@@ -3,19 +3,22 @@ import type { Ticket } from "@/types";
 import { tickets } from "@/data/dummy-data";
 
 const priorityColors: Record<string, string> = {
-  P1: "bg-red-500 hover:bg-red-500",
-  P2: "bg-yellow-500 hover:bg-yellow-500",
-  P3: "bg-gray-400 hover:bg-gray-400",
+  P1: "bg-red-50 text-red-700 border border-red-200 hover:bg-red-50",
+  P2: "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-50",
+  P3: "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-100",
 };
 
 interface TicketListProps {
   selectedId: string;
   onSelect: (id: string) => void;
+  collapsed: boolean;
 }
 
-export function TicketList({ selectedId, onSelect }: TicketListProps) {
+export function TicketList({ selectedId, onSelect, collapsed }: TicketListProps) {
+  if (collapsed) return null;
+
   return (
-    <div className="flex h-screen w-[300px] flex-col border-r bg-white">
+    <div className="flex h-screen w-[300px] flex-col border-r bg-white transition-all duration-150">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h2 className="text-sm font-semibold text-zinc-900">Open Tickets</h2>
         <span className="text-xs text-zinc-500">448</span>
@@ -38,14 +41,14 @@ export function TicketList({ selectedId, onSelect }: TicketListProps) {
           <button
             key={ticket.id}
             onClick={() => onSelect(ticket.id)}
-            className={`flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors ${
+            className={`flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors duration-150 ${
               selectedId === ticket.id
                 ? "bg-zinc-50"
-                : "hover:bg-zinc-50/50"
+                : "hover:bg-gray-50"
             }`}
           >
             <Badge
-              className={`${priorityColors[ticket.priority]} text-[10px] text-white font-semibold px-1.5 py-0.5 rounded`}
+              className={`${priorityColors[ticket.priority]} text-[10px] font-semibold px-1.5 py-0.5 rounded`}
             >
               {ticket.priority}
             </Badge>

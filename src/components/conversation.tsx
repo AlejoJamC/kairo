@@ -8,50 +8,37 @@ interface ConversationProps {
 export function Conversation({ messages }: ConversationProps) {
   return (
     <div className="flex flex-col gap-4">
-      {messages.map((msg, i) => (
-        <div key={i} className="flex gap-3">
+      {messages.map((msg, i) => {
+        const isCustomer = msg.sender === "customer";
+        return (
           <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-              msg.sender === "customer" ? "bg-zinc-200" : "bg-zinc-700"
-            }`}
+            key={i}
+            className={`flex gap-3 ${isCustomer ? "" : "flex-row-reverse"}`}
           >
-            {msg.sender === "customer" ? (
-              <User className="h-4 w-4 text-zinc-600" />
-            ) : (
-              <Bot className="h-4 w-4 text-white" />
-            )}
+            <div
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                isCustomer ? "bg-zinc-200" : "bg-zinc-700"
+              }`}
+            >
+              {isCustomer ? (
+                <User className="h-4 w-4 text-zinc-600" />
+              ) : (
+                <Bot className="h-4 w-4 text-white" />
+              )}
+            </div>
+            <div
+              className={`max-w-[75%] rounded-lg px-4 py-3 shadow-sm ${
+                isCustomer
+                  ? "bg-white border border-gray-200 text-zinc-800"
+                  : "bg-blue-50 text-zinc-700 ml-auto"
+              }`}
+            >
+              <p className="text-sm">{msg.content}</p>
+              <p className="mt-1 text-xs text-gray-400">{msg.timestamp}</p>
+            </div>
           </div>
-          <div
-            className={`flex-1 rounded-lg px-4 py-3 text-sm ${
-              msg.sender === "customer"
-                ? "bg-zinc-100 text-zinc-800"
-                : "bg-zinc-50 text-zinc-700"
-            }`}
-          >
-            {msg.content}
-          </div>
-        </div>
-      ))}
-
-      {/* Placeholder message blocks matching design */}
-      <div className="flex gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-200">
-          <User className="h-4 w-4 text-zinc-600" />
-        </div>
-        <div className="flex-1 space-y-2 rounded-lg bg-zinc-100 px-4 py-3">
-          <div className="h-3 w-3/4 rounded bg-zinc-300" />
-          <div className="h-3 w-1/2 rounded bg-zinc-300" />
-        </div>
-      </div>
-      <div className="flex gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-200">
-          <User className="h-4 w-4 text-zinc-600" />
-        </div>
-        <div className="flex-1 space-y-2 rounded-lg bg-zinc-100 px-4 py-3">
-          <div className="h-3 w-2/3 rounded bg-zinc-300" />
-          <div className="h-3 w-5/6 rounded bg-zinc-300" />
-        </div>
-      </div>
+        );
+      })}
     </div>
   );
 }

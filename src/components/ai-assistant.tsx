@@ -9,17 +9,19 @@ import { escalationReasons, knowledgeArticles } from "@/data/dummy-data";
 import {
   ChevronDown,
   ChevronUp,
-  Plus,
   FileText,
-  User,
-  FileCode,
-  CheckSquare,
 } from "lucide-react";
 import { useState } from "react";
 
 interface AiAssistantProps {
   customer: string;
 }
+
+const reasonDotColors: Record<string, string> = {
+  "Repeated Error 500": "bg-red-500",
+  "Similar past L2 case": "bg-green-500",
+  "Enterprise SLA Impact": "bg-amber-500",
+};
 
 export function AiAssistant({ customer }: AiAssistantProps) {
   const [escalationOpen, setEscalationOpen] = useState(true);
@@ -36,11 +38,11 @@ export function AiAssistant({ customer }: AiAssistantProps) {
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {/* Escalation Suggested */}
         <Collapsible open={escalationOpen} onOpenChange={setEscalationOpen}>
-          <Card className="gap-0 py-0">
+          <Card className="gap-0 py-0 border-l-4 border-l-red-500 shadow-sm hover:shadow-md transition-shadow duration-150">
             <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer px-3 py-2.5">
+              <CardHeader className="cursor-pointer px-3 py-2.5 bg-red-50/50 rounded-tr-md">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
-                  <span className="text-orange-600">Escalation Suggested</span>
+                  <span className="text-red-600">Escalation Suggested</span>
                   {escalationOpen ? (
                     <ChevronUp className="h-4 w-4 text-zinc-400" />
                   ) : (
@@ -60,7 +62,11 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                       key={i}
                       className="flex items-center gap-2 text-xs text-zinc-700"
                     >
-                      <span>{reason.icon}</span>
+                      <span
+                        className={`h-2 w-2 rounded-full shrink-0 ${
+                          reasonDotColors[reason.label] ?? "bg-zinc-400"
+                        }`}
+                      />
                       <span>{reason.label}</span>
                     </li>
                   ))}
@@ -75,7 +81,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
 
         {/* Related Knowledge */}
         <Collapsible open={knowledgeOpen} onOpenChange={setKnowledgeOpen}>
-          <Card className="gap-0 py-0">
+          <Card className="gap-0 py-0 shadow-sm hover:shadow-md transition-shadow duration-150">
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer px-3 py-2.5">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
@@ -91,21 +97,22 @@ export function AiAssistant({ customer }: AiAssistantProps) {
             <CollapsibleContent>
               <CardContent className="px-3 pb-3 pt-0 space-y-2">
                 {knowledgeArticles.map((article, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    {article.type === "guide" ? (
-                      <Plus className="h-3.5 w-3.5 text-green-600" />
-                    ) : (
-                      <FileText className="h-3.5 w-3.5 text-zinc-500" />
-                    )}
-                    <span className="text-zinc-500">
-                      {article.type === "guide" ? "Guide:" : "Incident #443:"}
-                    </span>
-                    <a
-                      href={article.link}
-                      className="text-blue-600 hover:underline"
-                    >
-                      {article.label}
-                    </a>
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 rounded-md border border-gray-200 px-2.5 py-2 text-xs hover:bg-gray-50 transition-colors duration-150"
+                  >
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-zinc-500">
+                        {article.type === "guide" ? "Guide:" : "Incident #443:"}
+                      </span>{" "}
+                      <a
+                        href={article.link}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {article.label}
+                      </a>
+                    </div>
                   </div>
                 ))}
               </CardContent>
@@ -115,7 +122,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
 
         {/* Escalation Packet */}
         <Collapsible open={packetOpen} onOpenChange={setPacketOpen}>
-          <Card className="gap-0 py-0">
+          <Card className="gap-0 py-0 shadow-sm hover:shadow-md transition-shadow duration-150">
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer px-3 py-2.5">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
@@ -129,22 +136,22 @@ export function AiAssistant({ customer }: AiAssistantProps) {
               </CardHeader>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <CardContent className="px-3 pb-3 pt-0 space-y-2">
-                <div className="flex items-center gap-2 text-xs text-zinc-700">
-                  <User className="h-3.5 w-3.5 text-zinc-400" />
-                  <span className="text-zinc-500">Customer:</span>
-                  <span className="font-medium">{customer}</span>
+              <CardContent className="px-3 pb-3 pt-0">
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="rounded-md bg-zinc-50 p-2 text-center">
+                    <p className="text-[10px] text-zinc-500">Customer</p>
+                    <p className="text-xs font-medium text-zinc-800">{customer}</p>
+                  </div>
+                  <div className="rounded-md bg-zinc-50 p-2 text-center">
+                    <p className="text-[10px] text-zinc-500">Workflow</p>
+                    <p className="text-xs font-medium text-zinc-800">Bot Process X</p>
+                  </div>
+                  <div className="rounded-md bg-zinc-50 p-2 text-center">
+                    <p className="text-[10px] text-zinc-500">Status</p>
+                    <p className="text-xs font-medium text-zinc-800">Logs Attached</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-zinc-700">
-                  <FileCode className="h-3.5 w-3.5 text-zinc-400" />
-                  <span className="text-zinc-500">Workflow:</span>
-                  <span className="font-medium">Bot Process X</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-zinc-700">
-                  <CheckSquare className="h-3.5 w-3.5 text-zinc-400" />
-                  <span>Error Logs Attached</span>
-                </div>
-                <div className="flex gap-2 pt-1">
+                <div className="flex gap-2">
                   <Button variant="outline" size="sm" className="text-xs">
                     Edit Details
                   </Button>
