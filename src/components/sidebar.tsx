@@ -8,15 +8,16 @@ import {
   ChevronDown,
   Menu,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
-const navItems = [
-  { icon: Home, label: "Inbox", active: true },
-  { icon: LayoutDashboard, label: "Dashboard" },
-  { icon: Bot, label: "Auto Resolvable", count: 14 },
-  { icon: FileText, label: "Guided", count: 10 },
-  { icon: AlertTriangle, label: "Escalation", count: 8 },
-  { icon: Settings, label: "Views", hasChevron: true },
-];
+type NavItem = {
+  icon: typeof Home;
+  label: string;
+  active?: boolean;
+  count?: number;
+  hasChevron?: boolean;
+};
 
 interface SidebarProps {
   collapsed: boolean;
@@ -24,6 +25,17 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+  const { t } = useTranslation(["common", "dashboard"]);
+
+  const navItems: NavItem[] = [
+    { icon: Home, label: t("dashboard:sidebar.inbox"), active: true },
+    { icon: LayoutDashboard, label: t("dashboard:title") },
+    { icon: Bot, label: "Auto Resolvable", count: 14 },
+    { icon: FileText, label: "Guided", count: 10 },
+    { icon: AlertTriangle, label: "Escalation", count: 8 },
+    { icon: Settings, label: t("dashboard:sidebar.settings"), hasChevron: true },
+  ];
+
   return (
     <aside
       className={`flex h-screen flex-col bg-zinc-900 text-white transition-all duration-150 ${
@@ -38,7 +50,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <Menu className="h-5 w-5" />
         </button>
         {!collapsed && (
-          <span className="text-base font-semibold">Kairo</span>
+          <span className="text-base font-semibold">{t("common:appName")}</span>
         )}
       </div>
 
@@ -70,6 +82,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </button>
         ))}
       </nav>
+
+      <div className="mt-auto px-3 pb-4">
+        {!collapsed && <LanguageSwitcher />}
+      </div>
     </aside>
   );
 }

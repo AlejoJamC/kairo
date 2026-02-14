@@ -1,0 +1,41 @@
+{
+  "title": "Panel",
+  "tickets": {
+    "title": "Tickets",
+    "count_one": "{{count}} ticket",
+    "count_other": "{{count}} tickets",
+    "noTickets": "No hay tickets para mostrar",
+    "assignedToMe": "Asignados a mí",
+    "unassigned": "Sin asignar",
+    "all": "Todos los tickets"
+  },
+  "sidebar": {
+    "inbox": "Bandeja de entrada",
+    "myTickets": "Mis Tickets",
+    "unassigned": "Sin asignar",
+    "allTickets": "Todos los Tickets",
+    "settings": "Configuración"
+  },
+  "ticketDetail": {
+    "customer": "Cliente",
+    "plan": "Plan",
+    "sla": "SLA",
+    "replyPlaceholder": "Escribe tu respuesta...",
+    "send": "Enviar",
+    "addNote": "Agregar nota",
+    "resolve": "Resolver",
+    "escalate": "Escalar"
+  },
+  "ai": {
+    "title": "Asistente IA",
+    "escalationReasons": "Razones de Escalación",
+    "suggestedReply": "Respuesta Sugerida",
+    "knowledgeBase": "Base de Conocimiento",
+    "telemetry": "Telemetría",
+    "recentRuns": "Ejecuciones Recientes",
+    "failures": "Fallos",
+    "lastError": "Último Error",
+    "lastRunStatus": "Estado Última Ejecución",
+    "lastRunTime": "Hora Última Ejecución"
+  }
+}
