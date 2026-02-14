@@ -11,12 +11,9 @@ const priorityColors: Record<string, string> = {
 interface TicketListProps {
   selectedId: string;
   onSelect: (id: string) => void;
-  collapsed: boolean;
 }
 
-export function TicketList({ selectedId, onSelect, collapsed }: TicketListProps) {
-  if (collapsed) return null;
-
+export function TicketList({ selectedId, onSelect }: TicketListProps) {
   return (
     <div className="flex h-screen w-[300px] flex-col border-r bg-white transition-all duration-150">
       <div className="flex items-center justify-between border-b px-4 py-3">

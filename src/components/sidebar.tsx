@@ -38,7 +38,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <Menu className="h-5 w-5" />
         </button>
         {!collapsed && (
-          <span className="text-base font-semibold">AI Support Cockpit</span>
+          <span className="text-base font-semibold">Kairo</span>
         )}
       </div>
 

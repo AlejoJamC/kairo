@@ -19,7 +19,6 @@ function App() {
       <TicketList
         selectedId={selectedTicketId}
         onSelect={setSelectedTicketId}
-        collapsed={sidebarCollapsed}
       />
       <TicketDetail ticket={selectedTicket} />
       <AiAssistant customer={selectedTicket.customer} />
