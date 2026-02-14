@@ -137,3 +137,12 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Multimedia files
+*.jpg
+*.jpeg
+*.png
+*.gif
+
+# JetBrains IDEs
+.idea/
