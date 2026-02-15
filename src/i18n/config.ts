@@ -10,18 +10,20 @@ import {
 import enCommon from "./resources/en/common.json";
 import enDashboard from "./resources/en/dashboard.json";
 import enAuth from "./resources/en/auth.json";
+import enClients from "./resources/en/clients.json";
 
 import esCommon from "./resources/es/common.json";
 import esDashboard from "./resources/es/dashboard.json";
 import esAuth from "./resources/es/auth.json";
+import esClients from "./resources/es/clients.json";
 
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
     resources: {
-      en: { common: enCommon, dashboard: enDashboard, auth: enAuth },
-      es: { common: esCommon, dashboard: esDashboard, auth: esAuth },
+      en: { common: enCommon, dashboard: enDashboard, auth: enAuth, clients: enClients },
+      es: { common: esCommon, dashboard: esDashboard, auth: esAuth, clients: esClients },
     },
 
     fallbackLng: defaultLanguage,
@@ -43,7 +45,7 @@ i18n
       useSuspense: false, // All resources are bundled, no async loading needed
     },
 
-    ns: [defaultNamespace, "dashboard", "auth"],
+    ns: [defaultNamespace, "dashboard", "auth", "clients"],
   });
 
 // Update <html lang> on language change for accessibility/SEO

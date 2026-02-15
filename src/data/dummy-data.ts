@@ -4,6 +4,7 @@ import type {
   TelemetryData,
   EscalationReason,
   KnowledgeArticle,
+  Client,
 } from "@/types";
 
 export const tickets: Ticket[] = [
@@ -176,4 +177,73 @@ export const escalationReasons: EscalationReason[] = [
 export const knowledgeArticles: KnowledgeArticle[] = [
   { type: "guide", label: "Handling Error 500", link: "#" },
   { type: "incident", label: "Previous Case", link: "#" },
+];
+
+export const clients: Client[] = [
+  {
+    id: "c1",
+    internalId: "CLI-001",
+    legalId: "US-EIN-12-3456789",
+    name: "ACME Corp",
+    telephone: "+1 (555) 100-2000",
+    authorizedEmails: ["admin@acme.com", "support@acme.com"],
+    contactPersons: [
+      { name: "John Smith", role: "CTO" },
+      { name: "Jane Doe", role: "VP Engineering" },
+    ],
+    plan: "Enterprise",
+    slaLevel: "Critical",
+  },
+  {
+    id: "c2",
+    internalId: "CLI-002",
+    legalId: "US-EIN-98-7654321",
+    name: "Globex Inc",
+    telephone: "+1 (555) 200-3000",
+    authorizedEmails: ["ops@globex.com"],
+    contactPersons: [{ name: "Hank Scorpio", role: "CEO" }],
+    plan: "Pro",
+    slaLevel: "High",
+  },
+  {
+    id: "c3",
+    internalId: "CLI-003",
+    legalId: "US-EIN-55-1234567",
+    name: "Initech",
+    telephone: "+1 (555) 300-4000",
+    authorizedEmails: ["bill@initech.com", "peter@initech.com"],
+    contactPersons: [
+      { name: "Bill Lumbergh", role: "VP" },
+      { name: "Peter Gibbons", role: "Engineer" },
+    ],
+    plan: "Starter",
+    slaLevel: "Standard",
+  },
+  {
+    id: "c4",
+    internalId: "CLI-004",
+    legalId: "US-EIN-77-9876543",
+    name: "Umbrella Co",
+    telephone: "+1 (555) 400-5000",
+    authorizedEmails: ["security@umbrella.com", "admin@umbrella.com", "ops@umbrella.com"],
+    contactPersons: [
+      { name: "Albert Wesker", role: "Director of Operations" },
+    ],
+    plan: "Enterprise",
+    slaLevel: "Critical",
+  },
+  {
+    id: "c5",
+    internalId: "CLI-005",
+    legalId: "US-EIN-33-1112223",
+    name: "Stark Industries",
+    telephone: "+1 (555) 500-6000",
+    authorizedEmails: ["tony@stark.com", "pepper@stark.com"],
+    contactPersons: [
+      { name: "Tony Stark", role: "CEO" },
+      { name: "Pepper Potts", role: "COO" },
+    ],
+    plan: "Enterprise",
+    slaLevel: "Critical",
+  },
 ];

@@ -1,12 +1,14 @@
 import type common from "./resources/en/common.json";
 import type dashboard from "./resources/en/dashboard.json";
 import type auth from "./resources/en/auth.json";
+import type clients from "./resources/en/clients.json";
 
 /** All available namespaces and their translation shapes */
 export interface I18nNamespaces {
   common: typeof common;
   dashboard: typeof dashboard;
   auth: typeof auth;
+  clients: typeof clients;
 }
 
 /** Union of all namespace names */

@@ -17,7 +17,8 @@
     "settings": "Configuración",
     "escalation": "Escalado",
     "guided" : "Guiado",
-    "autoResolvable" : "Auto Resuelto"
+    "autoResolvable" : "Auto Resuelto",
+    "clients" : "Clientes"
   },
   "ticketDetail": {
     "customer": "Cliente",

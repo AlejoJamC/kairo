@@ -1,0 +1,23 @@
+{
+  "title": "Client Directory",
+  "searchPlaceholder": "Search by name or ID...",
+  "table": {
+    "name": "Name",
+    "planType": "Plan Type",
+    "slaLevel": "SLA Level"
+  },
+  "detail": {
+    "title": "Client Details",
+    "internalId": "Internal ID",
+    "legalId": "Legal ID",
+    "telephone": "Telephone",
+    "authorizedEmails": "Authorized Emails",
+    "contactPersons": "Contact Persons",
+    "plan": "Plan",
+    "sla": "SLA Level"
+  },
+  "empty": {
+    "noClients": "No clients found",
+    "noResults": "No clients match your search"
+  }
+}

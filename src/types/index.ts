@@ -37,3 +37,27 @@ export interface KnowledgeArticle {
   label: string;
   link: string;
 }
+
+// --- Client Directory ---
+
+export type AppView = "inbox" | "clients";
+
+export type PlanType = "Enterprise" | "Pro" | "Starter";
+export type SlaLevel = "Critical" | "High" | "Standard";
+
+export interface ContactPerson {
+  name: string;
+  role: string;
+}
+
+export interface Client {
+  id: string;
+  internalId: string;
+  legalId: string;
+  name: string;
+  telephone: string;
+  authorizedEmails: string[];
+  contactPersons: ContactPerson[];
+  plan: PlanType;
+  slaLevel: SlaLevel;
+}
