@@ -1,0 +1,6 @@
+# Next.js
+.next/
+out/
+
+# Webapp build output (copied during build)
+public/dashboard/

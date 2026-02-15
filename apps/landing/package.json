@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
-    "build": "next build",
+    "build:webapp": "cd ../webapp && bun run build && rm -rf ../landing/public/dashboard && cp -r dist ../landing/public/dashboard",
+    "build": "bun run build:webapp && next build",
     "start": "next start",
     "lint": "next lint",
-    "clean": "rm -rf .next out"
+    "clean": "rm -rf .next out public/dashboard"
   },
   "dependencies": {
     "next": "^15.3.3",
