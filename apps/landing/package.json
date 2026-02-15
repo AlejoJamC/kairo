@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
-    "build:webapp": "rm -rf public/dashboard && cp -r ../webapp/dist public/dashboard",
+    "build:webapp": "mkdir -p public/dashboard && rm -rf public/dashboard && cp -r ../webapp/dist public/dashboard",
     "build": "bun run build:webapp && next build && cp -r out ../../dist",
     "start": "next start",
     "lint": "next lint",
