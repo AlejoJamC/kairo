@@ -1,0 +1,23 @@
+{
+  "title": "Directorio de Clientes",
+  "searchPlaceholder": "Buscar por nombre o ID...",
+  "table": {
+    "name": "Nombre",
+    "planType": "Tipo de Plan",
+    "slaLevel": "Nivel de SLA"
+  },
+  "detail": {
+    "title": "Detalles del Cliente",
+    "internalId": "ID Interno",
+    "legalId": "ID Legal",
+    "telephone": "Teléfono",
+    "authorizedEmails": "Correos Autorizados",
+    "contactPersons": "Personas de Contacto",
+    "plan": "Plan",
+    "sla": "Nivel de SLA"
+  },
+  "empty": {
+    "noClients": "No se encontraron clientes",
+    "noResults": "Ningún cliente coincide con tu búsqueda"
+  }
+}

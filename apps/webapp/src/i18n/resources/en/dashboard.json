@@ -1,0 +1,60 @@
+{
+  "title": "Dashboard",
+  "tickets": {
+    "title": "Open Tickets",
+    "count_one": "{{count}} ticket",
+    "count_other": "{{count}} tickets",
+    "noTickets": "No tickets to display",
+    "assignedToMe": "Assigned to me",
+    "unassigned": "Unassigned",
+    "all": "All tickets"
+  },
+  "sidebar": {
+    "inbox": "Inbox",
+    "myTickets": "My Tickets",
+    "unassigned": "Unassigned",
+    "allTickets": "All Tickets",
+    "settings": "Settings",
+    "escalation": "Escalar",
+    "guided" : "Guided",
+    "autoResolvable" : "Auto Resolvable",
+    "clients" : "Clients"
+  },
+  "ticketDetail": {
+    "customer": "Customer",
+    "plan": "Plan",
+    "sla": "SLA",
+    "replyPlaceholder": "Type your reply...",
+    "send": "Send",
+    "addNote": "Add note",
+    "resolve": "Resolve",
+    "escalate": "Escalate",
+    "attach": "Attach",
+    "quickReply": "Quick Reply",
+    "sendHint": "⌘ + Enter to send"
+  },
+  "ai": {
+    "title": "AI Assistant",
+    "escalationSuggested": "Escalation Suggested",
+    "reasonForEscalation": "Reason for Escalation:",
+    "escalateToL2": "Escalate to Level 2",
+    "relatedKnowledge": "Related Knowledge",
+    "guide": "Guide:",
+    "incident": "Incident #443:",
+    "escalationPacket": "Escalation Packet",
+    "customer": "Customer",
+    "workflow": "Workflow",
+    "status": "Status",
+    "logsAttached": "Logs Attached",
+    "editDetails": "Edit Details",
+    "escalationReasons": "Escalation Reasons",
+    "suggestedReply": "Suggested Reply",
+    "knowledgeBase": "Knowledge Base",
+    "telemetry": "Telemetry",
+    "recentRuns": "Recent Runs",
+    "failures": "Failures",
+    "lastError": "Last Error",
+    "lastRunStatus": "Last Run Status",
+    "lastRunTime": "Last Run Time"
+  }
+}

@@ -146,3 +146,18 @@ vite.config.ts.timestamp-*
 
 # JetBrains IDEs
 .idea/
+
+# Internal documentation
+internal/
+internal/*
+
+# Turborepo
+.turbo
+
+# Expo
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision

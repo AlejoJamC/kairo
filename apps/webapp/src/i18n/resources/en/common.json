@@ -1,0 +1,44 @@
+{
+  "appName": "Kairo",
+  "loading": "Loading...",
+  "error": "Something went wrong",
+  "retry": "Retry",
+  "save": "Save",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "edit": "Edit",
+  "close": "Close",
+  "back": "Back",
+  "next": "Next",
+  "search": "Search",
+  "noResults": "No results found",
+  "language": "Language",
+  "languages": {
+    "en": "English",
+    "es": "Spanish"
+  },
+  "status": {
+    "open": "Open",
+    "pending": "Pending",
+    "resolved": "Resolved"
+  },
+  "priority": {
+    "P1": "Critical",
+    "P2": "High",
+    "P3": "Normal"
+  },
+  "channel": {
+    "Email": "Email",
+    "API": "API",
+    "Outage": "Outage"
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}} minute ago",
+    "minutesAgo_other": "{{count}} minutes ago",
+    "hoursAgo": "{{count}} hour ago",
+    "hoursAgo_other": "{{count}} hours ago",
+    "daysAgo": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@kairo/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "build": "echo 'Use EAS Build for mobile'",
+    "clean": "rm -rf .expo"
+  },
+  "dependencies": {
+    "expo": "~52.0.0",
+    "expo-router": "~4.0.0",
+    "react": "^19.2.0",
+    "react-native": "~0.76.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "typescript": "~5.9.3"
+  }
+}
