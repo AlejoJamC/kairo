@@ -4,7 +4,7 @@
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "turbo run dev --filter=@kairo/webapp --filter=@kairo/landing --filter=@kairo/api",
-    "build": "turbo run build --filter=@kairo/landing",
+    "build": "cd apps/landing && bun run build",
     "build:all": "turbo run build",
     "lint": "turbo run lint",
     "clean": "turbo run clean"
