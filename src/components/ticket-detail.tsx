@@ -22,7 +22,7 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
             <Bot className="h-5 w-5 text-zinc-600" />
           </div>
           <h2 className="text-base font-semibold text-zinc-900">
-            Bot Not Executing Properly
+            {ticket.title}
           </h2>
         </div>
         <div className="flex items-center gap-2">

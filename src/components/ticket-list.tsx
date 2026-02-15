@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import type { Ticket } from "@/types";
 import { tickets } from "@/data/dummy-data";
+import { useTranslation } from "react-i18next";
 
 const priorityColors: Record<string, string> = {
   P1: "bg-red-50 text-red-700 border border-red-200 hover:bg-red-50",
@@ -14,10 +15,12 @@ interface TicketListProps {
 }
 
 export function TicketList({ selectedId, onSelect }: TicketListProps) {
+  const { t } = useTranslation("dashboard");
+
   return (
     <div className="flex h-screen w-[300px] flex-col border-r bg-white transition-all duration-150">
       <div className="flex items-center justify-between border-b px-4 py-3">
-        <h2 className="text-sm font-semibold text-zinc-900">Open Tickets</h2>
+        <h2 className="text-sm font-semibold text-zinc-900">{t("tickets.title")}</h2>
         <span className="text-xs text-zinc-500">448</span>
       </div>
 

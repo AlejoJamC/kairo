@@ -30,9 +30,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const navItems: NavItem[] = [
     { icon: Home, label: t("dashboard:sidebar.inbox"), active: true },
     { icon: LayoutDashboard, label: t("dashboard:title") },
-    { icon: Bot, label: "Auto Resolvable", count: 14 },
-    { icon: FileText, label: "Guided", count: 10 },
-    { icon: AlertTriangle, label: "Escalation", count: 8 },
+    { icon: Bot, label: t("dashboard:sidebar.autoResolvable"), count: 14 },
+    { icon: FileText, label: t("dashboard:sidebar.guided"), count: 10 },
+    { icon: AlertTriangle, label: t("dashboard:sidebar.escalation"), count: 8 },
     { icon: Settings, label: t("dashboard:sidebar.settings"), hasChevron: true },
   ];
 

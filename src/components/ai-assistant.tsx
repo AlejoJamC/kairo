@@ -12,6 +12,7 @@ import {
   FileText,
 } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface AiAssistantProps {
   customer: string;
@@ -24,6 +25,7 @@ const reasonDotColors: Record<string, string> = {
 };
 
 export function AiAssistant({ customer }: AiAssistantProps) {
+  const { t } = useTranslation("dashboard");
   const [escalationOpen, setEscalationOpen] = useState(true);
   const [knowledgeOpen, setKnowledgeOpen] = useState(true);
   const [packetOpen, setPacketOpen] = useState(true);
@@ -31,7 +33,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   return (
     <div className="flex h-full w-[300px] flex-col border-l bg-white">
       <div className="flex items-center justify-between border-b px-4 py-3">
-        <h2 className="text-sm font-semibold text-zinc-900">AI Assistant</h2>
+        <h2 className="text-sm font-semibold text-zinc-900">{t("ai.title")}</h2>
         <ChevronDown className="h-4 w-4 text-zinc-400" />
       </div>
 
@@ -42,7 +44,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer px-3 py-2.5 bg-red-50/50 rounded-tr-md">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
-                  <span className="text-red-600">Escalation Suggested</span>
+                  <span className="text-red-600">{t("ai.escalationSuggested")}</span>
                   {escalationOpen ? (
                     <ChevronUp className="h-4 w-4 text-zinc-400" />
                   ) : (
@@ -54,7 +56,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
             <CollapsibleContent>
               <CardContent className="px-3 pb-3 pt-0">
                 <p className="mb-2 text-xs text-zinc-500">
-                  Reason for Escalation:
+                  {t("ai.reasonForEscalation")}
                 </p>
                 <ul className="space-y-1.5">
                   {escalationReasons.map((reason, i) => (
@@ -72,7 +74,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                   ))}
                 </ul>
                 <Button className="mt-3 w-full" size="sm">
-                  Escalate to Level 2
+                  {t("ai.escalateToL2")}
                 </Button>
               </CardContent>
             </CollapsibleContent>
@@ -85,7 +87,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer px-3 py-2.5">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
-                  Related Knowledge
+                  {t("ai.relatedKnowledge")}
                   {knowledgeOpen ? (
                     <ChevronUp className="h-4 w-4 text-zinc-400" />
                   ) : (
@@ -104,7 +106,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                     <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
                     <div className="flex-1 min-w-0">
                       <span className="text-zinc-500">
-                        {article.type === "guide" ? "Guide:" : "Incident #443:"}
+                        {article.type === "guide" ? t("ai.guide") : t("ai.incident")}
                       </span>{" "}
                       <a
                         href={article.link}
@@ -126,7 +128,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer px-3 py-2.5">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
-                  Escalation Packet
+                  {t("ai.escalationPacket")}
                   {packetOpen ? (
                     <ChevronUp className="h-4 w-4 text-zinc-400" />
                   ) : (
@@ -139,24 +141,24 @@ export function AiAssistant({ customer }: AiAssistantProps) {
               <CardContent className="px-3 pb-3 pt-0">
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   <div className="rounded-md bg-zinc-50 p-2 text-center">
-                    <p className="text-[10px] text-zinc-500">Customer</p>
+                    <p className="text-[10px] text-zinc-500">{t("ai.customer")}</p>
                     <p className="text-xs font-medium text-zinc-800">{customer}</p>
                   </div>
                   <div className="rounded-md bg-zinc-50 p-2 text-center">
-                    <p className="text-[10px] text-zinc-500">Workflow</p>
+                    <p className="text-[10px] text-zinc-500">{t("ai.workflow")}</p>
                     <p className="text-xs font-medium text-zinc-800">Bot Process X</p>
                   </div>
                   <div className="rounded-md bg-zinc-50 p-2 text-center">
-                    <p className="text-[10px] text-zinc-500">Status</p>
-                    <p className="text-xs font-medium text-zinc-800">Logs Attached</p>
+                    <p className="text-[10px] text-zinc-500">{t("ai.status")}</p>
+                    <p className="text-xs font-medium text-zinc-800">{t("ai.logsAttached")}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" className="text-xs">
-                    Edit Details
+                    {t("ai.editDetails")}
                   </Button>
                   <Button size="sm" className="text-xs">
-                    Escalate to L2
+                    {t("ai.escalateToL2")}
                   </Button>
                 </div>
               </CardContent>

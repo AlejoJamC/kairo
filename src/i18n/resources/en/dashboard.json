@@ -1,7 +1,7 @@
 {
   "title": "Dashboard",
   "tickets": {
-    "title": "Tickets",
+    "title": "Open Tickets",
     "count_one": "{{count}} ticket",
     "count_other": "{{count}} tickets",
     "noTickets": "No tickets to display",
@@ -14,7 +14,10 @@
     "myTickets": "My Tickets",
     "unassigned": "Unassigned",
     "allTickets": "All Tickets",
-    "settings": "Settings"
+    "settings": "Settings",
+    "escalation": "Escalar",
+    "guided" : "Guided",
+    "autoResolvable" : "Auto Resolvable"
   },
   "ticketDetail": {
     "customer": "Customer",
@@ -24,10 +27,25 @@
     "send": "Send",
     "addNote": "Add note",
     "resolve": "Resolve",
-    "escalate": "Escalate"
+    "escalate": "Escalate",
+    "attach": "Attach",
+    "quickReply": "Quick Reply",
+    "sendHint": "⌘ + Enter to send"
   },
   "ai": {
     "title": "AI Assistant",
+    "escalationSuggested": "Escalation Suggested",
+    "reasonForEscalation": "Reason for Escalation:",
+    "escalateToL2": "Escalate to Level 2",
+    "relatedKnowledge": "Related Knowledge",
+    "guide": "Guide:",
+    "incident": "Incident #443:",
+    "escalationPacket": "Escalation Packet",
+    "customer": "Customer",
+    "workflow": "Workflow",
+    "status": "Status",
+    "logsAttached": "Logs Attached",
+    "editDetails": "Edit Details",
     "escalationReasons": "Escalation Reasons",
     "suggestedReply": "Suggested Reply",
     "knowledgeBase": "Knowledge Base",

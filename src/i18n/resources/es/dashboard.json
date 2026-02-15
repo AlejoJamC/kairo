@@ -1,7 +1,7 @@
 {
   "title": "Panel",
   "tickets": {
-    "title": "Tickets",
+    "title": "Tickets Abiertos",
     "count_one": "{{count}} ticket",
     "count_other": "{{count}} tickets",
     "noTickets": "No hay tickets para mostrar",
@@ -14,7 +14,10 @@
     "myTickets": "Mis Tickets",
     "unassigned": "Sin asignar",
     "allTickets": "Todos los Tickets",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "escalation": "Escalado",
+    "guided" : "Guiado",
+    "autoResolvable" : "Auto Resuelto"
   },
   "ticketDetail": {
     "customer": "Cliente",
@@ -24,10 +27,25 @@
     "send": "Enviar",
     "addNote": "Agregar nota",
     "resolve": "Resolver",
-    "escalate": "Escalar"
+    "escalate": "Escalar",
+    "attach": "Adjuntar",
+    "quickReply": "Respuesta Rápida",
+    "sendHint": "⌘ + Enter para enviar"
   },
   "ai": {
     "title": "Asistente IA",
+    "escalationSuggested": "Escalación Sugerida",
+    "reasonForEscalation": "Razón de Escalación:",
+    "escalateToL2": "Escalar a Nivel 2",
+    "relatedKnowledge": "Conocimiento Relacionado",
+    "guide": "Guía:",
+    "incident": "Incidente #443:",
+    "escalationPacket": "Paquete de Escalación",
+    "customer": "Cliente",
+    "workflow": "Flujo de Trabajo",
+    "status": "Estado",
+    "logsAttached": "Logs Adjuntos",
+    "editDetails": "Editar Detalles",
     "escalationReasons": "Razones de Escalación",
     "suggestedReply": "Respuesta Sugerida",
     "knowledgeBase": "Base de Conocimiento",
