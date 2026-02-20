@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { UserMenu } from "@/components/user-menu";
 import type { AppView } from "@/types";
 
 type NavItem = {
@@ -92,8 +93,13 @@ export function Sidebar({ collapsed, onToggle, activeView, onViewChange }: Sideb
         })}
       </nav>
 
-      <div className="mt-auto px-3 pb-4">
-        {!collapsed && <LanguageSwitcher />}
+      <div className="mt-auto">
+        {!collapsed && (
+          <div className="px-3 pb-2">
+            <LanguageSwitcher />
+          </div>
+        )}
+        {!collapsed && <UserMenu />}
       </div>
     </aside>
   );

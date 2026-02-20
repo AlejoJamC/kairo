@@ -2,5 +2,7 @@
 .next/
 out/
 
+.env.local
+
 # Webapp build output (copied during build)
 public/dashboard/

@@ -5,18 +5,20 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "build:webapp": "mkdir -p public/dashboard && rm -rf public/dashboard && cp -r ../webapp/dist public/dashboard",
-    "build": "bun run build:webapp && next build && cp -r out ../../dist",
+    "build": "bun run build:webapp && next build",
     "start": "next start",
     "lint": "next lint",
     "clean": "rm -rf .next out public/dashboard"
   },
   "dependencies": {
+    "@supabase/auth-helpers-nextjs": "^0.15.0",
+    "@supabase/supabase-js": "^2.97.0",
+    "@tailwindcss/postcss": "^4.1.18",
+    "lucide-react": "^0.511.0",
     "next": "^15.3.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "tailwindcss": "^4.1.18",
-    "@tailwindcss/postcss": "^4.1.18",
-    "lucide-react": "^0.511.0"
+    "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
     "@kairo/webapp": "workspace:*",
