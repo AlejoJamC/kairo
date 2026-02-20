@@ -40,7 +40,7 @@ export interface KnowledgeArticle {
 
 // --- Client Directory ---
 
-export type AppView = "inbox" | "clients";
+export type AppView = "inbox" | "clients" | "settings";
 
 export type PlanType = "Enterprise" | "Pro" | "Starter";
 export type SlaLevel = "Critical" | "High" | "Standard";

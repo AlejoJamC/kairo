@@ -39,7 +39,7 @@ export function Sidebar({ collapsed, onToggle, activeView, onViewChange }: Sideb
     { icon: FileText, label: t("dashboard:sidebar.guided"), count: 10 },
     { icon: AlertTriangle, label: t("dashboard:sidebar.escalation"), count: 8 },
     { icon: Users, label: t("dashboard:sidebar.clients"), view: "clients" },
-    { icon: Settings, label: t("dashboard:sidebar.settings"), hasChevron: true },
+    { icon: Settings, label: t("dashboard:sidebar.settings"), view: "settings" },
   ];
 
   return (

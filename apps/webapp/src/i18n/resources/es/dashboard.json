@@ -20,6 +20,21 @@
     "autoResolvable" : "Auto Resuelto",
     "clients" : "Clientes"
   },
+  "settings": {
+    "title": "Configuración de Perfil",
+    "subtitle": "Administra la información de tu cuenta",
+    "nameLabel": "Nombre Completo",
+    "namePlaceholder": "Ingresa tu nombre completo",
+    "emailLabel": "Correo Electrónico",
+    "phoneLabel": "Teléfono",
+    "phonePlaceholder": "Ingresa tu número de teléfono",
+    "companyLabel": "Nombre de Empresa",
+    "companyPlaceholder": "Ingresa el nombre de tu empresa",
+    "saveButton": "Guardar Cambios",
+    "saving": "Guardando...",
+    "saveSuccess": "Perfil actualizado exitosamente",
+    "saveError": "Error al actualizar el perfil"
+  },
   "ticketDetail": {
     "customer": "Cliente",
     "plan": "Plan",

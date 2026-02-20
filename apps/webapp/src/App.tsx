@@ -4,6 +4,7 @@ import { TicketList } from "@/components/ticket-list";
 import { TicketDetail } from "@/components/ticket-detail";
 import { AiAssistant } from "@/components/ai-assistant";
 import { ClientDirectory } from "@/components/client-directory";
+import { ProfileSettings } from "@/components/profile-settings";
 import { tickets } from "@/data/dummy-data";
 import type { AppView } from "@/types";
 
@@ -30,6 +31,8 @@ function App() {
           <TicketDetail ticket={selectedTicket} />
           <AiAssistant customer={selectedTicket.customer} />
         </>
+      ) : activeView === "settings" ? (
+        <ProfileSettings />
       ) : (
         <ClientDirectory />
       )}

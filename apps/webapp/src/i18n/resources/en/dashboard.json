@@ -20,6 +20,21 @@
     "autoResolvable" : "Auto Resolvable",
     "clients" : "Clients"
   },
+  "settings": {
+    "title": "Profile Settings",
+    "subtitle": "Manage your account information",
+    "nameLabel": "Full Name",
+    "namePlaceholder": "Enter your full name",
+    "emailLabel": "Email",
+    "phoneLabel": "Phone",
+    "phonePlaceholder": "Enter your phone number",
+    "companyLabel": "Company Name",
+    "companyPlaceholder": "Enter your company name",
+    "saveButton": "Save Changes",
+    "saving": "Saving...",
+    "saveSuccess": "Profile updated successfully",
+    "saveError": "Failed to update profile"
+  },
   "ticketDetail": {
     "customer": "Customer",
     "plan": "Plan",

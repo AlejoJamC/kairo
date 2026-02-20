@@ -3,11 +3,12 @@ import { NextResponse } from "next/server";
 
 export async function PATCH(request: Request) {
   try {
-    const { company_name } = await request.json();
+    const body = await request.json();
+    const { name, company_name } = body;
 
-    if (!company_name || !company_name.trim()) {
+    if (!name?.trim() && !company_name?.trim()) {
       return NextResponse.json(
-        { error: "Company name is required" },
+        { error: "At least one field (name or company_name) is required" },
         { status: 400 }
       );
     }
@@ -26,9 +27,13 @@ export async function PATCH(request: Request) {
       );
     }
 
+    const updates: Record<string, string> = {};
+    if (name?.trim()) updates.name = name.trim();
+    if (company_name?.trim()) updates.company_name = company_name.trim();
+
     const { error } = await supabase
       .from("profiles")
-      .update({ company_name: company_name.trim() })
+      .update(updates)
       .eq("id", user.id);
 
     if (error) {
