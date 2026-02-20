@@ -1,8 +1,11 @@
 "use client";
 
+import { getApiUrl } from "@/lib/api-config";
+
 export default function WizardPage() {
   const handleGoogleSignIn = () => {
-    window.location.href = "/api/auth/google";
+    const apiUrl = getApiUrl();
+    window.location.href = `${apiUrl}/api/auth/google`;
   };
 
   return (

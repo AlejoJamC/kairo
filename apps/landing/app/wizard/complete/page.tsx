@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiCall, getDashboardUrl } from "@/lib/api-config";
 
 interface UserData {
   id: string;
@@ -19,7 +20,7 @@ export default function CompleteProfilePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/me")
+    apiCall("/api/auth/me")
       .then((res) => {
         if (!res.ok) {
           router.push("/wizard/");
@@ -32,7 +33,7 @@ export default function CompleteProfilePage() {
         setUser(data.user);
 
         if (data.user.company_name) {
-          router.push("/dashboard/");
+          window.location.href = getDashboardUrl();
           return;
         }
 
@@ -56,9 +57,8 @@ export default function CompleteProfilePage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/user/profile", {
+      const response = await apiCall("/api/user/profile", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ company_name: companyName }),
       });
 
@@ -66,7 +66,7 @@ export default function CompleteProfilePage() {
         throw new Error("Failed to update profile");
       }
 
-      router.push("/dashboard/");
+      window.location.href = getDashboardUrl();
     } catch {
       setError("Failed to save. Please try again.");
       setSaving(false);

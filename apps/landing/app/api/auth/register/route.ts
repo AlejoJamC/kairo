@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    const { email, password, accountType } = await request.json();
+    const { email, password } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json(
@@ -24,20 +24,10 @@ export async function POST(request: Request) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { account_type: accountType },
-      },
     });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    if (data.user && accountType) {
-      await supabase
-        .from("profiles")
-        .update({ account_type: accountType })
-        .eq("id", data.user.id);
     }
 
     return NextResponse.json({

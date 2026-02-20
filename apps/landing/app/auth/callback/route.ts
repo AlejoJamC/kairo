@@ -31,7 +31,6 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(
-    `${process.env.NEXT_PUBLIC_APP_URL}/wizard/complete`
-  );
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  return NextResponse.redirect(`${appUrl}/wizard/complete`);
 }

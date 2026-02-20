@@ -19,7 +19,7 @@ export async function GET() {
 
     const { data } = await supabase
       .from("profiles")
-      .select("name, company_name, account_type, gmail_connected")
+      .select("name, company_name, gmail_connected")
       .eq("id", user.id)
       .single();
 
@@ -35,7 +35,6 @@ export async function GET() {
           user.user_metadata?.name ||
           "User",
         company_name: profile?.company_name,
-        accountType: profile?.account_type,
         gmailConnected: profile?.gmail_connected,
       },
     });

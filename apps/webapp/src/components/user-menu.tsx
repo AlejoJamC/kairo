@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LogOut, User } from "lucide-react";
+import { apiCall } from "@/lib/api-client";
 
 interface UserData {
   email: string;
@@ -13,7 +14,7 @@ export function UserMenu() {
   const [user, setUser] = useState<UserData | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/me")
+    apiCall("/api/auth/me")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.user) setUser(data.user);
@@ -22,7 +23,7 @@ export function UserMenu() {
   }, []);
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await apiCall("/api/auth/logout", { method: "POST" });
     window.location.href = "/";
   };
 
