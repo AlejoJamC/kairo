@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Footer } from "@/components/footer";
 
 export const metadata: Metadata = {
   title: "Kairo — AI Support Cockpit",
@@ -14,7 +15,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="flex flex-col min-h-screen antialiased">
+        <main className="flex-1">{children}</main>
+        <Footer />
+      </body>
     </html>
   );
 }
