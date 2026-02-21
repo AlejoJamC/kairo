@@ -203,10 +203,10 @@ export default function TermsPage() {
               <li>
                 Email:{" "}
                 <a
-                  href="mailto:legal@kairo.com"
+                  href="mailto:get.kairo.ai@gmail.com"
                   className="text-blue-600 hover:underline"
                 >
-                  legal@kairo.com
+                  get.kairo.ai@gmail.com
                 </a>
               </li>
               <li>

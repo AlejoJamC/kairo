@@ -157,10 +157,10 @@ export default function PrivacyPage() {
             <p className="text-neutral-700 leading-relaxed mt-4">
               To exercise these rights, contact us at{" "}
               <a
-                href="mailto:privacy@kairo.com"
+                href="mailto:get.kairo.ai@gmail.com"
                 className="text-blue-600 hover:underline"
               >
-                privacy@kairo.com
+                get.kairo.ai@gmail.com
               </a>
             </p>
           </section>
@@ -199,10 +199,10 @@ export default function PrivacyPage() {
               <li>
                 Email:{" "}
                 <a
-                  href="mailto:privacy@kairo.com"
+                  href="mailto:get.kairo.ai@gmail.com"
                   className="text-blue-600 hover:underline"
                 >
-                  privacy@kairo.com
+                    get.kairo.ai@gmail.com
                 </a>
               </li>
               <li>
