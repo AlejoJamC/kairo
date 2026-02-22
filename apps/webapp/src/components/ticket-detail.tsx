@@ -1,51 +1,65 @@
-import type { Ticket } from "@/types";
-import { conversationsByTicket, telemetryByTicket } from "@/data/dummy-data";
-import { Conversation } from "./conversation";
-import { TelemetryOverview } from "./telemetry-overview";
+import type { GmailTicket } from "@/types";
 import { ReplyBar } from "./reply-bar";
-import { Bot, Clock } from "lucide-react";
+import { Mail } from "lucide-react";
 
 interface TicketDetailProps {
-  ticket: Ticket;
+  ticket: GmailTicket | null;
 }
 
 export function TicketDetail({ ticket }: TicketDetailProps) {
-  const messages = conversationsByTicket[ticket.id] ?? [];
-  const telemetry = telemetryByTicket[ticket.id];
+  if (!ticket) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50">
+        <Mail className="h-10 w-10 text-zinc-300 mb-3" />
+        <p className="text-sm text-zinc-400">Select a ticket to view details</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50">
       {/* Fixed Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-3 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-200">
-            <Bot className="h-5 w-5 text-zinc-600" />
-          </div>
-          <h2 className="text-base font-semibold text-zinc-900">
-            {ticket.title}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h2 className="truncate text-base font-semibold text-zinc-900">
+            {ticket.subject}
           </h2>
+          <p className="text-xs text-zinc-500">
+            From:{" "}
+            <span className="font-medium text-zinc-700">
+              {ticket.from_name
+                ? `${ticket.from_name} <${ticket.from_email}>`
+                : ticket.from_email}
+            </span>
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="ml-4 flex shrink-0 items-center gap-2">
+          {ticket.priority && (
+            <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 border border-red-200">
+              {ticket.priority}
+            </span>
+          )}
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
-            Customer: {ticket.customer}
-          </span>
-          <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
-            Plan: {ticket.plan}
-          </span>
-          <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
-            SLA: {ticket.sla}
-          </span>
-          <span className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 border border-amber-200">
-            <Clock className="h-3 w-3" />
-            Elapsed: 2h 15m
+            {new Date(ticket.received_at).toLocaleString()}
           </span>
         </div>
       </div>
 
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        <Conversation messages={messages} />
-        {telemetry && <TelemetryOverview data={telemetry} />}
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          {ticket.body_plain ? (
+            <pre className="whitespace-pre-wrap font-sans text-sm text-zinc-800 leading-relaxed">
+              {ticket.body_plain}
+            </pre>
+          ) : ticket.snippet ? (
+            <p className="text-sm text-zinc-800 leading-relaxed">
+              {ticket.snippet}
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-400 italic">No email body available.</p>
+          )}
+        </div>
       </div>
 
       {/* Fixed bottom reply bar */}

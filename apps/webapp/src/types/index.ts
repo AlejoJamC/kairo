@@ -38,6 +38,27 @@ export interface KnowledgeArticle {
   link: string;
 }
 
+// --- Gmail Tickets (real data from DB) ---
+
+export interface GmailTicket {
+  id: string;
+  gmail_message_id: string;
+  gmail_thread_id: string | null;
+  subject: string;
+  from_email: string;
+  from_name: string | null;
+  to_email: string | null;
+  received_at: string;
+  snippet: string | null;
+  body_plain: string | null;
+  body_html: string | null;
+  status: string;
+  ticket_type: string | null;
+  priority: string | null;
+  category: string | null;
+  sentiment: string | null;
+}
+
 // --- Client Directory ---
 
 export type AppView = "inbox" | "clients" | "settings";

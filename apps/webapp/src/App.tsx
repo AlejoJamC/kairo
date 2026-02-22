@@ -6,16 +6,16 @@ import { TicketDetail } from "@/components/ticket-detail";
 import { AiAssistant } from "@/components/ai-assistant";
 import { ClientDirectory } from "@/components/client-directory";
 import { ProfileSettings } from "@/components/profile-settings";
+import { SyncButton } from "@/components/sync-button";
 import { Loader2 } from "lucide-react";
-import { tickets } from "@/data/dummy-data";
-import type { AppView } from "@/types";
+import type { AppView, GmailTicket } from "@/types";
 
 function AppContent() {
   const { loading } = useAuth();
-  const [selectedTicketId, setSelectedTicketId] = useState(tickets[0].id);
+  const [selectedTicket, setSelectedTicket] = useState<GmailTicket | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeView, setActiveView] = useState<AppView>("inbox");
-  const selectedTicket = tickets.find((t) => t.id === selectedTicketId)!;
+  const [refreshKey, setRefreshKey] = useState(0);
 
   if (loading) {
     return (
@@ -38,12 +38,22 @@ function AppContent() {
       />
       {activeView === "inbox" ? (
         <>
-          <TicketList
-            selectedId={selectedTicketId}
-            onSelect={setSelectedTicketId}
-          />
+          <div className="flex h-screen w-[300px] flex-col border-r bg-white">
+            <SyncButton onSyncComplete={() => setRefreshKey((k) => k + 1)} />
+            <TicketList
+              selectedId={selectedTicket?.id ?? null}
+              onSelect={setSelectedTicket}
+              refreshKey={refreshKey}
+            />
+          </div>
           <TicketDetail ticket={selectedTicket} />
-          <AiAssistant customer={selectedTicket.customer} />
+          <AiAssistant
+            customer={
+              selectedTicket?.from_name ||
+              selectedTicket?.from_email ||
+              "—"
+            }
+          />
         </>
       ) : activeView === "settings" ? (
         <ProfileSettings />
