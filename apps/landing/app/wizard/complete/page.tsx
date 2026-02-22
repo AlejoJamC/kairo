@@ -11,6 +11,29 @@ interface UserData {
   company_name?: string;
 }
 
+async function redirectToDashboard() {
+  const dashboardUrl = getDashboardUrl();
+  const isCrossOrigin =
+    dashboardUrl.startsWith("http") &&
+    !dashboardUrl.startsWith(window.location.origin);
+
+  if (!isCrossOrigin) {
+    window.location.href = dashboardUrl;
+    return;
+  }
+
+  // Cross-origin (local dev): pass session tokens via hash fragment
+  const res = await fetch("/api/auth/session-token");
+  if (!res.ok) {
+    window.location.href = dashboardUrl;
+    return;
+  }
+
+  const { access_token, refresh_token } = await res.json();
+  const hash = `#access_token=${encodeURIComponent(access_token)}&refresh_token=${encodeURIComponent(refresh_token)}`;
+  window.location.href = `${dashboardUrl}${hash}`;
+}
+
 export default function CompleteProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
@@ -33,7 +56,7 @@ export default function CompleteProfilePage() {
         setUser(data.user);
 
         if (data.user.company_name) {
-          window.location.href = getDashboardUrl();
+          redirectToDashboard();
           return;
         }
 
@@ -66,7 +89,7 @@ export default function CompleteProfilePage() {
         throw new Error("Failed to update profile");
       }
 
-      window.location.href = getDashboardUrl();
+      await redirectToDashboard();
     } catch {
       setError("Failed to save. Please try again.");
       setSaving(false);

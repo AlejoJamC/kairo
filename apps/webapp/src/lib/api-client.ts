@@ -10,8 +10,14 @@ export function getApiUrl(): string {
   return "";
 }
 
+export function getLandingUrl(path: string): string {
+  const base = import.meta.env.VITE_LANDING_URL || "";
+  return `${base}${path}`;
+}
+
 /**
  * Make an API call with credentials (cookies) included.
+ * Automatically redirects to /wizard on 401 Unauthorized.
  */
 export async function apiCall(
   endpoint: string,
@@ -20,9 +26,16 @@ export async function apiCall(
   const baseUrl = getApiUrl();
   const url = `${baseUrl}${endpoint}`;
 
-  return fetch(url, {
+  const response = await fetch(url, {
     headers: { "Content-Type": "application/json", ...options?.headers },
     credentials: "include",
     ...options,
   });
+
+  if (response.status === 401) {
+    window.location.href = getLandingUrl("/wizard/");
+    throw new Error("Unauthorized");
+  }
+
+  return response;
 }

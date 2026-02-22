@@ -1,33 +1,10 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import { LogOut, User } from "lucide-react";
-import { apiCall } from "@/lib/api-client";
-
-interface UserData {
-  email: string;
-  accountType: string;
-  gmailConnected: boolean;
-}
+import { useAuth } from "@/contexts/auth-context";
 
 export function UserMenu() {
-  const [user, setUser] = useState<UserData | null>(null);
+  const { profile, signOut } = useAuth();
 
-  useEffect(() => {
-    apiCall("/api/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.user) setUser(data.user);
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleLogout = async () => {
-    await apiCall("/api/auth/logout", { method: "POST" });
-    window.location.href = "/";
-  };
-
-  if (!user) return null;
+  if (!profile) return null;
 
   return (
     <div className="flex items-center gap-3 px-3 py-3 border-t border-zinc-800">
@@ -36,14 +13,14 @@ export function UserMenu() {
           <User className="w-4 h-4 text-zinc-300" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-300 truncate">{user.email}</p>
-          {user.gmailConnected && (
+          <p className="text-sm text-zinc-300 truncate">{profile.name || profile.email}</p>
+          {profile.gmail_connected && (
             <p className="text-xs text-green-400">Gmail Connected</p>
           )}
         </div>
       </div>
       <button
-        onClick={handleLogout}
+        onClick={signOut}
         className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-md transition-colors"
         title="Logout"
       >
