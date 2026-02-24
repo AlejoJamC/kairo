@@ -1,17 +1,17 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUserFromRequest } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import type { Database } from "@/types/supabase";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = await createClient();
 
     const {
       data: { user },
       error,
-    } = await supabase.auth.getUser();
+    } = await getUserFromRequest(request, supabase);
 
     if (error || !user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });

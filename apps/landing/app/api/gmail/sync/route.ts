@@ -1,25 +1,32 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUserFromRequest } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const supabase = await createClient();
 
-    // 1. Get authenticated user
+    // 1. Get authenticated user — Bearer token (webapp) or cookie fallback
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser();
+    } = await getUserFromRequest(request, supabase);
 
     if (authError || !user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    // 2. Get user's Gmail OAuth tokens
+    // 2. Get fresh provider tokens from the Supabase session cookie.
+    //    When the user logs in via Google, Supabase stores a live provider_token
+    //    here. It's always fresh and preferred over anything stored in gmail_accounts.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    // 3. Get stored Gmail tokens
     const { data: gmailAccount, error: gmailError } = await supabase
       .from("gmail_accounts")
-      .select("access_token, refresh_token, email")
+      .select("access_token, refresh_token, expires_at, email")
       .eq("user_id", user.id)
       .single();
 
@@ -30,20 +37,69 @@ export async function POST() {
       );
     }
 
-    // 3. Set up Gmail API client with user's tokens
+    // Resolve tokens: prefer the session's live provider_token (always current when
+    // the user is actively logged in via Google) over the stored tokens which may be
+    // stale or missing a refresh_token from an older connect flow.
+    const accessToken = session?.provider_token || gmailAccount.access_token;
+    const refreshToken =
+      session?.provider_refresh_token || gmailAccount.refresh_token;
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: "Gmail account not connected" },
+        { status: 400 }
+      );
+    }
+
+    // Heal gmail_accounts with fresh session tokens so future syncs work even
+    // without a session cookie (e.g. from a server-side cron).
+    if (session?.provider_token) {
+      await supabase
+        .from("gmail_accounts")
+        .update({
+          access_token: session.provider_token,
+          ...(session.provider_refresh_token && {
+            refresh_token: session.provider_refresh_token,
+          }),
+          expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+        })
+        .eq("user_id", user.id);
+    }
+
+    // 4. Set up Gmail API client
     const oauth2Client = new google.auth.OAuth2(
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET
     );
 
     oauth2Client.setCredentials({
-      access_token: gmailAccount.access_token,
-      refresh_token: gmailAccount.refresh_token,
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expiry_date: session?.provider_token
+        ? Date.now() + 3600 * 1000
+        : gmailAccount.expires_at
+          ? new Date(gmailAccount.expires_at).getTime()
+          : undefined,
+    });
+
+    // Persist refreshed tokens back to DB automatically
+    oauth2Client.on("tokens", async (tokens) => {
+      if (tokens.access_token) {
+        await supabase
+          .from("gmail_accounts")
+          .update({
+            access_token: tokens.access_token,
+            expires_at: tokens.expiry_date
+              ? new Date(tokens.expiry_date).toISOString()
+              : new Date(Date.now() + 3600 * 1000).toISOString(),
+          })
+          .eq("user_id", user.id);
+      }
     });
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-    // 4. Fetch list of message IDs (up to 100 most recent inbox emails)
+    // 5. Fetch list of message IDs (up to 100 most recent inbox emails)
     const listResponse = await gmail.users.messages.list({
       userId: "me",
       maxResults: 100,
@@ -65,7 +121,7 @@ export async function POST() {
       });
     }
 
-    // 5. Process each message
+    // 6. Process each message
     let processed = 0;
     let created = 0;
     let skipped = 0;

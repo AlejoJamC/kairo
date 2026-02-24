@@ -15,13 +15,18 @@ export async function GET(request: Request) {
       const providerRefreshToken = data.session.provider_refresh_token;
 
       if (providerToken && data.user) {
-        await supabase.from("gmail_accounts").upsert({
+        const payload: any = {
           user_id: data.user.id,
           email: data.user.email!,
           access_token: providerToken,
-          refresh_token: providerRefreshToken,
           expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
-        });
+        };
+
+        if (providerRefreshToken) {
+          payload.refresh_token = providerRefreshToken;
+        }
+
+        await supabase.from("gmail_accounts").upsert(payload);
 
         await supabase
           .from("profiles")

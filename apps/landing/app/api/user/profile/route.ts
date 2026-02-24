@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUserFromRequest } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export async function PATCH(request: Request) {
@@ -18,7 +18,7 @@ export async function PATCH(request: Request) {
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser();
+    } = await getUserFromRequest(request, supabase);
 
     if (authError || !user) {
       return NextResponse.json(

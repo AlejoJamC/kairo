@@ -10,6 +10,10 @@ export async function GET() {
       options: {
         scopes: "https://www.googleapis.com/auth/gmail.readonly",
         redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
       },
     });
 
