@@ -1,12 +1,10 @@
 /**
  * API Client for Dashboard (WebApp)
  *
- * Uses Vite environment variables to determine API endpoint.
+ * Always uses relative URLs — Vite proxy forwards /api to Next.js in dev,
+ * Vercel serves everything same-origin in production.
  */
 export function getApiUrl(): string {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
   return "";
 }
 
