@@ -187,6 +187,25 @@ export function ProfileSettings() {
             </button>
           </div>
         </div>
+
+        {/* Security */}
+        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-6">
+          <h2 className="mb-4 text-base font-semibold text-zinc-900">Security</h2>
+          <div className="flex items-center justify-between rounded-lg bg-zinc-50 p-4">
+            <div>
+              <p className="text-sm font-medium text-zinc-900">Password</p>
+              <p className="text-sm text-zinc-500">
+                Add a password to enable email/password login
+              </p>
+            </div>
+            <a
+              href="/set-password"
+              className="text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              Set Password
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );

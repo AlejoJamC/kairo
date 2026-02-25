@@ -17,7 +17,7 @@ export function Header() {
 
         <div className="flex items-center gap-3">
           <Link
-            href="/wizard/"
+            href="/login"
             className="px-4 py-2 text-sm font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
           >
             Log in
