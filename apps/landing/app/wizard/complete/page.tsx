@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiCall, getDashboardUrl } from "@/lib/api-config";
+import { createClient } from "@/lib/supabase/client";
 
 interface UserData {
   id: string;
@@ -13,25 +14,21 @@ interface UserData {
 
 async function redirectToDashboard() {
   const dashboardUrl = getDashboardUrl();
-  const isCrossOrigin =
-    dashboardUrl.startsWith("http") &&
-    !dashboardUrl.startsWith(window.location.origin);
 
-  if (!isCrossOrigin) {
+  // The browser Supabase client on the landing app already has the session
+  // (stored in cookies by createBrowserClient). Read tokens directly from it —
+  // no server round-trip needed, works identically in dev and production.
+  const supabase = createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (session?.access_token && session?.refresh_token) {
+    const hash = `#access_token=${encodeURIComponent(session.access_token)}&refresh_token=${encodeURIComponent(session.refresh_token)}`;
+    window.location.href = `${dashboardUrl}${hash}`;
+  } else {
     window.location.href = dashboardUrl;
-    return;
   }
-
-  // Cross-origin (local dev): pass session tokens via hash fragment
-  const res = await fetch("/api/auth/session-token");
-  if (!res.ok) {
-    window.location.href = dashboardUrl;
-    return;
-  }
-
-  const { access_token, refresh_token } = await res.json();
-  const hash = `#access_token=${encodeURIComponent(access_token)}&refresh_token=${encodeURIComponent(refresh_token)}`;
-  window.location.href = `${dashboardUrl}${hash}`;
 }
 
 export default function CompleteProfilePage() {
