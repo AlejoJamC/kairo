@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { getDashboardUrl } from '@/lib/api-config';
 import { Lock, Check, X, Loader2 } from 'lucide-react';
 
 export default function SetPasswordPage() {
@@ -57,7 +58,16 @@ export default function SetPasswordPage() {
         return;
       }
 
-      router.push('/dashboard');
+      // Same hash-token redirect as /wizard/complete so the webapp's
+      // supabase-js client (localStorage) can pick up the session.
+      const { data: { session } } = await supabase.auth.getSession();
+      const dashboardUrl = getDashboardUrl();
+      if (session?.access_token && session?.refresh_token) {
+        const hash = `#access_token=${encodeURIComponent(session.access_token)}&refresh_token=${encodeURIComponent(session.refresh_token)}`;
+        window.location.href = `${dashboardUrl}${hash}`;
+      } else {
+        window.location.href = dashboardUrl;
+      }
     } catch {
       setError('Failed to set password. Please try again.');
       setLoading(false);

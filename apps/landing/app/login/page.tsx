@@ -1,13 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { getDashboardUrl } from '@/lib/api-config';
 import Link from 'next/link';
 import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,7 +37,16 @@ export default function LoginPage() {
         return;
       }
 
-      router.push('/dashboard');
+      // Pass tokens via hash so the webapp's supabase-js client (localStorage)
+      // can call setSession() — same pattern as /wizard/complete.
+      const { data: { session } } = await supabase.auth.getSession();
+      const dashboardUrl = getDashboardUrl();
+      if (session?.access_token && session?.refresh_token) {
+        const hash = `#access_token=${encodeURIComponent(session.access_token)}&refresh_token=${encodeURIComponent(session.refresh_token)}`;
+        window.location.href = `${dashboardUrl}${hash}`;
+      } else {
+        window.location.href = dashboardUrl;
+      }
     } catch {
       setError('An unexpected error occurred. Please try again.');
       setLoading(false);
