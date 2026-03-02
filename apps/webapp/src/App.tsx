@@ -6,6 +6,7 @@ import { TicketDetail } from "@/components/ticket-detail";
 import { AiAssistant } from "@/components/ai-assistant";
 import { ClientDirectory } from "@/components/client-directory";
 import { ProfileSettings } from "@/components/profile-settings";
+import { ChangePasswordSettings } from "@/components/change-password-settings";
 import { SyncButton } from "@/components/sync-button";
 import { Loader2 } from "lucide-react";
 import type { AppView, GmailTicket } from "@/types";
@@ -56,7 +57,9 @@ function AppContent() {
           />
         </>
       ) : activeView === "settings" ? (
-        <ProfileSettings />
+        <ProfileSettings onViewChange={setActiveView} />
+      ) : activeView === "change-password" ? (
+        <ChangePasswordSettings onViewChange={setActiveView} />
       ) : (
         <ClientDirectory />
       )}

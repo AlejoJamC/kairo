@@ -3,8 +3,13 @@ import { useTranslation } from "react-i18next";
 import { User, Check, AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { createClient } from "@/lib/supabase/client";
+import type { AppView } from "@/types";
 
-export function ProfileSettings() {
+interface Props {
+  onViewChange: (view: AppView) => void;
+}
+
+export function ProfileSettings({ onViewChange }: Props) {
   const { t } = useTranslation(["dashboard", "common"]);
   const { user, profile, refreshProfile } = useAuth();
   const hasPassword = user?.identities?.some((id) => id.provider === "email") ?? false;
@@ -201,12 +206,12 @@ export function ProfileSettings() {
                   : "Add a password to enable email/password login"}
               </p>
             </div>
-            <a
-              href="/set-password"
+            <button
+              onClick={() => onViewChange("change-password")}
               className="text-sm font-medium text-blue-600 hover:text-blue-700"
             >
               {hasPassword ? "Change Password" : "Set Password"}
-            </a>
+            </button>
           </div>
         </div>
       </div>
