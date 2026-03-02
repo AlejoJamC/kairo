@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 
 export function ProfileSettings() {
   const { t } = useTranslation(["dashboard", "common"]);
-  const { profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
+  const hasPassword = user?.identities?.some((id) => id.provider === "email") ?? false;
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -195,14 +196,16 @@ export function ProfileSettings() {
             <div>
               <p className="text-sm font-medium text-zinc-900">Password</p>
               <p className="text-sm text-zinc-500">
-                Add a password to enable email/password login
+                {hasPassword
+                  ? "Email/password login is enabled on your account"
+                  : "Add a password to enable email/password login"}
               </p>
             </div>
             <a
               href="/set-password"
               className="text-sm font-medium text-blue-600 hover:text-blue-700"
             >
-              Set Password
+              {hasPassword ? "Change Password" : "Set Password"}
             </a>
           </div>
         </div>
