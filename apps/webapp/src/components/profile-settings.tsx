@@ -196,21 +196,27 @@ export function ProfileSettings({ onViewChange }: Props) {
 
         {/* Security */}
         <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-6">
-          <h2 className="mb-4 text-base font-semibold text-zinc-900">Security</h2>
+          <h2 className="mb-4 text-base font-semibold text-zinc-900">
+            {t("dashboard:settings.security.title")}
+          </h2>
           <div className="flex items-center justify-between rounded-lg bg-zinc-50 p-4">
             <div>
-              <p className="text-sm font-medium text-zinc-900">Password</p>
+              <p className="text-sm font-medium text-zinc-900">
+                {t("dashboard:settings.security.passwordLabel")}
+              </p>
               <p className="text-sm text-zinc-500">
                 {hasPassword
-                  ? "Email/password login is enabled on your account"
-                  : "Add a password to enable email/password login"}
+                  ? t("dashboard:settings.security.passwordEnabledDesc")
+                  : t("dashboard:settings.security.passwordDisabledDesc")}
               </p>
             </div>
             <button
               onClick={() => onViewChange("change-password")}
               className="text-sm font-medium text-blue-600 hover:text-blue-700"
             >
-              {hasPassword ? "Change Password" : "Set Password"}
+              {hasPassword
+                ? t("dashboard:settings.security.changePassword")
+                : t("dashboard:settings.security.setPassword")}
             </button>
           </div>
         </div>

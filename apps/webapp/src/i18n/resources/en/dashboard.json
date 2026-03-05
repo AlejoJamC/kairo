@@ -33,7 +33,37 @@
     "saveButton": "Save Changes",
     "saving": "Saving...",
     "saveSuccess": "Profile updated successfully",
-    "saveError": "Failed to update profile"
+    "saveError": "Failed to update profile",
+    "security": {
+      "title": "Security",
+      "passwordLabel": "Password",
+      "passwordEnabledDesc": "Email/password login is enabled on your account",
+      "passwordDisabledDesc": "Add a password to enable email/password login",
+      "changePassword": "Change Password",
+      "setPassword": "Set Password"
+    }
+  },
+  "changePassword": {
+    "backToSettings": "Back to Settings",
+    "changeTitle": "Change Password",
+    "setTitle": "Set Password",
+    "changeSubtitle": "Update your email/password login credentials",
+    "setSubtitle": "Add a password to enable email/password login",
+    "successMessage": "Password updated successfully",
+    "redirecting": "Redirecting back to settings…",
+    "newPasswordLabel": "New Password",
+    "confirmPasswordLabel": "Confirm Password",
+    "requirements": {
+      "title": "Password must contain:",
+      "minLength": "At least 8 characters",
+      "uppercase": "One uppercase letter",
+      "number": "One number",
+      "match": "Passwords match"
+    },
+    "updating": "Updating…",
+    "updateButton": "Update Password",
+    "setButton": "Set Password",
+    "error": "Failed to update password. Please try again."
   },
   "ticketDetail": {
     "customer": "Customer",

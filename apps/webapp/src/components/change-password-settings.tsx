@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Check, X, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { createClient } from "@/lib/supabase/client";
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function ChangePasswordSettings({ onViewChange }: Props) {
+  const { t } = useTranslation(["dashboard", "common"]);
   const { user } = useAuth();
   const hasPassword =
     user?.identities?.some((id) => id.provider === "email") ?? false;
@@ -46,7 +48,7 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
       setSuccess(true);
       setTimeout(() => onViewChange("settings"), 2000);
     } catch {
-      setError("Failed to update password. Please try again.");
+      setError(t("dashboard:changePassword.error"));
     } finally {
       setSaving(false);
     }
@@ -61,15 +63,17 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
             className="mb-4 flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-800 transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Settings
+            {t("dashboard:changePassword.backToSettings")}
           </button>
           <h1 className="text-2xl font-semibold text-zinc-900">
-            {hasPassword ? "Change Password" : "Set Password"}
+            {hasPassword
+              ? t("dashboard:changePassword.changeTitle")
+              : t("dashboard:changePassword.setTitle")}
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
             {hasPassword
-              ? "Update your email/password login credentials"
-              : "Add a password to enable email/password login"}
+              ? t("dashboard:changePassword.changeSubtitle")
+              : t("dashboard:changePassword.setSubtitle")}
           </p>
         </div>
 
@@ -80,10 +84,10 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
                 <Check className="h-6 w-6 text-green-600" />
               </div>
               <p className="text-sm font-medium text-zinc-900">
-                Password updated successfully
+                {t("dashboard:changePassword.successMessage")}
               </p>
               <p className="text-sm text-zinc-500">
-                Redirecting back to settings…
+                {t("dashboard:changePassword.redirecting")}
               </p>
             </div>
           ) : (
@@ -96,7 +100,7 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-zinc-700">
-                  New Password
+                  {t("dashboard:changePassword.newPasswordLabel")}
                 </label>
                 <input
                   type="password"
@@ -109,7 +113,7 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-zinc-700">
-                  Confirm Password
+                  {t("dashboard:changePassword.confirmPasswordLabel")}
                 </label>
                 <input
                   type="password"
@@ -122,13 +126,13 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
 
               <div className="space-y-1.5">
                 <p className="text-sm font-medium text-zinc-700">
-                  Password must contain:
+                  {t("dashboard:changePassword.requirements.title")}
                 </p>
                 {[
-                  { met: hasMinLength, label: "At least 8 characters" },
-                  { met: hasUppercase, label: "One uppercase letter" },
-                  { met: hasNumber, label: "One number" },
-                  { met: passwordsMatch, label: "Passwords match" },
+                  { met: hasMinLength, label: t("dashboard:changePassword.requirements.minLength") },
+                  { met: hasUppercase, label: t("dashboard:changePassword.requirements.uppercase") },
+                  { met: hasNumber, label: t("dashboard:changePassword.requirements.number") },
+                  { met: passwordsMatch, label: t("dashboard:changePassword.requirements.match") },
                 ].map(({ met, label }) => (
                   <div key={label} className="flex items-center gap-2 text-sm">
                     {met ? (
@@ -151,17 +155,17 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
                 >
                   {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                   {saving
-                    ? "Updating…"
+                    ? t("dashboard:changePassword.updating")
                     : hasPassword
-                      ? "Update Password"
-                      : "Set Password"}
+                      ? t("dashboard:changePassword.updateButton")
+                      : t("dashboard:changePassword.setButton")}
                 </button>
                 <button
                   type="button"
                   onClick={() => onViewChange("settings")}
                   className="text-sm text-zinc-500 hover:text-zinc-800 transition-colors"
                 >
-                  Cancel
+                  {t("common:cancel")}
                 </button>
               </div>
             </form>

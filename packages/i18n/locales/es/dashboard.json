@@ -33,6 +33,51 @@
     "quickReply": "Respuesta Rápida",
     "sendHint": "⌘ + Enter para enviar"
   },
+  "settings": {
+    "title": "Configuración de Perfil",
+    "subtitle": "Gestiona tu información personal",
+    "nameLabel": "Nombre Completo",
+    "namePlaceholder": "Juan García",
+    "emailLabel": "Correo electrónico",
+    "phoneLabel": "Teléfono",
+    "phonePlaceholder": "+1 (555) 000-0000",
+    "companyLabel": "Empresa",
+    "companyPlaceholder": "Empresa S.A.",
+    "saveError": "Error al guardar los cambios. Inténtalo de nuevo.",
+    "saveSuccess": "Cambios guardados correctamente",
+    "saving": "Guardando…",
+    "saveButton": "Guardar Cambios",
+    "security": {
+      "title": "Seguridad",
+      "passwordLabel": "Contraseña",
+      "passwordEnabledDesc": "El inicio de sesión con correo y contraseña está habilitado",
+      "passwordDisabledDesc": "Agrega una contraseña para habilitar el inicio de sesión",
+      "changePassword": "Cambiar Contraseña",
+      "setPassword": "Establecer Contraseña"
+    }
+  },
+  "changePassword": {
+    "backToSettings": "Volver a Configuración",
+    "changeTitle": "Cambiar Contraseña",
+    "setTitle": "Establecer Contraseña",
+    "changeSubtitle": "Actualiza tus credenciales de inicio de sesión",
+    "setSubtitle": "Agrega una contraseña para habilitar el inicio de sesión",
+    "successMessage": "Contraseña actualizada correctamente",
+    "redirecting": "Redirigiendo a configuración…",
+    "newPasswordLabel": "Nueva Contraseña",
+    "confirmPasswordLabel": "Confirmar Contraseña",
+    "requirements": {
+      "title": "La contraseña debe contener:",
+      "minLength": "Al menos 8 caracteres",
+      "uppercase": "Una letra mayúscula",
+      "number": "Un número",
+      "match": "Las contraseñas coinciden"
+    },
+    "updating": "Actualizando…",
+    "updateButton": "Actualizar Contraseña",
+    "setButton": "Establecer Contraseña",
+    "error": "Error al actualizar la contraseña. Inténtalo de nuevo."
+  },
   "ai": {
     "title": "Asistente IA",
     "escalationSuggested": "Escalación Sugerida",

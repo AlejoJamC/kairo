@@ -33,7 +33,37 @@
     "saveButton": "Guardar Cambios",
     "saving": "Guardando...",
     "saveSuccess": "Perfil actualizado exitosamente",
-    "saveError": "Error al actualizar el perfil"
+    "saveError": "Error al actualizar el perfil",
+    "security": {
+      "title": "Seguridad",
+      "passwordLabel": "Contraseña",
+      "passwordEnabledDesc": "El inicio de sesión con correo y contraseña está habilitado",
+      "passwordDisabledDesc": "Agrega una contraseña para habilitar el inicio de sesión",
+      "changePassword": "Cambiar Contraseña",
+      "setPassword": "Establecer Contraseña"
+    }
+  },
+  "changePassword": {
+    "backToSettings": "Volver a Configuración",
+    "changeTitle": "Cambiar Contraseña",
+    "setTitle": "Establecer Contraseña",
+    "changeSubtitle": "Actualiza tus credenciales de inicio de sesión",
+    "setSubtitle": "Agrega una contraseña para habilitar el inicio de sesión",
+    "successMessage": "Contraseña actualizada correctamente",
+    "redirecting": "Redirigiendo a configuración…",
+    "newPasswordLabel": "Nueva Contraseña",
+    "confirmPasswordLabel": "Confirmar Contraseña",
+    "requirements": {
+      "title": "La contraseña debe contener:",
+      "minLength": "Al menos 8 caracteres",
+      "uppercase": "Una letra mayúscula",
+      "number": "Un número",
+      "match": "Las contraseñas coinciden"
+    },
+    "updating": "Actualizando…",
+    "updateButton": "Actualizar Contraseña",
+    "setButton": "Establecer Contraseña",
+    "error": "Error al actualizar la contraseña. Inténtalo de nuevo."
   },
   "ticketDetail": {
     "customer": "Cliente",

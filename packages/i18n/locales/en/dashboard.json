@@ -33,6 +33,51 @@
     "quickReply": "Quick Reply",
     "sendHint": "⌘ + Enter to send"
   },
+  "settings": {
+    "title": "Profile Settings",
+    "subtitle": "Manage your personal information",
+    "nameLabel": "Full Name",
+    "namePlaceholder": "John Doe",
+    "emailLabel": "Email",
+    "phoneLabel": "Phone",
+    "phonePlaceholder": "+1 (555) 000-0000",
+    "companyLabel": "Company",
+    "companyPlaceholder": "Acme Inc.",
+    "saveError": "Failed to save changes. Please try again.",
+    "saveSuccess": "Changes saved successfully",
+    "saving": "Saving…",
+    "saveButton": "Save Changes",
+    "security": {
+      "title": "Security",
+      "passwordLabel": "Password",
+      "passwordEnabledDesc": "Email/password login is enabled on your account",
+      "passwordDisabledDesc": "Add a password to enable email/password login",
+      "changePassword": "Change Password",
+      "setPassword": "Set Password"
+    }
+  },
+  "changePassword": {
+    "backToSettings": "Back to Settings",
+    "changeTitle": "Change Password",
+    "setTitle": "Set Password",
+    "changeSubtitle": "Update your email/password login credentials",
+    "setSubtitle": "Add a password to enable email/password login",
+    "successMessage": "Password updated successfully",
+    "redirecting": "Redirecting back to settings…",
+    "newPasswordLabel": "New Password",
+    "confirmPasswordLabel": "Confirm Password",
+    "requirements": {
+      "title": "Password must contain:",
+      "minLength": "At least 8 characters",
+      "uppercase": "One uppercase letter",
+      "number": "One number",
+      "match": "Passwords match"
+    },
+    "updating": "Updating…",
+    "updateButton": "Update Password",
+    "setButton": "Set Password",
+    "error": "Failed to update password. Please try again."
+  },
   "ai": {
     "title": "AI Assistant",
     "escalationSuggested": "Escalation Suggested",
