@@ -1,6 +1,8 @@
 {
   "title": "Directorio de Clientes",
   "searchPlaceholder": "Buscar por nombre o ID...",
+  "addClient": "Agregar Cliente",
+  "loading": "Cargando clientes...",
   "table": {
     "name": "Nombre",
     "planType": "Tipo de Plan",
@@ -15,6 +17,39 @@
     "contactPersons": "Personas de Contacto",
     "plan": "Plan",
     "sla": "Nivel de SLA"
+  },
+  "form": {
+    "createTitle": "Nuevo Cliente",
+    "editTitle": "Editar Cliente",
+    "internalIdLabel": "ID Interno",
+    "internalIdPlaceholder": "CLI-001",
+    "nameLabel": "Nombre de la Empresa",
+    "namePlaceholder": "ACME Corp",
+    "legalIdLabel": "ID Legal",
+    "legalIdPlaceholder": "TAX-123456",
+    "telephoneLabel": "Teléfono",
+    "telephonePlaceholder": "+1 (555) 000-0000",
+    "planLabel": "Tipo de Plan",
+    "planPlaceholder": "Seleccionar plan...",
+    "slaLabel": "Nivel de SLA",
+    "slaPlaceholder": "Seleccionar nivel de SLA...",
+    "authorizedEmailsLabel": "Correos Autorizados",
+    "emailPlaceholder": "correo@ejemplo.com\ncontacto@ejemplo.com",
+    "contactPersonsLabel": "Personas de Contacto",
+    "personNamePlaceholder": "Nombre Completo",
+    "personRolePlaceholder": "Cargo (ej. CTO)",
+    "addPerson": "Agregar Persona",
+    "saveButton": "Guardar",
+    "savingButton": "Guardando...",
+    "cancelButton": "Cancelar",
+    "requiredError": "El ID Interno y el Nombre de la Empresa son requeridos",
+    "saveError": "Error al guardar el cliente. Inténtalo de nuevo.",
+    "duplicateIdError": "Ya existe un cliente con este ID Interno"
+  },
+  "actions": {
+    "edit": "Editar",
+    "delete": "Eliminar Cliente",
+    "confirmDelete": "¿Eliminar \"{{name}}\"? Esta acción no se puede deshacer."
   },
   "empty": {
     "noClients": "No se encontraron clientes",

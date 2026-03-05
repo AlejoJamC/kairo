@@ -74,11 +74,11 @@ export interface ContactPerson {
 export interface Client {
   id: string;
   internalId: string;
-  legalId: string;
+  legalId: string | null;
   name: string;
-  telephone: string;
+  telephone: string | null;
   authorizedEmails: string[];
   contactPersons: ContactPerson[];
-  plan: PlanType;
-  slaLevel: SlaLevel;
+  plan: PlanType | null;
+  slaLevel: SlaLevel | null;
 }

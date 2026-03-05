@@ -85,6 +85,52 @@ export type Database = {
       //   gmail_message_id, gmail_thread_id, from_email, from_name,
       //   to_email, cc_emails, body_plain, body_html, snippet, received_at
       // ------------------------------------------------------------------
+      // ------------------------------------------------------------------
+      // clients (004_create_clients_table)
+      // ------------------------------------------------------------------
+      clients: {
+        Row: {
+          id: string;
+          user_id: string;
+          internal_id: string;
+          legal_id: string | null;
+          name: string;
+          telephone: string | null;
+          authorized_emails: string[] | null;
+          contact_persons: Array<{ name: string; role: string }> | null;
+          plan_type: "Enterprise" | "Pro" | "Starter" | null;
+          sla_level: "Critical" | "High" | "Standard" | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          internal_id: string;
+          name: string;
+          legal_id?: string | null;
+          telephone?: string | null;
+          authorized_emails?: string[] | null;
+          contact_persons?: Array<{ name: string; role: string }> | null;
+          plan_type?: "Enterprise" | "Pro" | "Starter" | null;
+          sla_level?: "Critical" | "High" | "Standard" | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          internal_id?: string;
+          name?: string;
+          legal_id?: string | null;
+          telephone?: string | null;
+          authorized_emails?: string[] | null;
+          contact_persons?: Array<{ name: string; role: string }> | null;
+          plan_type?: "Enterprise" | "Pro" | "Starter" | null;
+          sla_level?: "Critical" | "High" | "Standard" | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
       tickets: {
         Row: {
           id: string;
@@ -130,6 +176,8 @@ export type Database = {
           first_response_at: string | null;
           sla_due_at: string | null;
           sla_breached: boolean;
+          // — client link (004) —
+          client_id: string | null;
         };
         Insert: {
           id?: string;
@@ -164,6 +212,7 @@ export type Database = {
           first_response_at?: string | null;
           sla_due_at?: string | null;
           sla_breached?: boolean;
+          client_id?: string | null;
         };
         Update: {
           // ticket_number is GENERATED ALWAYS — omit from Update
@@ -184,6 +233,7 @@ export type Database = {
           first_response_at?: string | null;
           sla_due_at?: string | null;
           sla_breached?: boolean;
+          client_id?: string | null;
         };
         Relationships: [];
       };

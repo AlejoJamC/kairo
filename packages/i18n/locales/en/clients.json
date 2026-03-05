@@ -1,6 +1,8 @@
 {
   "title": "Client Directory",
   "searchPlaceholder": "Search by name or ID...",
+  "addClient": "Add Client",
+  "loading": "Loading clients...",
   "table": {
     "name": "Name",
     "planType": "Plan Type",
@@ -15,6 +17,39 @@
     "contactPersons": "Contact Persons",
     "plan": "Plan",
     "sla": "SLA Level"
+  },
+  "form": {
+    "createTitle": "New Client",
+    "editTitle": "Edit Client",
+    "internalIdLabel": "Internal ID",
+    "internalIdPlaceholder": "CLI-001",
+    "nameLabel": "Company Name",
+    "namePlaceholder": "ACME Corp",
+    "legalIdLabel": "Legal ID",
+    "legalIdPlaceholder": "TAX-123456",
+    "telephoneLabel": "Telephone",
+    "telephonePlaceholder": "+1 (555) 000-0000",
+    "planLabel": "Plan Type",
+    "planPlaceholder": "Select plan...",
+    "slaLabel": "SLA Level",
+    "slaPlaceholder": "Select SLA level...",
+    "authorizedEmailsLabel": "Authorized Emails",
+    "emailPlaceholder": "email@example.com\ncontact@example.com",
+    "contactPersonsLabel": "Contact Persons",
+    "personNamePlaceholder": "Full Name",
+    "personRolePlaceholder": "Role (e.g. CTO)",
+    "addPerson": "Add Person",
+    "saveButton": "Save",
+    "savingButton": "Saving...",
+    "cancelButton": "Cancel",
+    "requiredError": "Internal ID and Company Name are required",
+    "saveError": "Failed to save client. Please try again.",
+    "duplicateIdError": "A client with this Internal ID already exists"
+  },
+  "actions": {
+    "edit": "Edit",
+    "delete": "Delete Client",
+    "confirmDelete": "Delete \"{{name}}\"? This cannot be undone."
   },
   "empty": {
     "noClients": "No clients found",
