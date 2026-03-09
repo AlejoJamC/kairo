@@ -1,0 +1,11 @@
+# Cursor Rules — Kairo
+
+Read `PROJECT.md` completely before suggesting or generating any code.
+All conventions, stack decisions, and architecture boundaries are defined there.
+
+## Cursor-specific preferences
+- Always show diffs before applying multi-file changes
+- Prefer explicit types over inference for function signatures
+- When generating components, always include both ES and EN strings (see i18n rules in PROJECT.md)
+- Never suggest `any` — suggest `unknown` with a type guard if truly uncertain
+- For Hono routes, follow the existing pattern in `apps/api/src/routes/`
