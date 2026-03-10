@@ -5,8 +5,10 @@ import { createClient } from '@/lib/supabase/client';
 import { getDashboardUrl } from '@/lib/api-config';
 import Link from 'next/link';
 import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { useTranslation } from '@/lib/i18n';
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -27,9 +29,7 @@ export default function LoginPage() {
 
       if (signInError) {
         if (signInError.message.includes('Invalid login credentials')) {
-          setError(
-            'Invalid credentials. If you signed up with Google, use "Continue with Google" or set a password first.'
-          );
+          setError(t.login.errorInvalidCredentials);
         } else {
           setError(signInError.message);
         }
@@ -48,7 +48,7 @@ export default function LoginPage() {
         window.location.href = dashboardUrl;
       }
     } catch {
-      setError('An unexpected error occurred. Please try again.');
+      setError(t.login.errorUnexpected);
       setLoading(false);
     }
   };
@@ -58,9 +58,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-white rounded-lg shadow-sm p-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-neutral-900 mb-2">
-            Welcome back
+            {t.login.title}
           </h1>
-          <p className="text-neutral-600">Sign in to your Kairo account</p>
+          <p className="text-neutral-600">{t.login.subtitle}</p>
         </div>
 
         {error && (
@@ -73,7 +73,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-neutral-900 mb-2">
-              Email
+              {t.login.emailLabel}
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
@@ -83,7 +83,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="you@company.com"
+                placeholder={t.login.emailPlaceholder}
                 className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
               />
             </div>
@@ -91,7 +91,7 @@ export default function LoginPage() {
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-neutral-900 mb-2">
-              Password
+              {t.login.passwordLabel}
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
@@ -113,13 +113,13 @@ export default function LoginPage() {
             className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-neutral-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? t.login.signingIn : t.login.signIn}
           </button>
         </form>
 
         <div className="my-6 flex items-center gap-4">
           <div className="flex-1 h-px bg-neutral-200" />
-          <span className="text-sm text-neutral-500">or</span>
+          <span className="text-sm text-neutral-500">{t.login.or}</span>
           <div className="flex-1 h-px bg-neutral-200" />
         </div>
 
@@ -133,13 +133,13 @@ export default function LoginPage() {
             <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
             <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
           </svg>
-          Continue with Google
+          {t.login.googleButton}
         </Link>
 
         <p className="mt-6 text-center text-sm text-neutral-600">
-          Don't have an account?{' '}
+          {t.login.noAccount}{' '}
           <Link href="/wizard" className="text-blue-600 hover:underline">
-            Sign up
+            {t.login.signUp}
           </Link>
         </p>
       </div>

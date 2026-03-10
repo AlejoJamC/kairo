@@ -20,6 +20,22 @@ export const es: Translations = {
     terms: "Términos de Servicio",
     copyright: "© 2026 Kairo. Todos los derechos reservados.",
   },
+  login: {
+    title: "Bienvenido de vuelta",
+    subtitle: "Inicia sesión en tu cuenta de Kairo",
+    emailLabel: "Correo electrónico",
+    emailPlaceholder: "tu@empresa.com",
+    passwordLabel: "Contraseña",
+    signingIn: "Iniciando sesión...",
+    signIn: "Iniciar sesión",
+    or: "o",
+    googleButton: "Continuar con Google",
+    noAccount: "¿No tienes cuenta?",
+    signUp: "Regístrate",
+    errorInvalidCredentials:
+      'Credenciales inválidas. Si te registraste con Google, usa "Continuar con Google" o establece una contraseña primero.',
+    errorUnexpected: "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.",
+  },
   wizard: {
     title: "Bienvenido a Kairo",
     subtitle: "Conecta tu bandeja de soporte para empezar",

@@ -18,6 +18,22 @@ export const en = {
     terms: "Terms of Service",
     copyright: "© 2026 Kairo. All rights reserved.",
   },
+  login: {
+    title: "Welcome back",
+    subtitle: "Sign in to your Kairo account",
+    emailLabel: "Email",
+    emailPlaceholder: "you@company.com",
+    passwordLabel: "Password",
+    signingIn: "Signing in...",
+    signIn: "Sign in",
+    or: "or",
+    googleButton: "Continue with Google",
+    noAccount: "Don't have an account?",
+    signUp: "Sign up",
+    errorInvalidCredentials:
+      'Invalid credentials. If you signed up with Google, use "Continue with Google" or set a password first.',
+    errorUnexpected: "An unexpected error occurred. Please try again.",
+  },
   wizard: {
     title: "Welcome to Kairo",
     subtitle: "Connect your support inbox to get started",
