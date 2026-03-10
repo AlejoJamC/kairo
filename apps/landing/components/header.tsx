@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { Zap } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 export function Header() {
+  const { t } = useTranslation();
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-neutral-200 bg-white/80 backdrop-blur-sm">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 md:px-8">
@@ -20,13 +25,13 @@ export function Header() {
             href="/login"
             className="px-4 py-2 text-sm font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
           >
-            Log in
+            {t.header.login}
           </Link>
           <Link
             href="/wizard/"
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
           >
-            Sign up
+            {t.header.signup}
           </Link>
         </div>
       </div>

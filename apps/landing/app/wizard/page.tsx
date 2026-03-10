@@ -1,8 +1,11 @@
 "use client";
 
 import { getApiUrl } from "@/lib/api-config";
+import { useTranslation } from "@/lib/i18n";
 
 export default function WizardPage() {
+  const { t } = useTranslation();
+
   const handleGoogleSignIn = () => {
     const apiUrl = getApiUrl();
     window.location.href = `${apiUrl}/api/auth/google`;
@@ -13,11 +16,9 @@ export default function WizardPage() {
       <div className="w-full max-w-md bg-white rounded-lg shadow-sm p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-neutral-900 mb-2">
-            Welcome to Kairo
+            {t.wizard.title}
           </h1>
-          <p className="text-neutral-600">
-            Connect your support inbox to get started
-          </p>
+          <p className="text-neutral-600">{t.wizard.subtitle}</p>
         </div>
 
         <button
@@ -42,12 +43,12 @@ export default function WizardPage() {
               fill="#EA4335"
             />
           </svg>
-          Continue with Google
+          {t.wizard.googleButton}
         </button>
 
         <div className="mt-6 text-center text-sm text-neutral-500">
-          <p>Kairo needs access to read your Gmail</p>
-          <p>to automatically triage support tickets</p>
+          <p>{t.wizard.gmailNote1}</p>
+          <p>{t.wizard.gmailNote2}</p>
         </div>
 
         <div className="mt-6 text-center">
@@ -55,9 +56,11 @@ export default function WizardPage() {
             disabled
             className="text-sm text-neutral-400 cursor-not-allowed"
           >
-            Continue with Email &rarr;
+            {t.wizard.emailButton}
           </button>
-          <p className="text-xs text-neutral-400 mt-1">(Coming soon)</p>
+          <p className="text-xs text-neutral-400 mt-1">
+            {t.wizard.emailComingSoon}
+          </p>
         </div>
       </div>
     </div>
