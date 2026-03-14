@@ -10,13 +10,13 @@ emails, and routes/responds based on learned behavior per client.
 /
 ├── apps/
 │   ├── landing/        # Next.js 15 — public marketing site
-│   ├── dashboard/      # Vite + React 19 — main product UI
+│   ├── webapp/         # Vite + React 19 — main support dashboard
+│   ├── mobile/         # Expo (React Native) — mobile companion
 │   └── api/            # Bun + Hono — backend API
 ├── packages/
-│   └── shared/         # shared types, utils
-├── specs/
-│   ├── pending/        # features ready to be implemented by agents
-│   └── done/           # completed specs (historical record)
+│   ├── types/          # shared TypeScript interfaces
+│   ├── i18n/           # shared translation resources (EN/ES)
+│   └── ui/             # shared ShadCN components
 ├── PROJECT.md          # ← you are here (read this first, always)
 ├── CLAUDE.md
 ├── .cursorrules
@@ -27,6 +27,7 @@ emails, and routes/responds based on learned behavior per client.
 | Layer       | Technology                        |
 |-------------|-----------------------------------|
 | Frontend    | Next.js 15, Vite, React 19        |
+| Mobile      | Expo (React Native)               |
 | API         | Bun, Hono                         |
 | Database    | Supabase (Postgres + Auth)        |
 | AI          | Claude API (batch mode)           |
@@ -34,20 +35,24 @@ emails, and routes/responds based on learned behavior per client.
 | Deploy      | Vercel                            |
 | Language    | TypeScript (strict, no `any`)     |
 | Tests       | Vitest                            |
-| Monorepo    | Turborepo                         |
+| Monorepo    | Turborepo + Bun                   |
 
 ## What's Working Today
-- Auth & onboarding (Supabase Auth + Google OAuth)
+- Auth & onboarding (Supabase Auth + Google OAuth + email/password)
 - Gmail sync (OAuth connected, emails being pulled)
-- Basic client CRUD
+- Client CRUD (full module with database persistence)
 - Session management
+- Profile settings with password change
+- i18n (EN/ES) on landing page, login page, and dashboard password settings
+- Shared component library (`packages/ui`) with ShadCN
+- Shared types (`packages/types`) with core schema
 
 ## What's NOT Built Yet
 - Email classification with Claude API
-- Conversation UI (sending messages to clients)
-- Profile update form
-- i18n (ES/EN) on several forms
+- Conversation UI (sending messages to clients) — components scaffolded, not wired
+- i18n on remaining dashboard forms and views
 - Intelligence layer (per-client learning)
+- Mobile app (scaffolded, not functional)
 
 ## Code Conventions
 - TypeScript strict mode everywhere — no `any`, no implicit returns on async
@@ -55,6 +60,7 @@ emails, and routes/responds based on learned behavior per client.
 - Components: PascalCase in `/components`
 - Hooks: camelCase prefixed `use` in `/hooks`
 - i18n: **every user-facing string must exist in both ES and EN** — no exceptions
+- i18n files live in `apps/webapp/src/i18n/resources/{en,es}/*.json` — NOT in `packages/i18n/locales/`
 - Error handling: always return typed errors, never throw raw strings
 - Commits: conventional commits (`feat:`, `fix:`, `chore:`)
 
@@ -62,6 +68,8 @@ emails, and routes/responds based on learned behavior per client.
 Every form, button, label, and error message must have both languages.
 Default detection: browser language. Fallback: EN.
 If a component exists only in one language, it's considered incomplete.
+Webapp i18n config: `apps/webapp/src/i18n/config.ts`
+Webapp translation files: `apps/webapp/src/i18n/resources/{en,es}/*.json`
 
 ## Architecture Boundaries — Do NOT touch without discussing first
 - `src/intelligence/` — email classification logic, prompt engineering, per-client learning
@@ -70,7 +78,6 @@ If a component exists only in one language, it's considered incomplete.
 
 ## Branch Strategy
 - `main` — production
-- `dev` — integration branch
 - `feature/[spec-name]` — one branch per spec
 
 ## How Agents Should Work on This Repo
