@@ -2,6 +2,8 @@
 
 AI-powered support cockpit for n8n companies — classifies emails, routes tickets, and learns per-client behavior.
 
+🇨🇴 [Versión en español](docs/README.es.md)
+
 ## Stack
 
 | Layer | Tech |
