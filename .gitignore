@@ -148,8 +148,8 @@ vite.config.ts.timestamp-*
 .idea/
 
 # Internal documentation
-internal/
-internal/*
+kairo-internal/
+kairo-internal/*
 
 # Turborepo
 .turbo

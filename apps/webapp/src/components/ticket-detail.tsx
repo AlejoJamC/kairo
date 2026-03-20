@@ -46,10 +46,10 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
       </div>
 
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         <div className="rounded-lg border border-zinc-200 bg-white p-5">
           {ticket.body_plain ? (
-            <pre className="whitespace-pre-wrap font-sans text-sm text-zinc-800 leading-relaxed">
+            <pre className="whitespace-pre-wrap break-words overflow-x-hidden font-sans text-sm text-zinc-800 leading-relaxed">
               {ticket.body_plain}
             </pre>
           ) : ticket.snippet ? (
