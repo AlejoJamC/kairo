@@ -9,7 +9,7 @@ interface TicketDetailProps {
 export function TicketDetail({ ticket }: TicketDetailProps) {
   if (!ticket) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50">
+      <div className="flex min-w-0 flex-1 flex-col items-center justify-center bg-zinc-50">
         <Mail className="h-10 w-10 text-zinc-300 mb-3" />
         <p className="text-sm text-zinc-400">Select a ticket to view details</p>
       </div>
@@ -17,7 +17,7 @@ export function TicketDetail({ ticket }: TicketDetailProps) {
   }
 
   return (
-    <div className="flex flex-1 flex-col bg-zinc-50">
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-zinc-50">
       {/* Fixed Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-3 shadow-sm">
         <div className="flex min-w-0 flex-1 flex-col">
