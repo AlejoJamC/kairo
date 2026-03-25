@@ -11,7 +11,7 @@ Cockpit de soporte con IA para empresas que usan n8n — clasifica correos, enru
 | Landing | Next.js 15 |
 | API | Bun + Hono |
 | Base de datos | Supabase (Postgres + Auth) |
-| IA | Claude API |
+| IA | Claude API (prod) / Ollama (local) |
 | Correo | Gmail API |
 | Deploy | Vercel |
 | Lenguaje | TypeScript (strict) |
@@ -25,9 +25,10 @@ kairo/
 │   ├── landing/   # Next.js — sitio de marketing
 │   └── api/       # Bun + Hono — backend
 ├── packages/
-│   ├── types/     # interfaces TypeScript compartidas
-│   ├── i18n/      # traducciones compartidas (EN/ES)
-│   └── ui/        # componentes ShadCN compartidos
+│   ├── types/          # interfaces TypeScript compartidas
+│   ├── i18n/           # traducciones compartidas (EN/ES)
+│   ├── ui/             # componentes ShadCN compartidos
+│   └── intelligence/   # proveedor LLM modular (Ollama / Anthropic)
 └── specs/         # especificaciones de features (pending/done)
 ```
 

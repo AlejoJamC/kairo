@@ -13,7 +13,7 @@ AI-powered support cockpit for n8n companies — classifies emails, routes ticke
 | Landing | Next.js 15 |
 | API | Bun + Hono |
 | Database | Supabase (Postgres + Auth) |
-| AI | Claude API |
+| AI | Claude API (prod) / Ollama (local) |
 | Email | Gmail API |
 | Deploy | Vercel |
 | Language | TypeScript (strict) |
@@ -27,9 +27,10 @@ kairo/
 │   ├── landing/   # Next.js — marketing site
 │   └── api/       # Bun + Hono — backend
 ├── packages/
-│   ├── types/     # shared TypeScript interfaces
-│   ├── i18n/      # shared translations (EN/ES)
-│   └── ui/        # shared ShadCN components
+│   ├── types/          # shared TypeScript interfaces
+│   ├── i18n/           # shared translations (EN/ES)
+│   ├── ui/             # shared ShadCN components
+│   └── intelligence/   # modular LLM provider (Ollama / Anthropic)
 └── specs/         # feature specs (pending/done)
 ```
 
