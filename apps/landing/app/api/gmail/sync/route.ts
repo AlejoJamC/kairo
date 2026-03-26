@@ -1,6 +1,7 @@
 import { createClient, getUserFromRequest } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
+import { env } from "@/env";
 
 export async function POST(request: Request) {
   try {
@@ -68,13 +69,13 @@ export async function POST(request: Request) {
 
     // 4. Set up Gmail API client
     const oauth2Client = new google.auth.OAuth2(
-      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
+      env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+      env.GOOGLE_CLIENT_SECRET
     );
 
     oauth2Client.setCredentials({
       access_token: accessToken,
-      refresh_token: refreshToken,
+      ...(refreshToken ? { refresh_token: refreshToken } : {}),
       expiry_date: session?.provider_token
         ? Date.now() + 3600 * 1000
         : gmailAccount.expires_at

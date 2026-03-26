@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { env } from "@/env";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -36,6 +37,5 @@ export async function GET(request: Request) {
     }
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-  return NextResponse.redirect(`${appUrl}/wizard/complete`);
+  return NextResponse.redirect(`${env.NEXT_PUBLIC_APP_URL}/wizard/complete`);
 }

@@ -161,3 +161,6 @@ kairo-internal/*
 *.p12
 *.key
 *.mobileprovision
+
+#Claude
+.claude/settings.local.json

@@ -4,11 +4,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "../../packages/env/**"],
       "outputs": ["dist/**", ".next/**", "out/**", "public/dashboard/**", "!.next/cache/**"]
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "inputs": ["$TURBO_DEFAULT$", "../../packages/env/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]

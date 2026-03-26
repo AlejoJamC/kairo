@@ -1,25 +1,19 @@
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/supabase";
+import {createClient as createSupabaseClient} from "@supabase/supabase-js";
+import type {Database} from "@/types/supabase";
+import {env} from "@/env";
 
 let client: ReturnType<typeof createSupabaseClient<Database>> | null = null;
 
 export function createClient() {
-  if (client) return client;
+    if (client) return client;
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    client = createSupabaseClient<Database>(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY, {
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: false,
+        },
+    });
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY");
-  }
-
-  client = createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: false,
-    },
-  });
-
-  return client;
+    return client;
 }

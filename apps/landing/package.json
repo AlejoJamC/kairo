@@ -11,6 +11,8 @@
     "clean": "rm -rf .next out public/dashboard"
   },
   "dependencies": {
+    "@kairo/env": "workspace:*",
+    "@t3-oss/env-nextjs": "^0.12.0",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/supabase-js": "^2.97.0",
     "@tailwindcss/postcss": "^4.1.18",
@@ -19,7 +21,8 @@
     "next": "^15.3.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@kairo/webapp": "workspace:*",
