@@ -70,12 +70,12 @@ export async function POST(request: Request) {
     // 4. Set up Gmail API client
     const oauth2Client = new google.auth.OAuth2(
       env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-      env.GMAIL_CLIENT_SECRET
+      env.GOOGLE_CLIENT_SECRET
     );
 
     oauth2Client.setCredentials({
       access_token: accessToken,
-      refresh_token: refreshToken,
+      ...(refreshToken ? { refresh_token: refreshToken } : {}),
       expiry_date: session?.provider_token
         ? Date.now() + 3600 * 1000
         : gmailAccount.expires_at

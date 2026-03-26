@@ -6,7 +6,6 @@ export const env = createEnv({
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
     INTELLIGENCE_PROVIDER: z.enum(["claude", "ollama"]).default("ollama"),
-    GMAIL_CLIENT_SECRET: z.string().min(1).optional(),
     SUPABASE_URL: z.string().url(),
   },
   clientPrefix: "VITE_",

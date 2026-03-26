@@ -76,16 +76,16 @@ Each app reads from that single file:
 
 The `.env.example` is grouped into three sections — `SHARED`, `LANDING`, and `WEBAPP` — with comments explaining each variable.
 
-**Migrating from an older setup?** If you had `apps/landing/.env.local` or `apps/webapp/.env.local`, merge their contents into the root `.env.local` and rename `GOOGLE_CLIENT_SECRET` → `GMAIL_CLIENT_SECRET`.
+**Migrating from an older setup?** If you had `apps/landing/.env.local` or `apps/webapp/.env.local`, merge their contents into the root `.env.local` and rename `GOOGLE_CLIENT_SECRET` → `GOOGLE_CLIENT_SECRET`.
 
 ### Where variables are validated
 
 | Package / App | File | Variables it owns |
 |---|---|---|
-| `packages/env` | `index.ts` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INTELLIGENCE_PROVIDER`, `ANTHROPIC_API_KEY`, `GMAIL_CLIENT_SECRET` |
+| `packages/env` | `index.ts` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INTELLIGENCE_PROVIDER`, `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_SECRET` |
 | `apps/api` | `src/env.ts` | Re-exports `@kairo/env` + `PORT` |
 | `apps/webapp` | `src/env.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LANDING_URL` |
-| `apps/landing` | `env.ts` | All `NEXT_PUBLIC_*` vars + `GMAIL_CLIENT_SECRET` |
+| `apps/landing` | `env.ts` | All `NEXT_PUBLIC_*` vars + `GOOGLE_CLIENT_SECRET` |
 
 Never access `process.env` or `import.meta.env` directly — always import from the nearest `env.ts`:
 
