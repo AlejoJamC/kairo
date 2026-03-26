@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { env } from "@/env";
 
 export async function GET() {
   try {
@@ -9,7 +10,7 @@ export async function GET() {
       provider: "google",
       options: {
         scopes: "https://www.googleapis.com/auth/gmail.readonly",
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+        redirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback`,
         queryParams: {
           access_type: "offline",
           prompt: "consent",

@@ -5,6 +5,7 @@ import path from 'path'
 
 export default defineConfig({
   base: '/dashboard/',
+  envDir: '../../',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

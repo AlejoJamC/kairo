@@ -1,3 +1,5 @@
+import { env } from "@/env";
+
 /**
  * API Configuration
  *
@@ -6,10 +8,7 @@
  * - With backend: value of NEXT_PUBLIC_API_URL (e.g. http://localhost:3001)
  */
 export function getApiUrl(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-  return "";
+  return env.NEXT_PUBLIC_API_URL;
 }
 
 /**
@@ -33,8 +32,5 @@ export async function apiCall(
  * In dev you may want http://localhost:5173/dashboard; in prod it's /dashboard.
  */
 export function getDashboardUrl(): string {
-  if (process.env.NEXT_PUBLIC_DASHBOARD_URL) {
-    return process.env.NEXT_PUBLIC_DASHBOARD_URL;
-  }
-  return "/dashboard";
+  return env.NEXT_PUBLIC_DASHBOARD_URL;
 }

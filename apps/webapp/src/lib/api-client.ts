@@ -5,14 +5,14 @@
  * Vercel serves everything same-origin in production.
  */
 import { createClient } from "@/lib/supabase/client";
+import { env } from "@/env";
 
 export function getApiUrl(): string {
   return "";
 }
 
 export function getLandingUrl(path: string): string {
-  const base = import.meta.env.VITE_LANDING_URL || "";
-  return `${base}${path}`;
+  return `${env.VITE_LANDING_URL}${path}`;
 }
 
 /**
