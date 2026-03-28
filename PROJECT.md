@@ -14,9 +14,13 @@ emails, and routes/responds based on learned behavior per client.
 │   ├── mobile/         # Expo (React Native) — mobile companion
 │   └── api/            # Bun + Hono — backend API
 ├── packages/
+│   ├── env/            # centralized env validation (@t3-oss/env-core)
 │   ├── types/          # shared TypeScript interfaces
 │   ├── i18n/           # shared translation resources (EN/ES)
-│   └── ui/             # shared ShadCN components
+│   ├── ui/             # shared ShadCN components
+│   └── intelligence/   # modular LLM provider (Ollama / Anthropic)
+├── supabase/
+│   └── migrations/     # shared DB migrations (Postgres via Supabase)
 ├── PROJECT.md          # ← you are here (read this first, always)
 ├── CLAUDE.md
 ├── .cursorrules
@@ -72,8 +76,8 @@ Webapp i18n config: `apps/webapp/src/i18n/config.ts`
 Webapp translation files: `apps/webapp/src/i18n/resources/{en,es}/*.json`
 
 ## Architecture Boundaries — Do NOT touch without discussing first
-- `src/intelligence/` — email classification logic, prompt engineering, per-client learning
-- Supabase schema changes — always require a migration file
+- `packages/intelligence/` — email classification logic, prompt engineering, per-client learning
+- Supabase schema changes — always require a migration file in `supabase/migrations/`
 - Gmail OAuth scopes — changes affect existing connected accounts
 
 ## Branch Strategy
