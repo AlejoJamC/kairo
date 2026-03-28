@@ -25,12 +25,16 @@ kairo/
 ├── apps/
 │   ├── webapp/    # Vite + React — support dashboard
 │   ├── landing/   # Next.js — marketing site
-│   └── api/       # Bun + Hono — backend
+│   ├── api/       # Bun + Hono — backend
+│   └── mobile/    # Expo — mobile app
 ├── packages/
+│   ├── env/            # centralized env validation (@t3-oss/env-core)
 │   ├── types/          # shared TypeScript interfaces
 │   ├── i18n/           # shared translations (EN/ES)
 │   ├── ui/             # shared ShadCN components
 │   └── intelligence/   # modular LLM provider (Ollama / Anthropic)
+├── supabase/
+│   └── migrations/     # shared DB migrations (Postgres via Supabase)
 └── specs/         # feature specs (pending/done)
 ```
 
