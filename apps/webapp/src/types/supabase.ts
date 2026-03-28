@@ -74,6 +74,9 @@ export type Database = {
           resolved_at: string | null;
           created_at: string;
           updated_at: string;
+          ai_reasoning: string | null;
+          classified_at: string | null;
+          classification_confidence: number | null;
         };
         Insert: {
           user_id: string;
@@ -95,6 +98,9 @@ export type Database = {
           status?: string;
           assigned_to?: string | null;
           resolved_at?: string | null;
+          ai_reasoning?: string | null;
+          classified_at?: string | null;
+          classification_confidence?: number | null;
         };
         Update: {
           ticket_type?: string | null;
@@ -104,6 +110,9 @@ export type Database = {
           status?: string;
           assigned_to?: string | null;
           resolved_at?: string | null;
+          ai_reasoning?: string | null;
+          classified_at?: string | null;
+          classification_confidence?: number | null;
         };
         Relationships: [];
       };

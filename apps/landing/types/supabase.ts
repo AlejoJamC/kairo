@@ -178,6 +178,10 @@ export type Database = {
           sla_breached: boolean;
           // — client link (004) —
           client_id: string | null;
+          // — AI classification metadata (005) —
+          ai_reasoning: string | null;
+          classified_at: string | null;
+          classification_confidence: number | null;
         };
         Insert: {
           id?: string;
@@ -213,6 +217,9 @@ export type Database = {
           sla_due_at?: string | null;
           sla_breached?: boolean;
           client_id?: string | null;
+          ai_reasoning?: string | null;
+          classified_at?: string | null;
+          classification_confidence?: number | null;
         };
         Update: {
           // ticket_number is GENERATED ALWAYS — omit from Update
@@ -234,6 +241,9 @@ export type Database = {
           sla_due_at?: string | null;
           sla_breached?: boolean;
           client_id?: string | null;
+          ai_reasoning?: string | null;
+          classified_at?: string | null;
+          classification_confidence?: number | null;
         };
         Relationships: [];
       };
