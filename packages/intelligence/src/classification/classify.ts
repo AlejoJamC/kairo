@@ -7,6 +7,6 @@ export async function classifyEmail(
   message: EmailMessage
 ): Promise<ClassificationResult> {
   const provider = createCompletionProvider();
-  const prompt = buildPrompt(message);
+  const prompt = await buildPrompt(message);
   return provider.completeJSON(prompt, ClassificationSchema);
 }

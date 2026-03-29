@@ -1,49 +1,33 @@
+import { readFile } from 'fs/promises';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import type { EmailMessage } from './types';
 
-export function buildPrompt(message: EmailMessage): string {
-  return `Eres un asistente de clasificación de emails para un sistema de soporte técnico.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-Analiza el siguiente email y clasifícalo según las instrucciones.
+let promptTemplateCache: string | null = null;
 
-**Email:**
-De: ${message.from}
-Asunto: ${message.subject}
-Cuerpo: ${message.body}
+async function loadPromptTemplate(): Promise<string> {
+  if (promptTemplateCache) return promptTemplateCache;
 
-**Instrucciones:**
+  const promptPath = join(__dirname, '../../prompts/email-classification.md');
+  const fileContent = await readFile(promptPath, 'utf-8');
 
-1. **tipo**:
-   - "support" si el usuario necesita ayuda técnica o tiene un problema
-   - "lead" si es una consulta de ventas o interés en comprar
-   - "spam" si es irrelevante o publicidad no solicitada
+  const withoutFrontmatter = fileContent.replace(/^---\n[\s\S]*?\n---\n/, '');
+  promptTemplateCache = withoutFrontmatter.trim();
 
-2. **prioridad**:
-   - "P1" si es urgente (sistema caído, error en producción, cliente bloqueado)
-   - "P2" si es importante pero no urgente
-   - "P3" si es normal
+  return promptTemplateCache;
+}
 
-3. **categoria**:
-   - "technical" para problemas técnicos
-   - "billing" para facturación
-   - "sales" para consultas de ventas
-   - "other" para cualquier otra cosa
+/**
+ * Build classification prompt by injecting email data into template
+ */
+export async function buildPrompt(message: EmailMessage): Promise<string> {
+  const template = await loadPromptTemplate();
 
-4. **sentimiento**:
-   - "urgente" si el tono es apremiante o frustrado
-   - "neutral" si el tono es profesional
-   - "casual" si el tono es relajado
-
-5. **razonamiento**: Explica brevemente por qué clasificaste así
-
-6. **confianza**: Número 0-1 indicando qué tan seguro estás
-
-Responde SOLO con JSON (sin markdown):
-{
-  "tipo": "support" | "lead" | "spam",
-  "prioridad": "P1" | "P2" | "P3",
-  "categoria": "technical" | "billing" | "sales" | "other",
-  "sentimiento": "urgente" | "neutral" | "casual",
-  "razonamiento": "string",
-  "confianza": 0.95
-}`;
+  return template
+    .replaceAll('{{from}}', message.from)
+    .replaceAll('{{subject}}', message.subject)
+    .replaceAll('{{body}}', message.body);
 }
