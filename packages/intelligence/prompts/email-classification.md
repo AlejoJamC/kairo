@@ -1,6 +1,6 @@
 ---
 version: 1.0.0
-author: Alejandro Jaramillo
+author: Alejandro Mantilla
 date: 2026-03-29
 model: claude-sonnet-4-20250514
 fallback_model: llama3.2
