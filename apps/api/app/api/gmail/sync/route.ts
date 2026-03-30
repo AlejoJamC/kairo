@@ -177,6 +177,7 @@ export async function POST(request: Request) {
         let bodyPlain = "";
         let bodyHtml = "";
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const extractBody = (parts: any[]): void => {
           for (const part of parts) {
             if (part.mimeType === "text/plain" && part.body?.data) {
