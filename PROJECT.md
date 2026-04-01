@@ -19,8 +19,14 @@ emails, and routes/responds based on learned behavior per client.
 │   ├── i18n/           # shared translation resources (EN/ES)
 │   ├── ui/             # shared ShadCN components
 │   └── intelligence/   # modular LLM provider (Ollama / Anthropic)
+│       └── prompts/    # versioned LLM prompts (YAML frontmatter + markdown)
 ├── supabase/
 │   └── migrations/     # shared DB migrations (Postgres via Supabase)
+├── kairo-internal/
+│   ├── architecture/   # 17 Architecture Decision Records (ADR-001 to ADR-017)
+│   └── varios/         # legacy design docs, ideation, architecture specs
+├── docs/
+│   └── README.es.md    # Spanish documentation
 ├── PROJECT.md          # ← you are here (read this first, always)
 ├── CLAUDE.md
 ├── .cursorrules
@@ -34,7 +40,7 @@ emails, and routes/responds based on learned behavior per client.
 | Mobile      | Expo (React Native)               |
 | API         | Bun, Hono                         |
 | Database    | Supabase (Postgres + Auth)        |
-| AI          | Claude API (batch mode)           |
+| AI          | Claude API (prod) / Ollama (local)|
 | Email       | Gmail API (OAuth, sync active)    |
 | Deploy      | Vercel                            |
 | Language    | TypeScript (strict, no `any`)     |
@@ -50,12 +56,17 @@ emails, and routes/responds based on learned behavior per client.
 - i18n (EN/ES) on landing page, login page, and dashboard password settings
 - Shared component library (`packages/ui`) with ShadCN
 - Shared types (`packages/types`) with core schema
+- Centralized env validation (`packages/env`) via `@t3-oss/env-core` + Zod
+- Intelligence layer (`packages/intelligence`) — modular LLM provider abstraction (Ollama / Anthropic)
+- Email classification prompt versioned as markdown artifact (`packages/intelligence/prompts/email-classification.md` v1.0.0)
+- DB schema with AI classification constraints (migration 005)
+- Supabase migrations consolidated at repo root (`supabase/migrations/`)
 
 ## What's NOT Built Yet
-- Email classification with Claude API
+- Email classification wired end-to-end (prompt exists, API call not integrated)
 - Conversation UI (sending messages to clients) — components scaffolded, not wired
 - i18n on remaining dashboard forms and views
-- Intelligence layer (per-client learning)
+- Intelligence layer per-client learning / feedback loop
 - Mobile app (scaffolded, not functional)
 
 ## Code Conventions

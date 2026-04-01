@@ -31,9 +31,11 @@ kairo/
 │   ├── i18n/           # traducciones compartidas (EN/ES)
 │   ├── ui/             # componentes ShadCN compartidos
 │   └── intelligence/   # proveedor LLM modular (Ollama / Anthropic)
+│       └── prompts/    # prompts LLM versionados (markdown + frontmatter YAML)
 ├── supabase/
 │   └── migrations/     # migraciones de base de datos compartidas (Postgres vía Supabase)
-└── specs/         # especificaciones de features (pending/done)
+└── kairo-internal/
+    └── architecture/   # 17 Architecture Decision Records
 ```
 
 ## Primeros pasos
@@ -77,8 +79,6 @@ Cada app lee desde ese único archivo:
 | `apps/landing` | `next.config.ts` llama a `loadEnvConfig("../../")` antes de que webpack compile, para que las variables `NEXT_PUBLIC_*` queden embebidas en el bundle del cliente |
 
 El `.env.example` está agrupado en tres secciones — `SHARED`, `LANDING` y `WEBAPP` — con comentarios que explican cada variable.
-
-**¿Migrando desde una configuración anterior?** Si tenías `apps/landing/.env.local` o `apps/webapp/.env.local`, fusiona su contenido en el `.env.local` raíz y renombra `GOOGLE_CLIENT_SECRET` → `GOOGLE_CLIENT_SECRET`.
 
 ### Dónde se valida cada variable
 
