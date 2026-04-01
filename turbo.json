@@ -7,6 +7,11 @@
       "inputs": ["$TURBO_DEFAULT$", "../../packages/env/**"],
       "outputs": ["dist/**", ".next/**", "out/**", "public/dashboard/**", "!.next/cache/**"]
     },
+    "build:api": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "../../packages/env/**"],
+      "outputs": ["dist/**"]
+    },
     "dev": {
       "cache": false,
       "persistent": true,

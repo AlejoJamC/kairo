@@ -3,12 +3,11 @@ import { env } from "@/env";
 /**
  * API Configuration
  *
- * Returns the base API URL based on environment:
- * - Default: '' (relative, uses Next.js API routes / serverless)
- * - With backend: value of NEXT_PUBLIC_API_URL (e.g. http://localhost:3001)
+ * Always returns '' (relative URL) — Next.js API routes / serverless functions
+ * are served on the same origin. There is no separate backend URL.
  */
 export function getApiUrl(): string {
-  return env.NEXT_PUBLIC_API_URL;
+  return "";
 }
 
 /**
@@ -18,8 +17,7 @@ export async function apiCall(
   endpoint: string,
   options?: RequestInit
 ): Promise<Response> {
-  const baseUrl = getApiUrl();
-  const url = `${baseUrl}${endpoint}`;
+  const url = `${getApiUrl()}${endpoint}`;
 
   return fetch(url, {
     headers: { "Content-Type": "application/json", ...options?.headers },

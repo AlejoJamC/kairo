@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
+    "build:api": "bun build src/index.ts --outdir dist --target bun",
     "start": "bun run dist/index.js",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@kairo/env": "workspace:*",
+    "@supabase/supabase-js": "^2.49.4",
     "@t3-oss/env-core": "^0.12.0",
     "hono": "^4.7.10",
     "zod": "^3.25.0"
