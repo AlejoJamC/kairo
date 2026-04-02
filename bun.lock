@@ -11,9 +11,10 @@
     },
     "apps/api": {
       "name": "@kairo/api",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@kairo/env": "workspace:*",
+        "@kairo/intelligence": "workspace:*",
         "@supabase/supabase-js": "^2.49.4",
         "@t3-oss/env-core": "^0.12.0",
         "hono": "^4.7.10",
