@@ -1,17 +1,18 @@
 {
   "name": "@kairo/api",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run --watch src/index.ts",
+    "dev": "bun run --watch --env-file ../../.env.local src/index.ts",
     "build:api": "bun build src/index.ts --outdir dist --target bun",
-    "start": "bun run dist/index.js",
+    "start": "bun run --env-file ../../.env.local dist/index.js",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@kairo/env": "workspace:*",
+    "@kairo/intelligence": "workspace:*",
     "@supabase/supabase-js": "^2.49.4",
     "@t3-oss/env-core": "^0.12.0",
     "hono": "^4.7.10",
