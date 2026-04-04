@@ -873,3 +873,6 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
+// Convenience type aliases derived from generated schema
+export type Ticket = Database["public"]["Tables"]["tickets"]["Row"]
