@@ -18,6 +18,14 @@ export type KairoEvents = {
       userId: string;
     };
   };
+  "tickets/batch-classify.triggered": {
+    data: {
+      userId: string;
+      ticketIds: string[];
+      forceReclassify: boolean;
+      jobId: string;
+    };
+  };
 };
 
 export const inngest = new Inngest({
