@@ -13,6 +13,11 @@ export type KairoEvents = {
       processedMessageIds: string[];
     };
   };
+  "pipeline/tier3.triggered": {
+    data: {
+      userId: string;
+    };
+  };
 };
 
 export const inngest = new Inngest({
