@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { serve } from "inngest/hono";
 import { inngest } from "./lib/inngest.js";
 import { tier1FastPath } from "./functions/pipeline/tier1-fast-path.js";
+import { tier2Background } from "./functions/pipeline/tier2-background.js";
 import { health } from "./routes/v1/health.js";
 import { tickets } from "./routes/v1/tickets.js";
 
@@ -15,7 +16,7 @@ app.route("/v1", v1);
 
 app.use(
   "/api/inngest",
-  serve({ client: inngest, functions: [tier1FastPath] })
+  serve({ client: inngest, functions: [tier1FastPath, tier2Background] })
 );
 
 export default {

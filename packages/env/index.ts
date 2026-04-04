@@ -12,6 +12,8 @@ export const env = createEnv({
         FAST_PATH_SCAN_SIZE: z.coerce.number().int().positive().default(30),
         FAST_PATH_ESCAPE_COUNT: z.coerce.number().int().positive().default(3),
         FAST_PATH_CONCURRENCY: z.coerce.number().int().positive().default(3),
+        BACKGROUND_CONCURRENCY: z.coerce.number().int().positive().default(3),
+        TIER_2_WINDOW_DAYS: z.coerce.number().int().positive().default(15),
     },
     clientPrefix: "VITE_",
     client: {
