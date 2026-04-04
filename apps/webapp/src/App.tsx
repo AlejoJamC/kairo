@@ -1,22 +1,17 @@
 import { useState } from "react";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { Sidebar } from "@/components/sidebar";
-import { TicketList } from "@/components/ticket-list";
-import { TicketDetail } from "@/components/ticket-detail";
-import { AiAssistant } from "@/components/ai-assistant";
+import { Inbox } from "@/components/inbox";
 import { ClientDirectory } from "@/components/client-directory";
 import { ProfileSettings } from "@/components/profile-settings";
 import { ChangePasswordSettings } from "@/components/change-password-settings";
-import { SyncButton } from "@/components/sync-button";
 import { Loader2 } from "lucide-react";
-import type { AppView, GmailTicket } from "@/types";
+import type { AppView } from "@/types";
 
 function AppContent() {
   const { loading } = useAuth();
-  const [selectedTicket, setSelectedTicket] = useState<GmailTicket | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeView, setActiveView] = useState<AppView>("inbox");
-  const [refreshKey, setRefreshKey] = useState(0);
 
   if (loading) {
     return (
@@ -38,24 +33,7 @@ function AppContent() {
         onViewChange={setActiveView}
       />
       {activeView === "inbox" ? (
-        <>
-          <div className="flex h-screen w-[300px] flex-col border-r bg-white">
-            <SyncButton onSyncComplete={() => setRefreshKey((k) => k + 1)} />
-            <TicketList
-              selectedId={selectedTicket?.id ?? null}
-              onSelect={setSelectedTicket}
-              refreshKey={refreshKey}
-            />
-          </div>
-          <TicketDetail ticket={selectedTicket} />
-          <AiAssistant
-            customer={
-              selectedTicket?.from_name ||
-              selectedTicket?.from_email ||
-              "—"
-            }
-          />
-        </>
+        <Inbox />
       ) : activeView === "settings" ? (
         <ProfileSettings onViewChange={setActiveView} />
       ) : activeView === "change-password" ? (

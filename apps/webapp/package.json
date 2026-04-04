@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@kairo/env": "workspace:*",
+    "@kairo/types": "workspace:*",
+    "zustand": "^5.0.0",
     "@t3-oss/env-core": "^0.12.0",
     "@supabase/supabase-js": "^2.97.0",
     "@tailwindcss/vite": "^4.1.18",
