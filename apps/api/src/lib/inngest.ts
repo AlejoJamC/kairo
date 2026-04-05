@@ -26,6 +26,12 @@ export type KairoEvents = {
       jobId: string;
     };
   };
+  "pipeline/incremental-sync.triggered": {
+    data: {
+      userId: string;
+      gmailAccessToken: string;
+    };
+  };
 };
 
 export const inngest = new Inngest({

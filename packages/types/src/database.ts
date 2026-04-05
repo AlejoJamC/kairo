@@ -292,6 +292,7 @@ export type Database = {
           direction: string
           external_id: string
           id: string
+          processing_batch: string | null
           processing_tier: number | null
           raw_payload: Json | null
           received_at: string
@@ -312,6 +313,7 @@ export type Database = {
           direction: string
           external_id: string
           id?: string
+          processing_batch?: string | null
           processing_tier?: number | null
           raw_payload?: Json | null
           received_at: string
@@ -332,6 +334,7 @@ export type Database = {
           direction?: string
           external_id?: string
           id?: string
+          processing_batch?: string | null
           processing_tier?: number | null
           raw_payload?: Json | null
           received_at?: string

@@ -235,11 +235,16 @@ CREATE TABLE IF NOT EXISTS "public"."messages" (
     "skip_reason" "text",
     "processing_tier" integer,
     "classified_at" timestamp with time zone,
+    "processing_batch" "text",
     CONSTRAINT "messages_classification_status_check" CHECK ((("classification_status" IS NULL) OR ("classification_status" = ANY (ARRAY['pending'::"text", 'classified'::"text", 'skipped'::"text", 'failed'::"text"]))))
 );
 
 
 ALTER TABLE "public"."messages" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."messages"."processing_batch" IS 'onboarding = initial 90-day backfill, incremental = recurring sync';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."profiles" (
@@ -558,6 +563,10 @@ CREATE INDEX "idx_messages_conversation_id" ON "public"."messages" USING "btree"
 
 
 CREATE INDEX "idx_messages_direction" ON "public"."messages" USING "btree" ("direction");
+
+
+
+CREATE INDEX "idx_messages_processing_batch" ON "public"."messages" USING "btree" ("processing_batch");
 
 
 
