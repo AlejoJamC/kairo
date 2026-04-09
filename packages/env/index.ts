@@ -17,6 +17,8 @@ export const env = createEnv({
         MAX_EMAIL_AGE_DAYS: z.coerce.number().int().positive().default(90),
         BATCH_SYNC_LIMIT: z.coerce.number().int().positive().default(20),
         INCREMENTAL_SYNC_CONCURRENCY: z.coerce.number().int().positive().default(3),
+        // Kelan backoffice — optional comma-separated admin email allowlist
+        KELAN_ADMIN_EMAILS: z.string().optional(),
     },
     clientPrefix: "VITE_",
     client: {
