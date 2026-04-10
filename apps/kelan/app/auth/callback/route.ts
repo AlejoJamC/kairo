@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { createServiceRoleClient } from '@/lib/supabase/server';
 import { ROUTES, ERROR_CODES, SEARCH_PARAMS } from '@/lib/constants';
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
@@ -24,13 +23,21 @@ export async function GET(request: NextRequest) {
 
   const response = NextResponse.redirect(`${origin}${ROUTES.DASHBOARD}`);
 
+  // Mutable store: starts with request cookies, then captures cookies set
+  // by exchangeCodeForSession so auth.uid() is available for the admin check
+  // within the same request without re-reading from request.cookies.
+  const cookieStore = new Map(
+    request.cookies.getAll().map(c => [c.name, c.value])
+  );
+
   const supabase = createServerClient(url, key, {
     cookies: {
       getAll() {
-        return request.cookies.getAll();
+        return Array.from(cookieStore.entries()).map(([name, value]) => ({ name, value }));
       },
       setAll(cookiesToSet: CookieToSet[]) {
         for (const { name, value, options } of cookiesToSet) {
+          cookieStore.set(name, value);
           response.cookies.set(name, value, options);
         }
       },
@@ -45,27 +52,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(deniedUrl);
     }
 
-    const adminClient = createServiceRoleClient();
-
-    const { data: adminUser, error: adminError } = await adminClient
+    const { data: adminUser } = await supabase
       .from('admin_users')
       .select('id')
       .eq('auth_uid', sessionData.user.id)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
-    if (adminError || !adminUser) {
-      // User authenticated with Google but is not in admin_users.
-      // Sign them out so they don't have a dangling session.
-      await supabase.auth.signOut();
+    if (!adminUser) {
       return NextResponse.redirect(deniedUrl);
     }
-
-    // Update last_login_at
-    await adminClient
-      .from('admin_users')
-      .update({ last_login_at: new Date().toISOString() })
-      .eq('id', adminUser.id);
 
     return response;
   } catch {

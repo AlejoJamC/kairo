@@ -3,8 +3,8 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-    KELAN_ADMIN_EMAILS: z.string().optional(),
+    // Phase 2: add SUPABASE_SERVICE_ROLE_KEY here when cross-tenant
+    // dashboard queries are implemented (never expose as NEXT_PUBLIC_).
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
@@ -12,8 +12,6 @@ export const env = createEnv({
     NEXT_PUBLIC_KELAN_URL: z.string().url().optional(),
   },
   runtimeEnv: {
-    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    KELAN_ADMIN_EMAILS: process.env.KELAN_ADMIN_EMAILS,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_KELAN_URL: process.env.NEXT_PUBLIC_KELAN_URL,
