@@ -14,6 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action: string
+          admin_user_id: string
+          changes: Json | null
+          created_at: string
+          id: string
+          target_id: string | null
+          target_table: string
+        }
+        Insert: {
+          action: string
+          admin_user_id: string
+          changes?: Json | null
+          created_at?: string
+          id?: string
+          target_id?: string | null
+          target_table: string
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string
+          changes?: Json | null
+          created_at?: string
+          id?: string
+          target_id?: string | null
+          target_table?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_users: {
+        Row: {
+          auth_uid: string
+          avatar_url: string | null
+          created_at: string
+          display_name: string
+          email: string
+          id: string
+          is_active: boolean
+          last_login_at: string | null
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          auth_uid: string
+          avatar_url?: string | null
+          created_at?: string
+          display_name: string
+          email: string
+          id?: string
+          is_active?: boolean
+          last_login_at?: string | null
+          role?: string
+          updated_at?: string
+        }
+        Update: {
+          auth_uid?: string
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          last_login_at?: string | null
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       categorization_feedback: {
         Row: {
           confidence_score: number
@@ -876,6 +953,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
-// Convenience type aliases derived from generated schema
-export type Ticket = Database["public"]["Tables"]["tickets"]["Row"]
