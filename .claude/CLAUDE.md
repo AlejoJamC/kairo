@@ -1,3 +1,8 @@
+## ⛔ NEVER commit or push without an explicit instruction
+**NEVER run `git commit`, `git push`, or any destructive git command unless the user explicitly says "commit" or "push" in that message. Implementing code does NOT mean commit. Finishing a task does NOT mean commit. Wait. Always wait for the explicit order.**
+
+---
+
 **Read `PROJECT.md` in full before doing anything else.**
 
 ## Meta rules (read before anything else)
