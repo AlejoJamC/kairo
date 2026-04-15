@@ -12,7 +12,6 @@ AI-powered support cockpit for n8n companies — classifies emails, routes ticke
 | WebApp | Vite + React 19 |
 | Landing | Next.js 15 |
 | Admin (Kelan) | Next.js 15 |
-| API | Bun + Hono |
 | Database | Supabase (Postgres + Auth) |
 | AI | Claude API (prod) / Ollama (local) |
 | Email | Gmail API |
@@ -27,7 +26,6 @@ kairo/
 │   ├── webapp/    # Vite + React — support dashboard
 │   ├── landing/   # Next.js — marketing site
 │   ├── kelan/     # Next.js — admin panel (internal)
-│   ├── api/       # Bun + Hono — backend
 │   └── mobile/    # Expo — mobile app
 ├── packages/
 │   ├── env/            # centralized env validation (@t3-oss/env-core)
@@ -51,7 +49,6 @@ bun run dev
 
 - WebApp → http://localhost:5173
 - Landing → http://localhost:3000
-- API → http://localhost:3001
 - Kelan (admin) → http://localhost:3002
 
 ## Commands
@@ -79,7 +76,6 @@ Each app reads from that single file:
 
 | App | How it reads root `.env.local` |
 |---|---|
-| `apps/api` | Bun reads `.env.local` from the monorepo root natively |
 | `apps/webapp` | Vite `envDir: "../../"` points it at the monorepo root |
 | `apps/landing` | `next.config.ts` calls `loadEnvConfig("../../")` before webpack compiles, so `NEXT_PUBLIC_*` vars get inlined into the client bundle |
 | `apps/kelan` | `next.config.ts` calls `loadEnvConfig("../../")` — same pattern as landing |
@@ -91,7 +87,6 @@ The `.env.example` is grouped into three sections — `SHARED`, `LANDING`, and `
 | Package / App | File | Variables it owns |
 |---|---|---|
 | `packages/env` | `index.ts` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INTELLIGENCE_PROVIDER`, `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_SECRET` |
-| `apps/api` | `src/env.ts` | Re-exports `@kairo/env` + `PORT` |
 | `apps/webapp` | `src/env.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LANDING_URL` |
 | `apps/landing` | `env.ts` | All `NEXT_PUBLIC_*` vars + `GOOGLE_CLIENT_SECRET` |
 | `apps/kelan` | `env.ts` | Supabase public vars for admin panel |

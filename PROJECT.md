@@ -11,8 +11,8 @@ emails, and routes/responds based on learned behavior per client.
 ├── apps/
 │   ├── landing/        # Next.js 15 — public marketing site
 │   ├── webapp/         # Vite + React 19 — main support dashboard
-│   ├── mobile/         # Expo (React Native) — mobile companion
-│   └── api/            # Bun + Hono — backend API
+│   ├── kelan/          # Next.js 15 — admin panel (internal)
+│   └── mobile/         # Expo (React Native) — mobile companion
 ├── packages/
 │   ├── env/            # centralized env validation (@t3-oss/env-core)
 │   ├── types/          # shared TypeScript interfaces
@@ -38,7 +38,6 @@ emails, and routes/responds based on learned behavior per client.
 |-------------|-----------------------------------|
 | Frontend    | Next.js 15, Vite, React 19        |
 | Mobile      | Expo (React Native)               |
-| API         | Bun, Hono                         |
 | Database    | Supabase (Postgres + Auth)        |
 | AI          | Claude API (prod) / Ollama (local)|
 | Email       | Gmail API (OAuth, sync active)    |
@@ -71,7 +70,6 @@ emails, and routes/responds based on learned behavior per client.
 
 ## Code Conventions
 - TypeScript strict mode everywhere — no `any`, no implicit returns on async
-- API routes: REST pattern under `/api/v1/[resource]`
 - Components: PascalCase in `/components`
 - Hooks: camelCase prefixed `use` in `/hooks`
 - i18n: **every user-facing string must exist in both ES and EN** — no exceptions

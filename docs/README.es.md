@@ -9,7 +9,7 @@ Cockpit de soporte con IA para empresas que usan n8n — clasifica correos, enru
 | Monorepo | Turborepo + Bun |
 | WebApp | Vite + React 19 |
 | Landing | Next.js 15 |
-| API | Bun + Hono |
+| Admin (Kelan) | Next.js 15 |
 | Base de datos | Supabase (Postgres + Auth) |
 | IA | Claude API (prod) / Ollama (local) |
 | Correo | Gmail API |
@@ -23,7 +23,7 @@ kairo/
 ├── apps/
 │   ├── webapp/    # Vite + React — dashboard de soporte
 │   ├── landing/   # Next.js — sitio de marketing
-│   ├── api/       # Bun + Hono — backend
+│   ├── kelan/     # Next.js — panel de administración (interno)
 │   └── mobile/    # Expo — app móvil
 ├── packages/
 │   ├── env/            # validación centralizada de variables (@t3-oss/env-core)
@@ -47,7 +47,7 @@ bun run dev
 
 - WebApp → http://localhost:5173
 - Landing → http://localhost:3000
-- API → http://localhost:3001
+- Kelan (admin) → http://localhost:3002
 
 ## Comandos
 
@@ -74,7 +74,6 @@ Cada app lee desde ese único archivo:
 
 | App | Cómo lee el `.env.local` raíz |
 |---|---|
-| `apps/api` | Bun lee `.env.local` desde la raíz del monorepo de forma nativa |
 | `apps/webapp` | Vite tiene `envDir: "../../"` apuntando a la raíz del monorepo |
 | `apps/landing` | `next.config.ts` llama a `loadEnvConfig("../../")` antes de que webpack compile, para que las variables `NEXT_PUBLIC_*` queden embebidas en el bundle del cliente |
 
@@ -85,7 +84,6 @@ El `.env.example` está agrupado en tres secciones — `SHARED`, `LANDING` y `WE
 | Paquete / App | Archivo | Variables que gestiona |
 |---|---|---|
 | `packages/env` | `index.ts` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INTELLIGENCE_PROVIDER`, `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_SECRET` |
-| `apps/api` | `src/env.ts` | Re-exporta `@kairo/env` + `PORT` |
 | `apps/webapp` | `src/env.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LANDING_URL` |
 | `apps/landing` | `env.ts` | Todas las variables `NEXT_PUBLIC_*` + `GOOGLE_CLIENT_SECRET` |
 
