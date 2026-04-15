@@ -22,6 +22,12 @@
     },
     "clean": {
       "cache": false
+    },
+    "@kairo/dashboard#build": {
+      "env": ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY"]
+    },
+    "@kairo/landing#build": {
+      "env": ["GOOGLE_CLIENT_SECRET"]
     }
   }
 }
