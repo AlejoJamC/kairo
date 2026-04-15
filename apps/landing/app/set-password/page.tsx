@@ -58,7 +58,7 @@ export default function SetPasswordPage() {
         return;
       }
 
-      // Same hash-token redirect as /wizard/complete so the webapp's
+      // Same hash-token redirect as /wizard/complete so the dashboard's
       // supabase-js client (localStorage) can pick up the session.
       const { data: { session } } = await supabase.auth.getSession();
       const dashboardUrl = getDashboardUrl();

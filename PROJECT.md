@@ -10,7 +10,7 @@ emails, and routes/responds based on learned behavior per client.
 /
 ├── apps/
 │   ├── landing/        # Next.js 15 — public marketing site
-│   ├── webapp/         # Vite + React 19 — main support dashboard
+│   ├── dashboard/         # Vite + React 19 — main support dashboard
 │   ├── kelan/          # Next.js 15 — admin panel (internal)
 │   └── mobile/         # Expo (React Native) — mobile companion
 ├── packages/
@@ -73,7 +73,7 @@ emails, and routes/responds based on learned behavior per client.
 - Components: PascalCase in `/components`
 - Hooks: camelCase prefixed `use` in `/hooks`
 - i18n: **every user-facing string must exist in both ES and EN** — no exceptions
-- i18n files live in `apps/webapp/src/i18n/resources/{en,es}/*.json` — NOT in `packages/i18n/locales/`
+- i18n files live in `apps/dashboard/src/i18n/resources/{en,es}/*.json` — NOT in `packages/i18n/locales/`
 - Error handling: always return typed errors, never throw raw strings
 - Commits: conventional commits (`feat:`, `fix:`, `chore:`)
 
@@ -81,8 +81,8 @@ emails, and routes/responds based on learned behavior per client.
 Every form, button, label, and error message must have both languages.
 Default detection: browser language. Fallback: EN.
 If a component exists only in one language, it's considered incomplete.
-Webapp i18n config: `apps/webapp/src/i18n/config.ts`
-Webapp translation files: `apps/webapp/src/i18n/resources/{en,es}/*.json`
+Webapp i18n config: `apps/dashboard/src/i18n/config.ts`
+Webapp translation files: `apps/dashboard/src/i18n/resources/{en,es}/*.json`
 
 ## Architecture Boundaries — Do NOT touch without discussing first
 - `packages/intelligence/` — email classification logic, prompt engineering, per-client learning

@@ -18,7 +18,7 @@ export function getLandingUrl(path: string): string {
 /**
  * Make an API call with credentials (cookies) included.
  * Attaches the Supabase access token as Bearer header so Next.js API routes
- * can authenticate regardless of cookie storage (webapp uses localStorage).
+ * can authenticate regardless of cookie storage (dashboard uses localStorage).
  * Automatically redirects to /wizard on 401 Unauthorized.
  */
 export async function apiCall(

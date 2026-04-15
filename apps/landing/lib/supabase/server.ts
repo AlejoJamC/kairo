@@ -6,7 +6,7 @@ import { env } from "@/env";
 
 /**
  * Authenticates a request by checking the Authorization: Bearer header first,
- * then falling back to cookie-based auth. This supports the webapp (which stores
+ * then falling back to cookie-based auth. This supports the dashboard (which stores
  * the Supabase session in localStorage and sends it as a Bearer token) as well
  * as server-rendered pages (which use cookies).
  */

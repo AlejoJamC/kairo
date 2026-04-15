@@ -21,7 +21,7 @@ Cockpit de soporte con IA para empresas que usan n8n — clasifica correos, enru
 ```
 kairo/
 ├── apps/
-│   ├── webapp/    # Vite + React — dashboard de soporte
+│   ├── dashboard/    # Vite + React — dashboard de soporte
 │   ├── landing/   # Next.js — sitio de marketing
 │   ├── kelan/     # Next.js — panel de administración (interno)
 │   └── mobile/    # Expo — app móvil
@@ -74,7 +74,7 @@ Cada app lee desde ese único archivo:
 
 | App | Cómo lee el `.env.local` raíz |
 |---|---|
-| `apps/webapp` | Vite tiene `envDir: "../../"` apuntando a la raíz del monorepo |
+| `apps/dashboard` | Vite tiene `envDir: "../../"` apuntando a la raíz del monorepo |
 | `apps/landing` | `next.config.ts` llama a `loadEnvConfig("../../")` antes de que webpack compile, para que las variables `NEXT_PUBLIC_*` queden embebidas en el bundle del cliente |
 
 El `.env.example` está agrupado en tres secciones — `SHARED`, `LANDING` y `WEBAPP` — con comentarios que explican cada variable.
@@ -84,7 +84,7 @@ El `.env.example` está agrupado en tres secciones — `SHARED`, `LANDING` y `WE
 | Paquete / App | Archivo | Variables que gestiona |
 |---|---|---|
 | `packages/env` | `index.ts` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INTELLIGENCE_PROVIDER`, `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_SECRET` |
-| `apps/webapp` | `src/env.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LANDING_URL` |
+| `apps/dashboard` | `src/env.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LANDING_URL` |
 | `apps/landing` | `env.ts` | Todas las variables `NEXT_PUBLIC_*` + `GOOGLE_CLIENT_SECRET` |
 
 Nunca accedas a `process.env` o `import.meta.env` directamente — siempre importa desde el `env.ts` más cercano:

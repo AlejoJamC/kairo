@@ -37,7 +37,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Pass tokens via hash so the webapp's supabase-js client (localStorage)
+      // Pass tokens via hash so the dashboard's supabase-js client (localStorage)
       // can call setSession() — same pattern as /wizard/complete.
       const { data: { session } } = await supabase.auth.getSession();
       const dashboardUrl = getDashboardUrl();

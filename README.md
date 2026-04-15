@@ -23,7 +23,7 @@ AI-powered support cockpit for n8n companies — classifies emails, routes ticke
 ```
 kairo/
 ├── apps/
-│   ├── webapp/    # Vite + React — support dashboard
+│   ├── dashboard/    # Vite + React — support dashboard
 │   ├── landing/   # Next.js — marketing site
 │   ├── kelan/     # Next.js — admin panel (internal)
 │   └── mobile/    # Expo — mobile app
@@ -76,7 +76,7 @@ Each app reads from that single file:
 
 | App | How it reads root `.env.local` |
 |---|---|
-| `apps/webapp` | Vite `envDir: "../../"` points it at the monorepo root |
+| `apps/dashboard` | Vite `envDir: "../../"` points it at the monorepo root |
 | `apps/landing` | `next.config.ts` calls `loadEnvConfig("../../")` before webpack compiles, so `NEXT_PUBLIC_*` vars get inlined into the client bundle |
 | `apps/kelan` | `next.config.ts` calls `loadEnvConfig("../../")` — same pattern as landing |
 
@@ -87,7 +87,7 @@ The `.env.example` is grouped into three sections — `SHARED`, `LANDING`, and `
 | Package / App | File | Variables it owns |
 |---|---|---|
 | `packages/env` | `index.ts` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INTELLIGENCE_PROVIDER`, `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_SECRET` |
-| `apps/webapp` | `src/env.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LANDING_URL` |
+| `apps/dashboard` | `src/env.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LANDING_URL` |
 | `apps/landing` | `env.ts` | All `NEXT_PUBLIC_*` vars + `GOOGLE_CLIENT_SECRET` |
 | `apps/kelan` | `env.ts` | Supabase public vars for admin panel |
 

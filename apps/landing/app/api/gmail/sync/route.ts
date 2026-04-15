@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient();
 
-    // 1. Get authenticated user — Bearer token (webapp) or cookie fallback
+    // 1. Get authenticated user — Bearer token (dashboard) or cookie fallback
     const {
       data: { user },
       error: authError,

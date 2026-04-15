@@ -12,7 +12,7 @@
 - When a spec or task says "create X file" — verify it doesn't already exist first.
 
 ## Project
-Kairo — AI support cockpit for n8n companies. Monorepo: webapp (Vite+React19), landing (Next.js 15), api (Bun+Hono), mobile (Expo). See `PROJECT.md` for full architecture, conventions, and boundaries.
+Kairo — AI support cockpit for n8n companies. Monorepo: dashboard (Vite+React19), landing (Next.js 15), api (Bun+Hono), mobile (Expo). See `PROJECT.md` for full architecture, conventions, and boundaries.
 
 ## Database migrations
 

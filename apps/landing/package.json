@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
-    "build:webapp": "mkdir -p public/dashboard && rm -rf public/dashboard && cp -r ../webapp/dist public/dashboard",
-    "build": "bun run build:webapp && next build",
+    "build:dashboard": "mkdir -p public/dashboard && rm -rf public/dashboard && cp -r ../dashboard/dist public/dashboard",
+    "build": "bun run build:dashboard && next build",
     "start": "next start",
     "lint": "next lint",
     "clean": "rm -rf .next out public/dashboard"
@@ -25,7 +25,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@kairo/webapp": "workspace:*",
+    "@kairo/dashboard": "workspace:*",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
