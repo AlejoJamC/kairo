@@ -38,7 +38,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
     return data.content[0].text;
   }
 
-  async completeJSON<T>(prompt: string, schema: z.ZodSchema<T>): Promise<T> {
+  async completeJSON<T>(prompt: string, schema: z.ZodSchema<T>, options: CompletionOptions = {}): Promise<T> {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -48,8 +48,8 @@ export class AnthropicCompletionProvider implements CompletionProvider {
       },
       body: JSON.stringify({
         model: this.model,
-        max_tokens: 1000,
-        temperature: 0.3,
+        max_tokens: options.maxTokens ?? 1000,
+        temperature: options.temperature ?? 0.3,
         messages: [{ role: 'user', content: prompt }],
       }),
     });

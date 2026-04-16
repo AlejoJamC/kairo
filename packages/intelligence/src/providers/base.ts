@@ -2,7 +2,7 @@ import type { z } from 'zod';
 
 export interface CompletionProvider {
   complete(prompt: string, options?: CompletionOptions): Promise<string>;
-  completeJSON<T>(prompt: string, schema: z.ZodSchema<T>): Promise<T>;
+  completeJSON<T>(prompt: string, schema: z.ZodSchema<T>, options?: CompletionOptions): Promise<T>;
   model: string;
 }
 

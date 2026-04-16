@@ -14,7 +14,8 @@
     "dev": "turbo run dev --filter=@kairo/dashboard --filter=@kairo/landing --filter=@kairo/kelan",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "eval:pipeline": "bun run scripts/eval/run_pipeline_eval.ts"
   },
   "workspaces": ["apps/*", "packages/*"]
 }
