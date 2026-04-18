@@ -16,7 +16,7 @@ describe('buildPrompt', () => {
     expect(out).not.toMatch(/\{\{from\}\}/);
     expect(out).not.toMatch(/\{\{subject\}\}/);
     expect(out).not.toMatch(/\{\{body\}\}/);
-    expect(out).toContain('Email Classification Prompt');
+    expect(out).toContain('Instrucciones de clasificación');
   });
 });
 
@@ -31,9 +31,10 @@ describe.skipIf(skipLlm)('classifyEmail with real prompt', () => {
     });
 
     expect(result.prioridad).toBe('P1');
-    expect(result.tipo).toBe('support');
-    expect(result.categoria).toBe('technical');
-    expect(result.sentimiento).toBe('urgente');
+    expect(result.tipo).toBe('soporte');
+    expect(result.categoria).toBe('tecnico');
+    expect(result.tono).toMatch(/agresivo|frustrado/);
+    expect(result.urgencia).toBe('alta');
     expect(result.confianza).toBeGreaterThan(0.8);
   });
 
@@ -44,9 +45,9 @@ describe.skipIf(skipLlm)('classifyEmail with real prompt', () => {
       from: 'prospecto@startup.com',
     });
 
-    expect(result.tipo).toBe('lead');
-    expect(result.categoria).toBe('sales');
-    expect(result.sentimiento).toBe('neutral');
+    expect(result.tipo).toBe('prospecto');
+    expect(result.categoria).toBe('no_aplica');
+    expect(result.tono).toBe('neutral');
   });
 
   it('should classify newsletter as spam', async () => {
