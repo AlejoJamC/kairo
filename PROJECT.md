@@ -23,15 +23,22 @@ emails, and routes/responds based on learned behavior per client.
 ├── supabase/
 │   └── migrations/     # shared DB migrations (Postgres via Supabase)
 ├── scripts/
-│   └── eval/           # offline evaluation scripts (KAI-97 / KAI-106)
-│       ├── run_pipeline_eval.ts  # runs 50 .eml files through pipeline → CSV
+│   └── eval/                     # offline evaluation scripts (KAI-97 / KAI-106)
+│       ├── run_pipeline_eval.ts  # KAI-106: runs .eml files through pipeline → pipeline_output_50.csv
+│       ├── compute_metrics.ts    # KAI-97:  joins ground truth + pipeline output → F1/calibration report
 │       ├── tsconfig.json         # extends root; typeRoots → packages/intelligence/node_modules/@types
 │       ├── lib/
 │       │   ├── parse-eml.ts      # zero-dep EML parser (headers, base64, QP, multipart)
-│       │   └── write-csv.ts      # CSV writer
+│       │   ├── write-csv.ts      # CSV writer (RFC 4180)
+│       │   ├── metrics.ts        # precision, recall, macro-F1 per label
+│       │   ├── calibration.ts    # confidence band accuracy table
+│       │   ├── spanish-analysis.ts # tone inflation + difficulty breakdown (KAI-93)
+│       │   └── report-writer.ts  # JSON + markdown report generation
 │       └── data/
-│           ├── input/eml/        # place 001.eml … 050.eml here before running
-│           └── output/           # pipeline_output_50.csv + pipeline_eval_run.log
+│           ├── input/
+│           │   ├── eml/          # 001.eml … 050.eml (raw emails for KAI-106)
+│           │   └── ground_truth_50.csv  # human labels from KAI-102 (required by KAI-97)
+│           └── output/           # pipeline_output_50.csv · eval_report.json · eval_report.md
 ├── kairo-internal/
 │   ├── architecture/   # 17 Architecture Decision Records (ADR-001 to ADR-017)
 │   └── varios/         # legacy design docs, ideation, architecture specs
@@ -67,10 +74,13 @@ emails, and routes/responds based on learned behavior per client.
 - Shared types (`packages/types`) with core schema
 - Centralized env validation (`packages/env`) via `@t3-oss/env-core` + Zod
 - Intelligence layer (`packages/intelligence`) — modular LLM provider abstraction (Ollama / Anthropic)
-- Email classification prompt versioned as markdown artifact (`packages/intelligence/prompts/email-classification.md` v1.0.0)
+- Email classification prompt versioned as markdown artifact (`packages/intelligence/prompts/email-classification.md` v2.1.0)
+  - Frontmatter is single source of truth for allowed enum values (tipo, prioridad, categoria, tono, urgencia)
+  - Zod schema built dynamically from frontmatter — never hardcoded separately
 - DB schema with AI classification constraints (migration 005)
 - Supabase migrations consolidated at repo root (`supabase/migrations/`)
-- Pipeline eval script (`scripts/eval/`) — runs .eml files through classification → CSV (KAI-106)
+- Pipeline eval script (`scripts/eval/run_pipeline_eval.ts`) — runs 50 .eml files through classification → CSV (KAI-106)
+- Metrics eval script (`scripts/eval/compute_metrics.ts`) — joins ground truth + pipeline output, computes F1/calibration/tone-inflation report (KAI-97)
 
 ## What's NOT Built Yet
 - Email classification wired end-to-end (prompt exists, API call not integrated)
@@ -111,7 +121,8 @@ Webapp translation files: `apps/dashboard/src/i18n/resources/{en,es}/*.json`
 | `bun run dev` | Start dashboard + landing + kelan dev servers |
 | `bun run build` | Turbo full monorepo build |
 | `bun test` | Run Vitest across all packages |
-| `bun run eval:pipeline` | Run 50 .eml files through classification pipeline → `scripts/eval/data/output/` |
+| `bun run eval:pipeline` | Run 50 .eml files through classification pipeline → `scripts/eval/data/output/pipeline_output_50.csv` |
+| `bun run eval:metrics` | Join ground truth + pipeline output → `eval_report.json` + `eval_report.md` (requires both input files) |
 | `supabase db diff --schema public` | Check for uncommitted schema changes |
 | `supabase migration new <name>` | Create a new migration file |
 | `supabase db push` | Apply migrations to the local/remote DB |
