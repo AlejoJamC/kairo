@@ -1,12 +1,24 @@
 import { z } from 'zod';
+import type { AllowedValues } from './prompt';
 
-export const ClassificationSchema = z.object({
-  tipo: z.enum(['support', 'lead', 'spam']),
-  prioridad: z.enum(['P1', 'P2', 'P3']),
-  categoria: z.enum(['technical', 'billing', 'sales', 'other']),
-  sentimiento: z.enum(['urgente', 'neutral', 'casual']),
-  razonamiento: z.string(),
-  confianza: z.number().min(0).max(1),
-});
+/**
+ * Builds the Zod classification schema dynamically from the allowed values
+ * parsed out of the prompt frontmatter.
+ *
+ * This is the enforcement layer: if the model returns any value not in the
+ * frontmatter lists, Zod throws and the email is recorded as an error.
+ * That is intentional — it means the prompt needs fixing.
+ */
+export function buildClassificationSchema(allowed: AllowedValues) {
+  return z.object({
+    tipo: z.enum(allowed.tipo),
+    prioridad: z.enum(allowed.prioridad),
+    categoria: z.enum(allowed.categoria),
+    tono: z.enum(allowed.tono),
+    urgencia: z.enum(allowed.urgencia),
+    razonamiento: z.string(),
+    confianza: z.number().min(0).max(1),
+  });
+}
 
-export type ClassificationResult = z.infer<typeof ClassificationSchema>;
+export type ClassificationResult = z.infer<ReturnType<typeof buildClassificationSchema>>;

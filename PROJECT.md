@@ -22,6 +22,16 @@ emails, and routes/responds based on learned behavior per client.
 │       └── prompts/    # versioned LLM prompts (YAML frontmatter + markdown)
 ├── supabase/
 │   └── migrations/     # shared DB migrations (Postgres via Supabase)
+├── scripts/
+│   └── eval/           # offline evaluation scripts (KAI-97 / KAI-106)
+│       ├── run_pipeline_eval.ts  # runs 50 .eml files through pipeline → CSV
+│       ├── tsconfig.json         # extends root; typeRoots → packages/intelligence/node_modules/@types
+│       ├── lib/
+│       │   ├── parse-eml.ts      # zero-dep EML parser (headers, base64, QP, multipart)
+│       │   └── write-csv.ts      # CSV writer
+│       └── data/
+│           ├── input/eml/        # place 001.eml … 050.eml here before running
+│           └── output/           # pipeline_output_50.csv + pipeline_eval_run.log
 ├── kairo-internal/
 │   ├── architecture/   # 17 Architecture Decision Records (ADR-001 to ADR-017)
 │   └── varios/         # legacy design docs, ideation, architecture specs
@@ -60,6 +70,7 @@ emails, and routes/responds based on learned behavior per client.
 - Email classification prompt versioned as markdown artifact (`packages/intelligence/prompts/email-classification.md` v1.0.0)
 - DB schema with AI classification constraints (migration 005)
 - Supabase migrations consolidated at repo root (`supabase/migrations/`)
+- Pipeline eval script (`scripts/eval/`) — runs .eml files through classification → CSV (KAI-106)
 
 ## What's NOT Built Yet
 - Email classification wired end-to-end (prompt exists, API call not integrated)
@@ -92,6 +103,20 @@ Webapp translation files: `apps/dashboard/src/i18n/resources/{en,es}/*.json`
 ## Branch Strategy
 - `main` — production
 - `feature/[spec-name]` — one branch per spec
+
+## Common Commands
+
+| Command | What it does |
+|---------|-------------|
+| `bun run dev` | Start dashboard + landing + kelan dev servers |
+| `bun run build` | Turbo full monorepo build |
+| `bun test` | Run Vitest across all packages |
+| `bun run eval:pipeline` | Run 50 .eml files through classification pipeline → `scripts/eval/data/output/` |
+| `supabase db diff --schema public` | Check for uncommitted schema changes |
+| `supabase migration new <name>` | Create a new migration file |
+| `supabase db push` | Apply migrations to the local/remote DB |
+| `supabase db dump --schema public > supabase/schema.sql 2>/dev/null` | Snapshot current schema |
+| `supabase gen types typescript --schema public > packages/types/src/database.ts 2>/dev/null` | Regenerate TS types from DB |
 
 ## How Agents Should Work on This Repo
 1. Read this file (`PROJECT.md`) completely before doing anything

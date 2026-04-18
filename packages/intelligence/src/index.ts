@@ -1,5 +1,6 @@
 export { classifyEmail } from './classification';
-export type { ClassificationResult, EmailMessage } from './classification';
+export type { ClassificationResult, EmailMessage, AllowedValues } from './classification';
+export { buildClassificationSchema, loadPrompt } from './classification';
 
 export { generateEmbedding, generateEmbeddings } from './embeddings';
 

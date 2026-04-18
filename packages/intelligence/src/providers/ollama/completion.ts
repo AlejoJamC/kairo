@@ -33,8 +33,8 @@ export class OllamaCompletionProvider implements CompletionProvider {
     return data.response;
   }
 
-  async completeJSON<T>(prompt: string, schema: z.ZodSchema<T>): Promise<T> {
-    const text = await this.complete(prompt, { temperature: 0.3 });
+  async completeJSON<T>(prompt: string, schema: z.ZodSchema<T>, options: CompletionOptions = {}): Promise<T> {
+    const text = await this.complete(prompt, { temperature: options.temperature ?? 0.3 });
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {

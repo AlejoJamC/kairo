@@ -1,3 +1,10 @@
+# KAIRO
+# Evals
+#scripts/eval/data
+*.eml
+
+# KELAN
+
 # Logs
 logs
 *.log
