@@ -15,7 +15,8 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
-    "eval:pipeline": "bun run scripts/eval/run_pipeline_eval.ts"
+    "eval:pipeline": "bun run scripts/eval/run_pipeline_eval.ts",
+    "eval:metrics": "bun run scripts/eval/compute_metrics.ts"
   },
   "workspaces": ["apps/*", "packages/*"]
 }

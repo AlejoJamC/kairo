@@ -24,11 +24,13 @@
       "cache": false
     },
     "@kairo/dashboard#build": {
-      "env": ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY"]
+      "env": ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY"],
+      "outputs": ["dist/**"]
     },
     "@kairo/landing#build": {
       "dependsOn": ["@kairo/dashboard#build"],
-      "env": ["GOOGLE_CLIENT_SECRET"]
+      "env": ["GOOGLE_CLIENT_SECRET"],
+      "outputs": [".next/**", "!.next/cache/**", "public/dashboard/**"]
     }
   }
 }
