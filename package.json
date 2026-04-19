@@ -11,12 +11,10 @@
   "packageManager": "bun@1.3.5",
   "private": true,
   "scripts": {
-    "dev": "turbo run dev --filter=@kairo/dashboard --filter=@kairo/landing --filter=@kairo/kelan",
+    "dev": "turbo run dev --filter=@kairo/dashboard --filter=@kairo/landing --filter=@kairo/api --filter=@kairo/kelan",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "clean": "turbo run clean",
-    "eval:pipeline": "bun run scripts/eval/run_pipeline_eval.ts",
-    "eval:metrics": "bun run scripts/eval/compute_metrics.ts"
+    "clean": "turbo run clean"
   },
   "workspaces": ["apps/*", "packages/*"]
 }
