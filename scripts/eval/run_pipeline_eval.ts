@@ -100,28 +100,28 @@ async function main(): Promise<void> {
 
       const elapsed = Math.round(performance.now() - emailStart);
 
-      const typeLabel = result.tipo.padEnd(10);
-      const catLabel = result.categoria.padEnd(14);
+      const typeLabel = result.type.padEnd(10);
+      const catLabel = result.category.padEnd(14);
       console.log(
-        `${label} ✓  ${elapsed}ms — ${typeLabel} / ${result.prioridad} / ${catLabel} (confidence: ${result.confianza.toFixed(2)})`
+        `${label} ✓  ${elapsed}ms — ${typeLabel} / ${result.priority} / ${catLabel} (confidence: ${result.confidence.toFixed(2)})`
       );
 
       logLines.push(
-        `[OK] ${filename} — ${elapsed}ms — ${result.tipo}/${result.prioridad}/${result.categoria}`
+        `[OK] ${filename} — ${elapsed}ms — ${result.type}/${result.priority}/${result.category}`
       );
 
       rows.push({
         email_id: emailId,
         filename,
-        predicted_ticket_type: result.tipo,
-        predicted_priority: result.prioridad,
-        predicted_category: result.categoria,
-        predicted_tone: result.tono,
-        predicted_urgency: result.urgencia,
-        confidence: result.confianza,
+        predicted_ticket_type: result.type,
+        predicted_priority: result.priority,
+        predicted_category: result.category,
+        predicted_tone: result.tone,
+        predicted_urgency: result.urgency,
+        confidence: result.confidence,
         processing_tier: 0,
         processing_time_ms: elapsed,
-        raw_reasoning: result.razonamiento,
+        raw_reasoning: result.reasoning,
         error: '',
       });
     } catch (err: unknown) {

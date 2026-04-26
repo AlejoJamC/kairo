@@ -3,7 +3,7 @@ import { buildPrompt } from './prompt';
 import { classifyEmail } from './classify';
 
 describe('buildPrompt', () => {
-  it('loads template from file and substitutes placeholders', async () => {
+  it('loads the Spanish template by default and substitutes placeholders', async () => {
     const out = await buildPrompt({
       subject: 'Test subject',
       body: 'Test body line',
@@ -18,6 +18,15 @@ describe('buildPrompt', () => {
     expect(out).not.toMatch(/\{\{body\}\}/);
     expect(out).toContain('Instrucciones de clasificación');
   });
+
+  it('loads the English template when lang=en', async () => {
+    const out = await buildPrompt(
+      { subject: 'Subject', body: 'Body', from: 'a@b.com' },
+      'en',
+    );
+    expect(out).toContain('Classification instructions');
+    expect(out).not.toContain('Instrucciones de clasificación');
+  });
 });
 
 const skipLlm = process.env['SKIP_LLM_INTEGRATION'] === '1';
@@ -30,12 +39,12 @@ describe.skipIf(skipLlm)('classifyEmail with real prompt', () => {
       from: 'cto@acme.com',
     });
 
-    expect(result.prioridad).toBe('P1');
-    expect(result.tipo).toBe('soporte');
-    expect(result.categoria).toBe('tecnico');
-    expect(result.tono).toMatch(/agresivo|frustrado/);
-    expect(result.urgencia).toBe('alta');
-    expect(result.confianza).toBeGreaterThan(0.8);
+    expect(result.priority).toBe('P1');
+    expect(result.type).toBe('support');
+    expect(result.category).toBe('technical');
+    expect(result.tone).toMatch(/aggressive|frustrated/);
+    expect(result.urgency).toBe('high');
+    expect(result.confidence).toBeGreaterThan(0.8);
   });
 
   it('should classify lead inquiry correctly', async () => {
@@ -45,9 +54,9 @@ describe.skipIf(skipLlm)('classifyEmail with real prompt', () => {
       from: 'prospecto@startup.com',
     });
 
-    expect(result.tipo).toBe('prospecto');
-    expect(result.categoria).toBe('no_aplica');
-    expect(result.tono).toBe('neutral');
+    expect(result.type).toBe('prospect');
+    expect(result.category).toBe('not_applicable');
+    expect(result.tone).toBe('neutral');
   });
 
   it('should classify newsletter as spam', async () => {
@@ -57,8 +66,8 @@ describe.skipIf(skipLlm)('classifyEmail with real prompt', () => {
       from: 'newsletter@marketing.com',
     });
 
-    expect(result.tipo).toBe('spam');
-    expect(result.confianza).toBeGreaterThan(0.9);
+    expect(result.type).toBe('spam');
+    expect(result.confidence).toBeGreaterThan(0.9);
   });
 
   it('should handle low confidence ambiguous cases', async () => {
@@ -68,6 +77,28 @@ describe.skipIf(skipLlm)('classifyEmail with real prompt', () => {
       from: 'user@example.com',
     });
 
-    expect(result.confianza).toBeLessThan(0.7);
+    expect(result.confidence).toBeLessThan(0.7);
+  });
+
+  it('produces identical canonical enum values in ES and EN prompts', async () => {
+    const es = await classifyEmail(
+      {
+        subject: 'URGENTE: sistema caído',
+        body: 'Nada funciona, estamos perdiendo dinero en producción.',
+        from: 'cto@acme.com',
+      },
+      { lang: 'es' },
+    );
+    const en = await classifyEmail(
+      {
+        subject: 'URGENT: system down',
+        body: 'Nothing works, we are losing money in production.',
+        from: 'cto@acme.com',
+      },
+      { lang: 'en' },
+    );
+    expect(es.priority).toBe(en.priority);
+    expect(es.type).toBe(en.type);
+    expect(es.urgency).toBe(en.urgency);
   });
 });

@@ -16,14 +16,32 @@ bun install
 ```ts
 import { classifyEmail } from '@kairo/intelligence';
 
+// Default language is Spanish (current primary tenant).
 const result = await classifyEmail({
   subject: "Error 500",
   body: "Sistema caído en producción",
   from: "cliente@acme.com"
 });
 
-// result: { tipo, prioridad, categoria, sentimiento, razonamiento, confianza }
+// Explicit language selection (per-tenant):
+const enResult = await classifyEmail(
+  { subject: "System down", body: "Nothing works", from: "cto@acme.com" },
+  { lang: 'en' },
+);
+
+// Output shape (canonical English identifiers — stable IDs, NOT translations):
+// {
+//   type:       "support" | "prospect" | "spam" | "internal" | "other",
+//   priority:   "P1" | "P2" | "P3",
+//   category:   "technical" | "billing" | "account" | "general" | "not_applicable",
+//   tone:       "aggressive" | "frustrated" | "neutral" | "positive",
+//   urgency:    "high" | "medium" | "low",
+//   reasoning:  string,    // follows the email's language
+//   confidence: number     // 0..1
+// }
 ```
+
+The canonical schema is defined in code (`src/classification/schema.ts`). Per-language prompt bodies live under `prompts/email-classification/<lang>.md`. Adding Portuguese = one new markdown file; no schema duplication.
 
 ### Embeddings
 

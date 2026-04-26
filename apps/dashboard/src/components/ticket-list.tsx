@@ -161,12 +161,12 @@ export function TicketList() {
         for (const r of results) {
           if (r.status === "success" && r.classification) {
             updateClassification(r.ticket_id, {
-              ticket_type: r.classification.tipo,
-              priority: r.classification.prioridad,
-              category: r.classification.categoria,
-              sentiment: r.classification.sentimiento,
-              ai_reasoning: r.classification.razonamiento,
-              classification_confidence: r.classification.confianza,
+              ticket_type: r.classification.type,
+              priority: r.classification.priority,
+              category: r.classification.category,
+              sentiment: r.classification.tone,
+              ai_reasoning: r.classification.reasoning,
+              classification_confidence: r.classification.confidence,
               classified_at: new Date().toISOString(),
             });
           }
