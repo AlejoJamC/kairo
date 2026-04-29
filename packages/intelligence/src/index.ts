@@ -1,6 +1,26 @@
-export { classifyEmail } from './classification';
-export type { ClassificationResult, EmailMessage, AllowedValues } from './classification';
-export { buildClassificationSchema, loadPrompt } from './classification';
+export {
+  classifyEmail,
+  buildPrompt,
+  ClassificationSchema,
+  TICKET_TYPE,
+  PRIORITY,
+  CATEGORY,
+  TONE,
+  URGENCY,
+  SUPPORTED_LANGS,
+  DEFAULT_LANG,
+} from './classification';
+export type {
+  ClassificationResult,
+  EmailMessage,
+  ClassifyOptions,
+  PromptLang,
+  TicketType,
+  Priority,
+  Category,
+  Tone,
+  Urgency,
+} from './classification';
 
 export { generateEmbedding, generateEmbeddings } from './embeddings';
 

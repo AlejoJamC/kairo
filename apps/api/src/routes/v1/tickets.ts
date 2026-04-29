@@ -49,12 +49,12 @@ tickets.post("/:id/classify", async (c) => {
   const { error: updateError } = await supabase
     .from("tickets")
     .update({
-      ticket_type: classification.tipo,
-      priority: classification.prioridad,
-      category: classification.categoria,
-      sentiment: classification.sentimiento,
-      ai_reasoning: classification.razonamiento,
-      classification_confidence: classification.confianza,
+      ticket_type: classification.type,
+      priority: classification.priority,
+      category: classification.category,
+      sentiment: classification.tone,
+      ai_reasoning: classification.reasoning,
+      classification_confidence: classification.confidence,
       classified_at,
       classification_tier: 1,
     })
@@ -221,12 +221,12 @@ tickets.post("/classify-batch", async (c) => {
       await supabase
         .from("tickets")
         .update({
-          ticket_type: classification.tipo,
-          priority: classification.prioridad,
-          category: classification.categoria,
-          sentiment: classification.sentimiento,
-          ai_reasoning: classification.razonamiento,
-          classification_confidence: classification.confianza,
+          ticket_type: classification.type,
+          priority: classification.priority,
+          category: classification.category,
+          sentiment: classification.tone,
+          ai_reasoning: classification.reasoning,
+          classification_confidence: classification.confidence,
           classified_at,
         })
         .eq("id", ticket.id);

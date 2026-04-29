@@ -1,13 +1,14 @@
 import { z } from "zod";
+import { ClassificationSchema } from "@kairo/intelligence";
 
-export const ClassificationOutputSchema = z.object({
-  tipo: z.enum(["support", "lead", "spam"]),
-  prioridad: z.enum(["P1", "P2", "P3"]),
-  categoria: z.enum(["technical", "billing", "sales", "other"]),
-  sentimiento: z.enum(["urgente", "neutral", "casual"]),
-  razonamiento: z.string(),
-  confianza: z.number().min(0).max(1),
-});
+// Canonical classification contract lives in @kairo/intelligence.
+// Re-export so apps/api consumers have a single import surface.
+export const ClassificationOutputSchema = ClassificationSchema;
+export type ClassificationOutput = z.infer<typeof ClassificationOutputSchema>;
+
+// ---------------------------------------------------------------------------
+// Single classify — response
+// ---------------------------------------------------------------------------
 
 export const ClassifyResponseSchema = z.object({
   ticket_id: z.string().uuid(),
@@ -16,7 +17,6 @@ export const ClassifyResponseSchema = z.object({
   tier: z.number().int(),
 });
 
-export type ClassificationOutput = z.infer<typeof ClassificationOutputSchema>;
 export type ClassifyResponse = z.infer<typeof ClassifyResponseSchema>;
 
 // ---------------------------------------------------------------------------
