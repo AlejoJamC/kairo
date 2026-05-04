@@ -28,7 +28,7 @@ export function Inbox() {
         .from("tickets")
         .select("*")
         .eq("user_id", user.id)
-        .order("received_at", { ascending: false })
+        .order("priority_score", { ascending: false, nullsFirst: false })
         .limit(200);
 
       if (error) {
@@ -53,7 +53,7 @@ export function Inbox() {
             .from("tickets")
             .select("*")
             .eq("user_id", user.id)
-            .order("received_at", { ascending: false })
+            .order("priority_score", { ascending: false, nullsFirst: false })
             .limit(200)
             .then(({ data }) => {
               if (data) setTickets(data as Ticket[]);

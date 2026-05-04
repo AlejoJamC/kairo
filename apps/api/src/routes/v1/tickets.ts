@@ -7,8 +7,174 @@ import {
   ClassifyBatchRequestSchema,
   type BatchTicketResult,
 } from "../../lib/schemas/classification.js";
+import {
+  computePriorityScore,
+  DEFAULT_WEIGHTS,
+  type TenantWeights,
+} from "../../lib/scoring.js";
+import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
 
 export const tickets = new Hono();
+
+// ---------------------------------------------------------------------------
+// Auth helper (shared across endpoints)
+// ---------------------------------------------------------------------------
+
+async function resolveUser(authHeader: string) {
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  if (!token) return null;
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
+
+// ---------------------------------------------------------------------------
+// GET /v1/tickets — paginated list sorted by priority_score DESC NULLS LAST
+// ---------------------------------------------------------------------------
+
+tickets.get("/", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const limit = Math.min(Number(c.req.query("limit") ?? 20), 100);
+  const cursor = c.req.query("cursor");
+
+  let query = supabase
+    .from("tickets")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("priority_score", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: true })
+    .limit(limit);
+
+  if (cursor) {
+    try {
+      const { score, id } = JSON.parse(atob(cursor)) as { score: number | null; id: string };
+      if (score !== null) {
+        query = query.or(
+          `priority_score.lt.${score},and(priority_score.eq.${score},id.gt.${id})`
+        );
+      } else {
+        query = query.is("priority_score", null).gt("id", id);
+      }
+    } catch {
+      return c.json({ error: "Invalid cursor" }, 400);
+    }
+  }
+
+  const { data, error } = await query;
+  if (error) return c.json({ error: error.message }, 500);
+
+  const items = data ?? [];
+  const last = items.at(-1);
+  const nextCursor =
+    items.length === limit && last
+      ? btoa(JSON.stringify({ score: last.priority_score ?? null, id: last.id }))
+      : null;
+
+  return c.json({ data: items, next_cursor: nextCursor, count: items.length });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/tickets/:id/recalculate-score
+// ---------------------------------------------------------------------------
+
+tickets.post("/:id/recalculate-score", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  // 1. Fetch ticket
+  const { data: ticket, error: ticketErr } = await supabase
+    .from("tickets")
+    .select("id, ticket_type, sentiment, received_at, created_at, from_email, client_id, emotion, user_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  // 2. Fetch client plan
+  let planTier: TenantWeights extends never ? never : ReturnType<typeof normalizePlanTier> =
+    "none" as const;
+  if (ticket.client_id) {
+    const { data: client } = await supabase
+      .from("clients")
+      .select("plan_type")
+      .eq("id", ticket.client_id)
+      .single();
+    planTier = normalizePlanTier(client?.plan_type);
+  }
+
+  // 3. Fetch recent ticket count (same sender, last 30 days)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { count: recentCount } = await supabase
+    .from("tickets")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("from_email", ticket.from_email ?? "")
+    .gte("created_at", thirtyDaysAgo);
+
+  // 4. Fetch tenant weights (fallback to defaults)
+  const { data: configRow } = await supabase
+    .from("tenant_priority_config")
+    .select("weight_type, weight_plan, weight_emotion, weight_age")
+    .eq("user_id", user.id)
+    .single();
+
+  const weights: TenantWeights = configRow
+    ? {
+        weightType:    configRow.weight_type,
+        weightPlan:    configRow.weight_plan,
+        weightEmotion: configRow.weight_emotion,
+        weightAge:     configRow.weight_age,
+      }
+    : DEFAULT_WEIGHTS;
+
+  // 5. Compute score
+  const receivedAt = ticket.received_at ?? ticket.created_at ?? new Date().toISOString();
+  const priorityScore = computePriorityScore(
+    {
+      type: (ticket.ticket_type as Parameters<typeof computePriorityScore>[0]["type"]) ?? "other",
+      tone: (ticket.sentiment as Parameters<typeof computePriorityScore>[0]["tone"]) ?? "neutral",
+      plan: planTier,
+      receivedAt,
+      recentTicketCount: recentCount ?? 0,
+    },
+    weights
+  );
+
+  // 6. Compute sla_due_at from tenant_sla_rules
+  let sla_due_at: string | null = null;
+  const { data: slaRule } = await supabase
+    .from("tenant_sla_rules")
+    .select("response_hours")
+    .eq("user_id", user.id)
+    .eq("ticket_type", ticket.ticket_type ?? "")
+    .eq("plan_tier", planTier)
+    .single();
+
+  if (slaRule) {
+    sla_due_at = computeSlaDeadline(receivedAt, slaRule.response_hours);
+  }
+
+  // 7. Persist
+  const score_computed_at = new Date().toISOString();
+  const { error: updateErr } = await supabase
+    .from("tickets")
+    .update({ priority_score: priorityScore, sla_due_at, score_computed_at })
+    .eq("id", id);
+
+  if (updateErr) return c.json({ error: updateErr.message }, 500);
+
+  return c.json({
+    priority_score: priorityScore,
+    sla_due_at,
+    emotion: ticket.emotion,
+    score_computed_at,
+  });
+});
 
 // ---------------------------------------------------------------------------
 // POST /v1/tickets/:id/classify — single-ticket manual classify (KAI-7)

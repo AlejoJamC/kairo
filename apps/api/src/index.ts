@@ -9,6 +9,7 @@ import { incrementalSync } from "./functions/pipeline/incremental-sync.js";
 import { health } from "./routes/v1/health.js";
 import { tickets } from "./routes/v1/tickets.js";
 import { sync } from "./routes/v1/sync.js";
+import { tenants } from "./routes/v1/tenants.js";
 
 const app = new Hono();
 
@@ -16,6 +17,7 @@ const v1 = new Hono();
 v1.route("/", health);
 v1.route("/tickets", tickets);
 v1.route("/sync", sync);
+v1.route("/tenants", tenants);
 
 app.route("/v1", v1);
 

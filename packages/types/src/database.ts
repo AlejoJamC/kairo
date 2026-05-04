@@ -631,12 +631,14 @@ export type Database = {
       ticket_proposals: {
         Row: {
           confidence_score: number
-          conversation_id: string
+          conversation_id: string | null
           created_at: string
+          emotion_confidence: number | null
           id: string
           message_ids: string[]
           model_version: string
           proposed_category: string | null
+          proposed_emotion: string | null
           proposed_priority: string | null
           proposed_sentiment: string | null
           proposed_type: string | null
@@ -649,12 +651,14 @@ export type Database = {
         }
         Insert: {
           confidence_score: number
-          conversation_id: string
+          conversation_id?: string | null
           created_at?: string
+          emotion_confidence?: number | null
           id?: string
           message_ids: string[]
           model_version: string
           proposed_category?: string | null
+          proposed_emotion?: string | null
           proposed_priority?: string | null
           proposed_sentiment?: string | null
           proposed_type?: string | null
@@ -667,12 +671,14 @@ export type Database = {
         }
         Update: {
           confidence_score?: number
-          conversation_id?: string
+          conversation_id?: string | null
           created_at?: string
+          emotion_confidence?: number | null
           id?: string
           message_ids?: string[]
           model_version?: string
           proposed_category?: string | null
+          proposed_emotion?: string | null
           proposed_priority?: string | null
           proposed_sentiment?: string | null
           proposed_type?: string | null
