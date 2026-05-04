@@ -177,6 +177,43 @@ tickets.post("/:id/recalculate-score", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /v1/tickets/:id/similar — semantic similarity (KAI-20)
+// Gracefully returns [] when pgvector RPC is unavailable
+// ---------------------------------------------------------------------------
+
+tickets.get("/:id/similar", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+  const limit = Math.min(Number(c.req.query("limit") ?? 5), 20);
+
+  // Verify ticket belongs to user
+  const { data: ticket, error: ticketErr } = await supabase
+    .from("tickets")
+    .select("id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  // Call pgvector RPC — degrade gracefully if extension/function not yet deployed
+  const { data, error } = await supabase.rpc("find_similar_tickets", {
+    p_ticket_id: id,
+    p_user_id: user.id,
+    p_limit: limit,
+  });
+
+  if (error) {
+    // RPC missing (42883) or pgvector not installed — not a hard failure
+    return c.json({ data: [], degraded: true });
+  }
+
+  return c.json({ data: data ?? [] });
+});
+
+// ---------------------------------------------------------------------------
 // POST /v1/tickets/:id/classify — single-ticket manual classify (KAI-7)
 // ---------------------------------------------------------------------------
 
