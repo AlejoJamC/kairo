@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildPrompt } from './prompt';
 import { classifyEmail } from './classify';
+import { TONE } from './schema';
 
 describe('buildPrompt', () => {
   it('loads the Spanish template by default and substitutes placeholders', async () => {
@@ -26,6 +27,26 @@ describe('buildPrompt', () => {
     );
     expect(out).toContain('Classification instructions');
     expect(out).not.toContain('Instrucciones de clasificación');
+  });
+
+  it('ES prompt contains all canonical tone values used as emotion signal', async () => {
+    const out = await buildPrompt(
+      { subject: 'Test', body: 'Test', from: 'a@b.com' },
+      'es',
+    );
+    for (const tone of TONE) {
+      expect(out).toContain(tone);
+    }
+  });
+
+  it('EN prompt contains all canonical tone values used as emotion signal', async () => {
+    const out = await buildPrompt(
+      { subject: 'Test', body: 'Test', from: 'a@b.com' },
+      'en',
+    );
+    for (const tone of TONE) {
+      expect(out).toContain(tone);
+    }
   });
 });
 
@@ -78,6 +99,18 @@ describe.skipIf(skipLlm)('classifyEmail with real prompt', () => {
     });
 
     expect(result.confidence).toBeLessThan(0.7);
+  });
+
+  it('always returns tone within canonical set and confidence in [0,1]', async () => {
+    const result = await classifyEmail({
+      subject: 'No puedo iniciar sesión',
+      body: 'Llevo dos horas intentando entrar y no puedo. Es muy frustrante.',
+      from: 'user@client.com',
+    });
+
+    expect(TONE).toContain(result.tone);
+    expect(result.confidence).toBeGreaterThanOrEqual(0);
+    expect(result.confidence).toBeLessThanOrEqual(1);
   });
 
   it('produces identical canonical enum values in ES and EN prompts', async () => {

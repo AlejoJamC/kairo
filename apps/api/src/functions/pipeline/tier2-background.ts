@@ -4,6 +4,7 @@ import { inngest } from "../../lib/inngest.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
+import { resolveModelVersion } from "../../lib/model-version.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types (shared shape with Tier 1)
@@ -267,8 +268,28 @@ export const tier2Background = inngest.createFunction(
               DEFAULT_WEIGHTS
             );
 
-            await Promise.all([
-              supabase.from("tickets").insert({
+            const { data: proposal } = await supabase
+              .from("ticket_proposals")
+              .insert({
+                conversation_id: null,
+                message_ids: [],
+                proposed_type: classification.type,
+                proposed_category: classification.category,
+                proposed_priority: classification.priority,
+                proposed_sentiment: classification.tone,
+                proposed_emotion: classification.tone,
+                emotion_confidence: classification.confidence,
+                confidence_score: classification.confidence,
+                model_version: resolveModelVersion(),
+                raw_llm_output: classification as Record<string, unknown>,
+                status: "auto_approved",
+              })
+              .select("id")
+              .single();
+
+            const { data: ticket } = await supabase
+              .from("tickets")
+              .insert({
                 user_id: userId,
                 subject,
                 from_email: from,
@@ -283,25 +304,35 @@ export const tier2Background = inngest.createFunction(
                 classification_tier: 2,
                 priority_score: priorityScore,
                 emotion: classification.tone,
+                emotion_confidence: classification.confidence,
                 score_computed_at: classified_at,
-              }),
-              channelIntegrationId
-                ? supabase.from("messages").upsert(
-                    {
-                      channel_integration_id: channelIntegrationId,
-                      external_id: messageId,
-                      direction: "inbound",
-                      received_at: receivedAt,
-                      sender_external_id: from,
-                      snippet: snippet || null,
-                      classification_status: "classified",
-                      processing_tier: 2,
-                      classified_at,
-                    },
-                    { onConflict: "channel_integration_id,external_id" }
-                  )
-                : Promise.resolve(),
-            ]);
+              })
+              .select("id")
+              .single();
+
+            if (proposal?.id && ticket?.id) {
+              await supabase
+                .from("ticket_proposals")
+                .update({ ticket_id: ticket.id })
+                .eq("id", proposal.id);
+            }
+
+            if (channelIntegrationId) {
+              await supabase.from("messages").upsert(
+                {
+                  channel_integration_id: channelIntegrationId,
+                  external_id: messageId,
+                  direction: "inbound",
+                  received_at: receivedAt,
+                  sender_external_id: from,
+                  snippet: snippet || null,
+                  classification_status: "classified",
+                  processing_tier: 2,
+                  classified_at,
+                },
+                { onConflict: "channel_integration_id,external_id" }
+              );
+            }
           })
           .catch(async (err: unknown) => {
             const detail = err instanceof Error ? err.message : String(err);
