@@ -2,6 +2,7 @@
 # Evals
 #scripts/eval/data
 *.eml
+*.csv
 
 # KELAN
 
