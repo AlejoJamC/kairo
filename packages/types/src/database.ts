@@ -468,6 +468,63 @@ export type Database = {
         }
         Relationships: []
       }
+      tenant_priority_config: {
+        Row: {
+          id: string
+          updated_at: string
+          user_id: string
+          weight_age: number
+          weight_emotion: number
+          weight_plan: number
+          weight_type: number
+        }
+        Insert: {
+          id?: string
+          updated_at?: string
+          user_id: string
+          weight_age?: number
+          weight_emotion?: number
+          weight_plan?: number
+          weight_type?: number
+        }
+        Update: {
+          id?: string
+          updated_at?: string
+          user_id?: string
+          weight_age?: number
+          weight_emotion?: number
+          weight_plan?: number
+          weight_type?: number
+        }
+        Relationships: []
+      }
+      tenant_sla_rules: {
+        Row: {
+          id: string
+          plan_tier: string
+          resolution_hours: number | null
+          response_hours: number
+          ticket_type: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          plan_tier: string
+          resolution_hours?: number | null
+          response_hours: number
+          ticket_type: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          plan_tier?: string
+          resolution_hours?: number | null
+          response_hours?: number
+          ticket_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ticket_events: {
         Row: {
           author_id: string | null
@@ -684,6 +741,8 @@ export type Database = {
           client_id: string | null
           conversation_id: string | null
           created_at: string | null
+          emotion: string | null
+          emotion_confidence: number | null
           first_response_at: string | null
           from_email: string | null
           from_name: string | null
@@ -693,8 +752,10 @@ export type Database = {
           merged_into_ticket_id: string | null
           parent_ticket_id: string | null
           priority: string | null
+          priority_score: number | null
           received_at: string | null
           resolved_at: string | null
+          score_computed_at: string | null
           sentiment: string | null
           sla_breached: boolean
           sla_due_at: string | null
@@ -721,6 +782,8 @@ export type Database = {
           client_id?: string | null
           conversation_id?: string | null
           created_at?: string | null
+          emotion?: string | null
+          emotion_confidence?: number | null
           first_response_at?: string | null
           from_email?: string | null
           from_name?: string | null
@@ -730,8 +793,10 @@ export type Database = {
           merged_into_ticket_id?: string | null
           parent_ticket_id?: string | null
           priority?: string | null
+          priority_score?: number | null
           received_at?: string | null
           resolved_at?: string | null
+          score_computed_at?: string | null
           sentiment?: string | null
           sla_breached?: boolean
           sla_due_at?: string | null
@@ -758,6 +823,8 @@ export type Database = {
           client_id?: string | null
           conversation_id?: string | null
           created_at?: string | null
+          emotion?: string | null
+          emotion_confidence?: number | null
           first_response_at?: string | null
           from_email?: string | null
           from_name?: string | null
@@ -767,8 +834,10 @@ export type Database = {
           merged_into_ticket_id?: string | null
           parent_ticket_id?: string | null
           priority?: string | null
+          priority_score?: number | null
           received_at?: string | null
           resolved_at?: string | null
+          score_computed_at?: string | null
           sentiment?: string | null
           sla_breached?: boolean
           sla_due_at?: string | null
@@ -817,6 +886,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      is_active_admin: { Args: never; Returns: boolean }
+      is_superadmin: { Args: never; Returns: boolean }
       recompute_category_confidence_thresholds: {
         Args: never
         Returns: undefined
