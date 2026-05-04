@@ -98,12 +98,12 @@ function FilterChip({
 // ---------------------------------------------------------------------------
 
 interface ClassificationResult {
-  tipo: string;
-  prioridad: string;
-  categoria: string;
-  sentimiento: string;
-  razonamiento: string;
-  confianza: number;
+  type: string;
+  priority: string;
+  category: string;
+  tone: string;
+  reasoning: string;
+  confidence: number;
 }
 
 interface BatchTicketResult {
