@@ -177,6 +177,82 @@ tickets.post("/:id/recalculate-score", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /v1/tickets/:id/related-history — historically resolved similar tickets (KAI-21)
+// Primary: pgvector RPC find_similar_tickets filtered to status='resolved'
+// Fallback: full-text match on from_email or subject keywords when RPC unavailable
+// ---------------------------------------------------------------------------
+
+tickets.get("/:id/related-history", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  // Verify ticket belongs to user
+  const { data: ticket, error: ticketErr } = await supabase
+    .from("tickets")
+    .select("id, from_email, subject")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  // Primary: pgvector RPC
+  const { data: rpcData, error: rpcError } = await supabase.rpc("find_similar_tickets", {
+    p_ticket_id: id,
+    p_user_id: user.id,
+    p_limit: 3,
+    p_status_filter: "resolved",
+  });
+
+  if (!rpcError) {
+    const results = (rpcData ?? []).map((r: Record<string, unknown>) => ({
+      id: r.id,
+      subject: r.subject,
+      resolved_at: r.resolved_at,
+      resolution_summary: r.resolution_summary ?? null,
+      ticket_number: r.ticket_number,
+      similarity: r.similarity,
+    }));
+    return c.json({ data: results });
+  }
+
+  // Fallback: full-text — same sender OR shared subject words, resolved tickets only
+  const keywords = (ticket.subject ?? "")
+    .split(/\s+/)
+    .filter((w) => w.length > 3)
+    .slice(0, 5);
+
+  let fallbackQuery = supabase
+    .from("tickets")
+    .select("id, subject, resolved_at, resolution_summary, ticket_number")
+    .eq("user_id", user.id)
+    .eq("status", "resolved")
+    .neq("id", id)
+    .limit(3);
+
+  if (ticket.from_email) {
+    fallbackQuery = fallbackQuery.eq("from_email", ticket.from_email);
+  } else if (keywords.length > 0) {
+    fallbackQuery = fallbackQuery.ilike("subject", `%${keywords[0]}%`);
+  }
+
+  const { data: fallbackData } = await fallbackQuery;
+
+  const results = (fallbackData ?? []).map((r) => ({
+    id: r.id,
+    subject: r.subject,
+    resolved_at: r.resolved_at ?? null,
+    resolution_summary: r.resolution_summary ?? null,
+    ticket_number: r.ticket_number,
+    similarity: null,
+  }));
+
+  return c.json({ data: results });
+});
+
+// ---------------------------------------------------------------------------
 // GET /v1/tickets/:id/similar — semantic similarity (KAI-20)
 // Gracefully returns [] when pgvector RPC is unavailable
 // ---------------------------------------------------------------------------
