@@ -3,6 +3,7 @@ import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
+import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types (shared shape with Tier 1 & 2)
@@ -217,6 +218,17 @@ async function classifyWindow(
       .then(async (classification) => {
         const classified_at = new Date().toISOString();
 
+        const priorityScore = computePriorityScore(
+          {
+            type: classification.type,
+            tone: classification.tone,
+            plan: "none",
+            receivedAt: receivedAt,
+            recentTicketCount: 0,
+          },
+          DEFAULT_WEIGHTS
+        );
+
         await Promise.all([
           supabase.from("tickets").insert({
             user_id: userId,
@@ -231,6 +243,9 @@ async function classifyWindow(
             classification_confidence: classification.confidence,
             classified_at,
             classification_tier: 3,
+            priority_score: priorityScore,
+            emotion: classification.tone,
+            score_computed_at: classified_at,
           }),
           channelIntegrationId
             ? supabase.from("messages").upsert(
