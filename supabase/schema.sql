@@ -381,6 +381,17 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_followers" (
 ALTER TABLE "public"."ticket_followers" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."ticket_groups" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "name" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."ticket_groups" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."ticket_messages" (
     "ticket_id" "uuid" NOT NULL,
     "message_id" "uuid" NOT NULL,
@@ -469,6 +480,8 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "emotion" "text",
     "emotion_confidence" numeric(3,2),
     "score_computed_at" timestamp with time zone,
+    "group_id" "uuid",
+    "resolution_summary" "text",
     CONSTRAINT "chk_category" CHECK ((("category" IS NULL) OR ("category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_emotion" CHECK ((("emotion" IS NULL) OR ("emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_priority" CHECK ((("priority" IS NULL) OR ("priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
@@ -614,6 +627,11 @@ ALTER TABLE ONLY "public"."ticket_events"
 
 ALTER TABLE ONLY "public"."ticket_followers"
     ADD CONSTRAINT "ticket_followers_pkey" PRIMARY KEY ("ticket_id", "user_id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_groups"
+    ADD CONSTRAINT "ticket_groups_pkey" PRIMARY KEY ("id");
 
 
 
@@ -814,6 +832,10 @@ CREATE INDEX "idx_tickets_user_id" ON "public"."tickets" USING "btree" ("user_id
 
 
 
+CREATE INDEX "tickets_group_id_idx" ON "public"."tickets" USING "btree" ("group_id") WHERE ("group_id" IS NOT NULL);
+
+
+
 CREATE OR REPLACE TRIGGER "on_category_confidence_thresholds_updated" BEFORE UPDATE ON "public"."category_confidence_thresholds" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
 
 
@@ -927,6 +949,11 @@ ALTER TABLE ONLY "public"."ticket_followers"
 
 
 
+ALTER TABLE ONLY "public"."ticket_groups"
+    ADD CONSTRAINT "ticket_groups_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."ticket_messages"
     ADD CONSTRAINT "ticket_messages_message_id_fkey" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE CASCADE;
 
@@ -969,6 +996,11 @@ ALTER TABLE ONLY "public"."tickets"
 
 ALTER TABLE ONLY "public"."tickets"
     ADD CONSTRAINT "tickets_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."tickets"
+    ADD CONSTRAINT "tickets_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "public"."ticket_groups"("id") ON DELETE SET NULL;
 
 
 
@@ -1217,6 +1249,10 @@ CREATE POLICY "superadmin_manage" ON "public"."admin_users" USING ("public"."is_
 
 
 
+CREATE POLICY "tenant_owns_groups" ON "public"."ticket_groups" USING (("user_id" = "auth"."uid"())) WITH CHECK (("user_id" = "auth"."uid"()));
+
+
+
 ALTER TABLE "public"."tenant_priority_config" ENABLE ROW LEVEL SECURITY;
 
 
@@ -1235,6 +1271,9 @@ ALTER TABLE "public"."ticket_events" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."ticket_followers" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."ticket_groups" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."ticket_messages" ENABLE ROW LEVEL SECURITY;
@@ -1367,6 +1406,12 @@ GRANT ALL ON TABLE "public"."ticket_events" TO "service_role";
 GRANT ALL ON TABLE "public"."ticket_followers" TO "anon";
 GRANT ALL ON TABLE "public"."ticket_followers" TO "authenticated";
 GRANT ALL ON TABLE "public"."ticket_followers" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_groups" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_groups" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_groups" TO "service_role";
 
 
 

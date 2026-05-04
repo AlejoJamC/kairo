@@ -592,6 +592,27 @@ export type Database = {
           },
         ]
       }
+      ticket_groups: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ticket_messages: {
         Row: {
           created_at: string
@@ -754,12 +775,14 @@ export type Database = {
           from_name: string | null
           gmail_message_id: string | null
           gmail_thread_id: string | null
+          group_id: string | null
           id: string
           merged_into_ticket_id: string | null
           parent_ticket_id: string | null
           priority: string | null
           priority_score: number | null
           received_at: string | null
+          resolution_summary: string | null
           resolved_at: string | null
           score_computed_at: string | null
           sentiment: string | null
@@ -795,12 +818,14 @@ export type Database = {
           from_name?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
+          group_id?: string | null
           id?: string
           merged_into_ticket_id?: string | null
           parent_ticket_id?: string | null
           priority?: string | null
           priority_score?: number | null
           received_at?: string | null
+          resolution_summary?: string | null
           resolved_at?: string | null
           score_computed_at?: string | null
           sentiment?: string | null
@@ -836,12 +861,14 @@ export type Database = {
           from_name?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
+          group_id?: string | null
           id?: string
           merged_into_ticket_id?: string | null
           parent_ticket_id?: string | null
           priority?: string | null
           priority_score?: number | null
           received_at?: string | null
+          resolution_summary?: string | null
           resolved_at?: string | null
           score_computed_at?: string | null
           sentiment?: string | null
@@ -869,6 +896,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_groups"
             referencedColumns: ["id"]
           },
           {
