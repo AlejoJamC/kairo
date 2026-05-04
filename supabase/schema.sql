@@ -394,7 +394,7 @@ ALTER TABLE "public"."ticket_messages" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."ticket_proposals" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "conversation_id" "uuid" NOT NULL,
+    "conversation_id" "uuid",
     "message_ids" "uuid"[] NOT NULL,
     "proposed_category" "text",
     "proposed_priority" "text",
@@ -409,6 +409,9 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_proposals" (
     "rejection_reason" "text",
     "ticket_id" "uuid",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "proposed_emotion" "text",
+    "emotion_confidence" numeric(3,2),
+    CONSTRAINT "chk_proposed_emotion" CHECK ((("proposed_emotion" IS NULL) OR ("proposed_emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "ticket_proposals_confidence_score_check" CHECK ((("confidence_score" >= (0.0)::double precision) AND ("confidence_score" <= (1.0)::double precision)))
 );
 
