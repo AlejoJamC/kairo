@@ -3,6 +3,7 @@ import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
+import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -209,6 +210,17 @@ export const tier1FastPath = inngest.createFunction(
             classifiedIds.push(messageId);
             const classified_at = new Date().toISOString();
 
+            const priorityScore = computePriorityScore(
+              {
+                type: classification.type,
+                tone: classification.tone,
+                plan: "none",
+                receivedAt: receivedAt,
+                recentTicketCount: 0,
+              },
+              DEFAULT_WEIGHTS
+            );
+
             await Promise.all([
               supabase.from("tickets").insert({
                 user_id: userId,
@@ -223,6 +235,9 @@ export const tier1FastPath = inngest.createFunction(
                 classification_confidence: classification.confidence,
                 classified_at,
                 classification_tier: 1,
+                priority_score: priorityScore,
+                emotion: classification.tone,
+                score_computed_at: classified_at,
               }),
               channelIntegrationId
                 ? supabase.from("messages").upsert(
