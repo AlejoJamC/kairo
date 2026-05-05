@@ -13,10 +13,10 @@
   "dependencies": {
     "@kairo/env": "workspace:*",
     "@kairo/types": "workspace:*",
-    "zustand": "^5.0.0",
-    "@t3-oss/env-core": "^0.12.0",
     "@supabase/supabase-js": "^2.97.0",
+    "@t3-oss/env-core": "^0.12.0",
     "@tailwindcss/vite": "^4.1.18",
+    "@tanstack/react-virtual": "^3.13.24",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "i18next": "^25.8.7",
@@ -28,7 +28,8 @@
     "react-i18next": "^16.5.4",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.18",
-    "zod": "^3.25.0"
+    "zod": "^3.25.0",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

@@ -1,5 +1,17 @@
 {
   "title": "Panel",
+  "ticketList": {
+    "header": "Tickets",
+    "classifyAll": "Clasificar Todo",
+    "classifying": "Clasificando...",
+    "scanning": "Escaneando correos... {{count}} ticket clasificado",
+    "scanning_other": "Escaneando correos... {{count}} tickets clasificados",
+    "noTickets": "Sin tickets aún.",
+    "checkingEmails": "Revisando tus correos recientes...",
+    "noMatch": "Ningún ticket coincide con los filtros actuales.",
+    "classified": "clasificado",
+    "unclassified": "sin clasificar"
+  },
   "tickets": {
     "title": "Tickets Abiertos",
     "count_one": "{{count}} ticket",
