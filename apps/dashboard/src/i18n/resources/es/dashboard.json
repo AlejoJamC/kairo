@@ -1,5 +1,21 @@
 {
   "title": "Panel",
+  "ticketCard": {
+    "slaBreached": "VENCIDO",
+    "group": "Agrupar",
+    "escalate": "Escalar",
+    "timeJustNow": "ahora mismo",
+    "timeMinutes_one": "hace {{count}}m",
+    "timeMinutes_other": "hace {{count}}m",
+    "timeHours_one": "hace {{count}}h",
+    "timeHours_other": "hace {{count}}h",
+    "timeDays_one": "hace {{count}}d",
+    "timeDays_other": "hace {{count}}d",
+    "slaHours_one": "{{count}}h {{minutes}}m",
+    "slaHours_other": "{{count}}h {{minutes}}m",
+    "slaMinutes_one": "{{count}}m",
+    "slaMinutes_other": "{{count}}m"
+  },
   "ticketList": {
     "header": "Tickets",
     "classifyAll": "Clasificar Todo",

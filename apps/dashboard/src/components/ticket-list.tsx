@@ -2,25 +2,10 @@ import { useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import { useTriageStore, type Ticket } from "@/stores/triage-store";
+import { TicketCard } from "@/components/ticket-card";
 import { apiCall } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { RefreshCw } from "lucide-react";
-
-// ---------------------------------------------------------------------------
-// Badge helpers
-// ---------------------------------------------------------------------------
-
-const PRIORITY_CLASSES: Record<string, string> = {
-  P1: "bg-red-50 text-red-700 border border-red-200",
-  P2: "bg-amber-50 text-amber-700 border border-amber-200",
-  P3: "bg-gray-100 text-gray-600 border border-gray-300",
-};
-
-const TYPE_CLASSES: Record<string, string> = {
-  support: "bg-blue-50 text-blue-700 border border-blue-200",
-  lead: "bg-green-50 text-green-700 border border-green-200",
-  spam: "bg-zinc-100 text-zinc-600 border border-zinc-300",
-};
 
 // ---------------------------------------------------------------------------
 // Skeleton placeholder
@@ -119,7 +104,7 @@ interface BatchTicketResult {
 // Virtualized ticket list — used when filtered count > 50
 // ---------------------------------------------------------------------------
 
-const ITEM_HEIGHT = 88; // px — approximate height of one ticket card
+const ITEM_HEIGHT = 100; // px — approximate height of TicketCard
 
 function VirtualTicketList({
   tickets,
@@ -165,60 +150,6 @@ function VirtualTicketList({
         })}
       </div>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// TicketCard — shared between virtual and plain list
-// ---------------------------------------------------------------------------
-
-function TicketCard({
-  ticket,
-  selected,
-  onSelect,
-}: {
-  ticket: Ticket;
-  selected: boolean;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <button
-      onClick={() => onSelect(ticket.id)}
-      className={`flex w-full flex-col border-b px-4 py-3 text-left transition-colors duration-150 ${
-        selected ? "bg-zinc-50" : "hover:bg-gray-50"
-      }`}
-    >
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="truncate text-sm font-medium text-zinc-900">
-          {ticket.from_name ?? ticket.from_email ?? "Unknown"}
-        </span>
-        <div className="flex shrink-0 items-center gap-1">
-          {ticket.ticket_type && (
-            <span
-              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                TYPE_CLASSES[ticket.ticket_type] ?? "bg-zinc-100 text-zinc-600"
-              }`}
-            >
-              {ticket.ticket_type}
-            </span>
-          )}
-          {ticket.priority && (
-            <span
-              className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                PRIORITY_CLASSES[ticket.priority] ?? "bg-zinc-100 text-zinc-600"
-              }`}
-            >
-              {ticket.priority}
-            </span>
-          )}
-        </div>
-      </div>
-      <p className="truncate text-xs text-zinc-700">{ticket.subject}</p>
-      <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{ticket.snippet}</p>
-      <p className="mt-1 text-[10px] text-zinc-400">
-        {ticket.received_at ? new Date(ticket.received_at).toLocaleString() : ""}
-      </p>
-    </button>
   );
 }
 
