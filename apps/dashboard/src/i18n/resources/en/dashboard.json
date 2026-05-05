@@ -1,5 +1,21 @@
 {
   "title": "Dashboard",
+  "ticketCard": {
+    "slaBreached": "OVERDUE",
+    "group": "Group",
+    "escalate": "Escalate",
+    "timeJustNow": "just now",
+    "timeMinutes_one": "{{count}}m ago",
+    "timeMinutes_other": "{{count}}m ago",
+    "timeHours_one": "{{count}}h ago",
+    "timeHours_other": "{{count}}h ago",
+    "timeDays_one": "{{count}}d ago",
+    "timeDays_other": "{{count}}d ago",
+    "slaHours_one": "{{count}}h {{minutes}}m",
+    "slaHours_other": "{{count}}h {{minutes}}m",
+    "slaMinutes_one": "{{count}}m",
+    "slaMinutes_other": "{{count}}m"
+  },
   "ticketList": {
     "header": "Tickets",
     "classifyAll": "Classify All",
