@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.prompt // \"\"' | grep -qiE '\\b(commit|push)\\b' && printf '1' > ~/.claude/kairo-git-flag || printf '0' > ~/.claude/kairo-git-flag"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"'); if echo \"$cmd\" | grep -qE '^git (commit|push)\\b'; then flag=$(cat ~/.claude/kairo-git-flag 2>/dev/null || echo \"0\"); if [ \"$flag\" != \"1\" ]; then echo '{\"continue\":false,\"stopReason\":\"\\ud83d\\udeab Blocked: the last user message did not contain an explicit commit or push instruction.\"}'; fi; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
