@@ -1,47 +1,8 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Users, ArrowUp, Mail } from "lucide-react";
+import { getEmotionTokens } from "@kairo/ui";
 import type { Ticket } from "@kairo/types";
-
-// ---------------------------------------------------------------------------
-// Emotion config — canonical vocabulary: aggressive | frustrated | neutral | positive
-// Unknown / null → silent fallback (no emoji, default gray border)
-// ---------------------------------------------------------------------------
-
-interface EmotionStyle {
-  border: string;
-  bg: string;
-  emoji: string;
-}
-
-/**
- * Emotion severity order — SEMAPHORE (most → least critical).
- * NEVER reorder these entries. The sequence is intentional:
- *
- *   🔥 aggressive → red    (highest severity — on fire)
- *   😩 frustrated → orange (elevated — visibly distressed)
- *   😐 neutral    → blue   (standard — no urgency signal)
- *   😊 positive   → green  (lowest — happy customer)
- *
- * Unknown / null values fall through to EMOTION_FALLBACK (zinc, no emoji).
- */
-const EMOTION_MAP: Record<string, EmotionStyle> = {
-  aggressive: { border: "border-l-red-500",    bg: "bg-red-50",      emoji: "🔥" },
-  frustrated:  { border: "border-l-orange-500", bg: "bg-orange-50",   emoji: "😩" },
-  neutral:     { border: "border-l-blue-400",   bg: "bg-transparent",  emoji: "😐" },
-  positive:    { border: "border-l-green-500",  bg: "bg-transparent",  emoji: "😊" },
-};
-
-const EMOTION_FALLBACK: EmotionStyle = {
-  border: "border-l-zinc-200",
-  bg: "bg-transparent",
-  emoji: "",
-};
-
-function resolveEmotion(emotion: string | null | undefined): EmotionStyle {
-  if (!emotion) return EMOTION_FALLBACK;
-  return EMOTION_MAP[emotion.toLowerCase()] ?? EMOTION_FALLBACK;
-}
 
 // ---------------------------------------------------------------------------
 // Channel icon
@@ -155,7 +116,7 @@ export function TicketCard({
   const { t } = useTranslation("dashboard");
   const [hovered, setHovered] = useState(false);
 
-  const emotion = resolveEmotion(ticket.emotion);
+  const emotion = getEmotionTokens(ticket.emotion);
   const relativeTime = useRelativeTime(ticket.received_at ?? ticket.created_at);
 
   // Avatar initials from name or email
@@ -175,12 +136,12 @@ export function TicketCard({
       onMouseLeave={() => setHovered(false)}
       className={[
         "relative flex w-full flex-col border-b border-l-4 px-3 py-2.5 text-left transition-colors duration-150",
-        emotion.border,
+        emotion.cardBorder,
         selected
           ? "bg-zinc-50"
           : hovered
           ? "bg-gray-50"
-          : emotion.bg,
+          : emotion.cardBg,
       ].join(" ")}
       aria-selected={selected}
     >
@@ -194,7 +155,7 @@ export function TicketCard({
         {/* Name + emoji */}
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-900">
           {emotion.emoji && (
-            <span className="mr-1" role="img" aria-label={ticket.emotion ?? ""}>
+            <span className="mr-1" role="img" aria-label={emotion.ariaLabel}>
               {emotion.emoji}
             </span>
           )}
@@ -265,10 +226,10 @@ export function TicketCard({
 // All-states documentation (replaces Storybook — no Storybook in this project)
 //
 // Semaphore order: aggressive → frustrated → neutral → positive
-// (🔥 → 😩 → 😐 → 😊) — from most to least critical. Never invert.
+// (🤬 → 😩 → 😐 → 😊) — from most to least critical. Never invert.
 //
 // State 1 — aggressive (most critical)
-//   emotion="aggressive" → 🔥 RED border + bg-red-50
+//   emotion="aggressive" → 🤬 RED border + bg-red-50
 //   sla_due_at = future → "2h 15m" badge
 //   group_id = "abc"    → Users icon shown
 //   selected = true     → bg-zinc-50
