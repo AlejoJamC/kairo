@@ -1,6 +1,7 @@
 export * from "./badge";
 export * from "./button";
 export * from "./card";
+export * from "./triage-tokens";
 export * from "./collapsible";
 export * from "./dropdown-menu";
 export * from "./input";

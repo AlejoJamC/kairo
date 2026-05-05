@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import { useTriageStore, type Ticket } from "@/stores/triage-store";
 import { TicketCard } from "@/components/ticket-card";
+import { getPriorityTokens, getTicketTypeTokens } from "@kairo/ui";
 import { apiCall } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { RefreshCw } from "lucide-react";
@@ -61,17 +62,19 @@ function FilterChip({
   label,
   active,
   onClick,
+  activeClass,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  activeClass?: string;
 }) {
   return (
     <button
       onClick={onClick}
       className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
         active
-          ? "bg-blue-600 text-white"
+          ? (activeClass ?? "bg-blue-600 text-white")
           : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
       }`}
     >
@@ -281,23 +284,31 @@ export function TicketList() {
 
       {/* Filter controls */}
       <div className="flex flex-wrap gap-1 border-b px-3 py-2">
-        {(["P1", "P2", "P3"] as const).map((p) => (
-          <FilterChip
-            key={p}
-            label={p}
-            active={filters.priority === p}
-            onClick={() => toggleFilter("priority", p)}
-          />
-        ))}
+        {(["P1", "P2", "P3", "P4"] as const).map((p) => {
+          const tok = getPriorityTokens(p);
+          return (
+            <FilterChip
+              key={p}
+              label={p}
+              active={filters.priority === p}
+              onClick={() => toggleFilter("priority", p)}
+              activeClass={tok ? `${tok.badgeBg} ${tok.badgeText} border ${tok.badgeBorder}` : undefined}
+            />
+          );
+        })}
         <span className="w-px bg-zinc-200" />
-        {(["support", "lead", "spam"] as const).map((tp) => (
-          <FilterChip
-            key={tp}
-            label={tp}
-            active={filters.type === tp}
-            onClick={() => toggleFilter("type", tp)}
-          />
-        ))}
+        {(["support", "prospect", "spam", "other"] as const).map((tp) => {
+          const tok = getTicketTypeTokens(tp);
+          return (
+            <FilterChip
+              key={tp}
+              label={tp}
+              active={filters.type === tp}
+              onClick={() => toggleFilter("type", tp)}
+              activeClass={`${tok.badgeBg} ${tok.badgeText} border ${tok.badgeBorder}`}
+            />
+          );
+        })}
         <span className="w-px bg-zinc-200" />
         {(["technical", "billing", "sales", "other"] as const).map((c) => (
           <FilterChip
