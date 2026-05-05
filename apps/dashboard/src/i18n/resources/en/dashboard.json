@@ -1,5 +1,17 @@
 {
   "title": "Dashboard",
+  "ticketList": {
+    "header": "Tickets",
+    "classifyAll": "Classify All",
+    "classifying": "Classifying...",
+    "scanning": "Scanning emails... {{count}} ticket classified",
+    "scanning_other": "Scanning emails... {{count}} tickets classified",
+    "noTickets": "No tickets yet.",
+    "checkingEmails": "Checking your recent emails...",
+    "noMatch": "No tickets match the current filters.",
+    "classified": "classified",
+    "unclassified": "unclassified"
+  },
   "tickets": {
     "title": "Open Tickets",
     "count_one": "{{count}} ticket",

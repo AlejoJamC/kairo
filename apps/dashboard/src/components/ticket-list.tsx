@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useTranslation } from "react-i18next";
 import { useTriageStore, type Ticket } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
@@ -114,10 +116,120 @@ interface BatchTicketResult {
 }
 
 // ---------------------------------------------------------------------------
+// Virtualized ticket list — used when filtered count > 50
+// ---------------------------------------------------------------------------
+
+const ITEM_HEIGHT = 88; // px — approximate height of one ticket card
+
+function VirtualTicketList({
+  tickets,
+  selectedTicketId,
+  onSelect,
+}: {
+  tickets: Ticket[];
+  selectedTicketId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: tickets.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ITEM_HEIGHT,
+    overscan: 5,
+  });
+
+  return (
+    <div ref={parentRef} className="flex-1 overflow-y-auto">
+      <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const ticket = tickets[virtualRow.index];
+          return (
+            <div
+              key={virtualRow.key}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              <TicketCard
+                ticket={ticket}
+                selected={selectedTicketId === ticket.id}
+                onSelect={onSelect}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TicketCard — shared between virtual and plain list
+// ---------------------------------------------------------------------------
+
+function TicketCard({
+  ticket,
+  selected,
+  onSelect,
+}: {
+  ticket: Ticket;
+  selected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <button
+      onClick={() => onSelect(ticket.id)}
+      className={`flex w-full flex-col border-b px-4 py-3 text-left transition-colors duration-150 ${
+        selected ? "bg-zinc-50" : "hover:bg-gray-50"
+      }`}
+    >
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="truncate text-sm font-medium text-zinc-900">
+          {ticket.from_name ?? ticket.from_email ?? "Unknown"}
+        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          {ticket.ticket_type && (
+            <span
+              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                TYPE_CLASSES[ticket.ticket_type] ?? "bg-zinc-100 text-zinc-600"
+              }`}
+            >
+              {ticket.ticket_type}
+            </span>
+          )}
+          {ticket.priority && (
+            <span
+              className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                PRIORITY_CLASSES[ticket.priority] ?? "bg-zinc-100 text-zinc-600"
+              }`}
+            >
+              {ticket.priority}
+            </span>
+          )}
+        </div>
+      </div>
+      <p className="truncate text-xs text-zinc-700">{ticket.subject}</p>
+      <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{ticket.snippet}</p>
+      <p className="mt-1 text-[10px] text-zinc-400">
+        {ticket.received_at ? new Date(ticket.received_at).toLocaleString() : ""}
+      </p>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // TicketList
 // ---------------------------------------------------------------------------
 
+const VIRTUALIZE_THRESHOLD = 50;
+
 export function TicketList() {
+  const { t } = useTranslation("dashboard");
   const { tickets, selectedTicketId, isScanning, classifiedCount, selectTicket, updateClassification } =
     useTriageStore();
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
@@ -155,7 +267,6 @@ export function TicketList() {
       const data = await res.json();
 
       if (data.mode === "sync") {
-        // Update store directly from results
         const results = data.results as BatchTicketResult[];
         setClassifyProgress(`${data.processed} / ${data.total} classified`);
         for (const r of results) {
@@ -172,7 +283,6 @@ export function TicketList() {
           }
         }
       } else {
-        // Async path: poll batch_classify_jobs table until completed
         const jobId = data.job_id as string;
         setClassifyProgress(`Queued (${data.total} tickets)...`);
         await pollJobStatus(jobId);
@@ -186,12 +296,11 @@ export function TicketList() {
   }
 
   async function pollJobStatus(jobId: string): Promise<void> {
-    // batch_classify_jobs is not yet in the generated schema — cast to any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase = createClient() as any;
     return new Promise((resolve) => {
       let attempts = 0;
-      const MAX_ATTEMPTS = 60; // 2 min at 2s interval
+      const MAX_ATTEMPTS = 60;
 
       const tick = async () => {
         attempts++;
@@ -233,7 +342,7 @@ export function TicketList() {
     <div className="flex flex-1 flex-col overflow-hidden bg-white">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-3">
-        <h2 className="text-sm font-semibold text-zinc-900">Tickets</h2>
+        <h2 className="text-sm font-semibold text-zinc-900">{t("ticketList.header")}</h2>
         <span className="text-xs text-zinc-500">
           {classifiedCount}/{tickets.length}
         </span>
@@ -250,12 +359,12 @@ export function TicketList() {
           />
         ))}
         <span className="w-px bg-zinc-200" />
-        {(["support", "lead", "spam"] as const).map((t) => (
+        {(["support", "lead", "spam"] as const).map((tp) => (
           <FilterChip
-            key={t}
-            label={t}
-            active={filters.type === t}
-            onClick={() => toggleFilter("type", t)}
+            key={tp}
+            label={tp}
+            active={filters.type === tp}
+            onClick={() => toggleFilter("type", tp)}
           />
         ))}
         <span className="w-px bg-zinc-200" />
@@ -271,7 +380,7 @@ export function TicketList() {
         {(["classified", "unclassified"] as const).map((s) => (
           <FilterChip
             key={s}
-            label={s}
+            label={t(`ticketList.${s}`)}
             active={filters.status === s}
             onClick={() => toggleFilter("status", s)}
           />
@@ -287,15 +396,17 @@ export function TicketList() {
             className="flex items-center gap-1.5 rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
           >
             <RefreshCw className={`h-3 w-3 ${classifyingAll ? "animate-spin" : ""}`} />
-            {classifyingAll ? (classifyProgress ?? "Classifying...") : "Classify All"}
+            {classifyingAll
+              ? (classifyProgress ?? t("ticketList.classifying"))
+              : t("ticketList.classifyAll")}
           </button>
         </div>
       )}
 
-      {/* Scanning banner when tickets exist */}
+      {/* Scanning banner */}
       {isScanning && tickets.length > 0 && (
         <div className="border-b bg-blue-50 px-4 py-2 text-xs text-blue-700">
-          Scanning emails... {classifiedCount} ticket{classifiedCount !== 1 ? "s" : ""} classified
+          {t("ticketList.scanning", { count: classifiedCount })}
         </div>
       )}
 
@@ -310,54 +421,28 @@ export function TicketList() {
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
           {tickets.length === 0 ? (
             <>
-              <p className="text-sm text-zinc-500">No tickets yet.</p>
-              <p className="text-xs text-zinc-400">Checking your recent emails...</p>
+              <p className="text-sm text-zinc-500">{t("ticketList.noTickets")}</p>
+              <p className="text-xs text-zinc-400">{t("ticketList.checkingEmails")}</p>
             </>
           ) : (
-            <p className="text-sm text-zinc-500">No tickets match the current filters.</p>
+            <p className="text-sm text-zinc-500">{t("ticketList.noMatch")}</p>
           )}
         </div>
+      ) : filtered.length > VIRTUALIZE_THRESHOLD ? (
+        <VirtualTicketList
+          tickets={filtered}
+          selectedTicketId={selectedTicketId}
+          onSelect={selectTicket}
+        />
       ) : (
         <div className="flex-1 overflow-y-auto">
           {filtered.map((ticket) => (
-            <button
+            <TicketCard
               key={ticket.id}
-              onClick={() => selectTicket(ticket.id)}
-              className={`flex w-full flex-col border-b px-4 py-3 text-left transition-colors duration-150 ${
-                selectedTicketId === ticket.id ? "bg-zinc-50" : "hover:bg-gray-50"
-              }`}
-            >
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="truncate text-sm font-medium text-zinc-900">
-                  {ticket.from_name ?? ticket.from_email ?? "Unknown"}
-                </span>
-                <div className="flex shrink-0 items-center gap-1">
-                  {ticket.ticket_type && (
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                        TYPE_CLASSES[ticket.ticket_type] ?? "bg-zinc-100 text-zinc-600"
-                      }`}
-                    >
-                      {ticket.ticket_type}
-                    </span>
-                  )}
-                  {ticket.priority && (
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                        PRIORITY_CLASSES[ticket.priority] ?? "bg-zinc-100 text-zinc-600"
-                      }`}
-                    >
-                      {ticket.priority}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <p className="truncate text-xs text-zinc-700">{ticket.subject}</p>
-              <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{ticket.snippet}</p>
-              <p className="mt-1 text-[10px] text-zinc-400">
-                {ticket.received_at ? new Date(ticket.received_at).toLocaleString() : ""}
-              </p>
-            </button>
+              ticket={ticket}
+              selected={selectedTicketId === ticket.id}
+              onSelect={selectTicket}
+            />
           ))}
         </div>
       )}
