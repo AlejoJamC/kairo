@@ -16,7 +16,8 @@ import {
 import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
 import { emitTicketEvent } from "../../lib/ticket-events.js";
 import { sendGmailReply, GmailSendException } from "../../lib/gmail-send.js";
-import { createCompletionProvider } from "@kairo/intelligence";
+import { createCompletionProvider, detectEscalationTriggers } from "@kairo/intelligence";
+import type { EscalationContext } from "@kairo/intelligence";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { planScoreFromTier, computeClientFlags } from "../../lib/client-profile.js";
 import { readFileSync } from "fs";
@@ -1148,4 +1149,126 @@ tickets.get("/:id/client-profile", async (c) => {
   // 4. Cache and return
   profileCache.set(cacheKey, { data: profile, expiresAt: Date.now() + PROFILE_CACHE_TTL_MS });
   return c.json(profile);
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/tickets/:id/escalation-reasons — detect escalation triggers (KAI-41)
+// Rule-based detection (no LLM): 4 deterministic rules + pgvector past_l2_case.
+// Persists reasons in the latest ticket_proposals row for frontend display.
+// Called automatically by tier1-fast-path after classification.
+// ---------------------------------------------------------------------------
+
+export async function buildEscalationContext(
+  ticketId: string,
+  userId: string,
+): Promise<EscalationContext | null> {
+  const now7d  = new Date(Date.now() -  7 * 24 * 60 * 60 * 1000).toISOString();
+  const now30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Fetch ticket fields needed for rule evaluation
+  const { data: ticket, error: ticketErr } = await supabase
+    .from("tickets")
+    .select("id, emotion, sla_breached, sla_due_at, created_at, status, client_id, from_email")
+    .eq("id", ticketId)
+    .eq("user_id", userId)
+    .single();
+
+  if (ticketErr || !ticket) return null;
+
+  // Resolve planScore from client
+  let planScore = 0;
+  if (ticket.client_id) {
+    const { data: client } = await supabase
+      .from("clients")
+      .select("plan_type")
+      .eq("id", ticket.client_id)
+      .eq("user_id", userId)
+      .single();
+    planScore = planScoreFromTier(client?.plan_type ?? null);
+  }
+
+  // Parallel counts: tickets last 30d + technical tickets last 7d (same client)
+  const [last30Res, tech7Res, similarRes] = await Promise.all([
+    ticket.client_id
+      ? supabase
+          .from("tickets")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("client_id", ticket.client_id)
+          .gte("created_at", now30d)
+      : Promise.resolve({ count: 0 }),
+
+    ticket.client_id
+      ? supabase
+          .from("tickets")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("client_id", ticket.client_id)
+          .eq("category", "technical")
+          .gte("created_at", now7d)
+      : Promise.resolve({ count: 0 }),
+
+    // past_l2_case: find similar tickets then cross with escalations table
+    supabase.rpc("find_similar_tickets", {
+      p_ticket_id: ticketId,
+      p_user_id:   userId,
+      p_limit:     5,
+      p_threshold: 0.80,
+    }),
+  ]);
+
+  // Check if any similar ticket was escalated to L2
+  let pastL2CaseFound = false;
+  if (!similarRes.error && similarRes.data && similarRes.data.length > 0) {
+    const similarIds = (similarRes.data as Array<{ ticket_id: string }>).map((r) => r.ticket_id);
+    const { count } = await supabase
+      .from("escalations")
+      .select("id", { count: "exact", head: true })
+      .in("ticket_id", similarIds)
+      .gte("escalated_to_level", 2);
+    pastL2CaseFound = (count ?? 0) > 0;
+  }
+
+  return {
+    ticketId,
+    emotion:            ticket.emotion ?? null,
+    slaBreached:        ticket.sla_breached ?? false,
+    slaDueAt:           ticket.sla_due_at ?? null,
+    createdAt:          ticket.created_at ?? new Date().toISOString(),
+    status:             ticket.status ?? "open",
+    planScore,
+    ticketsLast30Days:  last30Res.count ?? 0,
+    technicalLast7Days: tech7Res.count ?? 0,
+    pastL2CaseFound,
+  };
+}
+
+tickets.post("/:id/escalation-reasons", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const ticketId = c.req.param("id");
+
+  const ctx = await buildEscalationContext(ticketId, user.id);
+  if (!ctx) return c.json({ error: "Ticket not found" }, 404);
+
+  const result = detectEscalationTriggers(ctx);
+
+  // Persist into the latest pending proposal for this ticket
+  const { data: proposal } = await supabase
+    .from("ticket_proposals")
+    .select("id")
+    .eq("ticket_id", ticketId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (proposal?.id) {
+    await supabase
+      .from("ticket_proposals")
+      .update({ escalation_reasons: result.reasons })
+      .eq("id", proposal.id);
+  }
+
+  return c.json(result);
 });

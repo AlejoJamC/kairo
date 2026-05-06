@@ -587,6 +587,7 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_proposals" (
     "emotion_confidence" numeric(3,2),
     "proposed_reply" "text",
     "referenced_kb_articles" "uuid"[] DEFAULT '{}'::"uuid"[] NOT NULL,
+    "escalation_reasons" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
     CONSTRAINT "chk_proposed_emotion" CHECK ((("proposed_emotion" IS NULL) OR ("proposed_emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "ticket_proposals_confidence_score_check" CHECK ((("confidence_score" >= (0.0)::double precision) AND ("confidence_score" <= (1.0)::double precision)))
 );

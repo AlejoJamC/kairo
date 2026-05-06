@@ -34,3 +34,11 @@ export {
   createCompletionProvider,
   createEmbeddingProvider,
 } from './config/providers';
+
+export { detectEscalationTriggers } from './escalation';
+export type {
+  EscalationContext,
+  EscalationReason,
+  EscalationDetectionResult,
+  EscalationTriggerId,
+} from './escalation';
