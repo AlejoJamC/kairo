@@ -159,6 +159,16 @@
     "escalationReason": "Motivo",
     "escalationReasonPlaceholder": "Describe el motivo de escalación...",
     "cancelEdit": "Cancelar",
-    "confirmEscalation": "Confirmar Escalación"
+    "confirmEscalation": "Confirmar Escalación",
+    "kbArticles": "Base de Conocimiento",
+    "similarCases": "Casos Previos Similares",
+    "noKbArticles": "No hay artículos relacionados. Agrega artículos en Configuración.",
+    "noSimilarCases": "No se encontraron casos previos similares.",
+    "useInReply": "Insertar en respuesta",
+    "viewResolution": "Ver resolución",
+    "hideResolution": "Ocultar",
+    "similarity": "Similitud",
+    "resolvedOn": "Resuelto el",
+    "ticketNumber": "Caso #{{number}}"
   }
 }

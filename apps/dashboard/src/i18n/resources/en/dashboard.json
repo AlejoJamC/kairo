@@ -159,6 +159,16 @@
     "escalationReason": "Reason",
     "escalationReasonPlaceholder": "Describe the reason for escalation...",
     "cancelEdit": "Cancel",
-    "confirmEscalation": "Confirm Escalation"
+    "confirmEscalation": "Confirm Escalation",
+    "kbArticles": "Knowledge Base",
+    "similarCases": "Similar Past Cases",
+    "noKbArticles": "No related articles found. Add articles in Settings.",
+    "noSimilarCases": "No similar past cases found.",
+    "useInReply": "Insert in reply",
+    "viewResolution": "View resolution",
+    "hideResolution": "Hide",
+    "similarity": "Similarity",
+    "resolvedOn": "Resolved on",
+    "ticketNumber": "Case #{{number}}"
   }
 }
