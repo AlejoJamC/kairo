@@ -149,6 +149,16 @@
     "failures": "Fallos",
     "lastError": "Último Error",
     "lastRunStatus": "Estado Última Ejecución",
-    "lastRunTime": "Hora Última Ejecución"
+    "lastRunTime": "Hora Última Ejecución",
+    "noEscalationSignals": "Sin señales de escalación detectadas",
+    "escalateToLevel": "Escalar a Nivel {{level}}",
+    "highConfidence": "Alta confianza",
+    "escalating": "Escalando...",
+    "escalatedSuccess": "Escalado. Notificación enviada.",
+    "confidence": "Confianza",
+    "escalationReason": "Motivo",
+    "escalationReasonPlaceholder": "Describe el motivo de escalación...",
+    "cancelEdit": "Cancelar",
+    "confirmEscalation": "Confirmar Escalación"
   }
 }

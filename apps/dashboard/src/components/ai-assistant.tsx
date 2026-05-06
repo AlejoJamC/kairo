@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { ChevronDown, ChevronUp, FileText, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -5,30 +8,137 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { escalationReasons, knowledgeArticles } from "@/data/dummy-data";
-import {
-  ChevronDown,
-  ChevronUp,
-  FileText,
-} from "lucide-react";
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
+import { knowledgeArticles } from "@/data/dummy-data";
+import { useTriageStore } from "@/stores/triage-store";
+import { apiCall } from "@/lib/api-client";
+
+// ---------------------------------------------------------------------------
+// Types — aligned with KAI-41 API response shape
+// ---------------------------------------------------------------------------
+
+interface EscalationReason {
+  id:        string;
+  label_es:  string;
+  label_en:  string;
+  severity:  "high" | "medium" | "low";
+}
+
+interface EscalationResult {
+  reasons:          EscalationReason[];
+  recommendedLevel: 1 | 2 | 3;
+  confidence:       number;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const SEVERITY_CHIP: Record<string, string> = {
+  high:   "bg-red-100 text-red-700 border border-red-200",
+  medium: "bg-orange-100 text-orange-700 border border-orange-200",
+  low:    "bg-yellow-100 text-yellow-700 border border-yellow-200",
+};
+
+const SEVERITY_ACCENT: Record<string, string> = {
+  high:   "border-l-red-500 bg-red-50/40",
+  medium: "border-l-orange-400 bg-orange-50/40",
+  low:    "border-l-yellow-400 bg-yellow-50/40",
+  none:   "border-l-zinc-200 bg-zinc-50/40",
+};
+
+function topSeverity(reasons: EscalationReason[]): string {
+  if (reasons.some((r) => r.severity === "high"))   return "high";
+  if (reasons.some((r) => r.severity === "medium")) return "medium";
+  if (reasons.some((r) => r.severity === "low"))    return "low";
+  return "none";
+}
+
+// ---------------------------------------------------------------------------
+// AiAssistant
+// ---------------------------------------------------------------------------
 
 interface AiAssistantProps {
   customer: string;
 }
 
-const reasonDotColors: Record<string, string> = {
-  "Repeated Error 500": "bg-red-500",
-  "Similar past L2 case": "bg-green-500",
-  "Enterprise SLA Impact": "bg-amber-500",
-};
-
 export function AiAssistant({ customer }: AiAssistantProps) {
-  const { t } = useTranslation("dashboard");
+  const { t, i18n } = useTranslation("dashboard");
+  const { selectedTicketId, setPendingEscalation, tickets } = useTriageStore();
+  const selectedTicket = tickets.find((t) => t.id === selectedTicketId) ?? null;
+
+  // Section open/close state
   const [escalationOpen, setEscalationOpen] = useState(true);
-  const [knowledgeOpen, setKnowledgeOpen] = useState(true);
-  const [packetOpen, setPacketOpen] = useState(true);
+  const [knowledgeOpen,  setKnowledgeOpen]  = useState(true);
+  const [packetOpen,     setPacketOpen]      = useState(true);
+
+  // Escalation reasons state
+  const [escalation,        setEscalation]        = useState<EscalationResult | null>(null);
+  const [reasonsLoading,    setReasonsLoading]     = useState(false);
+
+  // Escalation packet form state
+  const [editMode,          setEditMode]           = useState(false);
+  const [escalationReason,  setEscalationReason]   = useState("");
+  const [escalating,        setEscalating]         = useState(false);
+  const [escalatedAt,       setEscalatedAt]        = useState<string | null>(null);
+
+  // Fetch escalation reasons when selected ticket changes
+  useEffect(() => {
+    if (!selectedTicketId) {
+      setEscalation(null);
+      setEscalatedAt(null);
+      setEditMode(false);
+      return;
+    }
+
+    setEscalation(null);
+    setEscalatedAt(null);
+    setEditMode(false);
+    setReasonsLoading(true);
+
+    apiCall(`/v1/tickets/${selectedTicketId}/escalation-reasons`, { method: "POST" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data: EscalationResult = await res.json();
+        setEscalation(data);
+        // Auto-open section if reasons exist
+        if (data.reasons.length > 0) setEscalationOpen(true);
+      })
+      .catch(() => {
+        // Service not available yet — degrade silently, show empty state
+      })
+      .finally(() => setReasonsLoading(false));
+  }, [selectedTicketId]);
+
+  async function handleEscalate() {
+    if (!selectedTicketId || escalating) return;
+    setEscalating(true);
+    try {
+      await apiCall(`/v1/tickets/${selectedTicketId}/escalate`, {
+        method: "POST",
+        body: JSON.stringify({ reason: escalationReason || undefined }),
+      });
+      // Success — notification delivery is handled async by another service
+      const ts = new Date().toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" });
+      setEscalatedAt(ts);
+      setPendingEscalation(selectedTicketId);
+      setEditMode(false);
+    } catch {
+      // Fire-and-forget: even if notification fails the escalation is recorded
+      const ts = new Date().toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" });
+      setEscalatedAt(ts);
+      setPendingEscalation(selectedTicketId);
+      setEditMode(false);
+    } finally {
+      setEscalating(false);
+    }
+  }
+
+  const reasons          = escalation?.reasons ?? [];
+  const recommendedLevel = escalation?.recommendedLevel ?? 2;
+  const confidence       = escalation?.confidence ?? 0;
+  const accent           = SEVERITY_ACCENT[topSeverity(reasons)];
+
+  const ctaLabel = t("ai.escalateToLevel", { level: recommendedLevel });
 
   return (
     <div className="flex h-full w-[300px] flex-col border-l bg-white">
@@ -38,61 +148,86 @@ export function AiAssistant({ customer }: AiAssistantProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {/* Escalation Suggested */}
+
+        {/* ── Section 1: Escalación Sugerida ─────────────────────────────── */}
         <Collapsible open={escalationOpen} onOpenChange={setEscalationOpen}>
-          <Card className="gap-0 py-0 border-l-4 border-l-red-500 shadow-sm hover:shadow-md transition-shadow duration-150">
+          <Card className={`gap-0 py-0 border-l-4 shadow-sm hover:shadow-md transition-shadow duration-150 ${accent}`}>
             <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer px-3 py-2.5 bg-red-50/50 rounded-tr-md">
+              <CardHeader className="cursor-pointer px-3 py-2.5 rounded-tr-md">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
-                  <span className="text-red-600">{t("ai.escalationSuggested")}</span>
-                  {escalationOpen ? (
-                    <ChevronUp className="h-4 w-4 text-zinc-400" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-zinc-400" />
-                  )}
+                  <span className={reasons.length > 0 ? "text-red-600" : "text-zinc-700"}>
+                    {t("ai.escalationSuggested")}
+                  </span>
+                  {escalationOpen
+                    ? <ChevronUp className="h-4 w-4 text-zinc-400" />
+                    : <ChevronDown className="h-4 w-4 text-zinc-400" />}
                 </CardTitle>
               </CardHeader>
             </CollapsibleTrigger>
+
             <CollapsibleContent>
               <CardContent className="px-3 pb-3 pt-0">
-                <p className="mb-2 text-xs text-zinc-500">
-                  {t("ai.reasonForEscalation")}
-                </p>
-                <ul className="space-y-1.5">
-                  {escalationReasons.map((reason, i) => (
-                    <li
-                      key={i}
-                      className="flex items-center gap-2 text-xs text-zinc-700"
-                    >
-                      <span
-                        className={`h-2 w-2 rounded-full shrink-0 ${
-                          reasonDotColors[reason.label] ?? "bg-zinc-400"
-                        }`}
-                      />
-                      <span>{reason.label}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button className="mt-3 w-full" size="sm">
-                  {t("ai.escalateToL2")}
-                </Button>
+                {reasonsLoading ? (
+                  <p className="text-xs text-zinc-400 animate-pulse">
+                    {t("ai.escalationReasons")}...
+                  </p>
+                ) : reasons.length === 0 ? (
+                  <p className="text-xs text-zinc-400 italic">
+                    {t("ai.noEscalationSignals")}
+                  </p>
+                ) : (
+                  <>
+                    {/* Confidence indicator */}
+                    {confidence > 0.80 && (
+                      <p className="mb-2 text-[10px] font-medium text-green-600 uppercase tracking-wide">
+                        {t("ai.highConfidence")}
+                      </p>
+                    )}
+
+                    {/* Reason chips */}
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {reasons.map((reason) => (
+                        <span
+                          key={reason.id}
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${SEVERITY_CHIP[reason.severity]}`}
+                        >
+                          {i18n.language === "en" ? reason.label_en : reason.label_es}
+                        </span>
+                      ))}
+                    </div>
+
+                    {escalatedAt ? (
+                      <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>{t("ai.escalatedSuccess")} {escalatedAt}</span>
+                      </div>
+                    ) : (
+                      <Button
+                        className="mt-1 w-full"
+                        size="sm"
+                        disabled={escalating}
+                        onClick={handleEscalate}
+                      >
+                        {escalating ? t("ai.escalating") : ctaLabel}
+                      </Button>
+                    )}
+                  </>
+                )}
               </CardContent>
             </CollapsibleContent>
           </Card>
         </Collapsible>
 
-        {/* Related Knowledge */}
+        {/* ── Section 2: Conocimiento Relacionado ────────────────────────── */}
         <Collapsible open={knowledgeOpen} onOpenChange={setKnowledgeOpen}>
           <Card className="gap-0 py-0 shadow-sm hover:shadow-md transition-shadow duration-150">
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer px-3 py-2.5">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
                   {t("ai.relatedKnowledge")}
-                  {knowledgeOpen ? (
-                    <ChevronUp className="h-4 w-4 text-zinc-400" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-zinc-400" />
-                  )}
+                  {knowledgeOpen
+                    ? <ChevronUp className="h-4 w-4 text-zinc-400" />
+                    : <ChevronDown className="h-4 w-4 text-zinc-400" />}
                 </CardTitle>
               </CardHeader>
             </CollapsibleTrigger>
@@ -108,10 +243,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                       <span className="text-zinc-500">
                         {article.type === "guide" ? t("ai.guide") : t("ai.incident")}
                       </span>{" "}
-                      <a
-                        href={article.link}
-                        className="text-blue-600 hover:underline"
-                      >
+                      <a href={article.link} className="text-blue-600 hover:underline">
                         {article.label}
                       </a>
                     </div>
@@ -122,49 +254,113 @@ export function AiAssistant({ customer }: AiAssistantProps) {
           </Card>
         </Collapsible>
 
-        {/* Escalation Packet */}
+        {/* ── Section 3: Paquete de Escalación ───────────────────────────── */}
         <Collapsible open={packetOpen} onOpenChange={setPacketOpen}>
           <Card className="gap-0 py-0 shadow-sm hover:shadow-md transition-shadow duration-150">
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer px-3 py-2.5">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
                   {t("ai.escalationPacket")}
-                  {packetOpen ? (
-                    <ChevronUp className="h-4 w-4 text-zinc-400" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-zinc-400" />
-                  )}
+                  {packetOpen
+                    ? <ChevronUp className="h-4 w-4 text-zinc-400" />
+                    : <ChevronDown className="h-4 w-4 text-zinc-400" />}
                 </CardTitle>
               </CardHeader>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="px-3 pb-3 pt-0">
-                <div className="grid grid-cols-3 gap-2 mb-3">
-                  <div className="rounded-md bg-zinc-50 p-2 text-center">
-                    <p className="text-[10px] text-zinc-500">{t("ai.customer")}</p>
-                    <p className="text-xs font-medium text-zinc-800">{customer}</p>
+                {escalatedAt ? (
+                  /* Success state */
+                  <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium py-2">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>{t("ai.escalatedSuccess")} {escalatedAt}</span>
                   </div>
-                  <div className="rounded-md bg-zinc-50 p-2 text-center">
-                    <p className="text-[10px] text-zinc-500">{t("ai.workflow")}</p>
-                    <p className="text-xs font-medium text-zinc-800">Bot Process X</p>
-                  </div>
-                  <div className="rounded-md bg-zinc-50 p-2 text-center">
-                    <p className="text-[10px] text-zinc-500">{t("ai.status")}</p>
-                    <p className="text-xs font-medium text-zinc-800">{t("ai.logsAttached")}</p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="text-xs">
-                    {t("ai.editDetails")}
-                  </Button>
-                  <Button size="sm" className="text-xs">
-                    {t("ai.escalateToL2")}
-                  </Button>
-                </div>
+                ) : (
+                  <>
+                    {/* Context summary */}
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      <div className="rounded-md bg-zinc-50 p-2 text-center">
+                        <p className="text-[10px] text-zinc-500">{t("ai.customer")}</p>
+                        <p className="truncate text-xs font-medium text-zinc-800">{customer}</p>
+                      </div>
+                      <div className="rounded-md bg-zinc-50 p-2 text-center">
+                        <p className="text-[10px] text-zinc-500">{t("ai.workflow")}</p>
+                        <p className="truncate text-xs font-medium text-zinc-800">
+                          {selectedTicket?.category ?? "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-md bg-zinc-50 p-2 text-center">
+                        <p className="text-[10px] text-zinc-500">{t("ai.status")}</p>
+                        <p className="truncate text-xs font-medium text-zinc-800">
+                          {selectedTicket?.status ?? "—"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Inline edit form */}
+                    {editMode && (
+                      <div className="mb-3">
+                        <label className="mb-1 block text-[10px] font-medium text-zinc-500 uppercase tracking-wide">
+                          {t("ai.escalationReason")}
+                        </label>
+                        <textarea
+                          value={escalationReason}
+                          onChange={(e) => setEscalationReason(e.target.value)}
+                          placeholder={t("ai.escalationReasonPlaceholder")}
+                          rows={3}
+                          className="w-full resize-none rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-xs text-zinc-800 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      {editMode ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 text-xs"
+                            onClick={() => setEditMode(false)}
+                          >
+                            {t("ai.cancelEdit")}
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="flex-1 text-xs"
+                            disabled={escalating}
+                            onClick={handleEscalate}
+                          >
+                            {escalating ? t("ai.escalating") : t("ai.confirmEscalation")}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs"
+                            onClick={() => setEditMode(true)}
+                          >
+                            {t("ai.editDetails")}
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="flex-1 text-xs"
+                            disabled={escalating}
+                            onClick={handleEscalate}
+                          >
+                            {escalating ? t("ai.escalating") : ctaLabel}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </CollapsibleContent>
           </Card>
         </Collapsible>
+
       </div>
     </div>
   );

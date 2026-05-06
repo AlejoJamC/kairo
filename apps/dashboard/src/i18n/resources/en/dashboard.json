@@ -149,6 +149,16 @@
     "failures": "Failures",
     "lastError": "Last Error",
     "lastRunStatus": "Last Run Status",
-    "lastRunTime": "Last Run Time"
+    "lastRunTime": "Last Run Time",
+    "noEscalationSignals": "No escalation signals detected",
+    "escalateToLevel": "Escalate to Level {{level}}",
+    "highConfidence": "High confidence",
+    "escalating": "Escalating...",
+    "escalatedSuccess": "Escalated. Notification sent.",
+    "confidence": "Confidence",
+    "escalationReason": "Reason",
+    "escalationReasonPlaceholder": "Describe the reason for escalation...",
+    "cancelEdit": "Cancel",
+    "confirmEscalation": "Confirm Escalation"
   }
 }

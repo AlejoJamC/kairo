@@ -9,6 +9,8 @@ interface TriageStore {
   aiSuggestedReply: string | null;
   isScanning: boolean;
   classifiedCount: number;
+  // Escalation — ticketId that was escalated, null if none pending
+  pendingEscalation: string | null;
   // Bulk-load on initial fetch
   setTickets: (tickets: Ticket[]) => void;
   // Realtime INSERT: insert at top, auto-select first arrival
@@ -19,6 +21,7 @@ interface TriageStore {
   setScanning: (v: boolean) => void;
   setSuggestedReply: (reply: string | null) => void;
   clearSuggestedReply: () => void;
+  setPendingEscalation: (ticketId: string | null) => void;
 }
 
 export const useTriageStore = create<TriageStore>((set) => ({
@@ -27,6 +30,7 @@ export const useTriageStore = create<TriageStore>((set) => ({
   aiSuggestedReply: null,
   isScanning: false,
   classifiedCount: 0,
+  pendingEscalation: null,
 
   setTickets: (tickets) =>
     set((state) => ({
@@ -59,4 +63,5 @@ export const useTriageStore = create<TriageStore>((set) => ({
   setScanning: (v) => set({ isScanning: v }),
   setSuggestedReply: (reply) => set({ aiSuggestedReply: reply }),
   clearSuggestedReply: () => set({ aiSuggestedReply: null }),
+  setPendingEscalation: (ticketId) => set({ pendingEscalation: ticketId }),
 }));
