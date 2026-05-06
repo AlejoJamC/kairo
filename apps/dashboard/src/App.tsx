@@ -20,7 +20,9 @@ function ComingSoon({ view }: { view: AppView }) {
 
 function AppContent() {
   const { loading } = useAuth();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("sidebar-collapsed") === "true"
+  );
   const [activeView, setActiveView] = useState<AppView>("inbox");
 
   if (loading) {
@@ -47,7 +49,11 @@ function AppContent() {
     <div className="flex h-screen overflow-hidden">
       <Sidebar
         collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((c) => !c)}
+        onToggle={() => setSidebarCollapsed((c) => {
+          const next = !c;
+          localStorage.setItem("sidebar-collapsed", String(next));
+          return next;
+        })}
         activeView={activeView}
         onViewChange={setActiveView}
       />
