@@ -1,8 +1,11 @@
 /**
  * API Client for Dashboard (WebApp)
  *
- * Always uses relative URLs — Vite proxy forwards /api to Next.js in dev,
- * Vercel serves everything same-origin in production.
+ * Always uses relative URLs.
+ * In dev, Vite proxies:
+ * - /api -> landing app (localhost:3000)
+ * - /v1  -> API service (localhost:3001)
+ * In production, routes are served same-origin.
  */
 import { createClient } from "@/lib/supabase/client";
 import { env } from "@/env";
@@ -47,7 +50,10 @@ export async function apiCall(
     headers,
   });
 
-  if (response.status === 401) {
+  // Only force auth redirect for landing-owned session endpoints.
+  // For /v1 API calls, let the caller handle 401 so product flows
+  // (template picker, reply, classify, etc.) don't trigger hard navigation.
+  if (response.status === 401 && endpoint.startsWith("/api/")) {
     window.location.href = getLandingUrl("/wizard/");
     throw new Error("Unauthorized");
   }
