@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { supabase } from "../../lib/supabase.js";
+import { emitTicketEvent } from "../../lib/ticket-events.js";
 
 export const ticketGroups = new Hono();
 
@@ -90,6 +91,17 @@ ticketGroups.post("/:id/tickets", async (c) => {
     .eq("user_id", user.id);
 
   if (error) return c.json({ error: "Failed to assign tickets", detail: error.message }, 500);
+
+  await Promise.all(
+    parsed.data.ticket_ids.map((ticketId) =>
+      emitTicketEvent({
+        ticketId,
+        authorId: user.id,
+        eventType: "grouped",
+        metadata: { group_id: groupId },
+      })
+    )
+  );
 
   return c.json({ group_id: groupId, ticket_ids: parsed.data.ticket_ids });
 });
