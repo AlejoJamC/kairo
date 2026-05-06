@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronUp, FileText, CheckCircle2 } from "lucide-react";
+import { ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,9 +8,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { knowledgeArticles } from "@/data/dummy-data";
 import { useTriageStore } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
+import { KnowledgePanel } from "@/components/knowledge-panel";
 
 // ---------------------------------------------------------------------------
 // Types — aligned with KAI-41 API response shape
@@ -68,7 +68,6 @@ export function AiAssistant({ customer }: AiAssistantProps) {
 
   // Section open/close state
   const [escalationOpen, setEscalationOpen] = useState(true);
-  const [knowledgeOpen,  setKnowledgeOpen]  = useState(true);
   const [packetOpen,     setPacketOpen]      = useState(true);
 
   // Escalation reasons state
@@ -218,41 +217,8 @@ export function AiAssistant({ customer }: AiAssistantProps) {
           </Card>
         </Collapsible>
 
-        {/* ── Section 2: Conocimiento Relacionado ────────────────────────── */}
-        <Collapsible open={knowledgeOpen} onOpenChange={setKnowledgeOpen}>
-          <Card className="gap-0 py-0 shadow-sm hover:shadow-md transition-shadow duration-150">
-            <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer px-3 py-2.5">
-                <CardTitle className="flex items-center justify-between text-sm font-medium">
-                  {t("ai.relatedKnowledge")}
-                  {knowledgeOpen
-                    ? <ChevronUp className="h-4 w-4 text-zinc-400" />
-                    : <ChevronDown className="h-4 w-4 text-zinc-400" />}
-                </CardTitle>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent className="px-3 pb-3 pt-0 space-y-2">
-                {knowledgeArticles.map((article, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2 rounded-md border border-gray-200 px-2.5 py-2 text-xs hover:bg-gray-50 transition-colors duration-150"
-                  >
-                    <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-zinc-500">
-                        {article.type === "guide" ? t("ai.guide") : t("ai.incident")}
-                      </span>{" "}
-                      <a href={article.link} className="text-blue-600 hover:underline">
-                        {article.label}
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
+        {/* ── Section 2: KB + Similar Cases ──────────────────────────────── */}
+        <KnowledgePanel ticketId={selectedTicketId} />
 
         {/* ── Section 3: Paquete de Escalación ───────────────────────────── */}
         <Collapsible open={packetOpen} onOpenChange={setPacketOpen}>
