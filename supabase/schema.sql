@@ -23,6 +23,46 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 
+CREATE OR REPLACE FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer DEFAULT 3) RETURNS TABLE("article_id" "uuid", "title" "text", "similarity" double precision)
+    LANGUAGE "sql" STABLE
+    AS $$
+  SELECT
+    id AS article_id,
+    title,
+    1 - (embedding <=> p_query_embedding) AS similarity
+  FROM kb_articles
+  WHERE user_id = p_user_id
+    AND is_published = true
+    AND embedding IS NOT NULL
+  ORDER BY embedding <=> p_query_embedding
+  LIMIT p_limit;
+$$;
+
+
+ALTER FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer DEFAULT 5, "p_threshold" double precision DEFAULT 0.80) RETURNS TABLE("ticket_id" "uuid", "similarity" double precision)
+    LANGUAGE "sql" STABLE
+    AS $$
+  SELECT
+    t.id AS ticket_id,
+    1 - (t.embedding <=> source.embedding) AS similarity
+  FROM tickets t,
+    (SELECT embedding FROM tickets WHERE id = p_ticket_id) AS source
+  WHERE t.user_id = p_user_id
+    AND t.id != p_ticket_id
+    AND t.embedding IS NOT NULL
+    AND source.embedding IS NOT NULL
+    AND 1 - (t.embedding <=> source.embedding) > p_threshold
+  ORDER BY t.embedding <=> source.embedding
+  LIMIT p_limit;
+$$;
+
+
+ALTER FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -260,6 +300,54 @@ CREATE TABLE IF NOT EXISTS "public"."conversations" (
 ALTER TABLE "public"."conversations" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."csat_events" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "score" integer,
+    "comment" "text",
+    "submitted_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "csat_events_score_check" CHECK ((("score" >= 1) AND ("score" <= 5)))
+);
+
+
+ALTER TABLE "public"."csat_events" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."escalation_contacts" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "name" "text" NOT NULL,
+    "phone_number" "text" NOT NULL,
+    "channel" "text" DEFAULT 'sms'::"text" NOT NULL,
+    "escalation_level" integer DEFAULT 2 NOT NULL,
+    "is_active" boolean DEFAULT true,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "escalation_contacts_channel_check" CHECK (("channel" = ANY (ARRAY['sms'::"text", 'whatsapp'::"text"])))
+);
+
+
+ALTER TABLE "public"."escalation_contacts" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."escalations" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "escalated_to_level" integer NOT NULL,
+    "escalated_by" "uuid" NOT NULL,
+    "reason" "text",
+    "context" "jsonb",
+    "notification_sent" boolean DEFAULT false,
+    "notification_channel" "text",
+    "notification_sent_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."escalations" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."gmail_accounts" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "user_id" "uuid" NOT NULL,
@@ -277,6 +365,22 @@ ALTER TABLE "public"."gmail_accounts" OWNER TO "postgres";
 
 COMMENT ON TABLE "public"."gmail_accounts" IS 'Gmail OAuth tokens for connected accounts';
 
+
+
+CREATE TABLE IF NOT EXISTS "public"."kb_articles" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "title" "text" NOT NULL,
+    "content" "text" NOT NULL,
+    "embedding" "extensions"."vector"(512),
+    "tags" "text"[],
+    "is_published" boolean DEFAULT true,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."kb_articles" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."llm_calls" (
@@ -369,6 +473,20 @@ CREATE TABLE IF NOT EXISTS "public"."response_templates" (
 
 
 ALTER TABLE "public"."response_templates" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."support_schedules" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "day_of_week" integer NOT NULL,
+    "start_time" time without time zone NOT NULL,
+    "end_time" time without time zone NOT NULL,
+    "timezone" "text" DEFAULT 'America/Bogota'::"text" NOT NULL,
+    CONSTRAINT "support_schedules_day_of_week_check" CHECK ((("day_of_week" >= 0) AND ("day_of_week" <= 6)))
+);
+
+
+ALTER TABLE "public"."support_schedules" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."tenant_priority_config" (
@@ -530,6 +648,8 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "group_id" "uuid",
     "resolution_summary" "text",
     "last_response_at" timestamp with time zone,
+    "embedding" "extensions"."vector"(512),
+    "embedding_updated_at" timestamp with time zone,
     CONSTRAINT "chk_category" CHECK ((("category" IS NULL) OR ("category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_emotion" CHECK ((("emotion" IS NULL) OR ("emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_priority" CHECK ((("priority" IS NULL) OR ("priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
@@ -618,6 +738,21 @@ ALTER TABLE ONLY "public"."conversations"
 
 
 
+ALTER TABLE ONLY "public"."csat_events"
+    ADD CONSTRAINT "csat_events_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."escalation_contacts"
+    ADD CONSTRAINT "escalation_contacts_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."escalations"
+    ADD CONSTRAINT "escalations_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."gmail_accounts"
     ADD CONSTRAINT "gmail_accounts_pkey" PRIMARY KEY ("id");
 
@@ -625,6 +760,11 @@ ALTER TABLE ONLY "public"."gmail_accounts"
 
 ALTER TABLE ONLY "public"."gmail_accounts"
     ADD CONSTRAINT "gmail_accounts_user_id_email_key" UNIQUE ("user_id", "email");
+
+
+
+ALTER TABLE ONLY "public"."kb_articles"
+    ADD CONSTRAINT "kb_articles_pkey" PRIMARY KEY ("id");
 
 
 
@@ -655,6 +795,16 @@ ALTER TABLE ONLY "public"."profiles"
 
 ALTER TABLE ONLY "public"."response_templates"
     ADD CONSTRAINT "response_templates_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."support_schedules"
+    ADD CONSTRAINT "support_schedules_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."support_schedules"
+    ADD CONSTRAINT "support_schedules_user_id_day_of_week_key" UNIQUE ("user_id", "day_of_week");
 
 
 
@@ -786,6 +936,10 @@ CREATE INDEX "idx_gmail_accounts_user_id" ON "public"."gmail_accounts" USING "bt
 
 
 
+CREATE INDEX "idx_kb_articles_embedding" ON "public"."kb_articles" USING "hnsw" ("embedding" "extensions"."vector_cosine_ops") WITH ("m"='16', "ef_construction"='64');
+
+
+
 CREATE INDEX "idx_llm_calls_created_at" ON "public"."llm_calls" USING "btree" ("created_at" DESC);
 
 
@@ -898,6 +1052,10 @@ CREATE INDEX "idx_tickets_conversation_id" ON "public"."tickets" USING "btree" (
 
 
 
+CREATE INDEX "idx_tickets_embedding" ON "public"."tickets" USING "hnsw" ("embedding" "extensions"."vector_cosine_ops") WITH ("m"='16', "ef_construction"='64');
+
+
+
 CREATE INDEX "idx_tickets_gmail_message_id" ON "public"."tickets" USING "btree" ("gmail_message_id");
 
 
@@ -997,8 +1155,43 @@ ALTER TABLE ONLY "public"."conversations"
 
 
 
+ALTER TABLE ONLY "public"."csat_events"
+    ADD CONSTRAINT "csat_events_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id");
+
+
+
+ALTER TABLE ONLY "public"."csat_events"
+    ADD CONSTRAINT "csat_events_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."escalation_contacts"
+    ADD CONSTRAINT "escalation_contacts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."escalations"
+    ADD CONSTRAINT "escalations_escalated_by_fkey" FOREIGN KEY ("escalated_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."escalations"
+    ADD CONSTRAINT "escalations_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id");
+
+
+
+ALTER TABLE ONLY "public"."escalations"
+    ADD CONSTRAINT "escalations_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
+
+
+
 ALTER TABLE ONLY "public"."gmail_accounts"
     ADD CONSTRAINT "gmail_accounts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."kb_articles"
+    ADD CONSTRAINT "kb_articles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -1029,6 +1222,11 @@ ALTER TABLE ONLY "public"."profiles"
 
 ALTER TABLE ONLY "public"."response_templates"
     ADD CONSTRAINT "response_templates_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."support_schedules"
+    ADD CONSTRAINT "support_schedules_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -1137,6 +1335,26 @@ CREATE POLICY "Authenticated users can read categorization_feedback" ON "public"
 
 
 CREATE POLICY "Authenticated users can read category_confidence_thresholds" ON "public"."category_confidence_thresholds" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "Users CRUD own csat_events" ON "public"."csat_events" USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users CRUD own escalation_contacts" ON "public"."escalation_contacts" USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users CRUD own escalations" ON "public"."escalations" USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users CRUD own kb_articles" ON "public"."kb_articles" USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users CRUD own support_schedules" ON "public"."support_schedules" USING (("auth"."uid"() = "user_id"));
 
 
 
@@ -1363,7 +1581,19 @@ CREATE POLICY "clients_update_own" ON "public"."clients" FOR UPDATE USING (("aut
 ALTER TABLE "public"."conversations" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."csat_events" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."escalation_contacts" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."escalations" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."gmail_accounts" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."kb_articles" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."llm_calls" ENABLE ROW LEVEL SECURITY;
@@ -1386,6 +1616,9 @@ CREATE POLICY "superadmin_audit_log_manage" ON "public"."admin_audit_log" USING 
 
 CREATE POLICY "superadmin_manage" ON "public"."admin_users" USING ("public"."is_superadmin"());
 
+
+
+ALTER TABLE "public"."support_schedules" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "tenant_owns_groups" ON "public"."ticket_groups" USING (("user_id" = "auth"."uid"())) WITH CHECK (("user_id" = "auth"."uid"()));
@@ -1431,6 +1664,18 @@ GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision) TO "anon";
+GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision) TO "service_role";
 
 
 
@@ -1506,9 +1751,33 @@ GRANT ALL ON TABLE "public"."conversations" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."csat_events" TO "anon";
+GRANT ALL ON TABLE "public"."csat_events" TO "authenticated";
+GRANT ALL ON TABLE "public"."csat_events" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."escalation_contacts" TO "anon";
+GRANT ALL ON TABLE "public"."escalation_contacts" TO "authenticated";
+GRANT ALL ON TABLE "public"."escalation_contacts" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."escalations" TO "anon";
+GRANT ALL ON TABLE "public"."escalations" TO "authenticated";
+GRANT ALL ON TABLE "public"."escalations" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."gmail_accounts" TO "anon";
 GRANT ALL ON TABLE "public"."gmail_accounts" TO "authenticated";
 GRANT ALL ON TABLE "public"."gmail_accounts" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."kb_articles" TO "anon";
+GRANT ALL ON TABLE "public"."kb_articles" TO "authenticated";
+GRANT ALL ON TABLE "public"."kb_articles" TO "service_role";
 
 
 
@@ -1533,6 +1802,12 @@ GRANT ALL ON TABLE "public"."profiles" TO "service_role";
 GRANT ALL ON TABLE "public"."response_templates" TO "anon";
 GRANT ALL ON TABLE "public"."response_templates" TO "authenticated";
 GRANT ALL ON TABLE "public"."response_templates" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."support_schedules" TO "anon";
+GRANT ALL ON TABLE "public"."support_schedules" TO "authenticated";
+GRANT ALL ON TABLE "public"."support_schedules" TO "service_role";
 
 
 

@@ -327,6 +327,124 @@ export type Database = {
           },
         ]
       }
+      csat_events: {
+        Row: {
+          comment: string | null
+          id: string
+          score: number | null
+          submitted_at: string | null
+          ticket_id: string
+          user_id: string
+        }
+        Insert: {
+          comment?: string | null
+          id?: string
+          score?: number | null
+          submitted_at?: string | null
+          ticket_id: string
+          user_id: string
+        }
+        Update: {
+          comment?: string | null
+          id?: string
+          score?: number | null
+          submitted_at?: string | null
+          ticket_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "csat_events_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      escalation_contacts: {
+        Row: {
+          channel: string
+          created_at: string | null
+          escalation_level: number
+          id: string
+          is_active: boolean | null
+          name: string
+          phone_number: string
+          user_id: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string | null
+          escalation_level?: number
+          id?: string
+          is_active?: boolean | null
+          name: string
+          phone_number: string
+          user_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string | null
+          escalation_level?: number
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          phone_number?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      escalations: {
+        Row: {
+          context: Json | null
+          created_at: string | null
+          escalated_by: string
+          escalated_to_level: number
+          id: string
+          notification_channel: string | null
+          notification_sent: boolean | null
+          notification_sent_at: string | null
+          reason: string | null
+          ticket_id: string
+          user_id: string
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string | null
+          escalated_by: string
+          escalated_to_level: number
+          id?: string
+          notification_channel?: string | null
+          notification_sent?: boolean | null
+          notification_sent_at?: string | null
+          reason?: string | null
+          ticket_id: string
+          user_id: string
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string | null
+          escalated_by?: string
+          escalated_to_level?: number
+          id?: string
+          notification_channel?: string | null
+          notification_sent?: boolean | null
+          notification_sent_at?: string | null
+          reason?: string | null
+          ticket_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalations_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gmail_accounts: {
         Row: {
           access_token: string | null
@@ -355,6 +473,42 @@ export type Database = {
           expires_at?: string | null
           id?: string
           refresh_token?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      kb_articles: {
+        Row: {
+          content: string
+          created_at: string | null
+          embedding: string | null
+          id: string
+          is_published: boolean | null
+          tags: string[] | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          is_published?: boolean | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          is_published?: boolean | null
+          tags?: string[] | null
+          title?: string
           updated_at?: string | null
           user_id?: string
         }
@@ -574,6 +728,33 @@ export type Database = {
           locale?: string
           title?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      support_schedules: {
+        Row: {
+          day_of_week: number
+          end_time: string
+          id: string
+          start_time: string
+          timezone: string
+          user_id: string
+        }
+        Insert: {
+          day_of_week: number
+          end_time: string
+          id?: string
+          start_time: string
+          timezone?: string
+          user_id: string
+        }
+        Update: {
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          start_time?: string
+          timezone?: string
           user_id?: string
         }
         Relationships: []
@@ -884,6 +1065,8 @@ export type Database = {
           client_id: string | null
           conversation_id: string | null
           created_at: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
           emotion: string | null
           emotion_confidence: number | null
           first_response_at: string | null
@@ -928,6 +1111,8 @@ export type Database = {
           client_id?: string | null
           conversation_id?: string | null
           created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
           emotion?: string | null
           emotion_confidence?: number | null
           first_response_at?: string | null
@@ -972,6 +1157,8 @@ export type Database = {
           client_id?: string | null
           conversation_id?: string | null
           created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
           emotion?: string | null
           emotion_confidence?: number | null
           first_response_at?: string | null
@@ -1045,6 +1232,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      find_relevant_kb: {
+        Args: { p_limit?: number; p_query_embedding: string; p_user_id: string }
+        Returns: {
+          article_id: string
+          similarity: number
+          title: string
+        }[]
+      }
+      find_similar_tickets: {
+        Args: {
+          p_limit?: number
+          p_threshold?: number
+          p_ticket_id: string
+          p_user_id: string
+        }
+        Returns: {
+          similarity: number
+          ticket_id: string
+        }[]
+      }
       is_active_admin: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
       recompute_category_confidence_thresholds: {
