@@ -360,6 +360,77 @@ export type Database = {
         }
         Relationships: []
       }
+      llm_calls: {
+        Row: {
+          completion_tokens: number | null
+          confidence_score: number | null
+          created_at: string
+          error_code: string | null
+          error_detail: string | null
+          feature: string
+          id: string
+          latency_ms: number | null
+          model: string
+          outcome: string | null
+          outcome_recorded_at: string | null
+          prompt_text: string
+          prompt_tokens: number | null
+          prompt_version: string | null
+          provider: string
+          response_text: string | null
+          ticket_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          completion_tokens?: number | null
+          confidence_score?: number | null
+          created_at?: string
+          error_code?: string | null
+          error_detail?: string | null
+          feature: string
+          id?: string
+          latency_ms?: number | null
+          model: string
+          outcome?: string | null
+          outcome_recorded_at?: string | null
+          prompt_text: string
+          prompt_tokens?: number | null
+          prompt_version?: string | null
+          provider: string
+          response_text?: string | null
+          ticket_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          completion_tokens?: number | null
+          confidence_score?: number | null
+          created_at?: string
+          error_code?: string | null
+          error_detail?: string | null
+          feature?: string
+          id?: string
+          latency_ms?: number | null
+          model?: string
+          outcome?: string | null
+          outcome_recorded_at?: string | null
+          prompt_text?: string
+          prompt_tokens?: number | null
+          prompt_version?: string | null
+          provider?: string
+          response_text?: string | null
+          ticket_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "llm_calls_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           body_html: string | null
@@ -700,9 +771,11 @@ export type Database = {
           proposed_category: string | null
           proposed_emotion: string | null
           proposed_priority: string | null
+          proposed_reply: string | null
           proposed_sentiment: string | null
           proposed_type: string | null
           raw_llm_output: Json
+          referenced_kb_articles: string[]
           rejection_reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -720,9 +793,11 @@ export type Database = {
           proposed_category?: string | null
           proposed_emotion?: string | null
           proposed_priority?: string | null
+          proposed_reply?: string | null
           proposed_sentiment?: string | null
           proposed_type?: string | null
           raw_llm_output: Json
+          referenced_kb_articles?: string[]
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -740,9 +815,11 @@ export type Database = {
           proposed_category?: string | null
           proposed_emotion?: string | null
           proposed_priority?: string | null
+          proposed_reply?: string | null
           proposed_sentiment?: string | null
           proposed_type?: string | null
           raw_llm_output?: Json
+          referenced_kb_articles?: string[]
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
