@@ -11,6 +11,7 @@ import {
 import { useTriageStore } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
 import { KnowledgePanel } from "@/components/knowledge-panel";
+import { ClientProfileCard } from "@/components/triage/ClientProfileCard";
 
 // ---------------------------------------------------------------------------
 // Types — aligned with KAI-41 API response shape
@@ -147,6 +148,11 @@ export function AiAssistant({ customer }: AiAssistantProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
+
+        {/* ── Section 0: Client Profile ───────────────────────────────────── */}
+        <div className="rounded-lg border border-zinc-200 bg-white shadow-sm">
+          <ClientProfileCard />
+        </div>
 
         {/* ── Section 1: Escalación Sugerida ─────────────────────────────── */}
         <Collapsible open={escalationOpen} onOpenChange={setEscalationOpen}>
