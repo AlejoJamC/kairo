@@ -1,3 +1,4 @@
+import { useRef, useState, useEffect } from "react";
 import {
   Home,
   LayoutDashboard,
@@ -19,7 +20,59 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useSidebarCounts, VIEW_TO_STATUS } from "@/hooks/useSidebarCounts";
 import type { AppView } from "@/types";
+
+// ---------------------------------------------------------------------------
+// NavBadge — pill showing ticket count, pulses briefly when count changes
+// ---------------------------------------------------------------------------
+
+function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
+  const prevRef = useRef(count);
+  const [pulse, setPulse] = useState(false);
+
+  useEffect(() => {
+    if (prevRef.current !== count && count > 0) {
+      setPulse(true);
+      const t = setTimeout(() => setPulse(false), 600);
+      prevRef.current = count;
+      return () => clearTimeout(t);
+    }
+    prevRef.current = count;
+  }, [count]);
+
+  if (count === 0) return null;
+
+  const label = count > 99 ? "99+" : String(count);
+
+  if (collapsed) {
+    // Small dot overlay on icon (top-right), max "9+" to fit
+    const collapsedLabel = count > 9 ? "9+" : String(count);
+    return (
+      <span
+        className={`absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold text-white leading-none ${
+          pulse ? "animate-pulse" : ""
+        }`}
+      >
+        {collapsedLabel}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={`ml-auto rounded-full bg-zinc-700 px-2 py-0.5 text-xs font-medium tabular-nums text-zinc-300 ${
+        pulse ? "animate-pulse" : ""
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
 
 type NavItem = {
   icon: typeof Home;
@@ -37,6 +90,7 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle, activeView, onViewChange }: SidebarProps) {
   const { t } = useTranslation(["dashboard"]);
   const { isAdmin } = useAuth();
+  const counts = useSidebarCounts();
 
   const mainNavItems: NavItem[] = [
     { icon: Home,            label: t("dashboard:sidebar.inbox"),          view: "inbox" },
@@ -52,12 +106,18 @@ export function Sidebar({ collapsed, onToggle, activeView, onViewChange }: Sideb
     { icon: Settings, label: t("dashboard:sidebar.settings"), view: "settings" },
   ];
 
+  const getCount = (view: AppView): number => {
+    const status = VIEW_TO_STATUS[view];
+    if (!status || !counts) return 0;
+    return counts[status] ?? 0;
+  };
+
   const renderItem = (item: NavItem) => {
     const isActive = item.view === activeView;
+    const count = getCount(item.view);
 
     const btn = (
       <button
-        key={item.view}
         onClick={() => onViewChange(item.view)}
         className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-150 ${
           collapsed ? "justify-center" : ""
@@ -67,14 +127,20 @@ export function Sidebar({ collapsed, onToggle, activeView, onViewChange }: Sideb
             : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
         }`}
       >
-        <item.icon className="h-4 w-4 shrink-0" />
+        <span className="relative shrink-0">
+          <item.icon className="h-4 w-4" />
+          {collapsed && <NavBadge count={count} collapsed />}
+        </span>
         {!collapsed && (
-          <span className="flex-1 text-left">{item.label}</span>
+          <>
+            <span className="flex-1 text-left">{item.label}</span>
+            <NavBadge count={count} collapsed={false} />
+          </>
         )}
       </button>
     );
 
-    if (!collapsed) return btn;
+    if (!collapsed) return <div key={item.view}>{btn}</div>;
 
     return (
       <Tooltip key={item.view} delayDuration={200}>
