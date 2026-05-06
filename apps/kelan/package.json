@@ -13,21 +13,21 @@
     "@kairo/env": "workspace:*",
     "@kairo/types": "workspace:*",
     "@kairo/ui": "workspace:*",
-    "@supabase/ssr": "^0.6.1",
-    "@supabase/supabase-js": "^2.97.0",
-    "@t3-oss/env-nextjs": "^0.12.0",
-    "@tailwindcss/postcss": "^4.1.18",
-    "lucide-react": "^0.511.0",
-    "next": "^15.3.3",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "tailwindcss": "^4.1.18",
-    "zod": "^3.25.0"
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.105.3",
+    "@t3-oss/env-nextjs": "^0.13.11",
+    "@tailwindcss/postcss": "^4.2.4",
+    "lucide-react": "^1.14.0",
+    "next": "^16.2.4",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "tailwindcss": "^4.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
-    "@types/react": "^19.2.7",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "typescript": "~5.9.3"
+    "typescript": "~6.0.3"
   }
 }
