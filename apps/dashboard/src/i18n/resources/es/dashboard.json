@@ -108,6 +108,9 @@
   },
   "replyBar": {
     "sending": "Enviando...",
+    "sendSuccess": "Respuesta enviada correctamente.",
+    "aiSuggestionBanner": "Kairo sugirió esta respuesta. Puedes editarla antes de enviar.",
+    "dismissSuggestion": "Descartar sugerencia",
     "errorGeneric": "Error al enviar. Intenta de nuevo.",
     "errorTokenExpired": "Tu sesión de Gmail expiró. Reconecta tu cuenta en Configuración.",
     "errorNoGmail": "No hay una integración de Gmail activa para este ticket."
@@ -118,8 +121,11 @@
     "errorLoading": "No se pudieron cargar las plantillas.",
     "empty": "Sin plantillas configuradas. Añade plantillas en Configuración.",
     "preview": "Vista previa",
+    "previewEmpty": "Pasa el mouse sobre una plantilla para ver su contenido.",
     "uncategorized": "General",
-    "confirmOverwrite": "¿Reemplazar el borrador actual con esta plantilla?"
+    "confirmOverwrite": "¿Reemplazar el borrador actual con esta plantilla?",
+    "dummyFormalGreetingTitle": "Saludo formal básico",
+    "dummyFormalGreetingContent": "Hola,\n\nGracias por contactarnos. Con gusto revisaremos tu solicitud y te responderemos con una actualización en breve.\n\nQuedamos atentos a cualquier detalle adicional.\n\nSaludos cordiales,"
   },
   "ai": {
     "title": "Asistente IA",

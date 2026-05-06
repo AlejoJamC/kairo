@@ -16,6 +16,8 @@ interface TemplatePickerProps {
   children: React.ReactNode;
 }
 
+const DUMMY_TEMPLATE_ID = "__dummy-formal-greeting-template";
+
 export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
   const { t, i18n } = useTranslation("dashboard");
   const [open, setOpen] = React.useState(false);
@@ -24,6 +26,21 @@ export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
   const [error, setError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState("");
   const [hoveredId, setHoveredId] = React.useState<string | null>(null);
+
+  const dummyTemplate = React.useMemo<Template>(
+    () => ({
+      id: DUMMY_TEMPLATE_ID,
+      title: t("templatePicker.dummyFormalGreetingTitle"),
+      content: t("templatePicker.dummyFormalGreetingContent"),
+      category: t("templatePicker.uncategorized"),
+    }),
+    [t]
+  );
+
+  function withDummyFirst(items: Template[]): Template[] {
+    const nonDummyItems = items.filter((item) => item.id !== DUMMY_TEMPLATE_ID);
+    return [dummyTemplate, ...nonDummyItems];
+  }
 
   async function fetchTemplates() {
     if (templates.length > 0) return;
@@ -35,10 +52,11 @@ export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as { data: Template[] };
-      setTemplates(json.data ?? []);
+      setTemplates(withDummyFirst(json.data ?? []));
     } catch (err) {
-      console.error("[TemplatePicker] fetch failed", err);
-      setError(t("templatePicker.errorLoading"));
+      console.warn("[TemplatePicker] fetch failed, using dummy template", err);
+      setTemplates(withDummyFirst([]));
+      setError(null);
     } finally {
       setLoading(false);
     }
@@ -87,7 +105,10 @@ export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
           {/* Body */}
           <div className="flex" style={{ maxHeight: "18rem" }}>
             {/* List */}
-            <div className="min-w-0 flex-1 overflow-y-auto py-1">
+            <div
+              className="min-w-0 flex-1 overflow-y-auto py-1"
+              onMouseLeave={() => setHoveredId(null)}
+            >
               {loading && (
                 <p className="px-3 py-4 text-center text-xs text-zinc-400">
                   {t("templatePicker.loading")}
@@ -114,7 +135,6 @@ export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
                         type="button"
                         className="w-full px-3 py-1.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 focus:bg-zinc-50 outline-none"
                         onMouseEnter={() => setHoveredId(tmpl.id)}
-                        onMouseLeave={() => setHoveredId(null)}
                         onClick={() => {
                           onSelect(tmpl.content);
                           setOpen(false);
@@ -127,17 +147,19 @@ export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
                 ))}
             </div>
 
-            {/* Hover preview panel */}
-            {hovered && (
-              <div className="w-44 shrink-0 overflow-y-auto border-l border-zinc-100 bg-zinc-50 p-3">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                  {t("templatePicker.preview")}
-                </p>
+            {/* Fixed preview panel to avoid hover flicker from layout shifts */}
+            <div className="w-44 shrink-0 overflow-y-auto border-l border-zinc-100 bg-zinc-50 p-3">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                {t("templatePicker.preview")}
+              </p>
+              {hovered ? (
                 <p className="whitespace-pre-wrap text-xs leading-relaxed text-zinc-600">
                   {hovered.content}
                 </p>
-              </div>
-            )}
+              ) : (
+                <p className="text-xs text-zinc-400">{t("templatePicker.previewEmpty")}</p>
+              )}
+            </div>
           </div>
 
           <Popover.Arrow className="fill-white" />
