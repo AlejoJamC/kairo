@@ -8,6 +8,16 @@ import { ChangePasswordSettings } from "@/components/change-password-settings";
 import { Loader2 } from "lucide-react";
 import type { AppView } from "@/types";
 
+const COMING_SOON_VIEWS: AppView[] = ["panel", "awaiting", "auto-resolved", "guided", "escalated"];
+
+function ComingSoon({ view }: { view: AppView }) {
+  return (
+    <div className="flex flex-1 items-center justify-center bg-zinc-950">
+      <p className="text-zinc-500 text-sm capitalize">{view} — coming soon</p>
+    </div>
+  );
+}
+
 function AppContent() {
   const { loading } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -24,6 +34,15 @@ function AppContent() {
     );
   }
 
+  const renderView = () => {
+    if (activeView === "inbox") return <Inbox />;
+    if (activeView === "settings") return <ProfileSettings onViewChange={setActiveView} />;
+    if (activeView === "change-password") return <ChangePasswordSettings onViewChange={setActiveView} />;
+    if (activeView === "clients") return <ClientDirectory />;
+    if (COMING_SOON_VIEWS.includes(activeView)) return <ComingSoon view={activeView} />;
+    return <Inbox />;
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
@@ -32,15 +51,7 @@ function AppContent() {
         activeView={activeView}
         onViewChange={setActiveView}
       />
-      {activeView === "inbox" ? (
-        <Inbox />
-      ) : activeView === "settings" ? (
-        <ProfileSettings onViewChange={setActiveView} />
-      ) : activeView === "change-password" ? (
-        <ChangePasswordSettings onViewChange={setActiveView} />
-      ) : (
-        <ClientDirectory />
-      )}
+      {renderView()}
     </div>
   );
 }

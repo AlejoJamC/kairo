@@ -39,14 +39,16 @@
   },
   "sidebar": {
     "inbox": "Bandeja de entrada",
+    "panel": "Panel",
+    "pendingClient": "Pendiente Cliente",
     "myTickets": "Mis Tickets",
     "unassigned": "Sin asignar",
     "allTickets": "Todos los Tickets",
     "settings": "Configuración",
     "escalation": "Escalado",
-    "guided" : "Guiado",
-    "autoResolvable" : "Auto Resuelto",
-    "clients" : "Clientes"
+    "guided": "Guiado",
+    "autoResolvable": "Auto Resuelto",
+    "clients": "Clientes"
   },
   "settings": {
     "title": "Configuración de Perfil",

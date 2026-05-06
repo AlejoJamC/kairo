@@ -61,7 +61,16 @@ export interface GmailTicket {
 
 // --- Client Directory ---
 
-export type AppView = "inbox" | "clients" | "settings" | "change-password";
+export type AppView =
+  | "inbox"
+  | "panel"
+  | "awaiting"
+  | "auto-resolved"
+  | "guided"
+  | "escalated"
+  | "clients"
+  | "settings"
+  | "change-password";
 
 export type PlanType = "Enterprise" | "Pro" | "Starter";
 export type SlaLevel = "Critical" | "High" | "Standard";
