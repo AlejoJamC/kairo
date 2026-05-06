@@ -946,6 +946,7 @@ export type Database = {
           conversation_id: string | null
           created_at: string
           emotion_confidence: number | null
+          escalation_reasons: Json
           id: string
           message_ids: string[]
           model_version: string
@@ -968,6 +969,7 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           emotion_confidence?: number | null
+          escalation_reasons?: Json
           id?: string
           message_ids: string[]
           model_version: string
@@ -990,6 +992,7 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           emotion_confidence?: number | null
+          escalation_reasons?: Json
           id?: string
           message_ids?: string[]
           model_version?: string

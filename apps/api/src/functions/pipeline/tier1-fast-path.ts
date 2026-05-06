@@ -1,10 +1,11 @@
-import { classifyEmail } from "@kairo/intelligence";
+import { classifyEmail, detectEscalationTriggers } from "@kairo/intelligence";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
+import { buildEscalationContext } from "../../routes/v1/tickets.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -271,6 +272,22 @@ export const tier1FastPath = inngest.createFunction(
                 .from("ticket_proposals")
                 .update({ ticket_id: ticket.id })
                 .eq("id", proposal.id);
+
+              // Detect escalation triggers post-classification (fire-and-forget)
+              buildEscalationContext(ticket.id, userId)
+                .then((ctx) => {
+                  if (!ctx) return;
+                  const result = detectEscalationTriggers(ctx);
+                  if (result.reasons.length > 0) {
+                    return supabase
+                      .from("ticket_proposals")
+                      .update({ escalation_reasons: result.reasons })
+                      .eq("id", proposal.id);
+                  }
+                })
+                .catch((err: unknown) => {
+                  console.error(`[tier1] Escalation detection failed for ticket ${ticket.id}:`, err);
+                });
             }
 
             if (channelIntegrationId) {
