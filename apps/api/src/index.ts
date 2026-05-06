@@ -12,6 +12,7 @@ import { ticketGroups } from "./routes/v1/ticket-groups.js";
 import { sync } from "./routes/v1/sync.js";
 import { tenants } from "./routes/v1/tenants.js";
 import { templates } from "./routes/v1/templates.js";
+import { sidebar } from "./routes/v1/sidebar.js";
 
 const app = new Hono();
 
@@ -22,6 +23,7 @@ v1.route("/ticket-groups", ticketGroups);
 v1.route("/sync", sync);
 v1.route("/tenants", tenants);
 v1.route("/templates", templates);
+v1.route("/sidebar", sidebar);
 
 app.route("/v1", v1);
 
