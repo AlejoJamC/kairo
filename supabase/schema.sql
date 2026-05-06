@@ -328,6 +328,22 @@ COMMENT ON TABLE "public"."profiles" IS 'Extended user profile data for Kairo us
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."response_templates" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "title" "text" NOT NULL,
+    "content" "text" NOT NULL,
+    "category" "text",
+    "locale" "text" DEFAULT 'es'::"text" NOT NULL,
+    "is_active" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."response_templates" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."tenant_priority_config" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "user_id" "uuid" NOT NULL,
@@ -603,6 +619,11 @@ ALTER TABLE ONLY "public"."profiles"
 
 
 
+ALTER TABLE ONLY "public"."response_templates"
+    ADD CONSTRAINT "response_templates_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."tenant_priority_config"
     ADD CONSTRAINT "tenant_priority_config_pkey" PRIMARY KEY ("id");
 
@@ -763,6 +784,14 @@ CREATE INDEX "idx_profiles_email" ON "public"."profiles" USING "btree" ("email")
 
 
 
+CREATE INDEX "idx_response_templates_locale" ON "public"."response_templates" USING "btree" ("user_id", "locale") WHERE ("is_active" = true);
+
+
+
+CREATE INDEX "idx_response_templates_user_id" ON "public"."response_templates" USING "btree" ("user_id") WHERE ("is_active" = true);
+
+
+
 CREATE INDEX "idx_ticket_events_author_id" ON "public"."ticket_events" USING "btree" ("author_id");
 
 
@@ -867,6 +896,10 @@ CREATE OR REPLACE TRIGGER "on_profiles_updated" BEFORE UPDATE ON "public"."profi
 
 
 
+CREATE OR REPLACE TRIGGER "on_response_templates_updated" BEFORE UPDATE ON "public"."response_templates" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
 CREATE OR REPLACE TRIGGER "on_tickets_updated" BEFORE UPDATE ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
 
 
@@ -923,6 +956,11 @@ ALTER TABLE ONLY "public"."messages"
 
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."response_templates"
+    ADD CONSTRAINT "response_templates_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -1046,6 +1084,10 @@ CREATE POLICY "Users can delete own gmail accounts" ON "public"."gmail_accounts"
 
 
 
+CREATE POLICY "Users can delete own templates" ON "public"."response_templates" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
 CREATE POLICY "Users can delete own ticket tags" ON "public"."ticket_tags" FOR DELETE USING ((EXISTS ( SELECT 1
    FROM "public"."tickets" "t"
   WHERE (("t"."id" = "ticket_tags"."ticket_id") AND ("t"."user_id" = "auth"."uid"())))));
@@ -1079,6 +1121,10 @@ CREATE POLICY "Users can insert own messages" ON "public"."messages" FOR INSERT 
 
 
 CREATE POLICY "Users can insert own profile" ON "public"."profiles" FOR INSERT WITH CHECK (("auth"."uid"() = "id"));
+
+
+
+CREATE POLICY "Users can insert own templates" ON "public"."response_templates" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
 
 
 
@@ -1126,6 +1172,10 @@ CREATE POLICY "Users can update own profile" ON "public"."profiles" FOR UPDATE U
 
 
 
+CREATE POLICY "Users can update own templates" ON "public"."response_templates" FOR UPDATE USING (("auth"."uid"() = "user_id"));
+
+
+
 CREATE POLICY "Users can update own ticket proposals" ON "public"."ticket_proposals" FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM "public"."conversations" "c"
   WHERE (("c"."id" = "ticket_proposals"."conversation_id") AND ("c"."user_id" = "auth"."uid"())))));
@@ -1159,6 +1209,10 @@ CREATE POLICY "Users can view own messages" ON "public"."messages" FOR SELECT US
 
 
 CREATE POLICY "Users can view own profile" ON "public"."profiles" FOR SELECT USING (("auth"."uid"() = "id"));
+
+
+
+CREATE POLICY "Users can view own templates" ON "public"."response_templates" FOR SELECT USING (("auth"."uid"() = "user_id"));
 
 
 
@@ -1244,6 +1298,9 @@ ALTER TABLE "public"."messages" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."response_templates" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "superadmin_audit_log_manage" ON "public"."admin_audit_log" USING (("auth"."uid"() IN ( SELECT "admin_users"."auth_uid"
@@ -1389,6 +1446,12 @@ GRANT ALL ON TABLE "public"."messages" TO "service_role";
 GRANT ALL ON TABLE "public"."profiles" TO "anon";
 GRANT ALL ON TABLE "public"."profiles" TO "authenticated";
 GRANT ALL ON TABLE "public"."profiles" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."response_templates" TO "anon";
+GRANT ALL ON TABLE "public"."response_templates" TO "authenticated";
+GRANT ALL ON TABLE "public"."response_templates" TO "service_role";
 
 
 
