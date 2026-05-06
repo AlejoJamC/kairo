@@ -40,7 +40,7 @@
   "sidebar": {
     "inbox": "Inbox",
     "panel": "Panel",
-    "pendingClient": "Awaiting Client",
+    "pendingClient": "Awaiting Reply",
     "myTickets": "My Tickets",
     "unassigned": "Unassigned",
     "allTickets": "All Tickets",
@@ -49,6 +49,15 @@
     "guided": "Guided",
     "autoResolvable": "Auto Resolved",
     "clients": "Clients"
+  },
+  "awaitingView": {
+    "title": "Awaiting Reply",
+    "subtitle": "Tickets where you sent a reply and are waiting for the client to respond.",
+    "empty": "No tickets waiting for a client response. Great work! 🎉",
+    "lastReply": "Last reply",
+    "followUp": "Follow up",
+    "openTicket": "View ticket",
+    "ticketNumber": "#{{number}}"
   },
   "settings": {
     "title": "Profile Settings",

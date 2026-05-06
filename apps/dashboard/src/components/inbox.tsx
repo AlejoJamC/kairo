@@ -28,6 +28,7 @@ export function Inbox() {
         .from("tickets")
         .select("*")
         .eq("user_id", user.id)
+        .neq("status", "awaiting_customer")
         .order("priority_score", { ascending: false, nullsFirst: false })
         .limit(200);
 
@@ -53,6 +54,7 @@ export function Inbox() {
             .from("tickets")
             .select("*")
             .eq("user_id", user.id)
+            .neq("status", "awaiting_customer")
             .order("priority_score", { ascending: false, nullsFirst: false })
             .limit(200)
             .then(({ data }) => {
