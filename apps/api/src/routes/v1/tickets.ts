@@ -23,6 +23,12 @@ import { planScoreFromTier, computeClientFlags } from "../../lib/client-profile.
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import {
+  isValidTransition,
+  getTransitionError,
+  isTicketStatus,
+  type TicketStatus,
+} from "../../lib/ticket-status-machine.js";
 
 export const tickets = new Hono();
 
@@ -614,11 +620,19 @@ tickets.get("/:id/activity", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// PATCH /v1/tickets/:id/status — update ticket status (KAI-28)
+// PATCH /v1/tickets/:id/status — typed state machine transition (KAI-50)
 // ---------------------------------------------------------------------------
 
 const UpdateStatusSchema = z.object({
-  status: z.enum(["open", "in_progress", "waiting", "resolved", "closed"]),
+  status: z.enum([
+    "open",
+    "awaiting_customer",
+    "in_progress",
+    "resolved",
+    "auto_resolved",
+    "guided",
+    "escalated",
+  ]),
 });
 
 tickets.patch("/:id/status", async (c) => {
@@ -642,10 +656,22 @@ tickets.patch("/:id/status", async (c) => {
 
   if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
-  const { error: updateErr } = await supabase
+  const fromStatus: TicketStatus = isTicketStatus(ticket.status ?? "") ? ticket.status as TicketStatus : "open";
+  const toStatus = parsed.data.status as TicketStatus;
+
+  if (!isValidTransition(fromStatus, toStatus)) {
+    return c.json(
+      { error: getTransitionError(fromStatus, toStatus), code: "INVALID_TRANSITION" },
+      422
+    );
+  }
+
+  const { data: updatedTicket, error: updateErr } = await supabase
     .from("tickets")
-    .update({ status: parsed.data.status })
-    .eq("id", id);
+    .update({ status: toStatus })
+    .eq("id", id)
+    .select()
+    .single();
 
   if (updateErr) return c.json({ error: updateErr.message }, 500);
 
@@ -653,10 +679,10 @@ tickets.patch("/:id/status", async (c) => {
     ticketId: id,
     authorId: user.id,
     eventType: "status_change",
-    metadata: { from_status: ticket.status, to_status: parsed.data.status },
+    metadata: { from: fromStatus, to: toStatus },
   });
 
-  return c.json({ ticket_id: id, status: parsed.data.status });
+  return c.json({ success: true, ticket: updatedTicket });
 });
 
 // ---------------------------------------------------------------------------
@@ -729,7 +755,7 @@ tickets.post("/:id/reply", async (c) => {
   // 1. Fetch ticket + linked conversation
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
-    .select("id, subject, from_email, gmail_thread_id, conversation_id")
+    .select("id, subject, from_email, gmail_thread_id, conversation_id, status")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -806,10 +832,17 @@ tickets.post("/:id/reply", async (c) => {
     });
   }
 
-  // 6. Update ticket last_response_at
+  // 6. Update ticket: last_response_at + auto-transition to awaiting_customer (KAI-50)
+  const currentStatus = ticket.status ?? "open";
+  const AUTO_AWAITING_SOURCES: TicketStatus[] = ["open", "in_progress"];
+  const shouldTransition = isTicketStatus(currentStatus) && AUTO_AWAITING_SOURCES.includes(currentStatus as TicketStatus);
+
   await supabase
     .from("tickets")
-    .update({ last_response_at: new Date().toISOString() })
+    .update({
+      last_response_at: new Date().toISOString(),
+      ...(shouldTransition ? { status: "awaiting_customer" } : {}),
+    })
     .eq("id", id);
 
   // 7. Emit activity event
@@ -820,6 +853,15 @@ tickets.post("/:id/reply", async (c) => {
     body: parsed.data.body,
     metadata: { gmail_message_id: sendResult.messageId, thread_id: sendResult.threadId },
   });
+
+  if (shouldTransition) {
+    await emitTicketEvent({
+      ticketId: id,
+      authorId: user.id,
+      eventType: "status_change",
+      metadata: { from: currentStatus, to: "awaiting_customer", trigger: "reply_sent" },
+    });
+  }
 
   return c.json({ success: true, messageId: sendResult.messageId });
 });
