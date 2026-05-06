@@ -108,6 +108,9 @@
   },
   "replyBar": {
     "sending": "Sending...",
+    "sendSuccess": "Reply sent successfully.",
+    "aiSuggestionBanner": "Kairo suggested this reply. You can edit it before sending.",
+    "dismissSuggestion": "Dismiss suggestion",
     "errorGeneric": "Failed to send. Please try again.",
     "errorTokenExpired": "Your Gmail session expired. Reconnect your account in Settings.",
     "errorNoGmail": "No active Gmail integration found for this ticket."
@@ -118,8 +121,11 @@
     "errorLoading": "Could not load templates.",
     "empty": "No templates configured. Add templates in Settings.",
     "preview": "Preview",
+    "previewEmpty": "Hover a template to preview its content.",
     "uncategorized": "General",
-    "confirmOverwrite": "Replace current draft with this template?"
+    "confirmOverwrite": "Replace current draft with this template?",
+    "dummyFormalGreetingTitle": "Basic formal greeting",
+    "dummyFormalGreetingContent": "Hello,\n\nThank you for contacting us. We will gladly review your request and get back to you with an update shortly.\n\nPlease feel free to share any additional details.\n\nBest regards,"
   },
   "ai": {
     "title": "AI Assistant",

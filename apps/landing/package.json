@@ -12,23 +12,23 @@
   },
   "dependencies": {
     "@kairo/env": "workspace:*",
-    "@t3-oss/env-nextjs": "^0.12.0",
+    "@t3-oss/env-nextjs": "^0.13.11",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
-    "@supabase/supabase-js": "^2.97.0",
-    "@tailwindcss/postcss": "^4.1.18",
+    "@supabase/supabase-js": "^2.105.3",
+    "@tailwindcss/postcss": "^4.2.4",
     "googleapis": "^171.4.0",
-    "lucide-react": "^0.511.0",
-    "next": "^15.3.3",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "tailwindcss": "^4.1.18",
-    "zod": "^3.25.0"
+    "lucide-react": "^1.14.0",
+    "next": "^16.2.4",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "tailwindcss": "^4.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@kairo/dashboard": "workspace:*",
-    "@types/node": "^24.10.1",
-    "@types/react": "^19.2.7",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "typescript": "~5.9.3"
+    "typescript": "~6.0.3"
   }
 }

@@ -6,6 +6,7 @@ export type { Ticket };
 interface TriageStore {
   tickets: Ticket[];
   selectedTicketId: string | null;
+  aiSuggestedReply: string | null;
   isScanning: boolean;
   classifiedCount: number;
   // Bulk-load on initial fetch
@@ -16,11 +17,14 @@ interface TriageStore {
   // Realtime UPDATE: merge classification fields into existing row
   updateClassification: (id: string, data: Partial<Ticket>) => void;
   setScanning: (v: boolean) => void;
+  setSuggestedReply: (reply: string | null) => void;
+  clearSuggestedReply: () => void;
 }
 
 export const useTriageStore = create<TriageStore>((set) => ({
   tickets: [],
   selectedTicketId: null,
+  aiSuggestedReply: null,
   isScanning: false,
   classifiedCount: 0,
 
@@ -53,4 +57,6 @@ export const useTriageStore = create<TriageStore>((set) => ({
     }),
 
   setScanning: (v) => set({ isScanning: v }),
+  setSuggestedReply: (reply) => set({ aiSuggestedReply: reply }),
+  clearSuggestedReply: () => set({ aiSuggestedReply: null }),
 }));

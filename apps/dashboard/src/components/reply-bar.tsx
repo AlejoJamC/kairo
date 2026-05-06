@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Paperclip, Send, Zap } from "lucide-react";
+import { Paperclip, Send, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import { TemplatePicker } from "./template-picker";
@@ -9,10 +9,23 @@ import { apiCall } from "@/lib/api-client";
 export function ReplyBar() {
   const { t } = useTranslation("dashboard");
   const selectedTicketId = useTriageStore((s) => s.selectedTicketId);
+  const aiSuggestedReply = useTriageStore((s) => s.aiSuggestedReply);
+  const clearSuggestedReply = useTriageStore((s) => s.clearSuggestedReply);
 
   const [draft, setDraft] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sendError, setSendError] = React.useState<string | null>(null);
+  const [sendSuccess, setSendSuccess] = React.useState(false);
+  const [showAiBanner, setShowAiBanner] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!aiSuggestedReply?.trim()) return;
+    setDraft(aiSuggestedReply);
+    setShowAiBanner(true);
+    setSendError(null);
+    setSendSuccess(false);
+    clearSuggestedReply();
+  }, [aiSuggestedReply, clearSuggestedReply]);
 
   function handleTemplateSelect(content: string) {
     if (draft.trim()) {
@@ -20,12 +33,15 @@ export function ReplyBar() {
     }
     setDraft(content);
     setSendError(null);
+    setSendSuccess(false);
+    setShowAiBanner(false);
   }
 
   async function handleSend() {
     if (!draft.trim() || !selectedTicketId || sending) return;
     setSending(true);
     setSendError(null);
+    setSendSuccess(false);
 
     try {
       const res = await apiCall(`/v1/tickets/${selectedTicketId}/reply`, {
@@ -48,6 +64,9 @@ export function ReplyBar() {
       }
 
       setDraft("");
+      setSendSuccess(true);
+      setShowAiBanner(false);
+      clearSuggestedReply();
     } catch (err) {
       console.error("[ReplyBar] send error", err);
       setSendError(t("replyBar.errorGeneric"));
@@ -75,6 +94,8 @@ export function ReplyBar() {
           onChange={(e) => {
             setDraft(e.target.value);
             if (sendError) setSendError(null);
+            if (sendSuccess) setSendSuccess(false);
+            if (showAiBanner) setShowAiBanner(false);
           }}
           onKeyDown={handleKeyDown}
           className="flex-1 resize-y rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-zinc-700 outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-300"
@@ -102,8 +123,24 @@ export function ReplyBar() {
         </div>
       </div>
 
+      {showAiBanner && (
+        <div className="mt-2 flex items-start justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2">
+          <p className="text-xs text-blue-800">{t("replyBar.aiSuggestionBanner")}</p>
+          <button
+            type="button"
+            className="rounded p-0.5 text-blue-700 hover:bg-blue-100"
+            onClick={() => setShowAiBanner(false)}
+            aria-label={t("replyBar.dismissSuggestion")}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {sendError ? (
         <p className="mt-1.5 text-xs text-red-500">{sendError}</p>
+      ) : sendSuccess ? (
+        <p className="mt-1.5 text-xs text-emerald-600">{t("replyBar.sendSuccess")}</p>
       ) : (
         <p className="mt-1.5 text-xs text-gray-400">{t("ticketDetail.sendHint")}</p>
       )}

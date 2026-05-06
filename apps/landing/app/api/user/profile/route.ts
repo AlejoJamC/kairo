@@ -27,9 +27,10 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const updates: Record<string, string> = {};
-    if (name?.trim()) updates.name = name.trim();
-    if (company_name?.trim()) updates.company_name = company_name.trim();
+    const updates = {
+      ...(name?.trim() && { name: name.trim() }),
+      ...(company_name?.trim() && { company_name: company_name.trim() }),
+    };
 
     const { error } = await supabase
       .from("profiles")
