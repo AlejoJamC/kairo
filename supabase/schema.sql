@@ -279,6 +279,33 @@ COMMENT ON TABLE "public"."gmail_accounts" IS 'Gmail OAuth tokens for connected 
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."llm_calls" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid",
+    "ticket_id" "uuid",
+    "feature" "text" NOT NULL,
+    "provider" "text" NOT NULL,
+    "model" "text" NOT NULL,
+    "prompt_version" "text",
+    "prompt_text" "text" NOT NULL,
+    "response_text" "text",
+    "prompt_tokens" integer,
+    "completion_tokens" integer,
+    "confidence_score" numeric(4,3),
+    "latency_ms" integer,
+    "outcome" "text",
+    "outcome_recorded_at" timestamp with time zone,
+    "error_code" "text",
+    "error_detail" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "llm_calls_confidence_check" CHECK ((("confidence_score" IS NULL) OR (("confidence_score" >= (0)::numeric) AND ("confidence_score" <= (1)::numeric)))),
+    CONSTRAINT "llm_calls_outcome_check" CHECK ((("outcome" IS NULL) OR ("outcome" = ANY (ARRAY['accepted'::"text", 'edited'::"text", 'rejected'::"text", 'ignored'::"text", 'auto_applied'::"text"]))))
+);
+
+
+ALTER TABLE "public"."llm_calls" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."messages" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "conversation_id" "uuid",
@@ -440,6 +467,8 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_proposals" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "proposed_emotion" "text",
     "emotion_confidence" numeric(3,2),
+    "proposed_reply" "text",
+    "referenced_kb_articles" "uuid"[] DEFAULT '{}'::"uuid"[] NOT NULL,
     CONSTRAINT "chk_proposed_emotion" CHECK ((("proposed_emotion" IS NULL) OR ("proposed_emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "ticket_proposals_confidence_score_check" CHECK ((("confidence_score" >= (0.0)::double precision) AND ("confidence_score" <= (1.0)::double precision)))
 );
@@ -599,6 +628,11 @@ ALTER TABLE ONLY "public"."gmail_accounts"
 
 
 
+ALTER TABLE ONLY "public"."llm_calls"
+    ADD CONSTRAINT "llm_calls_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."messages"
     ADD CONSTRAINT "messages_integration_external_id_key" UNIQUE ("channel_integration_id", "external_id");
 
@@ -749,6 +783,30 @@ CREATE INDEX "idx_conversations_user_id" ON "public"."conversations" USING "btre
 
 
 CREATE INDEX "idx_gmail_accounts_user_id" ON "public"."gmail_accounts" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_llm_calls_created_at" ON "public"."llm_calls" USING "btree" ("created_at" DESC);
+
+
+
+CREATE INDEX "idx_llm_calls_feature" ON "public"."llm_calls" USING "btree" ("feature");
+
+
+
+CREATE INDEX "idx_llm_calls_model" ON "public"."llm_calls" USING "btree" ("model");
+
+
+
+CREATE INDEX "idx_llm_calls_outcome" ON "public"."llm_calls" USING "btree" ("outcome") WHERE ("outcome" IS NOT NULL);
+
+
+
+CREATE INDEX "idx_llm_calls_prompt_version" ON "public"."llm_calls" USING "btree" ("feature", "prompt_version");
+
+
+
+CREATE INDEX "idx_llm_calls_ticket_id" ON "public"."llm_calls" USING "btree" ("ticket_id");
 
 
 
@@ -941,6 +999,16 @@ ALTER TABLE ONLY "public"."conversations"
 
 ALTER TABLE ONLY "public"."gmail_accounts"
     ADD CONSTRAINT "gmail_accounts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."llm_calls"
+    ADD CONSTRAINT "llm_calls_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."llm_calls"
+    ADD CONSTRAINT "llm_calls_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
 
 
@@ -1202,6 +1270,10 @@ CREATE POLICY "Users can view own gmail accounts" ON "public"."gmail_accounts" F
 
 
 
+CREATE POLICY "Users can view own llm calls" ON "public"."llm_calls" FOR SELECT USING (("auth"."uid"() = "user_id"));
+
+
+
 CREATE POLICY "Users can view own messages" ON "public"."messages" FOR SELECT USING ((EXISTS ( SELECT 1
    FROM "public"."conversations" "c"
   WHERE (("c"."id" = "messages"."conversation_id") AND ("c"."user_id" = "auth"."uid"())))));
@@ -1292,6 +1364,9 @@ ALTER TABLE "public"."conversations" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."gmail_accounts" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."llm_calls" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."messages" ENABLE ROW LEVEL SECURITY;
@@ -1434,6 +1509,12 @@ GRANT ALL ON TABLE "public"."conversations" TO "service_role";
 GRANT ALL ON TABLE "public"."gmail_accounts" TO "anon";
 GRANT ALL ON TABLE "public"."gmail_accounts" TO "authenticated";
 GRANT ALL ON TABLE "public"."gmail_accounts" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."llm_calls" TO "anon";
+GRANT ALL ON TABLE "public"."llm_calls" TO "authenticated";
+GRANT ALL ON TABLE "public"."llm_calls" TO "service_role";
 
 
 

@@ -16,6 +16,11 @@ import {
 import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
 import { emitTicketEvent } from "../../lib/ticket-events.js";
 import { sendGmailReply, GmailSendException } from "../../lib/gmail-send.js";
+import { createCompletionProvider } from "@kairo/intelligence";
+import { resolveModelVersion } from "../../lib/model-version.js";
+import { readFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 
 export const tickets = new Hono();
 
@@ -867,4 +872,169 @@ tickets.post("/:id/classify-approve", async (c) => {
   });
 
   return c.json({ ticket_id: id, proposal_id: parsed.data.proposal_id, action: parsed.data.action });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/tickets/:id/suggest-reply — context-aware reply suggestion (KAI-31)
+// Assembles 5 context sources, calls Claude, stores in ticket_proposals.
+// All context sources degrade gracefully — partial context is better than no call.
+// ---------------------------------------------------------------------------
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PROMPT_DIR = join(__dirname, "../../../../packages/intelligence/prompts/reply-suggestion");
+
+function loadPromptTemplate(lang: "es" | "en"): string {
+  try {
+    return readFileSync(join(PROMPT_DIR, `${lang}.md`), "utf-8");
+  } catch {
+    return readFileSync(join(PROMPT_DIR, "es.md"), "utf-8");
+  }
+}
+
+function detectLanguage(texts: string[]): "es" | "en" {
+  const sample = texts.join(" ").toLowerCase().slice(0, 2000);
+  const esSignals = (sample.match(/\b(hola|gracias|por favor|necesito|tengo|problema|ayuda|buenas|estimado)\b/g) ?? []).length;
+  const enSignals = (sample.match(/\b(hello|thank|please|need|have|problem|help|dear|hi|issue)\b/g) ?? []).length;
+  return enSignals > esSignals ? "en" : "es";
+}
+
+function fillTemplate(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce(
+    (t, [k, v]) => t.replaceAll(`{{${k}}}`, v),
+    template
+  );
+}
+
+const SuggestReplyResponseSchema = z.object({
+  suggestion: z.string(),
+  confidence: z.number().min(0).max(1),
+  detected_language: z.enum(["es", "en"]),
+});
+
+tickets.post("/:id/suggest-reply", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  // 1. Ticket — required; fail hard only here
+  const { data: ticket, error: ticketErr } = await supabase
+    .from("tickets")
+    .select("id, subject, ticket_type, priority, category, emotion, conversation_id, client_id, from_email")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  // 2. Message history — graceful degrade
+  let messageHistory = "No hay historial de mensajes disponible.";
+  if (ticket.conversation_id) {
+    const { data: msgs } = await supabase
+      .from("messages")
+      .select("direction, sender_display_name, body_plain, received_at")
+      .eq("conversation_id", ticket.conversation_id)
+      .order("received_at", { ascending: false })
+      .limit(10);
+
+    if (msgs && msgs.length > 0) {
+      messageHistory = msgs
+        .reverse()
+        .map((m) => `[${m.direction === "inbound" ? "Cliente" : "Agente"} — ${m.received_at}]\n${m.body_plain ?? ""}`)
+        .join("\n\n");
+    }
+  }
+
+  // 3. Client profile — graceful degrade
+  let clientProfile = "Sin perfil de cliente disponible.";
+  if (ticket.client_id) {
+    const { data: client } = await supabase
+      .from("clients")
+      .select("name, plan_type, sla_level")
+      .eq("id", ticket.client_id)
+      .single();
+
+    if (client) {
+      clientProfile = `Nombre: ${client.name} | Plan: ${client.plan_type ?? "N/A"} | SLA: ${client.sla_level ?? "N/A"}`;
+    }
+  }
+
+  // 4. Similar resolved case — graceful degrade (RPC may not be available)
+  let similarCase = "No hay casos similares resueltos disponibles.";
+  const { data: similar } = await supabase.rpc("find_similar_tickets", {
+    p_ticket_id: id,
+    p_user_id: user.id,
+    p_limit: 1,
+    p_status_filter: "resolved",
+  }).catch(() => ({ data: null }));
+
+  if (similar && similar.length > 0) {
+    const s = similar[0] as { subject?: string; resolution_summary?: string };
+    similarCase = `Asunto: ${s.subject ?? "N/A"}\nResolución: ${s.resolution_summary ?? "Sin resumen"}`;
+  }
+
+  // 5. KB articles — graceful degrade (find_relevant_kb RPC not yet implemented — ADR-012 pending)
+  // TODO: wire find_relevant_kb() once kb_articles table and pgvector index are built.
+  const referencedKbArticles: string[] = [];
+  const kbArticlesText = "No hay artículos de base de conocimiento disponibles aún.";
+
+  // Detect language from message history
+  const lang = detectLanguage([messageHistory, ticket.subject ?? ""]);
+  const promptTemplate = loadPromptTemplate(lang);
+
+  const prompt = fillTemplate(promptTemplate, {
+    subject: ticket.subject ?? "",
+    ticket_type: ticket.ticket_type ?? "N/A",
+    priority: ticket.priority ?? "N/A",
+    category: ticket.category ?? "N/A",
+    emotion: ticket.emotion ?? "neutral",
+    client_profile: clientProfile,
+    message_history: messageHistory,
+    similar_case: similarCase,
+    kb_articles: kbArticlesText,
+  });
+
+  // Call Claude
+  const provider = createCompletionProvider();
+  let suggestion: string;
+  let confidence: number;
+
+  try {
+    const raw = await provider.complete(prompt, { maxTokens: 1500, temperature: 0.4 });
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON in response");
+
+    const parsed = SuggestReplyResponseSchema.parse(JSON.parse(jsonMatch[0]));
+    suggestion = parsed.suggestion;
+    confidence = parsed.confidence;
+  } catch (err) {
+    return c.json(
+      { error: "Suggestion failed", detail: err instanceof Error ? err.message : String(err) },
+      500
+    );
+  }
+
+  // Store in ticket_proposals
+  const { data: proposal } = await supabase
+    .from("ticket_proposals")
+    .insert({
+      ticket_id: id,
+      conversation_id: ticket.conversation_id ?? null,
+      message_ids: [],
+      proposed_reply: suggestion,
+      referenced_kb_articles: referencedKbArticles,
+      confidence_score: confidence,
+      model_version: resolveModelVersion(),
+      raw_llm_output: { suggestion, confidence, lang },
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  return c.json({
+    suggestion,
+    referencedKbArticles,
+    confidence,
+    proposal_id: proposal?.id ?? null,
+  });
 });
