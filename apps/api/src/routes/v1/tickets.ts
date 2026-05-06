@@ -15,6 +15,7 @@ import {
 } from "../../lib/scoring.js";
 import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
 import { emitTicketEvent } from "../../lib/ticket-events.js";
+import { sendGmailReply, GmailSendException } from "../../lib/gmail-send.js";
 
 export const tickets = new Hono();
 
@@ -692,12 +693,18 @@ tickets.post("/:id/escalate", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /v1/tickets/:id/reply — send a reply (KAI-28)
+// POST /v1/tickets/:id/reply — send reply via Gmail + record message (KAI-29)
+// Resolves thread from conversations.external_thread_id (omnichannel design).
+// Fallback to tickets.gmail_thread_id for legacy tickets not yet linked to a
+// conversation (deprecated column per 003_kairo_core_schema).
+// Token source: gmail_accounts (Gmail-specific — see gmail-send.ts for the
+// deferred multi-account / omnichannel token abstraction note).
 // ---------------------------------------------------------------------------
 
 const ReplySchema = z.object({
   body: z.string().min(1),
-  is_internal: z.boolean().default(false),
+  bodyMarkdown: z.string().optional(),
+  templateId: z.string().uuid().optional(),
 });
 
 tickets.post("/:id/reply", async (c) => {
@@ -706,30 +713,108 @@ tickets.post("/:id/reply", async (c) => {
 
   const id = c.req.param("id");
 
-  let body: unknown;
-  try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON body" }, 400); }
+  let reqBody: unknown;
+  try { reqBody = await c.req.json(); } catch { return c.json({ error: "Invalid JSON body" }, 400); }
 
-  const parsed = ReplySchema.safeParse(body);
+  const parsed = ReplySchema.safeParse(reqBody);
   if (!parsed.success) return c.json({ error: "Invalid request", detail: parsed.error.flatten() }, 400);
 
-  const { data: ticket, error: fetchErr } = await supabase
+  // 1. Fetch ticket + linked conversation
+  const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
-    .select("id")
+    .select("id, subject, from_email, gmail_thread_id, conversation_id")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
 
-  if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
+  // 2. Resolve Gmail thread ID: prefer omnichannel path, fall back to legacy column
+  let threadId: string | null = null;
+  let channelIntegrationId: string | null = null;
+
+  if (ticket.conversation_id) {
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("external_thread_id, channel_integration_id")
+      .eq("id", ticket.conversation_id)
+      .single();
+    threadId = conv?.external_thread_id ?? null;
+    channelIntegrationId = conv?.channel_integration_id ?? null;
+  }
+
+  // Legacy fallback
+  if (!threadId) threadId = ticket.gmail_thread_id ?? null;
+
+  if (!threadId) {
+    return c.json({ error: "No Gmail thread found for this ticket", code: "NO_THREAD" }, 422);
+  }
+
+  // 3. Resolve Gmail OAuth token from gmail_accounts
+  const { data: gmailAccount } = await supabase
+    .from("gmail_accounts")
+    .select("access_token, email")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (!gmailAccount?.access_token) {
+    return c.json({ error: "No Gmail integration found", code: "NO_GMAIL_INTEGRATION" }, 422);
+  }
+
+  // 4. Send via Gmail API
+  let sendResult: { messageId: string; threadId: string };
+  try {
+    sendResult = await sendGmailReply({
+      accessToken: gmailAccount.access_token,
+      threadId,
+      to: ticket.from_email ?? "",
+      subject: ticket.subject?.startsWith("Re:") ? ticket.subject : `Re: ${ticket.subject}`,
+      bodyPlain: parsed.data.body,
+    });
+  } catch (err) {
+    if (err instanceof GmailSendException) {
+      const status = err.gmailError.code === "GMAIL_TOKEN_EXPIRED" ? 401 : 502;
+      return c.json({ error: err.gmailError.code, ...err.gmailError }, status);
+    }
+    return c.json({ error: "GMAIL_API_ERROR", detail: String(err) }, 502);
+  }
+
+  // 5. Record outbound message
+  if (channelIntegrationId) {
+    await supabase.from("messages").insert({
+      conversation_id: ticket.conversation_id,
+      channel_integration_id: channelIntegrationId,
+      external_id: sendResult.messageId,
+      thread_external_id: sendResult.threadId,
+      direction: "outbound",
+      sender_external_id: gmailAccount.email,
+      sender_display_name: gmailAccount.email,
+      body_plain: parsed.data.body,
+      body_html: parsed.data.bodyMarkdown ?? null,
+      snippet: parsed.data.body.slice(0, 200),
+      raw_payload: { gmail_message_id: sendResult.messageId, thread_id: sendResult.threadId },
+      received_at: new Date().toISOString(),
+    });
+  }
+
+  // 6. Update ticket last_response_at
+  await supabase
+    .from("tickets")
+    .update({ last_response_at: new Date().toISOString() })
+    .eq("id", id);
+
+  // 7. Emit activity event
   await emitTicketEvent({
     ticketId: id,
     authorId: user.id,
     eventType: "reply_sent",
     body: parsed.data.body,
-    isInternal: parsed.data.is_internal,
+    metadata: { gmail_message_id: sendResult.messageId, thread_id: sendResult.threadId },
   });
 
-  return c.json({ ticket_id: id, sent: true });
+  return c.json({ success: true, messageId: sendResult.messageId });
 });
 
 // ---------------------------------------------------------------------------
