@@ -3,14 +3,37 @@ import type { Ticket } from "@kairo/types";
 
 export type { Ticket };
 
+export interface RecentTicket {
+  id:            string;
+  ticket_number: number;
+  subject:       string | null;
+  status:        string;
+  created_at:    string;
+}
+
+export interface ClientProfile {
+  clientId:         string;
+  name:             string | null;
+  email:            string | null;
+  phone:            string | null;
+  clientType:       "enterprise" | "pro" | "starter" | "unknown";
+  activePlan:       string | null;
+  planScore:        number;
+  isNewClient:      boolean;
+  isRecurrent:      boolean;
+  totalTickets:     number;
+  ticketsLast30Days: number;
+  recentTickets:    RecentTicket[];
+}
+
 interface TriageStore {
   tickets: Ticket[];
   selectedTicketId: string | null;
   aiSuggestedReply: string | null;
   isScanning: boolean;
   classifiedCount: number;
-  // Escalation — ticketId that was escalated, null if none pending
   pendingEscalation: string | null;
+  clientProfile: ClientProfile | null;
   // Bulk-load on initial fetch
   setTickets: (tickets: Ticket[]) => void;
   // Realtime INSERT: insert at top, auto-select first arrival
@@ -22,6 +45,7 @@ interface TriageStore {
   setSuggestedReply: (reply: string | null) => void;
   clearSuggestedReply: () => void;
   setPendingEscalation: (ticketId: string | null) => void;
+  setClientProfile: (profile: ClientProfile | null) => void;
 }
 
 export const useTriageStore = create<TriageStore>((set) => ({
@@ -31,6 +55,7 @@ export const useTriageStore = create<TriageStore>((set) => ({
   isScanning: false,
   classifiedCount: 0,
   pendingEscalation: null,
+  clientProfile: null,
 
   setTickets: (tickets) =>
     set((state) => ({
@@ -64,4 +89,5 @@ export const useTriageStore = create<TriageStore>((set) => ({
   setSuggestedReply: (reply) => set({ aiSuggestedReply: reply }),
   clearSuggestedReply: () => set({ aiSuggestedReply: null }),
   setPendingEscalation: (ticketId) => set({ pendingEscalation: ticketId }),
+  setClientProfile: (profile) => set({ clientProfile: profile }),
 }));

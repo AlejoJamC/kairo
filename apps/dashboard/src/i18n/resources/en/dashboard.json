@@ -127,6 +127,16 @@
     "dummyFormalGreetingTitle": "Basic formal greeting",
     "dummyFormalGreetingContent": "Hello,\n\nThank you for contacting us. We will gladly review your request and get back to you with an update shortly.\n\nPlease feel free to share any additional details.\n\nBest regards,"
   },
+  "clientProfile": {
+    "noData": "Customer data not available.",
+    "unknown": "Unknown customer",
+    "newClient": "New customer",
+    "recurrent": "Returning customer",
+    "recurrentTooltip": "{{count}} tickets in the last 30 days",
+    "ticketsTotal": "tickets total",
+    "ticketsThisMonth": "this month",
+    "recentTickets": "Recent tickets"
+  },
   "ai": {
     "title": "AI Assistant",
     "escalationSuggested": "Escalation Suggested",
