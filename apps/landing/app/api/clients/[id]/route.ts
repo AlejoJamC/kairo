@@ -55,17 +55,15 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const updates: Record<string, unknown> = {};
-
-    if (body.name !== undefined) updates.name = body.name;
-    if (body.legal_id !== undefined) updates.legal_id = body.legal_id;
-    if (body.telephone !== undefined) updates.telephone = body.telephone;
-    if (body.authorized_emails !== undefined)
-      updates.authorized_emails = body.authorized_emails;
-    if (body.contact_persons !== undefined)
-      updates.contact_persons = body.contact_persons;
-    if (body.plan_type !== undefined) updates.plan_type = body.plan_type;
-    if (body.sla_level !== undefined) updates.sla_level = body.sla_level;
+    const updates = {
+      ...(body.name !== undefined && { name: body.name }),
+      ...(body.legal_id !== undefined && { legal_id: body.legal_id }),
+      ...(body.telephone !== undefined && { telephone: body.telephone }),
+      ...(body.authorized_emails !== undefined && { authorized_emails: body.authorized_emails }),
+      ...(body.contact_persons !== undefined && { contact_persons: body.contact_persons }),
+      ...(body.plan_type !== undefined && { plan_type: body.plan_type }),
+      ...(body.sla_level !== undefined && { sla_level: body.sla_level }),
+    };
 
     const { data: client, error } = await supabase
       .from("clients")
