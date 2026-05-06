@@ -40,7 +40,7 @@
   "sidebar": {
     "inbox": "Bandeja de entrada",
     "panel": "Panel",
-    "pendingClient": "Pendiente Cliente",
+    "pendingClient": "En espera del cliente",
     "myTickets": "Mis Tickets",
     "unassigned": "Sin asignar",
     "allTickets": "Todos los Tickets",
@@ -49,6 +49,15 @@
     "guided": "Guiado",
     "autoResolvable": "Auto Resuelto",
     "clients": "Clientes"
+  },
+  "awaitingView": {
+    "title": "En espera del cliente",
+    "subtitle": "Tickets donde enviaste una respuesta y el cliente aún no ha contestado.",
+    "empty": "No hay tickets esperando respuesta del cliente. ¡Buen trabajo! 🎉",
+    "lastReply": "Última respuesta",
+    "followUp": "Seguimiento",
+    "openTicket": "Ver ticket",
+    "ticketNumber": "#{{number}}"
   },
   "settings": {
     "title": "Configuración de Perfil",

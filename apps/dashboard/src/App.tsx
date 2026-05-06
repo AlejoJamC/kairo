@@ -5,10 +5,11 @@ import { Inbox } from "@/components/inbox";
 import { ClientDirectory } from "@/components/client-directory";
 import { ProfileSettings } from "@/components/profile-settings";
 import { ChangePasswordSettings } from "@/components/change-password-settings";
+import { AwaitingCustomerView } from "@/components/awaiting-customer-view";
 import { Loader2 } from "lucide-react";
 import type { AppView } from "@/types";
 
-const COMING_SOON_VIEWS: AppView[] = ["panel", "awaiting", "auto-resolved", "guided", "escalated"];
+const COMING_SOON_VIEWS: AppView[] = ["panel", "auto-resolved", "guided", "escalated"];
 
 function ComingSoon({ view }: { view: AppView }) {
   return (
@@ -38,6 +39,7 @@ function AppContent() {
 
   const renderView = () => {
     if (activeView === "inbox") return <Inbox />;
+    if (activeView === "awaiting") return <AwaitingCustomerView onViewChange={setActiveView} />;
     if (activeView === "settings") return <ProfileSettings onViewChange={setActiveView} />;
     if (activeView === "change-password") return <ChangePasswordSettings onViewChange={setActiveView} />;
     if (activeView === "clients") return <ClientDirectory />;
