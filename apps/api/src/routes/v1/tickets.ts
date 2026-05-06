@@ -18,6 +18,7 @@ import { emitTicketEvent } from "../../lib/ticket-events.js";
 import { sendGmailReply, GmailSendException } from "../../lib/gmail-send.js";
 import { createCompletionProvider } from "@kairo/intelligence";
 import { resolveModelVersion } from "../../lib/model-version.js";
+import { planScoreFromTier, computeClientFlags } from "../../lib/client-profile.js";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -1037,4 +1038,114 @@ tickets.post("/:id/suggest-reply", async (c) => {
     confidence,
     proposal_id: proposal?.id ?? null,
   });
+});
+
+// ---------------------------------------------------------------------------
+// GET /v1/tickets/:id/client-profile — client profile card (KAI-39)
+// Resolves client via tickets.client_id. Returns 404 if no client linked.
+// Response cached 60s per user+client pair.
+// ---------------------------------------------------------------------------
+
+type ClientProfileCache = {
+  data: unknown;
+  expiresAt: number;
+};
+const profileCache = new Map<string, ClientProfileCache>();
+const PROFILE_CACHE_TTL_MS = 60_000;
+
+tickets.get("/:id/client-profile", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const ticketId = c.req.param("id");
+
+  // 1. Fetch ticket to verify ownership and get client_id
+  const { data: ticket, error: ticketErr } = await supabase
+    .from("tickets")
+    .select("id, client_id, from_email")
+    .eq("id", ticketId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+  if (!ticket.client_id)    return c.json({ error: "No client linked to this ticket" }, 404);
+
+  // 2. Cache check
+  const cacheKey = `${user.id}:${ticket.client_id}`;
+  const cached = profileCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return c.json(cached.data);
+  }
+
+  // 3. Parallel fetch: client + ticket aggregates
+  const now30  = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const now90  = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [clientRes, totalRes, last30Res, last90Res, recentRes] = await Promise.all([
+    supabase
+      .from("clients")
+      .select("id, name, telephone, authorized_emails, plan_type, sla_level, internal_id")
+      .eq("id", ticket.client_id)
+      .eq("user_id", user.id)
+      .single(),
+
+    supabase
+      .from("tickets")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("client_id", ticket.client_id),
+
+    supabase
+      .from("tickets")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("client_id", ticket.client_id)
+      .gte("created_at", now30),
+
+    supabase
+      .from("tickets")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("client_id", ticket.client_id)
+      .gte("created_at", now90),
+
+    supabase
+      .from("tickets")
+      .select("id, ticket_number, subject, status, created_at")
+      .eq("user_id", user.id)
+      .eq("client_id", ticket.client_id)
+      .order("created_at", { ascending: false })
+      .limit(5),
+  ]);
+
+  if (clientRes.error || !clientRes.data) {
+    return c.json({ error: "Client not found" }, 404);
+  }
+
+  const client = clientRes.data;
+  const totalTickets      = totalRes.count ?? 0;
+  const ticketsLast30Days = last30Res.count ?? 0;
+  const ticketsLast90Days = last90Res.count ?? 0;
+  const recentTickets     = recentRes.data ?? [];
+
+  const { isRecurrent, isNewClient } = computeClientFlags(ticketsLast30Days, ticketsLast90Days);
+
+  const profile = {
+    clientId:        client.id,
+    name:            client.name,
+    email:           client.authorized_emails?.[0] ?? ticket.from_email ?? null,
+    phone:           client.telephone ?? null,
+    clientType:      normalizePlanTier(client.plan_type) as "enterprise" | "pro" | "starter" | "unknown",
+    activePlan:      client.plan_type ?? null,
+    planScore:       planScoreFromTier(client.plan_type),
+    isNewClient,
+    isRecurrent,
+    totalTickets,
+    ticketsLast30Days,
+    recentTickets,
+  };
+
+  // 4. Cache and return
+  profileCache.set(cacheKey, { data: profile, expiresAt: Date.now() + PROFILE_CACHE_TTL_MS });
+  return c.json(profile);
 });
