@@ -287,6 +287,7 @@ export type Database = {
           customer_avatar_url: string | null
           customer_display_name: string | null
           customer_external_id: string
+          external_thread_id: string | null
           id: string
           status: string
           updated_at: string
@@ -298,6 +299,7 @@ export type Database = {
           customer_avatar_url?: string | null
           customer_display_name?: string | null
           customer_external_id: string
+          external_thread_id?: string | null
           id?: string
           status?: string
           updated_at?: string
@@ -309,6 +311,7 @@ export type Database = {
           customer_avatar_url?: string | null
           customer_display_name?: string | null
           customer_external_id?: string
+          external_thread_id?: string | null
           id?: string
           status?: string
           updated_at?: string
@@ -777,6 +780,7 @@ export type Database = {
           gmail_thread_id: string | null
           group_id: string | null
           id: string
+          last_response_at: string | null
           merged_into_ticket_id: string | null
           parent_ticket_id: string | null
           priority: string | null
@@ -820,6 +824,7 @@ export type Database = {
           gmail_thread_id?: string | null
           group_id?: string | null
           id?: string
+          last_response_at?: string | null
           merged_into_ticket_id?: string | null
           parent_ticket_id?: string | null
           priority?: string | null
@@ -863,6 +868,7 @@ export type Database = {
           gmail_thread_id?: string | null
           group_id?: string | null
           id?: string
+          last_response_at?: string | null
           merged_into_ticket_id?: string | null
           parent_ticket_id?: string | null
           priority?: string | null

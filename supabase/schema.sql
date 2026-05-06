@@ -252,7 +252,8 @@ CREATE TABLE IF NOT EXISTS "public"."conversations" (
     "customer_avatar_url" "text",
     "status" "text" DEFAULT 'active'::"text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "external_thread_id" "text"
 );
 
 
@@ -483,6 +484,7 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "score_computed_at" timestamp with time zone,
     "group_id" "uuid",
     "resolution_summary" "text",
+    "last_response_at" timestamp with time zone,
     CONSTRAINT "chk_category" CHECK ((("category" IS NULL) OR ("category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_emotion" CHECK ((("emotion" IS NULL) OR ("emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_priority" CHECK ((("priority" IS NULL) OR ("priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
@@ -714,6 +716,10 @@ CREATE INDEX "idx_conversations_channel_integration_id" ON "public"."conversatio
 
 
 CREATE INDEX "idx_conversations_customer_external_id" ON "public"."conversations" USING "btree" ("customer_external_id");
+
+
+
+CREATE INDEX "idx_conversations_external_thread_id" ON "public"."conversations" USING "btree" ("external_thread_id") WHERE ("external_thread_id" IS NOT NULL);
 
 
 
