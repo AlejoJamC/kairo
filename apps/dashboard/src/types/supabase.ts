@@ -50,6 +50,24 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_roles: {
+        Row: {
+          id: string;
+          user_id: string;
+          role: string;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          role: string;
+          created_at?: string | null;
+        };
+        Update: {
+          role?: string;
+        };
+        Relationships: [];
+      };
       tickets: {
         Row: {
           id: string;

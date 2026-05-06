@@ -63,6 +63,20 @@ $$;
 ALTER FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_sidebar_counts"("p_user_id" "uuid") RETURNS TABLE("status" "text", "count" bigint)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    AS $$
+  SELECT status, COUNT(*) AS count
+  FROM tickets
+  WHERE user_id = p_user_id
+    AND archived_at IS NULL
+  GROUP BY status;
+$$;
+
+
+ALTER FUNCTION "public"."get_sidebar_counts"("p_user_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -651,12 +665,14 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "last_response_at" timestamp with time zone,
     "embedding" "extensions"."vector"(512),
     "embedding_updated_at" timestamp with time zone,
+    "archived_at" timestamp with time zone,
     CONSTRAINT "chk_category" CHECK ((("category" IS NULL) OR ("category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_emotion" CHECK ((("emotion" IS NULL) OR ("emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_priority" CHECK ((("priority" IS NULL) OR ("priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
     CONSTRAINT "chk_priority_score" CHECK ((("priority_score" IS NULL) OR (("priority_score" >= 0.000) AND ("priority_score" <= 1.000)))),
     CONSTRAINT "chk_sentiment" CHECK ((("sentiment" IS NULL) OR ("sentiment" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
-    CONSTRAINT "chk_ticket_type" CHECK ((("ticket_type" IS NULL) OR ("ticket_type" = ANY (ARRAY['support'::"text", 'prospect'::"text", 'spam'::"text", 'internal'::"text", 'other'::"text"]))))
+    CONSTRAINT "chk_ticket_type" CHECK ((("ticket_type" IS NULL) OR ("ticket_type" = ANY (ARRAY['support'::"text", 'prospect'::"text", 'spam'::"text", 'internal'::"text", 'other'::"text"])))),
+    CONSTRAINT "tickets_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'auto_resolved'::"text", 'guided'::"text", 'escalated'::"text"])))
 );
 
 
@@ -672,6 +688,18 @@ ALTER TABLE "public"."tickets" ALTER COLUMN "ticket_number" ADD GENERATED ALWAYS
     CACHE 1
 );
 
+
+
+CREATE TABLE IF NOT EXISTS "public"."user_roles" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "role" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "user_roles_role_check" CHECK (("role" = ANY (ARRAY['owner'::"text", 'admin'::"text", 'supervisor'::"text", 'agent'::"text"])))
+);
+
+
+ALTER TABLE "public"."user_roles" OWNER TO "postgres";
 
 
 ALTER TABLE ONLY "public"."admin_audit_log"
@@ -866,6 +894,16 @@ ALTER TABLE ONLY "public"."tickets"
 
 ALTER TABLE ONLY "public"."tickets"
     ADD CONSTRAINT "tickets_ticket_number_key" UNIQUE ("ticket_number");
+
+
+
+ALTER TABLE ONLY "public"."user_roles"
+    ADD CONSTRAINT "user_roles_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."user_roles"
+    ADD CONSTRAINT "user_roles_user_id_key" UNIQUE ("user_id");
 
 
 
@@ -1331,6 +1369,11 @@ ALTER TABLE ONLY "public"."tickets"
 
 
 
+ALTER TABLE ONLY "public"."user_roles"
+    ADD CONSTRAINT "user_roles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
 CREATE POLICY "Authenticated users can read categorization_feedback" ON "public"."categorization_feedback" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
 
 
@@ -1661,6 +1704,13 @@ ALTER TABLE "public"."ticket_tags" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."tickets" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."user_roles" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "users can read own role" ON "public"."user_roles" FOR SELECT USING (("auth"."uid"() = "user_id"));
+
+
+
 GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
@@ -1677,6 +1727,12 @@ GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extension
 GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision) TO "anon";
 GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_user_id" "uuid") TO "service_role";
 
 
 
@@ -1869,6 +1925,12 @@ GRANT ALL ON TABLE "public"."tickets" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."user_roles" TO "anon";
+GRANT ALL ON TABLE "public"."user_roles" TO "authenticated";
+GRANT ALL ON TABLE "public"."user_roles" TO "service_role";
 
 
 

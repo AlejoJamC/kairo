@@ -1056,6 +1056,7 @@ export type Database = {
       tickets: {
         Row: {
           ai_reasoning: string | null
+          archived_at: string | null
           assigned_to: string | null
           body_html: string | null
           body_plain: string | null
@@ -1102,6 +1103,7 @@ export type Database = {
         }
         Insert: {
           ai_reasoning?: string | null
+          archived_at?: string | null
           assigned_to?: string | null
           body_html?: string | null
           body_plain?: string | null
@@ -1148,6 +1150,7 @@ export type Database = {
         }
         Update: {
           ai_reasoning?: string | null
+          archived_at?: string | null
           assigned_to?: string | null
           body_html?: string | null
           body_plain?: string | null
@@ -1230,6 +1233,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1253,6 +1277,13 @@ export type Database = {
         Returns: {
           similarity: number
           ticket_id: string
+        }[]
+      }
+      get_sidebar_counts: {
+        Args: { p_user_id: string }
+        Returns: {
+          count: number
+          status: string
         }[]
       }
       is_active_admin: { Args: never; Returns: boolean }
