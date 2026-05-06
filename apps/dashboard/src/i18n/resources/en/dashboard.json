@@ -106,6 +106,21 @@
     "quickReply": "Quick Reply",
     "sendHint": "⌘ + Enter to send"
   },
+  "replyBar": {
+    "sending": "Sending...",
+    "errorGeneric": "Failed to send. Please try again.",
+    "errorTokenExpired": "Your Gmail session expired. Reconnect your account in Settings.",
+    "errorNoGmail": "No active Gmail integration found for this ticket."
+  },
+  "templatePicker": {
+    "searchPlaceholder": "Search template...",
+    "loading": "Loading templates...",
+    "errorLoading": "Could not load templates.",
+    "empty": "No templates configured. Add templates in Settings.",
+    "preview": "Preview",
+    "uncategorized": "General",
+    "confirmOverwrite": "Replace current draft with this template?"
+  },
   "ai": {
     "title": "AI Assistant",
     "escalationSuggested": "Escalation Suggested",
