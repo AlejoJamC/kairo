@@ -39,14 +39,16 @@
   },
   "sidebar": {
     "inbox": "Inbox",
+    "panel": "Panel",
+    "pendingClient": "Awaiting Client",
     "myTickets": "My Tickets",
     "unassigned": "Unassigned",
     "allTickets": "All Tickets",
     "settings": "Settings",
-    "escalation": "Escalar",
-    "guided" : "Guided",
-    "autoResolvable" : "Auto Resolvable",
-    "clients" : "Clients"
+    "escalation": "Escalated",
+    "guided": "Guided",
+    "autoResolvable": "Auto Resolved",
+    "clients": "Clients"
   },
   "settings": {
     "title": "Profile Settings",

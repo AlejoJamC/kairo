@@ -14,6 +14,7 @@ export interface UserProfile {
 interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
+  isAdmin: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -45,6 +46,7 @@ const initialHashTokens: {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -121,15 +123,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchProfile = async (userId: string) => {
     try {
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, email, name, company_name, gmail_connected")
-        .eq("id", userId)
-        .single();
+      const [profileResult, adminResult] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, email, name, company_name, gmail_connected")
+          .eq("id", userId)
+          .single(),
+        supabase
+          .from("admin_users")
+          .select("id")
+          .eq("id", userId)
+          .maybeSingle(),
+      ]);
 
-      if (!error && data) {
-        setProfile(data as UserProfile);
+      if (!profileResult.error && profileResult.data) {
+        setProfile(profileResult.data as UserProfile);
       }
+      setIsAdmin(!!adminResult.data);
     } finally {
       setLoading(false);
     }
@@ -151,7 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, loading, signOut, refreshProfile }}
+      value={{ user, profile, isAdmin, loading, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
