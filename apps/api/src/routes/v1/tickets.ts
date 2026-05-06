@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { classifyEmail } from "@kairo/intelligence";
 import { supabase } from "../../lib/supabase.js";
 import { inngest } from "../../lib/inngest.js";
@@ -13,6 +14,7 @@ import {
   type TenantWeights,
 } from "../../lib/scoring.js";
 import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
+import { emitTicketEvent } from "../../lib/ticket-events.js";
 
 export const tickets = new Hono();
 
@@ -291,10 +293,16 @@ tickets.get("/:id/similar", async (c) => {
 
 // ---------------------------------------------------------------------------
 // POST /v1/tickets/:id/classify — single-ticket manual classify (KAI-7)
+// Emits ai_classified (API call = autonomous AI) or human_classified when
+// the request carries ?source=human query param.
 // ---------------------------------------------------------------------------
 
 tickets.post("/:id/classify", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
   const id = c.req.param("id");
+  const source = c.req.query("source") === "human" ? "human" : "ai";
 
   const { data: ticket, error: fetchError } = await supabase
     .from("tickets")
@@ -348,6 +356,13 @@ tickets.post("/:id/classify", async (c) => {
       500
     );
   }
+
+  await emitTicketEvent({
+    ticketId: id,
+    authorId: source === "human" ? user.id : null,
+    eventType: source === "human" ? "human_classified" : "ai_classified",
+    metadata: { type: classification.type, priority: classification.priority },
+  });
 
   return c.json({
     ticket_id: id,
@@ -534,4 +549,237 @@ tickets.post("/classify-batch", async (c) => {
     failed,
     results,
   });
+});
+
+// ---------------------------------------------------------------------------
+// GET /v1/tickets/:id/activity — activity feed (KAI-28)
+// Returns ticket_events newest first, paginated by cursor.
+// TODO: restrict to agent/support roles only once role/permission system exists.
+// ---------------------------------------------------------------------------
+
+tickets.get("/:id/activity", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+  const limit = Math.min(Number(c.req.query("limit") ?? 50), 100);
+  const cursor = c.req.query("cursor");
+
+  // Verify ticket belongs to user (tenant isolation)
+  const { data: ticket, error: ticketErr } = await supabase
+    .from("tickets")
+    .select("id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  let query = supabase
+    .from("ticket_events")
+    .select("*")
+    .eq("ticket_id", id)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit);
+
+  if (cursor) {
+    try {
+      const { created_at, id: cursorId } = JSON.parse(atob(cursor)) as { created_at: string; id: string };
+      query = query.or(`created_at.lt.${created_at},and(created_at.eq.${created_at},id.lt.${cursorId})`);
+    } catch {
+      return c.json({ error: "Invalid cursor" }, 400);
+    }
+  }
+
+  const { data, error } = await query;
+  if (error) return c.json({ error: error.message }, 500);
+
+  const items = data ?? [];
+  const last = items.at(-1);
+  const nextCursor =
+    items.length === limit && last
+      ? btoa(JSON.stringify({ created_at: last.created_at, id: last.id }))
+      : null;
+
+  return c.json({ events: items, next_cursor: nextCursor, count: items.length });
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /v1/tickets/:id/status — update ticket status (KAI-28)
+// ---------------------------------------------------------------------------
+
+const UpdateStatusSchema = z.object({
+  status: z.enum(["open", "in_progress", "waiting", "resolved", "closed"]),
+});
+
+tickets.patch("/:id/status", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON body" }, 400); }
+
+  const parsed = UpdateStatusSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "Invalid request", detail: parsed.error.flatten() }, 400);
+
+  const { data: ticket, error: fetchErr } = await supabase
+    .from("tickets")
+    .select("id, status")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  const { error: updateErr } = await supabase
+    .from("tickets")
+    .update({ status: parsed.data.status })
+    .eq("id", id);
+
+  if (updateErr) return c.json({ error: updateErr.message }, 500);
+
+  await emitTicketEvent({
+    ticketId: id,
+    authorId: user.id,
+    eventType: "status_change",
+    metadata: { from_status: ticket.status, to_status: parsed.data.status },
+  });
+
+  return c.json({ ticket_id: id, status: parsed.data.status });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/tickets/:id/escalate — escalate ticket (KAI-28)
+// ---------------------------------------------------------------------------
+
+const EscalateSchema = z.object({
+  reason: z.string().min(1).max(1000).optional(),
+});
+
+tickets.post("/:id/escalate", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  let body: unknown;
+  try { body = await c.req.json(); } catch { body = {}; }
+
+  const parsed = EscalateSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "Invalid request", detail: parsed.error.flatten() }, 400);
+
+  const { data: ticket, error: fetchErr } = await supabase
+    .from("tickets")
+    .select("id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  await emitTicketEvent({
+    ticketId: id,
+    authorId: user.id,
+    eventType: "escalated",
+    body: parsed.data.reason ?? null,
+    isInternal: true,
+  });
+
+  return c.json({ ticket_id: id, escalated: true });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/tickets/:id/reply — send a reply (KAI-28)
+// ---------------------------------------------------------------------------
+
+const ReplySchema = z.object({
+  body: z.string().min(1),
+  is_internal: z.boolean().default(false),
+});
+
+tickets.post("/:id/reply", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON body" }, 400); }
+
+  const parsed = ReplySchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "Invalid request", detail: parsed.error.flatten() }, 400);
+
+  const { data: ticket, error: fetchErr } = await supabase
+    .from("tickets")
+    .select("id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  await emitTicketEvent({
+    ticketId: id,
+    authorId: user.id,
+    eventType: "reply_sent",
+    body: parsed.data.body,
+    isInternal: parsed.data.is_internal,
+  });
+
+  return c.json({ ticket_id: id, sent: true });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/tickets/:id/classify-approve — approve or reject AI proposal (KAI-28)
+// ---------------------------------------------------------------------------
+
+const ClassifyApproveSchema = z.object({
+  proposal_id: z.string().uuid(),
+  action: z.enum(["confirm", "reject"]),
+});
+
+tickets.post("/:id/classify-approve", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON body" }, 400); }
+
+  const parsed = ClassifyApproveSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "Invalid request", detail: parsed.error.flatten() }, 400);
+
+  const { data: ticket, error: fetchErr } = await supabase
+    .from("tickets")
+    .select("id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  const { error: proposalErr } = await supabase
+    .from("ticket_proposals")
+    .update({
+      status: parsed.data.action === "confirm" ? "confirmed" : "rejected",
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: user.id,
+    })
+    .eq("id", parsed.data.proposal_id)
+    .eq("ticket_id", id);
+
+  if (proposalErr) return c.json({ error: proposalErr.message }, 500);
+
+  await emitTicketEvent({
+    ticketId: id,
+    authorId: user.id,
+    eventType: parsed.data.action === "confirm" ? "ai_confirmed" : "ai_rejected",
+    metadata: { proposal_id: parsed.data.proposal_id },
+  });
+
+  return c.json({ ticket_id: id, proposal_id: parsed.data.proposal_id, action: parsed.data.action });
 });
