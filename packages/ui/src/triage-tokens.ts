@@ -105,6 +105,10 @@ export interface EmotionTokens {
   cardBorder: string;
   /** Subtle card background tint */
   cardBg: string;
+  /** Header background in center panel */
+  headerBg: string;
+  /** Text color on header background (WCAG AA) */
+  headerText: string;
   /** Emoji indicator */
   emoji: string;
   /** Aria label for emoji */
@@ -116,15 +120,17 @@ export interface EmotionTokens {
  * NEVER reorder — severity decreases top to bottom.
  */
 export const EMOTION_TOKENS: Record<EmotionTone, EmotionTokens> = {
-  aggressive: { cardBorder: "border-l-red-500",    cardBg: "bg-red-50",      emoji: "🤬", ariaLabel: "Aggressive" },
-  frustrated:  { cardBorder: "border-l-orange-500", cardBg: "bg-orange-50",   emoji: "😩", ariaLabel: "Frustrated" },
-  neutral:     { cardBorder: "border-l-blue-400",   cardBg: "bg-transparent", emoji: "😐", ariaLabel: "Neutral" },
-  positive:    { cardBorder: "border-l-green-500",  cardBg: "bg-transparent", emoji: "😊", ariaLabel: "Positive" },
+  aggressive: { cardBorder: "border-l-red-500",    cardBg: "bg-red-50",      headerBg: "bg-red-50",    headerText: "text-red-900",    emoji: "🤬", ariaLabel: "Aggressive" },
+  frustrated:  { cardBorder: "border-l-orange-500", cardBg: "bg-orange-50",   headerBg: "bg-amber-50",  headerText: "text-amber-900",  emoji: "😩", ariaLabel: "Frustrated" },
+  neutral:     { cardBorder: "border-l-blue-400",   cardBg: "bg-transparent", headerBg: "bg-zinc-50",   headerText: "text-zinc-900",   emoji: "😐", ariaLabel: "Neutral" },
+  positive:    { cardBorder: "border-l-green-500",  cardBg: "bg-transparent", headerBg: "bg-green-50",  headerText: "text-green-900",  emoji: "😊", ariaLabel: "Positive" },
 };
 
 export const EMOTION_FALLBACK: EmotionTokens = {
   cardBorder: "border-l-zinc-200",
   cardBg:     "bg-transparent",
+  headerBg:   "bg-white",
+  headerText: "text-zinc-900",
   emoji:      "",
   ariaLabel:  "",
 };
