@@ -13,7 +13,8 @@ export type TicketEventType =
   | "ai_rejected"
   | "sla_breach"
   | "escalated"
-  | "grouped";
+  | "grouped"
+  | "classification_corrected";
 
 export interface EmitTicketEventOptions {
   ticketId: string;
