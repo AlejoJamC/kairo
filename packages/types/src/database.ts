@@ -1344,6 +1344,10 @@ export type Database = {
           ticket_id: string
         }[]
       }
+      get_classification_accuracy: {
+        Args: { p_user_id: string; p_window?: string }
+        Returns: Json
+      }
       get_sidebar_counts: {
         Args: { p_user_id: string }
         Returns: {
