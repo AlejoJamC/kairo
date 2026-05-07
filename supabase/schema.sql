@@ -276,6 +276,33 @@ CREATE TABLE IF NOT EXISTS "public"."channel_integrations" (
 ALTER TABLE "public"."channel_integrations" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."classification_feedback" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "corrected_by" "uuid" NOT NULL,
+    "ai_ticket_type" "text",
+    "ai_priority" "text",
+    "ai_category" "text",
+    "ai_sentiment" "text",
+    "ai_model_version" "text",
+    "ai_confidence" numeric(3,2),
+    "correct_ticket_type" "text",
+    "correct_priority" "text",
+    "correct_category" "text",
+    "correct_sentiment" "text",
+    "notes" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "chk_cf_category" CHECK ((("correct_category" IS NULL) OR ("correct_category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
+    CONSTRAINT "chk_cf_priority" CHECK ((("correct_priority" IS NULL) OR ("correct_priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
+    CONSTRAINT "chk_cf_sentiment" CHECK ((("correct_sentiment" IS NULL) OR ("correct_sentiment" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
+    CONSTRAINT "chk_cf_ticket_type" CHECK ((("correct_ticket_type" IS NULL) OR ("correct_ticket_type" = ANY (ARRAY['support'::"text", 'prospect'::"text", 'spam'::"text", 'internal'::"text", 'other'::"text"]))))
+);
+
+
+ALTER TABLE "public"."classification_feedback" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."clients" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "user_id" "uuid" NOT NULL,
@@ -747,6 +774,11 @@ ALTER TABLE ONLY "public"."channel_integrations"
 
 
 
+ALTER TABLE ONLY "public"."classification_feedback"
+    ADD CONSTRAINT "classification_feedback_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."clients"
     ADD CONSTRAINT "clients_pkey" PRIMARY KEY ("id");
 
@@ -944,6 +976,18 @@ CREATE INDEX "idx_channel_integrations_provider" ON "public"."channel_integratio
 
 
 CREATE INDEX "idx_channel_integrations_user_id" ON "public"."channel_integrations" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_classification_feedback_created_at" ON "public"."classification_feedback" USING "btree" ("created_at" DESC);
+
+
+
+CREATE INDEX "idx_classification_feedback_ticket_id" ON "public"."classification_feedback" USING "btree" ("ticket_id");
+
+
+
+CREATE INDEX "idx_classification_feedback_user_id" ON "public"."classification_feedback" USING "btree" ("user_id");
 
 
 
@@ -1176,6 +1220,16 @@ ALTER TABLE ONLY "public"."categorization_feedback"
 
 ALTER TABLE ONLY "public"."channel_integrations"
     ADD CONSTRAINT "channel_integrations_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."classification_feedback"
+    ADD CONSTRAINT "classification_feedback_corrected_by_fkey" FOREIGN KEY ("corrected_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."classification_feedback"
+    ADD CONSTRAINT "classification_feedback_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
 
@@ -1432,6 +1486,10 @@ CREATE POLICY "Users can insert own channel integrations" ON "public"."channel_i
 
 
 
+CREATE POLICY "Users can insert own classification feedback" ON "public"."classification_feedback" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
 CREATE POLICY "Users can insert own conversations" ON "public"."conversations" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
 
 
@@ -1520,6 +1578,10 @@ CREATE POLICY "Users can view own channel integrations" ON "public"."channel_int
 
 
 
+CREATE POLICY "Users can view own classification feedback" ON "public"."classification_feedback" FOR SELECT USING (("auth"."uid"() = "user_id"));
+
+
+
 CREATE POLICY "Users can view own conversations" ON "public"."conversations" FOR SELECT USING (("auth"."uid"() = "user_id"));
 
 
@@ -1601,6 +1663,9 @@ ALTER TABLE "public"."category_confidence_thresholds" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."channel_integrations" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."classification_feedback" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."clients" ENABLE ROW LEVEL SECURITY;
@@ -1793,6 +1858,12 @@ GRANT ALL ON TABLE "public"."category_confidence_thresholds" TO "service_role";
 GRANT ALL ON TABLE "public"."channel_integrations" TO "anon";
 GRANT ALL ON TABLE "public"."channel_integrations" TO "authenticated";
 GRANT ALL ON TABLE "public"."channel_integrations" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."classification_feedback" TO "anon";
+GRANT ALL ON TABLE "public"."classification_feedback" TO "authenticated";
+GRANT ALL ON TABLE "public"."classification_feedback" TO "service_role";
 
 
 
