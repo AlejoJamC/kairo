@@ -1,5 +1,10 @@
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { getEmotionTokens, getPriorityTokens } from "@kairo/ui";
 import type { Ticket } from "@kairo/types";
+import { useTriageStore } from "@/stores/triage-store";
+import { CorrectionDialog } from "@/components/correction-dialog";
+import type { CorrectionFields } from "@/components/correction-dialog";
 
 function PriorityBadge({ priority }: { priority: string }) {
   const tokens = getPriorityTokens(priority);
@@ -48,7 +53,21 @@ interface TicketHeaderProps {
 }
 
 export function TicketHeader({ ticket }: TicketHeaderProps) {
+  const { t } = useTranslation("dashboard");
+  const { applyCorrection, correctedTicketIds } = useTriageStore();
+  const [correctionOpen, setCorrectionOpen] = useState(false);
+
+  const isCorrected = correctedTicketIds.has(ticket.id);
   const emotionTokens = getEmotionTokens(ticket.emotion);
+
+  function handleCorrected(fields: CorrectionFields) {
+    const patch: Partial<Ticket> = {};
+    if (fields.correct_priority)    patch.priority    = fields.correct_priority as Ticket["priority"];
+    if (fields.correct_ticket_type) patch.ticket_type = fields.correct_ticket_type as Ticket["ticket_type"];
+    if (fields.correct_category)    patch.category    = fields.correct_category as Ticket["category"];
+    if (fields.correct_sentiment)   patch.sentiment   = fields.correct_sentiment as Ticket["sentiment"];
+    applyCorrection(ticket.id, patch);
+  }
 
   return (
     <div
@@ -93,6 +112,23 @@ export function TicketHeader({ ticket }: TicketHeaderProps) {
           ticket.classification_confidence !== undefined && (
             <ConfidenceDot confidence={ticket.classification_confidence} />
           )}
+
+        {/* Correction trigger — only when classified */}
+        {ticket.classified_at && (
+          <div className="mt-1 flex items-center gap-2">
+            {isCorrected && (
+              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                {t("correction.correctedBadge")}
+              </span>
+            )}
+            <button
+              onClick={() => setCorrectionOpen(true)}
+              className="text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600"
+            >
+              {t("correction.triggerLabel")}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="ml-4 shrink-0">
@@ -100,6 +136,13 @@ export function TicketHeader({ ticket }: TicketHeaderProps) {
           {ticket.received_at ? new Date(ticket.received_at).toLocaleString() : ""}
         </span>
       </div>
+
+      <CorrectionDialog
+        ticket={ticket}
+        open={correctionOpen}
+        onOpenChange={setCorrectionOpen}
+        onCorrected={handleCorrected}
+      />
     </div>
   );
 }
