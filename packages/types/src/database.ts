@@ -235,6 +235,71 @@ export type Database = {
         }
         Relationships: []
       }
+      classification_feedback: {
+        Row: {
+          ai_category: string | null
+          ai_confidence: number | null
+          ai_model_version: string | null
+          ai_priority: string | null
+          ai_sentiment: string | null
+          ai_ticket_type: string | null
+          correct_category: string | null
+          correct_priority: string | null
+          correct_sentiment: string | null
+          correct_ticket_type: string | null
+          corrected_by: string
+          created_at: string
+          id: string
+          notes: string | null
+          ticket_id: string
+          user_id: string
+        }
+        Insert: {
+          ai_category?: string | null
+          ai_confidence?: number | null
+          ai_model_version?: string | null
+          ai_priority?: string | null
+          ai_sentiment?: string | null
+          ai_ticket_type?: string | null
+          correct_category?: string | null
+          correct_priority?: string | null
+          correct_sentiment?: string | null
+          correct_ticket_type?: string | null
+          corrected_by: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          ticket_id: string
+          user_id: string
+        }
+        Update: {
+          ai_category?: string | null
+          ai_confidence?: number | null
+          ai_model_version?: string | null
+          ai_priority?: string | null
+          ai_sentiment?: string | null
+          ai_ticket_type?: string | null
+          correct_category?: string | null
+          correct_priority?: string | null
+          correct_sentiment?: string | null
+          correct_ticket_type?: string | null
+          corrected_by?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          ticket_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classification_feedback_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           authorized_emails: string[] | null
