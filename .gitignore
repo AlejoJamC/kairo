@@ -1,3 +1,6 @@
+# Claude Code memory (local only)
+.claude/projects/
+
 # KAIRO
 # Evals
 #scripts/eval/data
