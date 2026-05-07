@@ -94,6 +94,7 @@ describe("event type coverage", () => {
     "reply_sent", "internal_note", "status_change", "assignment", "merge",
     "ai_classified", "human_classified", "ai_proposal", "ai_confirmed",
     "ai_rejected", "sla_breach", "escalated", "grouped",
+    "classification_corrected",
   ] as const;
 
   for (const eventType of allEventTypes) {
@@ -177,3 +178,4 @@ describe("request schema validation", () => {
     expect(schema.safeParse({ body: "hello" }).success).toBe(true);
   });
 });
+

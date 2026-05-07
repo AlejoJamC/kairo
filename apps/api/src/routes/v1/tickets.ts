@@ -6,6 +6,7 @@ import { inngest } from "../../lib/inngest.js";
 import { env } from "../../env.js";
 import {
   ClassifyBatchRequestSchema,
+  CorrectClassificationSchema,
   type BatchTicketResult,
 } from "../../lib/schemas/classification.js";
 import {
@@ -1313,4 +1314,92 @@ tickets.post("/:id/escalation-reasons", async (c) => {
   }
 
   return c.json(result);
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/tickets/:id/correct-classification — human correction (KAI-123)
+// ---------------------------------------------------------------------------
+
+tickets.post("/:id/correct-classification", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const ticketId = c.req.param("id");
+
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON body" }, 400); }
+
+  const parsed = CorrectClassificationSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "Invalid request", detail: parsed.error.flatten() }, 400);
+
+  // Load ticket — verify tenant ownership
+  const { data: ticket, error: fetchErr } = await supabase
+    .from("tickets")
+    .select("id, user_id, ticket_type, priority, category, sentiment, classification_confidence, classified_at")
+    .eq("id", ticketId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  // Snapshot model version from most recent proposal (best-effort)
+  const { data: latestProposal } = await supabase
+    .from("ticket_proposals")
+    .select("model_version")
+    .eq("ticket_id", ticketId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  // Insert feedback row
+  const { data: feedback, error: insertErr } = await supabase
+    .from("classification_feedback")
+    .insert({
+      ticket_id:        ticketId,
+      user_id:          user.id,
+      corrected_by:     user.id,
+      ai_ticket_type:   ticket.ticket_type,
+      ai_priority:      ticket.priority,
+      ai_category:      ticket.category,
+      ai_sentiment:     ticket.sentiment,
+      ai_model_version: latestProposal?.model_version ?? null,
+      ai_confidence:    ticket.classification_confidence ? Number(ticket.classification_confidence) : null,
+      correct_ticket_type: parsed.data.correct_ticket_type ?? null,
+      correct_priority:    parsed.data.correct_priority    ?? null,
+      correct_category:    parsed.data.correct_category    ?? null,
+      correct_sentiment:   parsed.data.correct_sentiment   ?? null,
+      notes:               parsed.data.notes               ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (insertErr || !feedback) return c.json({ error: "Failed to save correction" }, 500);
+
+  // Update ticket fields (only the ones provided)
+  const ticketPatch: Record<string, string> = {};
+  if (parsed.data.correct_ticket_type) ticketPatch.ticket_type = parsed.data.correct_ticket_type;
+  if (parsed.data.correct_priority)    ticketPatch.priority    = parsed.data.correct_priority;
+  if (parsed.data.correct_category)    ticketPatch.category    = parsed.data.correct_category;
+  if (parsed.data.correct_sentiment)   ticketPatch.sentiment   = parsed.data.correct_sentiment;
+
+  const { data: updatedTicket, error: updateErr } = await supabase
+    .from("tickets")
+    .update(ticketPatch)
+    .eq("id", ticketId)
+    .select()
+    .single();
+
+  if (updateErr) return c.json({ error: "Correction saved but ticket update failed" }, 500);
+
+  await emitTicketEvent({
+    ticketId,
+    authorId: user.id,
+    eventType: "classification_corrected",
+    metadata: {
+      feedback_id:   feedback.id,
+      corrections:   ticketPatch,
+    },
+  });
+
+  return c.json({ feedback_id: feedback.id, ticket: updatedTicket });
 });

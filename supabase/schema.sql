@@ -568,7 +568,7 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_events" (
     "is_internal" boolean DEFAULT false NOT NULL,
     "metadata" "jsonb",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "ticket_events_event_type_check" CHECK (("event_type" = ANY (ARRAY['reply_sent'::"text", 'internal_note'::"text", 'status_change'::"text", 'assignment'::"text", 'merge'::"text", 'ai_classified'::"text", 'human_classified'::"text", 'ai_proposal'::"text", 'ai_confirmed'::"text", 'ai_rejected'::"text", 'sla_breach'::"text", 'escalated'::"text", 'grouped'::"text"])))
+    CONSTRAINT "ticket_events_event_type_check" CHECK (("event_type" = ANY (ARRAY['reply_sent'::"text", 'internal_note'::"text", 'status_change'::"text", 'assignment'::"text", 'merge'::"text", 'ai_classified'::"text", 'human_classified'::"text", 'ai_proposal'::"text", 'ai_confirmed'::"text", 'ai_rejected'::"text", 'sla_breach'::"text", 'escalated'::"text", 'grouped'::"text", 'classification_corrected'::"text"])))
 );
 
 
