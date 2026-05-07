@@ -1,5 +1,23 @@
 {
   "title": "Dashboard",
+  "correction": {
+    "triggerLabel": "Wrong classification?",
+    "dialogTitle": "Correct Classification",
+    "dialogSubtitle": "Select the correct values. You only need to change what's wrong.",
+    "fieldPriority": "Priority",
+    "fieldType": "Ticket Type",
+    "fieldCategory": "Category",
+    "fieldSentiment": "Sentiment",
+    "fieldNotes": "Notes (optional)",
+    "fieldNotesPlaceholder": "Describe what was wrong...",
+    "submit": "Save correction",
+    "submitting": "Saving...",
+    "successMsg": "Classification updated",
+    "errorEmpty": "Select at least one field to correct",
+    "errorGeneric": "Failed to save correction. Try again.",
+    "correctedBadge": "Corrected",
+    "cancel": "Cancel"
+  },
   "ticketCard": {
     "slaBreached": "OVERDUE",
     "group": "Group",

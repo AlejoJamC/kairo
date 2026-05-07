@@ -34,6 +34,7 @@ interface TriageStore {
   classifiedCount: number;
   pendingEscalation: string | null;
   clientProfile: ClientProfile | null;
+  correctedTicketIds: Set<string>;
   // Bulk-load on initial fetch
   setTickets: (tickets: Ticket[]) => void;
   // Realtime INSERT: insert at top, auto-select first arrival
@@ -41,6 +42,8 @@ interface TriageStore {
   selectTicket: (id: string | null) => void;
   // Realtime UPDATE: merge classification fields into existing row
   updateClassification: (id: string, data: Partial<Ticket>) => void;
+  // Human correction: update ticket fields + mark as corrected
+  applyCorrection: (id: string, fields: Partial<Ticket>) => void;
   setScanning: (v: boolean) => void;
   setSuggestedReply: (reply: string | null) => void;
   clearSuggestedReply: () => void;
@@ -56,6 +59,7 @@ export const useTriageStore = create<TriageStore>((set) => ({
   classifiedCount: 0,
   pendingEscalation: null,
   clientProfile: null,
+  correctedTicketIds: new Set<string>(),
 
   setTickets: (tickets) =>
     set((state) => ({
@@ -84,6 +88,12 @@ export const useTriageStore = create<TriageStore>((set) => ({
         classifiedCount: updated.filter((t) => t.classified_at !== null).length,
       };
     }),
+
+  applyCorrection: (id, fields) =>
+    set((state) => ({
+      tickets: state.tickets.map((t) => (t.id === id ? { ...t, ...fields } : t)),
+      correctedTicketIds: new Set([...state.correctedTicketIds, id]),
+    })),
 
   setScanning: (v) => set({ isScanning: v }),
   setSuggestedReply: (reply) => set({ aiSuggestedReply: reply }),

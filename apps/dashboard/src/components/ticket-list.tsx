@@ -112,10 +112,12 @@ const ITEM_HEIGHT = 100; // px — approximate height of TicketCard
 function VirtualTicketList({
   tickets,
   selectedTicketId,
+  correctedTicketIds,
   onSelect,
 }: {
   tickets: Ticket[];
   selectedTicketId: string | null;
+  correctedTicketIds: Set<string>;
   onSelect: (id: string) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -147,6 +149,7 @@ function VirtualTicketList({
                 ticket={ticket}
                 selected={selectedTicketId === ticket.id}
                 onSelect={onSelect}
+                isCorrected={correctedTicketIds.has(ticket.id)}
               />
             </div>
           );
@@ -164,7 +167,7 @@ const VIRTUALIZE_THRESHOLD = 50;
 
 export function TicketList() {
   const { t } = useTranslation("dashboard");
-  const { tickets, selectedTicketId, isScanning, classifiedCount, selectTicket, updateClassification } =
+  const { tickets, selectedTicketId, isScanning, classifiedCount, selectTicket, updateClassification, correctedTicketIds } =
     useTriageStore();
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [classifyingAll, setClassifyingAll] = useState(false);
@@ -374,6 +377,7 @@ export function TicketList() {
         <VirtualTicketList
           tickets={filtered}
           selectedTicketId={selectedTicketId}
+          correctedTicketIds={correctedTicketIds}
           onSelect={selectTicket}
         />
       ) : (
@@ -384,6 +388,7 @@ export function TicketList() {
               ticket={ticket}
               selected={selectedTicketId === ticket.id}
               onSelect={selectTicket}
+              isCorrected={correctedTicketIds.has(ticket.id)}
             />
           ))}
         </div>

@@ -104,6 +104,7 @@ export interface TicketCardProps {
   onSelect: (id: string) => void;
   onGroup?: (id: string) => void;
   onEscalate?: (id: string) => void;
+  isCorrected?: boolean;
 }
 
 export function TicketCard({
@@ -112,6 +113,7 @@ export function TicketCard({
   onSelect,
   onGroup,
   onEscalate,
+  isCorrected = false,
 }: TicketCardProps) {
   const { t } = useTranslation("dashboard");
   const [hovered, setHovered] = useState(false);
@@ -181,10 +183,15 @@ export function TicketCard({
         </p>
       )}
 
-      {/* Row 4: ticket number + SLA + timestamp */}
+      {/* Row 4: ticket number + SLA + timestamp + corrected badge */}
       <div className="mt-1.5 flex items-center justify-between pl-8">
         <span className="text-[10px] text-zinc-400">#{ticket.ticket_number}</span>
         <div className="flex items-center gap-1.5">
+          {isCorrected && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+              {t("correction.correctedBadge")}
+            </span>
+          )}
           <SlaBadge slaDate={ticket.sla_due_at} />
           <span className="text-[10px] text-zinc-400">{relativeTime}</span>
         </div>

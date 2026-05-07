@@ -1,5 +1,23 @@
 {
   "title": "Panel",
+  "correction": {
+    "triggerLabel": "¿Clasificación incorrecta?",
+    "dialogTitle": "Corregir clasificación",
+    "dialogSubtitle": "Selecciona los valores correctos. Solo cambia lo que está mal.",
+    "fieldPriority": "Prioridad",
+    "fieldType": "Tipo de ticket",
+    "fieldCategory": "Categoría",
+    "fieldSentiment": "Sentimiento",
+    "fieldNotes": "Notas (opcional)",
+    "fieldNotesPlaceholder": "Describe qué estaba mal...",
+    "submit": "Guardar corrección",
+    "submitting": "Guardando...",
+    "successMsg": "Clasificación actualizada",
+    "errorEmpty": "Selecciona al menos un campo para corregir",
+    "errorGeneric": "No se pudo guardar la corrección. Intenta de nuevo.",
+    "correctedBadge": "Corregido",
+    "cancel": "Cancelar"
+  },
   "ticketCard": {
     "slaBreached": "VENCIDO",
     "group": "Agrupar",
