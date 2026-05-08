@@ -1,5 +1,9 @@
+## CLAUDE
+#Claude Local settings
+.claude/settings.local.json
 # Claude Code memory (local only)
 .claude/projects/
+/packages/claude_design/
 
 # KAIRO
 # Evals
@@ -172,6 +176,3 @@ kairo-internal/*
 *.p12
 *.key
 *.mobileprovision
-
-#Claude
-.claude/settings.local.json
