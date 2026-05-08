@@ -6,6 +6,7 @@ import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { buildEscalationContext } from "../../routes/v1/tickets.js";
+import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -250,6 +251,8 @@ export const tier1FastPath = inngest.createFunction(
                 subject,
                 from_email: from,
                 gmail_message_id: messageId,
+                gmail_thread_id: message.threadId,
+                received_at: receivedAt,
                 ticket_type: classification.type,
                 priority: classification.priority,
                 category: classification.category,
@@ -305,6 +308,22 @@ export const tier1FastPath = inngest.createFunction(
                 },
                 { onConflict: "channel_integration_id,external_id" }
               );
+            }
+
+            if (ticket?.id) {
+              maybeSendOutOfHoursReply({
+                supabase,
+                userId,
+                ticketId: ticket.id,
+                gmailAccessToken,
+                gmailThreadId: message.threadId,
+                gmailMessageId: messageId,
+                fromHeader: from,
+                subject,
+                receivedAt,
+              }).catch((err: unknown) => {
+                console.error(`[tier1] Out-of-hours reply failed for ticket ${ticket.id}:`, err);
+              });
             }
           })
           .catch(async (err: unknown) => {

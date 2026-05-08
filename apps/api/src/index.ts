@@ -14,6 +14,7 @@ import { tenants } from "./routes/v1/tenants.js";
 import { templates } from "./routes/v1/templates.js";
 import { sidebar } from "./routes/v1/sidebar.js";
 import { intelligence } from "./routes/v1/intelligence.js";
+import { supportSchedule } from "./routes/v1/support-schedule.js";
 
 const app = new Hono();
 
@@ -26,6 +27,7 @@ v1.route("/tenants", tenants);
 v1.route("/templates", templates);
 v1.route("/sidebar", sidebar);
 v1.route("/intelligence", intelligence);
+v1.route("/support-schedule", supportSchedule);
 
 app.route("/v1", v1);
 

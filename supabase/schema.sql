@@ -760,6 +760,8 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "embedding" "extensions"."vector"(512),
     "embedding_updated_at" timestamp with time zone,
     "archived_at" timestamp with time zone,
+    "auto_replied_out_of_hours" boolean DEFAULT false NOT NULL,
+    "auto_replied_at" timestamp with time zone,
     CONSTRAINT "chk_category" CHECK ((("category" IS NULL) OR ("category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_emotion" CHECK ((("emotion" IS NULL) OR ("emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_priority" CHECK ((("priority" IS NULL) OR ("priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
@@ -1191,6 +1193,10 @@ CREATE INDEX "idx_ticket_tags_tag" ON "public"."ticket_tags" USING "btree" ("tag
 
 
 CREATE INDEX "idx_tickets_assigned_to" ON "public"."tickets" USING "btree" ("assigned_to");
+
+
+
+CREATE INDEX "idx_tickets_auto_replied_thread" ON "public"."tickets" USING "btree" ("user_id", "gmail_thread_id") WHERE ("auto_replied_out_of_hours" = true);
 
 
 

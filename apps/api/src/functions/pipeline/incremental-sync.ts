@@ -3,6 +3,7 @@ import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
+import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -264,25 +265,33 @@ export const incrementalSync = inngest.createFunction(
         const messageId = message.id;
         const snippet = message.snippet ?? "";
 
+        const threadId = message.threadId;
+
         const promise = classifyEmail({ subject, body: snippet, from })
           .then(async (classification) => {
             const classified_at = new Date().toISOString();
 
-            await Promise.all([
-              supabase.from("tickets").insert({
-                user_id: userId,
-                subject,
-                from_email: from,
-                gmail_message_id: messageId,
-                ticket_type: classification.type,
-                priority: classification.priority,
-                category: classification.category,
-                sentiment: classification.tone,
-                ai_reasoning: classification.reasoning,
-                classification_confidence: classification.confidence,
-                classified_at,
-                classification_tier: 0,
-              }),
+            const [insertResult] = await Promise.all([
+              supabase
+                .from("tickets")
+                .insert({
+                  user_id: userId,
+                  subject,
+                  from_email: from,
+                  gmail_message_id: messageId,
+                  gmail_thread_id: threadId,
+                  received_at: receivedAt,
+                  ticket_type: classification.type,
+                  priority: classification.priority,
+                  category: classification.category,
+                  sentiment: classification.tone,
+                  ai_reasoning: classification.reasoning,
+                  classification_confidence: classification.confidence,
+                  classified_at,
+                  classification_tier: 0,
+                })
+                .select("id")
+                .single(),
               channelIntegrationId
                 ? supabase
                     .from("messages")
@@ -295,6 +304,26 @@ export const incrementalSync = inngest.createFunction(
                     .eq("channel_integration_id", channelIntegrationId)
                 : Promise.resolve(),
             ]);
+
+            const ticketId = insertResult?.data?.id;
+            if (ticketId) {
+              maybeSendOutOfHoursReply({
+                supabase,
+                userId,
+                ticketId,
+                gmailAccessToken,
+                gmailThreadId: threadId,
+                gmailMessageId: messageId,
+                fromHeader: from,
+                subject,
+                receivedAt,
+              }).catch((err: unknown) => {
+                console.error(
+                  `[incremental-sync] Out-of-hours reply failed for ticket ${ticketId}:`,
+                  err
+                );
+              });
+            }
           })
           .catch(async (err: unknown) => {
             const detail = err instanceof Error ? err.message : String(err);

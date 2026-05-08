@@ -1123,6 +1123,8 @@ export type Database = {
           ai_reasoning: string | null
           archived_at: string | null
           assigned_to: string | null
+          auto_replied_at: string | null
+          auto_replied_out_of_hours: boolean
           body_html: string | null
           body_plain: string | null
           category: string | null
@@ -1170,6 +1172,8 @@ export type Database = {
           ai_reasoning?: string | null
           archived_at?: string | null
           assigned_to?: string | null
+          auto_replied_at?: string | null
+          auto_replied_out_of_hours?: boolean
           body_html?: string | null
           body_plain?: string | null
           category?: string | null
@@ -1217,6 +1221,8 @@ export type Database = {
           ai_reasoning?: string | null
           archived_at?: string | null
           assigned_to?: string | null
+          auto_replied_at?: string | null
+          auto_replied_out_of_hours?: boolean
           body_html?: string | null
           body_plain?: string | null
           category?: string | null
