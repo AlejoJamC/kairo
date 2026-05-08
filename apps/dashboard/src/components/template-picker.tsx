@@ -47,7 +47,7 @@ export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiCall("/v1/templates", {
+      const res = await apiCall("/api/v1/templates", {
         headers: { "Accept-Language": i18n.language },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

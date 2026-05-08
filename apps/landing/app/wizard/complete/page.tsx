@@ -40,7 +40,7 @@ export default function CompleteProfilePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiCall("/api/auth/me")
+    apiCall("/bff/auth/me")
       .then((res) => {
         if (!res.ok) {
           router.push("/wizard/");
@@ -77,7 +77,7 @@ export default function CompleteProfilePage() {
     setError(null);
 
     try {
-      const response = await apiCall("/api/user/profile", {
+      const response = await apiCall("/bff/user/profile", {
         method: "PATCH",
         body: JSON.stringify({ company_name: companyName }),
       });

@@ -23,7 +23,7 @@ export function useSidebarCounts(): SidebarCounts | null {
 
     const fetchCounts = async () => {
       try {
-        const resp = await apiCall("/v1/sidebar/counts");
+        const resp = await apiCall("/api/v1/sidebar/counts");
         if (!resp.ok || cancelled) return;
         const data = (await resp.json()) as SidebarCounts;
         if (!cancelled) setCounts(data);

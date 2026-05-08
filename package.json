@@ -14,6 +14,7 @@
     "dev": "turbo run dev --filter=@kairo/dashboard --filter=@kairo/landing --filter=@kairo/api --filter=@kairo/kelan",
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "test": "SKIP_LLM_INTEGRATION=1 bun test apps/api packages/intelligence && turbo run test --filter=@kairo/dashboard",
     "clean": "turbo run clean"
   },
   "workspaces": ["apps/*", "packages/*"]

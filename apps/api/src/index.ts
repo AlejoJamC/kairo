@@ -31,7 +31,7 @@ v1.route("/intelligence", intelligence);
 v1.route("/support-schedule", supportSchedule);
 v1.route("/kb-articles", kbArticles);
 
-app.route("/v1", v1);
+app.route("/api/v1", v1);
 
 app.use(
   "/api/inngest",

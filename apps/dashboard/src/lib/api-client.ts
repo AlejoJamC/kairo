@@ -3,8 +3,8 @@
  *
  * Always uses relative URLs.
  * In dev, Vite proxies:
- * - /api -> landing app (localhost:3000)
- * - /v1  -> API service (localhost:3001)
+ * - /api -> @kairo/api service (localhost:3001) — owns /api/v1/* and /api/inngest
+ * - /bff -> landing app (localhost:3000) — auth/session/clients/gmail handlers
  * In production, routes are served same-origin.
  */
 import { createClient } from "@/lib/supabase/client";
@@ -50,10 +50,10 @@ export async function apiCall(
     headers,
   });
 
-  // Only force auth redirect for landing-owned session endpoints.
-  // For /v1 API calls, let the caller handle 401 so product flows
+  // Only force auth redirect for landing-owned BFF session endpoints.
+  // For /api/v1 API calls, let the caller handle 401 so product flows
   // (template picker, reply, classify, etc.) don't trigger hard navigation.
-  if (response.status === 401 && endpoint.startsWith("/api/")) {
+  if (response.status === 401 && endpoint.startsWith("/bff/")) {
     window.location.href = getLandingUrl("/wizard/");
     throw new Error("Unauthorized");
   }

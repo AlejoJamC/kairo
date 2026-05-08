@@ -12,7 +12,7 @@ import { useTriageStore } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
-// Types — aligned with GET /v1/tickets/:id/related-history response
+// Types — aligned with GET /api/v1/tickets/:id/related-history response
 // ---------------------------------------------------------------------------
 
 interface SimilarCase {
@@ -90,7 +90,7 @@ export function KnowledgePanel({ ticketId }: KnowledgePanelProps) {
     setCasesLoading(true);
 
     // Similar cases — endpoint exists, degrade to [] on any error
-    apiCall(`/v1/tickets/${ticketId}/related-history`)
+    apiCall(`/api/v1/tickets/${ticketId}/related-history`)
       .then(async (res) => {
         if (!res.ok) return;
         const json: { data: SimilarCase[] } = await res.json();
@@ -100,7 +100,7 @@ export function KnowledgePanel({ ticketId }: KnowledgePanelProps) {
       .finally(() => setCasesLoading(false));
 
     // KB articles — endpoint not yet created; shows empty state immediately.
-    // Wire here when GET /v1/tickets/:id/knowledge-context is implemented.
+    // Wire here when GET /api/v1/tickets/:id/knowledge-context is implemented.
   }, [ticketId]);
 
   return (

@@ -90,7 +90,7 @@ export function CorrectionDialog({
     setError(null);
 
     try {
-      const res = await apiCall(`/v1/tickets/${ticket.id}/correct-classification`, {
+      const res = await apiCall(`/api/v1/tickets/${ticket.id}/correct-classification`, {
         method: "POST",
         body: JSON.stringify(body),
       });

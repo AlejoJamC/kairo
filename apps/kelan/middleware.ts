@@ -4,7 +4,7 @@ import { ROUTES } from '@/lib/constants';
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
-const PROTECTED_PREFIXES = ['/dashboard', '/api/admin'];
+const PROTECTED_PREFIXES = ['/dashboard', '/internal/admin'];
 const PUBLIC_PATHS = [ROUTES.LOGIN, ROUTES.AUTH_CALLBACK];
 
 function isProtected(pathname: string): boolean {

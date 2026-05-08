@@ -8,7 +8,7 @@ export default function WizardPage() {
 
   const handleGoogleSignIn = () => {
     const apiUrl = getApiUrl();
-    window.location.href = `${apiUrl}/api/auth/google`;
+    window.location.href = `${apiUrl}/bff/auth/google`;
   };
 
   return (
