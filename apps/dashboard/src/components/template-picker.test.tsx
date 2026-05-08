@@ -24,7 +24,7 @@ vi.mock("@/lib/api-client", () => ({
 }));
 
 describe("TemplatePicker", () => {
-  it("shows dummy template when /v1/templates fails", async () => {
+  it("shows dummy template when /api/v1/templates fails", async () => {
     apiCallMock.mockRejectedValueOnce(new Error("network error"));
 
     render(

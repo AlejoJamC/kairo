@@ -1,7 +1,7 @@
 import { createClient, getUserFromRequest } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-// GET /api/clients — list all clients for the authenticated user
+// GET /bff/clients — list all clients for the authenticated user
 export async function GET(request: Request) {
   try {
     const supabase = await createClient();
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/clients — create a new client
+// POST /bff/clients — create a new client
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();

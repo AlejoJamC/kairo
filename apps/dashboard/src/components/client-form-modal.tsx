@@ -125,7 +125,7 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
     try {
       const isEdit = client !== null;
       const res = await apiCall(
-        isEdit ? `/api/clients/${client!.id}` : "/api/clients",
+        isEdit ? `/bff/clients/${client!.id}` : "/bff/clients",
         { method: isEdit ? "PATCH" : "POST", body: JSON.stringify(payload) }
       );
 

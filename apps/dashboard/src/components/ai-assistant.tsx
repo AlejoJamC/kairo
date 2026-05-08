@@ -95,7 +95,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
     setEditMode(false);
     setReasonsLoading(true);
 
-    apiCall(`/v1/tickets/${selectedTicketId}/escalation-reasons`, { method: "POST" })
+    apiCall(`/api/v1/tickets/${selectedTicketId}/escalation-reasons`, { method: "POST" })
       .then(async (res) => {
         if (!res.ok) return;
         const data: EscalationResult = await res.json();
@@ -113,7 +113,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
     if (!selectedTicketId || escalating) return;
     setEscalating(true);
     try {
-      await apiCall(`/v1/tickets/${selectedTicketId}/escalate`, {
+      await apiCall(`/api/v1/tickets/${selectedTicketId}/escalate`, {
         method: "POST",
         body: JSON.stringify({ reason: escalationReason || undefined }),
       });

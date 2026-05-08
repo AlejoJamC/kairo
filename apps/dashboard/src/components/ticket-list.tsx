@@ -190,7 +190,7 @@ export function TicketList() {
 
     try {
       const ids = tickets.map((t) => t.id);
-      const res = await apiCall("/v1/tickets/classify-batch", {
+      const res = await apiCall("/api/v1/tickets/classify-batch", {
         method: "POST",
         body: JSON.stringify({ ticket_ids: ids, force_reclassify: false }),
       });

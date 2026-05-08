@@ -1,7 +1,7 @@
 import { createClient, getUserFromRequest } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-// GET /api/clients/:id
+// GET /bff/clients/:id
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -37,7 +37,7 @@ export async function GET(
   }
 }
 
-// PATCH /api/clients/:id
+// PATCH /bff/clients/:id
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -88,7 +88,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/clients/:id
+// DELETE /bff/clients/:id
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

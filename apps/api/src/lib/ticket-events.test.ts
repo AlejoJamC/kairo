@@ -156,7 +156,7 @@ describe("request schema validation", () => {
       proposal_id: z.string().uuid(),
       action: z.enum(["confirm", "reject"]),
     });
-    const id = "00000000-0000-0000-0000-000000000001";
+    const id = "00000000-0000-4000-8000-000000000001";
     expect(schema.safeParse({ proposal_id: id, action: "confirm" }).success).toBe(true);
     expect(schema.safeParse({ proposal_id: id, action: "reject" }).success).toBe(true);
   });
@@ -167,7 +167,7 @@ describe("request schema validation", () => {
       proposal_id: z.string().uuid(),
       action: z.enum(["confirm", "reject"]),
     });
-    const id = "00000000-0000-0000-0000-000000000001";
+    const id = "00000000-0000-4000-8000-000000000001";
     expect(schema.safeParse({ proposal_id: id, action: "approve" }).success).toBe(false);
   });
 

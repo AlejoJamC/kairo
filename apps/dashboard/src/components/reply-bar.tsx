@@ -44,7 +44,7 @@ export function ReplyBar() {
     setSendSuccess(false);
 
     try {
-      const res = await apiCall(`/v1/tickets/${selectedTicketId}/reply`, {
+      const res = await apiCall(`/api/v1/tickets/${selectedTicketId}/reply`, {
         method: "POST",
         body: JSON.stringify({ body: draft }),
       });

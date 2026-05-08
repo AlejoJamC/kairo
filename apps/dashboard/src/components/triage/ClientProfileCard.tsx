@@ -103,7 +103,7 @@ export function ClientProfileCard() {
     setClientProfile(null);
     setLoading(true);
 
-    apiCall(`/v1/tickets/${selectedTicketId}/client-profile`)
+    apiCall(`/api/v1/tickets/${selectedTicketId}/client-profile`)
       .then(async (res) => {
         if (!res.ok) return;
         const data: ClientProfile = await res.json();

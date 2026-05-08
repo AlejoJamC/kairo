@@ -27,7 +27,7 @@ export function SyncButton({ onSyncComplete }: SyncButtonProps) {
     setSummary(null);
 
     try {
-      const response = await apiCall('/api/gmail/sync', { method: 'POST' });
+      const response = await apiCall('/bff/gmail/sync', { method: 'POST' });
 
       if (!response.ok) {
         const data = await response.json();

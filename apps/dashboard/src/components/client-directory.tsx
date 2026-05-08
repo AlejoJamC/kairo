@@ -63,7 +63,7 @@ export function ClientDirectory() {
 
   const fetchClients = async () => {
     try {
-      const res = await apiCall("/api/clients");
+      const res = await apiCall("/bff/clients");
       const data = await res.json();
       setClients(
         (data.clients as Record<string, unknown>[]).map(mapRow)
@@ -97,7 +97,7 @@ export function ClientDirectory() {
 
     setDeleting(client.id);
     try {
-      await apiCall(`/api/clients/${client.id}`, { method: "DELETE" });
+      await apiCall(`/bff/clients/${client.id}`, { method: "DELETE" });
       setClients((prev) => prev.filter((c) => c.id !== client.id));
       if (selectedClient?.id === client.id) setSelectedClient(null);
     } catch {

@@ -1,0 +1,6 @@
+[test]
+# Dashboard tests use vitest (React + JSDOM). Run them via `bun run test`
+# inside apps/dashboard, not via root `bun test`.
+# Ollama integration tests need a live Ollama daemon; gate with
+# SKIP_LLM_INTEGRATION=1 in CI.
+root = "."

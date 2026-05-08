@@ -27,7 +27,7 @@ describe("ticket groups route shape", () => {
   it("AddTicketsSchema accepts valid uuid array", () => {
     const { z } = require("zod");
     const schema = z.object({ ticket_ids: z.array(z.string().uuid()).min(1).max(100) });
-    const ids = ["00000000-0000-0000-0000-000000000001"];
+    const ids = ["00000000-0000-4000-8000-000000000001"];
     expect(schema.safeParse({ ticket_ids: ids }).success).toBe(true);
   });
 
