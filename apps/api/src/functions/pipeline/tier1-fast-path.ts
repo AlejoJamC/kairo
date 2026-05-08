@@ -7,6 +7,7 @@ import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { buildEscalationContext } from "../../routes/v1/tickets.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
+import { maybeGenerateTicketEmbedding } from "../../lib/ticket-embedding.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -323,6 +324,15 @@ export const tier1FastPath = inngest.createFunction(
                 receivedAt,
               }).catch((err: unknown) => {
                 console.error(`[tier1] Out-of-hours reply failed for ticket ${ticket.id}:`, err);
+              });
+
+              maybeGenerateTicketEmbedding({
+                supabase,
+                ticketId: ticket.id,
+                subject,
+                bodyPreview: snippet,
+              }).catch((err: unknown) => {
+                console.error(`[tier1] Embedding generation failed for ticket ${ticket.id}:`, err);
               });
             }
           })

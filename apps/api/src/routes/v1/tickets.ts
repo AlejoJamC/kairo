@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { classifyEmail } from "@kairo/intelligence";
+import { classifyEmail, generateEmbedding } from "@kairo/intelligence";
 import { supabase } from "../../lib/supabase.js";
 import { inngest } from "../../lib/inngest.js";
 import { env } from "../../env.js";
@@ -1402,4 +1402,97 @@ tickets.post("/:id/correct-classification", async (c) => {
   });
 
   return c.json({ feedback_id: feedback.id, ticket: updatedTicket });
+});
+
+// ---------------------------------------------------------------------------
+// GET /v1/tickets/:id/knowledge-context — KAI-42
+// Returns the right-panel "Conocimiento Relacionado" payload:
+//   { kbArticles: [...], similarResolvedCases: [...] }
+// Generates a fresh query embedding from subject + first 200 chars of body,
+// then calls the two pgvector RPCs. Threshold 0.75 for both. Graceful empty
+// response when no embeddings exist or RPC fails (e.g. pgvector not deployed).
+// ---------------------------------------------------------------------------
+
+const KNOWLEDGE_CONTEXT_THRESHOLD = 0.75;
+const KB_LIMIT = 3;
+const SIMILAR_CASES_LIMIT = 2;
+const BODY_PREVIEW_CHARS = 200;
+
+tickets.get("/:id/knowledge-context", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  const { data: ticket, error: ticketErr } = await supabase
+    .from("tickets")
+    .select("id, subject, body_plain")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  const subject = (ticket.subject ?? "").trim();
+  const bodyPreview = (ticket.body_plain ?? "").trim().slice(0, BODY_PREVIEW_CHARS);
+  const queryText = [subject, bodyPreview].filter(Boolean).join("\n\n");
+
+  // No text to embed → empty graceful response.
+  if (queryText.length === 0) {
+    return c.json({ kbArticles: [], similarResolvedCases: [] });
+  }
+
+  let queryVector: number[];
+  try {
+    queryVector = await generateEmbedding(queryText);
+  } catch (err) {
+    console.error(`[knowledge-context] generateEmbedding failed for ticket ${id}:`, err);
+    return c.json({ kbArticles: [], similarResolvedCases: [], degraded: true });
+  }
+
+  const [kbResult, similarResult] = await Promise.allSettled([
+    supabase.rpc("find_relevant_kb", {
+      p_query_embedding: queryVector,
+      p_user_id: user.id,
+      p_limit: KB_LIMIT,
+    }),
+    supabase.rpc("find_similar_tickets", {
+      p_ticket_id: id,
+      p_user_id: user.id,
+      p_limit: SIMILAR_CASES_LIMIT,
+      p_threshold: KNOWLEDGE_CONTEXT_THRESHOLD,
+      p_status_filter: "resolved",
+    }),
+  ]);
+
+  type KbRow = { article_id: string; title: string; similarity: number };
+  type SimilarRow = {
+    ticket_id: string;
+    subject: string | null;
+    resolved_at: string | null;
+    resolution_summary: string | null;
+    ticket_number: number;
+    similarity: number;
+  };
+
+  const kbArticles =
+    kbResult.status === "fulfilled" && !kbResult.value.error
+      ? ((kbResult.value.data ?? []) as KbRow[])
+          .filter((r) => r.similarity > KNOWLEDGE_CONTEXT_THRESHOLD)
+          .map((r) => ({ id: r.article_id, title: r.title, similarity: r.similarity }))
+      : [];
+
+  const similarResolvedCases =
+    similarResult.status === "fulfilled" && !similarResult.value.error
+      ? ((similarResult.value.data ?? []) as SimilarRow[]).map((r) => ({
+          id: r.ticket_id,
+          ticket_number: r.ticket_number,
+          subject: r.subject,
+          resolved_at: r.resolved_at,
+          resolution_summary: r.resolution_summary,
+          similarity: r.similarity,
+        }))
+      : [];
+
+  return c.json({ kbArticles, similarResolvedCases });
 });

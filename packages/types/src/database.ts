@@ -1341,13 +1341,18 @@ export type Database = {
       find_similar_tickets: {
         Args: {
           p_limit?: number
+          p_status_filter?: string
           p_threshold?: number
           p_ticket_id: string
           p_user_id: string
         }
         Returns: {
+          resolution_summary: string
+          resolved_at: string
           similarity: number
+          subject: string
           ticket_id: string
+          ticket_number: number
         }[]
       }
       get_classification_accuracy: {
