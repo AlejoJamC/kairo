@@ -1,12 +1,15 @@
 import type { EmbeddingProvider } from '../base';
+import { VOYAGE_EMBEDDING_MODEL, VOYAGE_EMBEDDING_DIMENSIONS } from '../../config/constants';
 
 interface VoyageResponse {
   data: Array<{ embedding: number[] }>;
 }
 
+// voyage-3-lite emits 512-dim vectors natively, matching the pgvector(512)
+// columns used by KAI-42 (tickets.embedding, kb_articles.embedding).
 export class VoyageEmbeddingProvider implements EmbeddingProvider {
-  public readonly model = 'voyage-2';
-  public readonly dimensions = 1536;
+  public readonly model = VOYAGE_EMBEDDING_MODEL;
+  public readonly dimensions = VOYAGE_EMBEDDING_DIMENSIONS;
   private apiKey: string;
 
   constructor(apiKey: string) {

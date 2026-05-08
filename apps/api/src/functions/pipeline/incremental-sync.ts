@@ -4,6 +4,7 @@ import { inngest } from "../../lib/inngest.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
+import { maybeGenerateTicketEmbedding } from "../../lib/ticket-embedding.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -320,6 +321,18 @@ export const incrementalSync = inngest.createFunction(
               }).catch((err: unknown) => {
                 console.error(
                   `[incremental-sync] Out-of-hours reply failed for ticket ${ticketId}:`,
+                  err
+                );
+              });
+
+              maybeGenerateTicketEmbedding({
+                supabase,
+                ticketId,
+                subject,
+                bodyPreview: snippet,
+              }).catch((err: unknown) => {
+                console.error(
+                  `[incremental-sync] Embedding generation failed for ticket ${ticketId}:`,
                   err
                 );
               });
