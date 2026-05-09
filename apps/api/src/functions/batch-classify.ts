@@ -4,8 +4,7 @@ import { supabase } from "../lib/supabase.js";
 import type { BatchTicketResult } from "../lib/schemas/classification.js";
 
 export const batchClassify = inngest.createFunction(
-  { id: "batch-classify" },
-  { event: "tickets/batch-classify.triggered" },
+  { id: "batch-classify", triggers: [{ event: "tickets/batch-classify.triggered" }] },
   async ({ event, step }) => {
     const { userId, ticketIds, forceReclassify, jobId } = event.data;
 

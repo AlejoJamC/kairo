@@ -1,4 +1,4 @@
-import { EventSchemas, Inngest } from "inngest";
+import { Inngest } from "inngest";
 
 export type KairoEvents = {
   "pipeline/tier1.triggered": {
@@ -34,7 +34,6 @@ export type KairoEvents = {
   };
 };
 
-export const inngest = new Inngest({
-  id: "kairo-api",
-  schemas: new EventSchemas().fromRecord<KairoEvents>(),
-});
+// In inngest v4, EventSchemas was removed. Event types are enforced via
+// KairoEvents below and used at createFunction call sites via generics.
+export const inngest = new Inngest({ id: "kairo-api" });

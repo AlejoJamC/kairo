@@ -143,8 +143,8 @@ export const tier2Background = inngest.createFunction(
   {
     id: "tier2-background",
     concurrency: { limit: env.BACKGROUND_CONCURRENCY },
+    triggers: [{ event: "pipeline/tier2.triggered" }],
   },
-  { event: "pipeline/tier2.triggered" },
   async ({ event, step }) => {
     const { userId, processedMessageIds } = event.data;
 

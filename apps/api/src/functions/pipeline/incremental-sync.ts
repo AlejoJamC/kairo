@@ -141,8 +141,8 @@ export const incrementalSync = inngest.createFunction(
   {
     id: "incremental-sync",
     concurrency: { limit: env.INCREMENTAL_SYNC_CONCURRENCY },
+    triggers: [{ event: "pipeline/incremental-sync.triggered" }],
   },
-  { event: "pipeline/incremental-sync.triggered" },
   async ({ event, step }) => {
     const { userId, gmailAccessToken } = event.data;
 
