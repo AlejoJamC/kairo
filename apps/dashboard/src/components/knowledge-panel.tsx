@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, BookOpen, Clock, MessageSquarePlus } from "lucide-react";
 import {
   Card, CardContent, CardHeader, CardTitle,
-  Button,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -130,19 +129,27 @@ export function KnowledgePanel({ ticketId }: KnowledgePanelProps) {
                   {t("ai.noKbArticles")}
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {kbArticles.map((article) => (
                     <div
                       key={article.id}
-                      className="rounded-md border border-zinc-200 px-2.5 py-2 text-xs space-y-1.5"
+                      style={{
+                        borderRadius: 8,
+                        border: "1px solid var(--k-border)",
+                        borderLeft: "3px solid var(--k-accent)",
+                        padding: "10px 10px 10px 12px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
                     >
                       {/* Title + similarity */}
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="font-medium text-zinc-800 leading-snug">
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", lineHeight: 1.35 }}>
                           {article.title}
                         </span>
                         {formatSimilarity(article.similarity) && (
-                          <span className="shrink-0 rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
+                          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 500, fontFamily: "var(--k-font-mono)", padding: "2px 6px", borderRadius: 4, background: "var(--k-accent-subtle)", color: "var(--k-accent)" }}>
                             {formatSimilarity(article.similarity)}
                           </span>
                         )}
@@ -150,11 +157,11 @@ export function KnowledgePanel({ ticketId }: KnowledgePanelProps) {
 
                       {/* Tag chips */}
                       {article.tags && article.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                           {article.tags.map((tag) => (
                             <span
                               key={tag}
-                              className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500"
+                              style={{ fontSize: 10, padding: "2px 6px", borderRadius: 999, background: "var(--k-surface-2)", color: "var(--k-text-tertiary)" }}
                             >
                               {tag}
                             </span>
@@ -163,15 +170,14 @@ export function KnowledgePanel({ ticketId }: KnowledgePanelProps) {
                       )}
 
                       {/* Use in reply */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-6 w-full gap-1 text-[11px]"
-                        onPress={() => setSuggestedReply(article.content)}
+                      <button
+                        type="button"
+                        style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}
+                        onClick={() => setSuggestedReply(article.content)}
                       >
-                        <MessageSquarePlus className="h-3 w-3" />
-                        {t("ai.useInReply")}
-                      </Button>
+                        <MessageSquarePlus style={{ width: 12, height: 12 }} />
+                        {t("ai.useInReply")} →
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -209,34 +215,41 @@ export function KnowledgePanel({ ticketId }: KnowledgePanelProps) {
                   {t("ai.noSimilarCases")}
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {similarCases.map((c) => (
                     <div
                       key={c.id}
-                      className="rounded-md border border-zinc-200 px-2.5 py-2 text-xs space-y-1.5"
+                      style={{
+                        padding: 12,
+                        border: "1px solid var(--k-border)",
+                        borderRadius: 8,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}
                     >
                       {/* Ticket number + similarity */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-zinc-500">
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 2 }}>
+                        <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 11, color: "var(--k-text-tertiary)" }}>
                           {t("ai.ticketNumber", { number: c.ticket_number })}
                         </span>
                         {formatSimilarity(c.similarity) && (
-                          <span className="shrink-0 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-600">
-                            {formatSimilarity(c.similarity)}
+                          <span style={{ flexShrink: 0, fontFamily: "var(--k-font-mono)", fontSize: 11, color: "#10B981" }}>
+                            {formatSimilarity(c.similarity)} sim
                           </span>
                         )}
                       </div>
 
                       {/* Subject */}
                       {c.subject && (
-                        <p className="text-zinc-800 leading-snug line-clamp-2">
+                        <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", lineHeight: 1.35, margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                           {c.subject}
                         </p>
                       )}
 
                       {/* Resolved date */}
                       {c.resolved_at && (
-                        <p className="text-[10px] text-zinc-400">
+                        <p style={{ fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", margin: 0 }}>
                           {t("ai.resolvedOn")} {formatDate(c.resolved_at, i18n.language)}
                         </p>
                       )}
@@ -245,18 +258,18 @@ export function KnowledgePanel({ ticketId }: KnowledgePanelProps) {
                       {c.resolution_summary && (
                         <>
                           <button
-                            className="text-[11px] font-medium text-blue-600 hover:underline"
+                            style={{ fontSize: 11, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}
                             onClick={() =>
                               setExpandedCase((prev) => (prev === c.id ? null : c.id))
                             }
                           >
                             {expandedCase === c.id
                               ? t("ai.hideResolution")
-                              : t("ai.viewResolution")}
+                              : t("ai.viewResolution")} →
                           </button>
 
                           {expandedCase === c.id && (
-                            <p className="mt-1 rounded-md bg-zinc-50 p-2 text-[11px] leading-relaxed text-zinc-700">
+                            <p style={{ marginTop: 4, borderRadius: 6, background: "var(--k-surface)", padding: "8px 10px", fontSize: 12, lineHeight: 1.55, color: "var(--k-text-secondary)" }}>
                               {c.resolution_summary}
                             </p>
                           )}

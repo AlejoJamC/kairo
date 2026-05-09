@@ -141,16 +141,51 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   const ctaLabel = t("ai.escalateToLevel", { level: recommendedLevel });
 
   return (
-    <div className="flex h-full w-[300px] flex-col border-l bg-white">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <h2 className="text-sm font-semibold text-zinc-900">{t("ai.title")}</h2>
-        <ChevronDown className="h-4 w-4 text-zinc-400" />
+    <div
+      style={{
+        width: 340,
+        flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        borderLeft: "1px solid var(--k-border)",
+        background: "white",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: "1px solid var(--k-border)",
+          padding: "12px 14px",
+          flexShrink: 0,
+        }}
+      >
+        <h2
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: "var(--k-text-primary)",
+            margin: 0,
+          }}
+        >
+          {t("ai.title")}
+        </h2>
+        <ChevronDown style={{ width: 16, height: 16, color: "var(--k-text-tertiary)" }} />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
 
         {/* ── Section 0: Client Profile ───────────────────────────────────── */}
-        <div className="rounded-lg border border-zinc-200 bg-white shadow-sm">
+        <div
+          style={{
+            borderRadius: 8,
+            border: "1px solid var(--k-border)",
+            background: "white",
+            boxShadow: "0 1px 2px rgba(9,9,11,0.04)",
+          }}
+        >
           <ClientProfileCard />
         </div>
 
@@ -251,19 +286,19 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                   <>
                     {/* Context summary */}
                     <div className="grid grid-cols-3 gap-2 mb-3">
-                      <div className="rounded-md bg-zinc-50 p-2 text-center">
-                        <p className="text-[10px] text-zinc-500">{t("ai.customer")}</p>
-                        <p className="truncate text-xs font-medium text-zinc-800">{customer}</p>
+                      <div className="rounded-md p-2 text-center" style={{ background: "var(--k-surface)" }}>
+                        <p className="text-[10px]" style={{ color: "var(--k-text-tertiary)" }}>{t("ai.customer")}</p>
+                        <p className="truncate text-xs font-medium" style={{ color: "var(--k-text-primary)" }}>{customer}</p>
                       </div>
-                      <div className="rounded-md bg-zinc-50 p-2 text-center">
-                        <p className="text-[10px] text-zinc-500">{t("ai.workflow")}</p>
-                        <p className="truncate text-xs font-medium text-zinc-800">
+                      <div className="rounded-md p-2 text-center" style={{ background: "var(--k-surface)" }}>
+                        <p className="text-[10px]" style={{ color: "var(--k-text-tertiary)" }}>{t("ai.workflow")}</p>
+                        <p className="truncate text-xs font-medium" style={{ color: "var(--k-text-primary)" }}>
                           {selectedTicket?.category ?? "—"}
                         </p>
                       </div>
-                      <div className="rounded-md bg-zinc-50 p-2 text-center">
-                        <p className="text-[10px] text-zinc-500">{t("ai.status")}</p>
-                        <p className="truncate text-xs font-medium text-zinc-800">
+                      <div className="rounded-md p-2 text-center" style={{ background: "var(--k-surface)" }}>
+                        <p className="text-[10px]" style={{ color: "var(--k-text-tertiary)" }}>{t("ai.status")}</p>
+                        <p className="truncate text-xs font-medium" style={{ color: "var(--k-text-primary)" }}>
                           {selectedTicket?.status ?? "—"}
                         </p>
                       </div>

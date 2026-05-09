@@ -1,5 +1,4 @@
 import type { Message } from "@/types";
-import { Bot, User } from "lucide-react";
 
 interface ConversationProps {
   messages: Message[];
@@ -7,34 +6,71 @@ interface ConversationProps {
 
 export function Conversation({ messages }: ConversationProps) {
   return (
-    <div className="flex flex-col gap-4">
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {messages.map((msg, i) => {
         const isCustomer = msg.sender === "customer";
         return (
           <div
             key={i}
-            className={`flex gap-3 ${isCustomer ? "" : "flex-row-reverse"}`}
+            style={{
+              display: "flex",
+              gap: 12,
+              flexDirection: isCustomer ? "row" : "row-reverse",
+            }}
           >
+            {/* Avatar */}
             <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                isCustomer ? "bg-zinc-200" : "bg-zinc-700"
-              }`}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                background: isCustomer
+                  ? "linear-gradient(135deg, #FCA5A5, #F472B6)"
+                  : "linear-gradient(135deg, var(--k-accent), #6E8BFF)",
+                color: "white",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 13,
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
             >
-              {isCustomer ? (
-                <User className="h-4 w-4 text-zinc-600" />
-              ) : (
-                <Bot className="h-4 w-4 text-white" />
-              )}
+              {isCustomer ? "C" : "A"}
             </div>
+
+            {/* Bubble */}
             <div
-              className={`max-w-[75%] rounded-lg px-4 py-3 shadow-sm ${
-                isCustomer
-                  ? "bg-white border border-gray-200 text-zinc-800"
-                  : "bg-blue-50 text-zinc-700 ml-auto"
-              }`}
+              style={{
+                maxWidth: "75%",
+                borderRadius: 12,
+                padding: "14px 16px",
+                background: "white",
+                border: "1px solid var(--k-border)",
+                boxShadow: "0 1px 2px rgba(9,9,11,0.04)",
+                marginLeft: isCustomer ? 0 : "auto",
+              }}
             >
-              <p className="text-sm">{msg.content}</p>
-              <p className="mt-1 text-xs text-gray-400">{msg.timestamp}</p>
+              <p
+                style={{
+                  fontSize: 14,
+                  color: "var(--k-text-primary)",
+                  lineHeight: 1.65,
+                  margin: 0,
+                }}
+              >
+                {msg.content}
+              </p>
+              <p
+                style={{
+                  marginTop: 6,
+                  fontSize: 11,
+                  fontFamily: "var(--k-font-mono)",
+                  color: "var(--k-text-tertiary)",
+                }}
+              >
+                {msg.timestamp}
+              </p>
             </div>
           </div>
         );
