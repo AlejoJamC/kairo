@@ -48,7 +48,7 @@ function DropdownMenuContent({ children, style }: { children?: ReactNode; style?
 
 function DropdownMenuGroup({ children }: { children?: ReactNode }) { return <View>{children}</View> }
 
-function DropdownMenuItem({ children, onSelect, style }: { children?: ReactNode; onSelect?: () => void; style?: ViewStyle }) {
+function DropdownMenuItem({ children, onSelect, style, variant: _variant }: { children?: ReactNode; onSelect?: () => void; style?: ViewStyle; variant?: string }) {
   const { close } = useContext(DropdownContext)
   return <TouchableOpacity onPress={() => { onSelect?.(); close() }} style={[s.item, style]} activeOpacity={0.7}><View style={s.row}>{children}</View></TouchableOpacity>
 }

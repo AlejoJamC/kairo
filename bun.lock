@@ -128,7 +128,9 @@
       "name": "@kairo/mobile",
       "version": "0.0.0",
       "dependencies": {
+        "@kairo/ui": "workspace:*",
         "@tamagui/babel-plugin": "^1.144.3",
+        "@tamagui/core": "^1.144.3",
         "babel-preset-expo": "~55.0.21",
         "expo": "~55.0.23",
         "expo-router": "~55.0.14",

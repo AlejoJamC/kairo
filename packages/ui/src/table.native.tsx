@@ -4,14 +4,14 @@
 // These stubs export the same component names so shared imports compile;
 // they render nothing and log a warning in dev mode.
 
-import { View, Text } from 'react-native'
 import type { ReactNode } from 'react'
 
 const warn = (name: string) => {
   if (__DEV__) console.warn(`[kairo/ui] ${name} is a web-only component. Use a FlatList on React Native.`)
 }
 
-const noop = (name: string) => ({ children, ..._ }: { children?: ReactNode; [k: string]: unknown }) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const noop = (name: string) => (_props: { children?: ReactNode; [k: string]: unknown }) => {
   warn(name)
   return null
 }
