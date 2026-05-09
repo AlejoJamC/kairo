@@ -7,5 +7,9 @@
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  // .native.{ts,tsx} files are resolved by Metro at bundle time and
+  // import from 'react-native' directly. TypeScript checks the web
+  // implementation only — Metro picks up .native.tsx automatically.
+  "exclude": ["src/**/*.native.ts", "src/**/*.native.tsx"]
 }
