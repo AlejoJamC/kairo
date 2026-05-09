@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { User, Check, AlertCircle, Loader2 } from "lucide-react";
+import { Check, AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import type { AppView } from "@/types";
@@ -52,18 +52,12 @@ export function ProfileSettings({ onViewChange }: Props) {
         .eq("id", profile!.id);
 
       if (error) {
-        setMessage({
-          type: "error",
-          text: t("dashboard:settings.saveError"),
-        });
+        setMessage({ type: "error", text: t("dashboard:settings.saveError") });
         return;
       }
 
       await refreshProfile();
-      setMessage({
-        type: "success",
-        text: t("dashboard:settings.saveSuccess"),
-      });
+      setMessage({ type: "success", text: t("dashboard:settings.saveSuccess") });
     } catch {
       setMessage({ type: "error", text: t("dashboard:settings.saveError") });
     } finally {
@@ -74,137 +68,137 @@ export function ProfileSettings({ onViewChange }: Props) {
 
   if (!profile) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-zinc-400" />
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Loader2 style={{ width: 28, height: 28, color: "var(--k-text-tertiary)" }} className="animate-spin" />
       </div>
     );
   }
 
+  // Initials avatar
+  const initials = (profile.name ?? profile.email ?? "?")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w: string) => w[0]?.toUpperCase() ?? "")
+    .join("");
+
   return (
-    <div className="flex-1 overflow-y-auto bg-zinc-50 p-8">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-zinc-900">
+    <div style={{ flex: 1, overflowY: "auto", background: "var(--k-surface)", padding: 32 }}>
+      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+
+        {/* Page title */}
+        <div style={{ marginBottom: 28 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--k-text-primary)", fontFamily: "var(--k-font-display)", margin: 0 }}>
             {t("dashboard:settings.title")}
           </h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p style={{ marginTop: 4, fontSize: 13, color: "var(--k-text-tertiary)" }}>
             {t("dashboard:settings.subtitle")}
           </p>
         </div>
 
-        <div className="rounded-lg border border-zinc-200 bg-white p-6">
-          <div className="mb-6 flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-zinc-100">
-              <User className="h-8 w-8 text-zinc-400" />
+        {/* Profile card */}
+        <div className="k-card" style={{ marginBottom: 16 }}>
+          {/* Avatar + name */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
+            <div style={{ width: 52, height: 52, borderRadius: 999, background: "linear-gradient(135deg, var(--k-accent), #6E8BFF)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, flexShrink: 0 }}>
+              {initials}
             </div>
             <div>
-              <p className="font-medium text-zinc-900">
+              <p style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>
                 {profile.name || profile.email}
               </p>
-              <p className="text-sm text-zinc-500">{profile.email}</p>
+              <p style={{ fontSize: 12, color: "var(--k-text-tertiary)" }}>{profile.email}</p>
             </div>
           </div>
 
-          <div className="space-y-5">
+          {/* Fields */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-700">
-                {t("dashboard:settings.nameLabel")}
-              </label>
+              <label className="k-label">{t("dashboard:settings.nameLabel")}</label>
               <input
                 type="text"
+                className="k-input"
                 value={formData.name}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, name: e.target.value }))
-                }
+                onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
                 placeholder={t("dashboard:settings.namePlaceholder")}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-700">
-                {t("dashboard:settings.emailLabel")}
-              </label>
+              <label className="k-label">{t("dashboard:settings.emailLabel")}</label>
               <input
                 type="email"
+                className="k-input"
                 value={formData.email}
                 disabled
-                className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-500 cursor-not-allowed"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-700">
-                {t("dashboard:settings.phoneLabel")}
-              </label>
+              <label className="k-label">{t("dashboard:settings.phoneLabel")}</label>
               <input
                 type="tel"
+                className="k-input"
                 value={formData.phone}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, phone: e.target.value }))
-                }
+                onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
                 placeholder={t("dashboard:settings.phonePlaceholder")}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-700">
-                {t("dashboard:settings.companyLabel")}
-              </label>
+              <label className="k-label">{t("dashboard:settings.companyLabel")}</label>
               <input
                 type="text"
+                className="k-input"
                 value={formData.company_name}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, company_name: e.target.value }))
-                }
+                onChange={(e) => setFormData((p) => ({ ...p, company_name: e.target.value }))}
                 placeholder={t("dashboard:settings.companyPlaceholder")}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </div>
 
+          {/* Message */}
           {message && (
             <div
-              className={`mt-4 flex items-center gap-2 rounded-md px-3 py-2 text-sm ${
-                message.type === "success"
-                  ? "bg-green-50 text-green-700"
-                  : "bg-red-50 text-red-700"
-              }`}
+              style={{
+                marginTop: 16,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                borderRadius: 6,
+                padding: "8px 12px",
+                fontSize: 13,
+                background: message.type === "success" ? "#ECFDF5" : "#FEF2F2",
+                color: message.type === "success" ? "#065F46" : "#991B1B",
+                border: `1px solid ${message.type === "success" ? "#A7F3D0" : "#FECACA"}`,
+              }}
             >
-              {message.type === "success" ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <AlertCircle className="h-4 w-4" />
-              )}
+              {message.type === "success"
+                ? <Check style={{ width: 14, height: 14, flexShrink: 0 }} />
+                : <AlertCircle style={{ width: 14, height: 14, flexShrink: 0 }} />}
               {message.text}
             </div>
           )}
 
-          <div className="mt-6">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {saving
-                ? t("dashboard:settings.saving")
-                : t("dashboard:settings.saveButton")}
+          {/* Save */}
+          <div style={{ marginTop: 20 }}>
+            <button className="k-btn-primary" onClick={handleSave} disabled={saving}>
+              {saving && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
+              {saving ? t("dashboard:settings.saving") : t("dashboard:settings.saveButton")}
             </button>
           </div>
         </div>
 
-        {/* Security */}
-        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-6">
-          <h2 className="mb-4 text-base font-semibold text-zinc-900">
+        {/* Security card */}
+        <div className="k-card">
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: "var(--k-text-primary)", margin: "0 0 16px", fontFamily: "var(--k-font-display)" }}>
             {t("dashboard:settings.security.title")}
           </h2>
-          <div className="flex items-center justify-between rounded-lg bg-zinc-50 p-4">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 8, background: "var(--k-surface)", padding: 14, border: "1px solid var(--k-border-subtle)" }}>
             <div>
-              <p className="text-sm font-medium text-zinc-900">
+              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)" }}>
                 {t("dashboard:settings.security.passwordLabel")}
               </p>
-              <p className="text-sm text-zinc-500">
+              <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>
                 {hasPassword
                   ? t("dashboard:settings.security.passwordEnabledDesc")
                   : t("dashboard:settings.security.passwordDisabledDesc")}
@@ -212,7 +206,7 @@ export function ProfileSettings({ onViewChange }: Props) {
             </div>
             <button
               onClick={() => onViewChange("change-password")}
-              className="text-sm font-medium text-blue-600 hover:text-blue-700"
+              style={{ fontSize: 13, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer" }}
             >
               {hasPassword
                 ? t("dashboard:settings.security.changePassword")
@@ -220,6 +214,7 @@ export function ProfileSettings({ onViewChange }: Props) {
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );

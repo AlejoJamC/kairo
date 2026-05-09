@@ -144,6 +144,147 @@
   --k-font-display:   "Inter Display", "Inter", system-ui, sans-serif;
 }
 
+/* ─── Shared form primitives ────────────────────────────────────────────────
+   Reusable classes for settings, modals, and forms (KAI-159).
+   All colors use --k-* tokens. No hardcoded palette values.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Field label */
+.k-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--k-text-secondary);
+  margin-bottom: 4px;
+}
+
+/* Text input (height 36px, radius 6px per spec) */
+.k-input {
+  display: block;
+  width: 100%;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--k-border);
+  background: white;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--k-text-primary);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+}
+.k-input::placeholder { color: var(--k-text-tertiary); }
+.k-input:focus {
+  border-color: var(--k-accent);
+  box-shadow: 0 0 0 2px rgba(43, 91, 255, 0.15);
+}
+.k-input:disabled {
+  background: var(--k-surface);
+  color: var(--k-text-tertiary);
+  cursor: not-allowed;
+}
+
+/* Select (same dimensions as input) */
+.k-select {
+  display: block;
+  width: 100%;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--k-border);
+  background: white;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--k-text-primary);
+  outline: none;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+}
+.k-select:focus {
+  border-color: var(--k-accent);
+  box-shadow: 0 0 0 2px rgba(43, 91, 255, 0.15);
+}
+.k-select:disabled {
+  background: var(--k-surface);
+  color: var(--k-text-tertiary);
+  cursor: not-allowed;
+}
+
+/* Textarea */
+.k-textarea {
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--k-border);
+  background: white;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--k-text-primary);
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+  line-height: 1.55;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+}
+.k-textarea::placeholder { color: var(--k-text-tertiary); }
+.k-textarea:focus {
+  border-color: var(--k-accent);
+  box-shadow: 0 0 0 2px rgba(43, 91, 255, 0.15);
+}
+.k-textarea:disabled {
+  background: var(--k-surface);
+  color: var(--k-text-tertiary);
+  cursor: not-allowed;
+}
+
+/* Primary button */
+.k-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 34px;
+  border-radius: 6px;
+  border: none;
+  background: var(--k-accent);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.k-btn-primary:hover { background: var(--k-accent-hover); }
+.k-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Secondary / ghost button */
+.k-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid var(--k-border);
+  background: white;
+  color: var(--k-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.k-btn-secondary:hover { background: var(--k-surface); }
+.k-btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Section card (border-radius 12px, shadow-card per spec) */
+.k-card {
+  background: white;
+  border: 1px solid var(--k-border);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(9, 9, 11, 0.04);
+}
+
 /* Auth-gate spinner — CSS animation using --k-accent */
 @keyframes kairo-spin {
   to { transform: rotate(360deg); }

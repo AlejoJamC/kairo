@@ -112,121 +112,107 @@ export function CorrectionDialog({
     }
   }
 
-  const selectCls =
-    "w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:opacity-50";
-
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <Dialog.Overlay
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 40,
+            background: "rgba(0,0,0,0.4)",
+            backdropFilter: "blur(2px)",
+          }}
+          className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+        />
 
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
-
+        <Dialog.Content
+          style={{
+            position: "fixed",
+            left: "50%",
+            top: "50%",
+            zIndex: 50,
+            width: "100%",
+            maxWidth: 440,
+            transform: "translate(-50%, -50%)",
+            background: "white",
+            borderRadius: 12,
+            padding: 24,
+            boxShadow: "0 4px 16px rgba(9,9,11,0.08), 0 1px 2px rgba(9,9,11,0.04)",
+          }}
+          className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+        >
           {/* Header */}
-          <div className="mb-4 flex items-start justify-between">
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
             <div>
-              <Dialog.Title className="text-base font-semibold text-zinc-900">
+              <Dialog.Title style={{ fontSize: 15, fontWeight: 600, color: "var(--k-text-primary)", fontFamily: "var(--k-font-display)", margin: 0 }}>
                 {t("correction.dialogTitle")}
               </Dialog.Title>
-              <Dialog.Description className="mt-0.5 text-xs text-zinc-500">
+              <Dialog.Description style={{ marginTop: 2, fontSize: 12, color: "var(--k-text-tertiary)" }}>
                 {t("correction.dialogSubtitle")}
               </Dialog.Description>
             </div>
-            <Dialog.Close className="rounded-md p-1 text-zinc-400 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-300">
-              <X className="h-4 w-4" />
+            <Dialog.Close
+              style={{ borderRadius: 6, padding: 4, color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer" }}
+            >
+              <X style={{ width: 16, height: 16 }} />
             </Dialog.Close>
           </div>
 
-          {/* Current AI values (context) */}
-          <div className="mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500">
+          {/* Current AI values */}
+          <div style={{ marginBottom: 16, borderRadius: 6, background: "var(--k-surface)", border: "1px solid var(--k-border-subtle)", padding: "6px 10px", fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>
             AI: {[ticket.priority, ticket.ticket_type, ticket.category, ticket.sentiment]
               .filter(Boolean)
               .join(" · ") || "—"}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {/* Priority */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700">
-                {t("correction.fieldPriority")}
-              </label>
-              <select
-                className={selectCls}
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                disabled={loading}
-              >
+              <label className="k-label">{t("correction.fieldPriority")}</label>
+              <select className="k-select" value={priority} onChange={(e) => setPriority(e.target.value)} disabled={loading}>
                 <option value="">—</option>
-                {PRIORITY_OPTIONS.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
+                {PRIORITY_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
 
             {/* Ticket type */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700">
-                {t("correction.fieldType")}
-              </label>
-              <select
-                className={selectCls}
-                value={ticketType}
-                onChange={(e) => setTicketType(e.target.value)}
-                disabled={loading}
-              >
+              <label className="k-label">{t("correction.fieldType")}</label>
+              <select className="k-select" value={ticketType} onChange={(e) => setTicketType(e.target.value)} disabled={loading}>
                 <option value="">—</option>
-                {TYPE_OPTIONS.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
+                {TYPE_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
 
             {/* Category */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700">
-                {t("correction.fieldCategory")}
-              </label>
-              <select
-                className={selectCls}
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                disabled={loading}
-              >
+              <label className="k-label">{t("correction.fieldCategory")}</label>
+              <select className="k-select" value={category} onChange={(e) => setCategory(e.target.value)} disabled={loading}>
                 <option value="">—</option>
-                {CATEGORY_OPTIONS.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
+                {CATEGORY_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
 
             {/* Sentiment */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700">
-                {t("correction.fieldSentiment")}
-              </label>
-              <select
-                className={selectCls}
-                value={sentiment}
-                onChange={(e) => setSentiment(e.target.value)}
-                disabled={loading}
-              >
+              <label className="k-label">{t("correction.fieldSentiment")}</label>
+              <select className="k-select" value={sentiment} onChange={(e) => setSentiment(e.target.value)} disabled={loading}>
                 <option value="">—</option>
-                {SENTIMENT_OPTIONS.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
+                {SENTIMENT_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
 
             {/* Notes */}
             <div>
-              <label className="mb-1 flex items-center justify-between text-xs font-medium text-zinc-700">
+              <label className="k-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span>{t("correction.fieldNotes")}</span>
-                <span className={notes.length > NOTE_MAX ? "text-red-500" : "text-zinc-400"}>
+                <span style={{ color: notes.length > NOTE_MAX ? "#EF4444" : "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)", fontSize: 11 }}>
                   {notes.length}/{NOTE_MAX}
                 </span>
               </label>
               <textarea
-                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:opacity-50"
+                className="k-textarea"
                 rows={2}
                 maxLength={NOTE_MAX}
                 placeholder={t("correction.fieldNotesPlaceholder")}
@@ -237,26 +223,24 @@ export function CorrectionDialog({
             </div>
 
             {/* Error / success */}
-            {error && <p className="text-xs text-red-500">{error}</p>}
-            {success && (
-              <p className="text-xs font-medium text-green-600">{t("correction.successMsg")}</p>
-            )}
+            {error   && <p style={{ fontSize: 12, color: "#EF4444", margin: 0 }}>{error}</p>}
+            {success && <p style={{ fontSize: 12, color: "#10B981", fontWeight: 500, margin: 0 }}>{t("correction.successMsg")}</p>}
 
             {/* Actions */}
-            <div className="flex justify-end gap-2 pt-1">
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
               <Dialog.Close
                 type="button"
-                className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-300"
                 disabled={loading}
+                className="k-btn-secondary"
               >
                 {t("correction.cancel")}
               </Dialog.Close>
               <button
                 type="submit"
                 disabled={loading || notes.length > NOTE_MAX}
-                className="flex items-center gap-1.5 rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                className="k-btn-primary"
               >
-                {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {loading && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
                 {loading ? t("correction.submitting") : t("correction.submit")}
               </button>
             </div>

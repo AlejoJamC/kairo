@@ -1,5 +1,4 @@
 import type { TelemetryData } from "@/types";
-import { Info } from "lucide-react";
 
 interface TelemetryOverviewProps {
   data: TelemetryData;
@@ -7,34 +6,36 @@ interface TelemetryOverviewProps {
 
 export function TelemetryOverview({ data }: TelemetryOverviewProps) {
   return (
-    <div className="rounded-lg border bg-white">
-      <div className="flex items-center gap-2 border-b px-4 py-2.5">
-        <h3 className="text-sm font-medium text-zinc-900">
+    <div style={{ borderRadius: 10, border: "1px solid var(--k-border)", background: "white", boxShadow: "0 1px 2px rgba(9,9,11,0.04)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--k-border-subtle)", padding: "10px 16px" }}>
+        <h3 style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", margin: 0 }}>
           Telemetry Overview
         </h3>
       </div>
-      <div className="flex items-center gap-6 px-4 py-3">
-        <Info className="h-4 w-4 shrink-0 text-blue-500" />
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-          <span className="text-zinc-600">
-            Recent Runs:{" "}
-            <span className="font-medium text-orange-600">
-              {data.failures} Failures
-            </span>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 24px", padding: "12px 16px" }}>
+        <span style={{ fontSize: 13, color: "var(--k-text-secondary)" }}>
+          Recent Runs:{" "}
+          <span style={{ fontWeight: 600, color: "#C2410C" }}>
+            {data.failures} Failures
           </span>
-          <span className="text-zinc-600">
-            Last Error:{" "}
-            <span className="font-semibold text-zinc-900">
-              {data.lastError}
-            </span>
+        </span>
+        <span style={{ width: 1, height: 14, background: "var(--k-border)", flexShrink: 0 }} />
+        <span style={{ fontSize: 13, color: "var(--k-text-secondary)" }}>
+          Last Error:{" "}
+          <span style={{ fontWeight: 600, color: "var(--k-text-primary)" }}>
+            {data.lastError}
           </span>
-          <span className="text-zinc-600">
-            Last Run:{" "}
-            <span className="font-medium text-zinc-900">
-              {data.lastRunStatus} {data.lastRunTime}
-            </span>
+        </span>
+        <span style={{ width: 1, height: 14, background: "var(--k-border)", flexShrink: 0 }} />
+        <span style={{ fontSize: 13, color: "var(--k-text-secondary)" }}>
+          Last Run:{" "}
+          <span style={{ fontWeight: 500, color: "var(--k-text-primary)" }}>
+            {data.lastRunStatus}
+          </span>{" "}
+          <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 12, color: "var(--k-text-tertiary)" }}>
+            {data.lastRunTime}
           </span>
-        </div>
+        </span>
       </div>
     </div>
   );

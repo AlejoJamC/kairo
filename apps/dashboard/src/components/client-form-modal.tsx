@@ -146,35 +146,33 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-xl">
+    <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", borderRadius: 12, background: "white", boxShadow: "0 4px 16px rgba(9,9,11,0.08), 0 1px 2px rgba(9,9,11,0.04)" }}>
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-4">
-          <h2 className="text-base font-semibold text-zinc-900">
+        <div style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--k-border)", background: "white", padding: "16px 24px" }}>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: "var(--k-text-primary)", fontFamily: "var(--k-font-display)", margin: 0 }}>
             {client ? t("form.editTitle") : t("form.createTitle")}
           </h2>
           <button
             onClick={onClose}
-            className="rounded p-1 hover:bg-zinc-100"
+            style={{ borderRadius: 6, padding: 4, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)" }}
             type="button"
           >
-            <X className="h-4 w-4 text-zinc-500" />
+            <X style={{ width: 16, height: 16 }} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-6">
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16, padding: 24 }}>
           {error && (
-            <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div style={{ borderRadius: 6, background: "#FEF2F2", border: "1px solid #FECACA", padding: "8px 12px", fontSize: 13, color: "#991B1B" }}>
               {error}
             </div>
           )}
 
           {/* Internal ID & Name */}
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-600">
-                {t("form.internalIdLabel")} *
-              </label>
+              <label className="k-label">{t("form.internalIdLabel")} *</label>
               <Input
                 value={form.internal_id}
                 onChangeText={(text) => set("internal_id", text)}
@@ -183,52 +181,28 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-600">
-                {t("form.nameLabel")} *
-              </label>
-              <Input
-                value={form.name}
-                onChangeText={(text) => set("name", text)}
-                placeholder={t("form.namePlaceholder")}
-              />
+              <label className="k-label">{t("form.nameLabel")} *</label>
+              <Input value={form.name} onChangeText={(text) => set("name", text)} placeholder={t("form.namePlaceholder")} />
             </div>
           </div>
 
           {/* Legal ID & Telephone */}
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-600">
-                {t("form.legalIdLabel")}
-              </label>
-              <Input
-                value={form.legal_id}
-                onChangeText={(text) => set("legal_id", text)}
-                placeholder={t("form.legalIdPlaceholder")}
-              />
+              <label className="k-label">{t("form.legalIdLabel")}</label>
+              <Input value={form.legal_id} onChangeText={(text) => set("legal_id", text)} placeholder={t("form.legalIdPlaceholder")} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-600">
-                {t("form.telephoneLabel")}
-              </label>
-              <Input
-                value={form.telephone}
-                onChangeText={(text) => set("telephone", text)}
-                placeholder={t("form.telephonePlaceholder")}
-              />
+              <label className="k-label">{t("form.telephoneLabel")}</label>
+              <Input value={form.telephone} onChangeText={(text) => set("telephone", text)} placeholder={t("form.telephonePlaceholder")} />
             </div>
           </div>
 
           {/* Plan & SLA */}
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-600">
-                {t("form.planLabel")}
-              </label>
-              <select
-                value={form.plan_type}
-                onChange={(e) => set("plan_type", e.target.value as PlanType | "")}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
+              <label className="k-label">{t("form.planLabel")}</label>
+              <select className="k-select" value={form.plan_type} onChange={(e) => set("plan_type", e.target.value as PlanType | "")}>
                 <option value="">{t("form.planPlaceholder")}</option>
                 <option value="Enterprise">Enterprise</option>
                 <option value="Pro">Pro</option>
@@ -236,14 +210,8 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-600">
-                {t("form.slaLabel")}
-              </label>
-              <select
-                value={form.sla_level}
-                onChange={(e) => set("sla_level", e.target.value as SlaLevel | "")}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
+              <label className="k-label">{t("form.slaLabel")}</label>
+              <select className="k-select" value={form.sla_level} onChange={(e) => set("sla_level", e.target.value as SlaLevel | "")}>
                 <option value="">{t("form.slaPlaceholder")}</option>
                 <option value="Critical">Critical</option>
                 <option value="High">High</option>
@@ -254,54 +222,40 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
 
           {/* Authorized Emails */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-600">
-              {t("form.authorizedEmailsLabel")}
-            </label>
+            <label className="k-label">{t("form.authorizedEmailsLabel")}</label>
             <textarea
+              className="k-textarea"
               value={form.emails}
               onChange={(e) => set("emails", e.target.value)}
               placeholder={t("form.emailPlaceholder")}
               rows={3}
-              className="w-full resize-none rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
           {/* Contact Persons */}
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-xs font-medium text-zinc-600">
-                {t("form.contactPersonsLabel")}
-              </label>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <label className="k-label" style={{ margin: 0 }}>{t("form.contactPersonsLabel")}</label>
               <button
                 type="button"
                 onClick={addPerson}
-                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer" }}
               >
-                <Plus className="h-3 w-3" />
+                <Plus style={{ width: 12, height: 12 }} />
                 {t("form.addPerson")}
               </button>
             </div>
-            <div className="space-y-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {form.contactPersons.map((cp, i) => (
-                <div key={i} className="flex gap-2">
-                  <Input
-                    value={cp.name}
-                    onChangeText={(text) => updatePerson(i, "name", text)}
-                    placeholder={t("form.personNamePlaceholder")}
-                    className="flex-1"
-                  />
-                  <Input
-                    value={cp.role}
-                    onChangeText={(text) => updatePerson(i, "role", text)}
-                    placeholder={t("form.personRolePlaceholder")}
-                    className="flex-1"
-                  />
+                <div key={i} style={{ display: "flex", gap: 8 }}>
+                  <Input value={cp.name} onChangeText={(text) => updatePerson(i, "name", text)} placeholder={t("form.personNamePlaceholder")} />
+                  <Input value={cp.role} onChangeText={(text) => updatePerson(i, "role", text)} placeholder={t("form.personRolePlaceholder")} />
                   <button
                     type="button"
                     onClick={() => removePerson(i)}
-                    className="rounded p-2 text-zinc-400 hover:bg-zinc-100 hover:text-red-500"
+                    style={{ borderRadius: 6, padding: 6, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", flexShrink: 0 }}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 style={{ width: 14, height: 14 }} />
                   </button>
                 </div>
               ))}
@@ -309,20 +263,12 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 border-t pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900"
-            >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, borderTop: "1px solid var(--k-border-subtle)", paddingTop: 16 }}>
+            <button type="button" onClick={onClose} className="k-btn-secondary">
               {t("form.cancelButton")}
             </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            <button type="submit" disabled={saving} className="k-btn-primary">
+              {saving && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
               {saving ? t("form.savingButton") : t("form.saveButton")}
             </button>
           </div>

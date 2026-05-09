@@ -8,7 +8,7 @@ import type { AppView } from "@/types";
 import type { Ticket } from "@kairo/types";
 
 // ---------------------------------------------------------------------------
-// SLA badge (reuses ticketCard i18n keys, consistent with ticket-card.tsx)
+// SLA badge
 // ---------------------------------------------------------------------------
 
 function SlaBadge({ slaDate, breached }: { slaDate: string | null | undefined; breached: boolean }) {
@@ -16,7 +16,7 @@ function SlaBadge({ slaDate, breached }: { slaDate: string | null | undefined; b
 
   if (breached) {
     return (
-      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-red-100 text-red-700">
+      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4, background: "#FEF2F2", color: "#DC2626", textTransform: "uppercase", letterSpacing: "0.03em" }}>
         {t("ticketCard.slaBreached")}
       </span>
     );
@@ -26,7 +26,7 @@ function SlaBadge({ slaDate, breached }: { slaDate: string | null | undefined; b
   const diff = new Date(slaDate).getTime() - Date.now();
   if (diff <= 0) {
     return (
-      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-red-100 text-red-700">
+      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4, background: "#FEF2F2", color: "#DC2626", textTransform: "uppercase", letterSpacing: "0.03em" }}>
         {t("ticketCard.slaBreached")}
       </span>
     );
@@ -40,7 +40,7 @@ function SlaBadge({ slaDate, breached }: { slaDate: string | null | undefined; b
     : t("ticketCard.slaMinutes_other", { count: totalMins });
 
   return (
-    <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-zinc-100 text-zinc-600">
+    <span style={{ fontSize: 10, fontWeight: 500, padding: "2px 6px", borderRadius: 4, background: "var(--k-surface-2)", color: "var(--k-text-tertiary)" }}>
       {label}
     </span>
   );
@@ -99,79 +99,87 @@ export function AwaitingCustomerView({ onViewChange }: AwaitingCustomerViewProps
   };
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-zinc-50">
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--k-surface)" }}>
       {/* Header */}
-      <div className="border-b bg-white px-6 py-4">
-        <h1 className="text-lg font-semibold text-zinc-900">
+      <div style={{ borderBottom: "1px solid var(--k-border)", background: "white", padding: "16px 24px", flexShrink: 0 }}>
+        <h1 style={{ fontSize: 18, fontWeight: 600, color: "var(--k-text-primary)", letterSpacing: "-0.01em", fontFamily: "var(--k-font-display)", margin: 0 }}>
           {t("awaitingView.title")}
         </h1>
-        <p className="mt-0.5 text-sm text-zinc-500">
+        <p style={{ marginTop: 2, fontSize: 13, color: "var(--k-text-tertiary)" }}>
           {t("awaitingView.subtitle")}
         </p>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
         {loading && (
-          <div className="flex items-center justify-center py-16">
-            <Clock className="h-5 w-5 animate-spin text-zinc-400" />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
+            <Clock style={{ width: 20, height: 20, color: "var(--k-text-tertiary)" }} className="animate-spin" />
           </div>
         )}
 
         {!loading && tickets.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-zinc-500 text-sm">{t("awaitingView.empty")}</p>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 80, textAlign: "center" }}>
+            <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t("awaitingView.empty")}</p>
           </div>
         )}
 
         {!loading && tickets.length > 0 && (
-          <ul className="space-y-2">
+          <ul style={{ display: "flex", flexDirection: "column", gap: 8, listStyle: "none", margin: 0, padding: 0 }}>
             {tickets.map((ticket) => (
               <li
                 key={ticket.id}
-                className="group flex items-center gap-4 rounded-lg border bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  borderRadius: 10,
+                  border: "1px solid var(--k-border)",
+                  background: "white",
+                  padding: "12px 16px",
+                  boxShadow: "0 1px 2px rgba(9,9,11,0.04)",
+                }}
               >
                 {/* Left: number + subject + client */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="shrink-0 text-xs font-medium text-zinc-400">
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                    <span style={{ fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", flexShrink: 0 }}>
                       {t("awaitingView.ticketNumber", { number: ticket.ticket_number })}
                     </span>
                     {(ticket.sla_breached || ticket.sla_due_at) && (
                       <SlaBadge slaDate={ticket.sla_due_at} breached={ticket.sla_breached ?? false} />
                     )}
                     {ticket.sla_breached && (
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />
+                      <AlertTriangle style={{ width: 13, height: 13, color: "#EF4444", flexShrink: 0 }} />
                     )}
                   </div>
-                  <p className="mt-0.5 truncate text-sm font-medium text-zinc-800">
+                  <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
                     {ticket.subject}
                   </p>
-                  <p className="mt-0.5 truncate text-xs text-zinc-500">
+                  <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
                     {ticket.from_name ?? ticket.from_email}
                   </p>
                 </div>
 
                 {/* Center: last reply time */}
-                <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-zinc-400">
-                  <span className="text-[10px] uppercase tracking-wide">
+                <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                  <span style={{ fontSize: 10, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     {t("awaitingView.lastReply")}
                   </span>
-                  <span className="font-medium text-zinc-600">
+                  <span style={{ fontSize: 12, fontWeight: 500, color: "var(--k-text-secondary)" }}>
                     {relativeTime(ticket.last_response_at)}
                   </span>
                 </div>
 
-                {/* Actions */}
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    onClick={() => openInTriage(ticket)}
-                    className="flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
-                  >
-                    {t("awaitingView.followUp")}
-                    <ArrowRight className="h-3 w-3" />
-                  </button>
-                </div>
+                {/* Action */}
+                <button
+                  onClick={() => openInTriage(ticket)}
+                  className="k-btn-secondary"
+                  style={{ flexShrink: 0, height: 30, fontSize: 12 }}
+                >
+                  {t("awaitingView.followUp")}
+                  <ArrowRight style={{ width: 12, height: 12 }} />
+                </button>
               </li>
             ))}
           </ul>
