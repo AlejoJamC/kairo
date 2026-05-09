@@ -16,6 +16,7 @@
     "@kairo/env": "workspace:*",
     "@kairo/types": "workspace:*",
     "@kairo/ui": "workspace:*",
+    "@tamagui/core": "^1.144.3",
     "@supabase/supabase-js": "^2.105.3",
     "@t3-oss/env-core": "^0.13.11",
     "@tailwindcss/vite": "^4.2.4",

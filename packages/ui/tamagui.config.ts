@@ -129,10 +129,11 @@ const displayFont = createFont({
     6:    '600',
     true: '400',
   },
+  // Tamagui letterSpacing is in pixels; -0.02em@48px ≈ -1px, -0.03em@72px ≈ -2px
   letterSpacing: {
-    8:    '-0.02em',
-    9:    '-0.03em',
-    true: '0em',
+    8:    -1,
+    9:    -2,
+    true: 0,
   },
 })
 
@@ -163,7 +164,7 @@ const bodyFont = createFont({
     true: '400',
   },
   letterSpacing: {
-    true: '0em',
+    true: 0,
   },
 })
 
@@ -182,8 +183,9 @@ const monoFont = createFont({
   weight: {
     true: '500',
   },
+  // 0.02em at 13px ≈ 0.26px; rounded to 0.25
   letterSpacing: {
-    true: '0.02em',
+    true: 0.25,
   },
 })
 
