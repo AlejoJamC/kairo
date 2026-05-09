@@ -3,7 +3,11 @@
   "compilerOptions": {
     "jsx": "react-native",
     "lib": ["ES2022"],
-    "noEmit": true
+    "noEmit": true,
+    // Resolve the "react-native" exports condition in @kairo/ui so TypeScript
+    // sees index.native.ts (RN-safe barrel) instead of index.ts, which
+    // re-exports web files that use DOM APIs (document, createPortal, etc.).
+    "customConditions": ["react-native"]
   },
   "include": ["app", "**/*.ts", "**/*.tsx"]
 }

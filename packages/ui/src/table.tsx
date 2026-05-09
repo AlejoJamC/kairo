@@ -1,102 +1,125 @@
-import * as React from "react"
+// Web implementation — HTML <table> elements styled via Tamagui tokens.
+// <table> does not exist in React Native; Metro resolves table.native.tsx
+// which exports lightweight stubs so shared code compiles on RN.
 
-import { cn } from "./lib/utils"
+import { styled, Stack } from '@tamagui/core'
+import type { ComponentProps } from 'react'
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+// ─── Container (scrollable wrapper) ──────────────────────────────────────────
+
+const TableContainer = styled(Stack, {
+  name: 'TableContainer',
+  position: 'relative',
+  width: '100%',
+  // @ts-ignore — overflowX is valid CSS
+  overflowX: 'auto',
+})
+
+// ─── Typed wrappers over native HTML elements ─────────────────────────────────
+// Tamagui's styled() doesn't support <table>/<thead> etc., so we use
+// lightweight function components that pass Tamagui theme values inline.
+
+type TableProps = ComponentProps<'table'> & { style?: object }
+type TheadProps = ComponentProps<'thead'> & { style?: object }
+type TbodyProps = ComponentProps<'tbody'> & { style?: object }
+type TfootProps = ComponentProps<'tfoot'> & { style?: object }
+type TrProps    = ComponentProps<'tr'>    & { style?: object }
+type ThProps    = ComponentProps<'th'>    & { style?: object }
+type TdProps    = ComponentProps<'td'>    & { style?: object }
+type CaptionProps = ComponentProps<'caption'> & { style?: object }
+
+function Table({ style, ...props }: TableProps) {
   return (
-    <div
-      data-slot="table-container"
-      className="relative w-full overflow-x-auto"
-    >
+    <TableContainer>
       <table
-        data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: 14,
+          captionSide: 'bottom',
+          ...style,
+        }}
         {...props}
       />
-    </div>
+    </TableContainer>
   )
 }
 
-function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return (
-    <thead
-      data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
-      {...props}
-    />
-  )
+function TableHeader({ style, ...props }: TheadProps) {
+  return <thead style={{ borderBottom: '1px solid var(--border)', ...style }} {...props} />
 }
 
-function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
-  return (
-    <tbody
-      data-slot="table-body"
-      className={cn("[&_tr:last-child]:border-0", className)}
-      {...props}
-    />
-  )
+function TableBody({ style, ...props }: TbodyProps) {
+  return <tbody style={style} {...props} />
 }
 
-function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
+function TableFooter({ style, ...props }: TfootProps) {
   return (
     <tfoot
-      data-slot="table-footer"
-      className={cn(
-        "bg-muted/50 border-t font-medium [&>tr]:last:border-b-0",
-        className
-      )}
+      style={{
+        borderTop: '1px solid var(--border)',
+        fontWeight: 500,
+        backgroundColor: 'rgba(0,0,0,0.02)',
+        ...style,
+      }}
       {...props}
     />
   )
 }
 
-function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+function TableRow({ style, ...props }: TrProps) {
   return (
     <tr
-      data-slot="table-row"
-      className={cn(
-        "hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors",
-        className
-      )}
+      style={{
+        borderBottom: '1px solid var(--border)',
+        transition: 'background-color 0.15s',
+        ...style,
+      }}
       {...props}
     />
   )
 }
 
-function TableHead({ className, ...props }: React.ComponentProps<"th">) {
+function TableHead({ style, ...props }: ThProps) {
   return (
     <th
-      data-slot="table-head"
-      className={cn(
-        "text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
-        className
-      )}
+      style={{
+        height: 40,
+        padding: '0 8px',
+        textAlign: 'left',
+        verticalAlign: 'middle',
+        fontWeight: 500,
+        whiteSpace: 'nowrap',
+        ...style,
+      }}
       {...props}
     />
   )
 }
 
-function TableCell({ className, ...props }: React.ComponentProps<"td">) {
+function TableCell({ style, ...props }: TdProps) {
   return (
     <td
-      data-slot="table-cell"
-      className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
-        className
-      )}
+      style={{
+        padding: 8,
+        verticalAlign: 'middle',
+        whiteSpace: 'nowrap',
+        ...style,
+      }}
       {...props}
     />
   )
 }
 
-function TableCaption({
-  className,
-  ...props
-}: React.ComponentProps<"caption">) {
+function TableCaption({ style, ...props }: CaptionProps) {
   return (
     <caption
-      data-slot="table-caption"
-      className={cn("text-muted-foreground mt-4 text-sm", className)}
+      style={{
+        marginTop: 16,
+        fontSize: 14,
+        color: 'var(--color-secondary)',
+        ...style,
+      }}
       {...props}
     />
   )

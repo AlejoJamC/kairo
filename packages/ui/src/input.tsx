@@ -1,21 +1,90 @@
-import * as React from "react"
+import { styled, type GetProps } from '@tamagui/core'
+import { Input as TamaguiInput } from '@tamagui/input'
 
-import { cn } from "./lib/utils"
+// ─── Styled primitive ────────────────────────────────────────────────────────
+// Built on @tamagui/input which normalises:
+//   web  → value + onChange
+//   RN   → value + onChangeText
+// `unstyled` opts out of the package's default tokens so we can apply
+// the Kairo design system values directly.
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+const InputFrame = styled(TamaguiInput, {
+  name: 'Input',
+  unstyled: true,
+
+  // Layout
+  width: '100%',
+  minWidth: 0,
+  height: 36,            // h-9 → 36px
+  paddingHorizontal: 12, // px-3
+  paddingVertical: 4,    // py-1
+
+  // Shape
+  borderRadius: '$input', // 6px from our tokens
+  borderWidth: 1,
+
+  // Colors
+  borderColor: '$borderColor',
+  backgroundColor: '$background',
+  color: '$color',
+  placeholderTextColor: '$colorTertiary',
+
+  outlineWidth: 0,       // remove browser default outline (replaced by focusStyle)
+
+  // States
+  hoverStyle: {
+    borderColor: '$primary',
+  },
+
+  focusStyle: {
+    borderColor: '$primary',
+    outlineColor: '$primary',
+    outlineWidth: 2,
+    outlineStyle: 'solid',
+    outlineOffset: 0,
+  },
+
+  variants: {
+    /** Visual error state — set when the field is invalid */
+    invalid: {
+      true: {
+        borderColor: '$danger',
+        focusStyle: {
+          borderColor: '$danger',
+          outlineColor: '$danger',
+          outlineWidth: 2,
+          outlineStyle: 'solid',
+        },
+      },
+    },
+
+    disabled: {
+      true: {
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+    },
+  } as const,
+
+  defaultVariants: {
+    invalid: false,
+    disabled: false,
+  },
+})
+
+// ─── Public component ────────────────────────────────────────────────────────
+
+type InputProps = GetProps<typeof InputFrame>
+
+function Input({ disabled, ...props }: InputProps) {
   return (
-    <input
-      type={type}
-      data-slot="input"
-      className={cn(
-        "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-        "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-        "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
-        className
-      )}
+    <InputFrame
+      disabled={disabled}
+      editable={disabled ? false : undefined} // RN equivalent of disabled
       {...props}
     />
   )
 }
 
 export { Input }
+export type { InputProps }

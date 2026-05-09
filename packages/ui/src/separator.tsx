@@ -1,25 +1,56 @@
-"use client"
+import { styled, Stack, type GetProps } from '@tamagui/core'
 
-import * as React from "react"
-import { Separator as SeparatorPrimitive } from "radix-ui"
+// ─── Styled primitive ────────────────────────────────────────────────────────
+// Built on Stack (Tamagui's cross-platform View) so it renders on web and RN
+// without any conditional code paths.
 
-import { cn } from "./lib/utils"
+const SeparatorFrame = styled(Stack, {
+  name: 'Separator',
+  flexShrink: 0,
+  backgroundColor: '$borderColor',
+
+  variants: {
+    orientation: {
+      horizontal: {
+        height: 1,
+        width: '100%',
+      },
+      vertical: {
+        width: 1,
+        alignSelf: 'stretch',
+      },
+    },
+  } as const,
+
+  defaultVariants: {
+    orientation: 'horizontal',
+  },
+})
+
+// ─── Public component ────────────────────────────────────────────────────────
+
+type SeparatorProps = GetProps<typeof SeparatorFrame> & {
+  /** Match Radix API: horizontal (default) | vertical */
+  orientation?: 'horizontal' | 'vertical'
+  /**
+   * Web-only ARIA: when true the separator is presentational (aria-hidden).
+   * Ignored on React Native. Default: true.
+   */
+  decorative?: boolean
+}
 
 function Separator({
-  className,
-  orientation = "horizontal",
+  orientation = 'horizontal',
   decorative = true,
   ...props
-}: React.ComponentProps<typeof SeparatorPrimitive.Root>) {
+}: SeparatorProps) {
   return (
-    <SeparatorPrimitive.Root
-      data-slot="separator"
-      decorative={decorative}
+    <SeparatorFrame
       orientation={orientation}
-      className={cn(
-        "bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
-        className
-      )}
+      // aria-* props are passed through to the DOM on web, ignored on RN
+      aria-hidden={decorative ? true : undefined}
+      aria-orientation={!decorative ? orientation : undefined}
+      role={decorative ? 'none' : 'separator'}
       {...props}
     />
   )

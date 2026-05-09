@@ -1,85 +1,94 @@
-import * as React from "react"
+import { styled, Stack, Text, type GetProps } from '@tamagui/core'
 
-import { cn } from "./lib/utils"
+// ─── Card ────────────────────────────────────────────────────────────────────
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card"
-      className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+const Card = styled(Stack, {
+  name: 'Card',
+  flexDirection: 'column',
+  backgroundColor: '$background',
+  borderRadius: '$card',
+  borderWidth: 1,
+  borderColor: '$borderColor',
+  paddingVertical: '$5',   // 24px
+  gap: '$5',               // 24px
+  // Web shadow — ignored on RN (use elevation there if needed)
+  shadowColor: '$black',
+  shadowOpacity: 0.05,
+  shadowRadius: 4,
+  shadowOffset: { width: 0, height: 1 },
+})
 
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-header"
-      className={cn(
-        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+// ─── CardHeader ──────────────────────────────────────────────────────────────
+// Original used CSS Container Query (@container/card-header) for the
+// action-column layout. That's web-only; on RN we use XStack with flex.
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
-      {...props}
-    />
-  )
-}
+const CardHeader = styled(Stack, {
+  name: 'CardHeader',
+  flexDirection: 'row',
+  alignItems: 'flex-start',
+  gap: '$2',               // 8px
+  paddingHorizontal: '$5', // 24px
+  flexWrap: 'wrap',
+})
 
-function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-description"
-      className={cn("text-muted-foreground text-sm", className)}
-      {...props}
-    />
-  )
-}
+// ─── CardTitle ───────────────────────────────────────────────────────────────
 
-function CardAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-action"
-      className={cn(
-        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+const CardTitle = styled(Text, {
+  name: 'CardTitle',
+  fontSize: '$5',          // 20px (card h3 in type scale)
+  fontWeight: '600',
+  lineHeight: 20,
+  color: '$color',
+  flexShrink: 1,
+})
 
-function CardContent({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-content"
-      className={cn("px-6", className)}
-      {...props}
-    />
-  )
-}
+// ─── CardDescription ─────────────────────────────────────────────────────────
 
-function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-footer"
-      className={cn("flex items-center px-6 [.border-t]:pt-6", className)}
-      {...props}
-    />
-  )
-}
+const CardDescription = styled(Text, {
+  name: 'CardDescription',
+  fontSize: '$3',          // 14px
+  color: '$colorSecondary',
+  lineHeight: 20,
+  flexShrink: 1,
+})
+
+// ─── CardAction ──────────────────────────────────────────────────────────────
+// Positioned to the trailing end of CardHeader. On web the original used
+// CSS grid; here we use marginLeft: 'auto' which works on both platforms.
+
+const CardAction = styled(Stack, {
+  name: 'CardAction',
+  flexDirection: 'column',
+  marginLeft: 'auto',
+  alignSelf: 'flex-start',
+})
+
+// ─── CardContent ─────────────────────────────────────────────────────────────
+
+const CardContent = styled(Stack, {
+  name: 'CardContent',
+  flexDirection: 'column',
+  paddingHorizontal: '$5', // 24px
+})
+
+// ─── CardFooter ──────────────────────────────────────────────────────────────
+
+const CardFooter = styled(Stack, {
+  name: 'CardFooter',
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: '$5', // 24px
+})
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type CardProps        = GetProps<typeof Card>
+type CardHeaderProps  = GetProps<typeof CardHeader>
+type CardTitleProps   = GetProps<typeof CardTitle>
+type CardDescriptionProps = GetProps<typeof CardDescription>
+type CardActionProps  = GetProps<typeof CardAction>
+type CardContentProps = GetProps<typeof CardContent>
+type CardFooterProps  = GetProps<typeof CardFooter>
 
 export {
   Card,
@@ -89,4 +98,14 @@ export {
   CardAction,
   CardDescription,
   CardContent,
+}
+
+export type {
+  CardProps,
+  CardHeaderProps,
+  CardTitleProps,
+  CardDescriptionProps,
+  CardActionProps,
+  CardContentProps,
+  CardFooterProps,
 }
