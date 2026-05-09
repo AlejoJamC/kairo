@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Paperclip, Send, X, Zap } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@kairo/ui";
 import { useTranslation } from "react-i18next";
 import { TemplatePicker } from "./template-picker";
 import { useTriageStore } from "@/stores/triage-store";
@@ -105,7 +105,7 @@ export function ReplyBar() {
             size="sm"
             className="text-xs"
             disabled={!canSend}
-            onClick={handleSend}
+            onPress={handleSend}
           >
             <Send className="mr-1.5 h-3.5 w-3.5" />
             {sending ? t("replyBar.sending") : t("ticketDetail.send")}

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
+  Card, CardContent, CardHeader, CardTitle,
+  Button,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+} from "@kairo/ui";
 import { useTriageStore } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
 import { KnowledgePanel } from "@/components/knowledge-panel";
@@ -157,7 +157,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
         {/* ── Section 1: Escalación Sugerida ─────────────────────────────── */}
         <Collapsible open={escalationOpen} onOpenChange={setEscalationOpen}>
           <Card className={`gap-0 py-0 border-l-4 shadow-sm hover:shadow-md transition-shadow duration-150 ${accent}`}>
-            <CollapsibleTrigger asChild>
+            <CollapsibleTrigger>
               <CardHeader className="cursor-pointer px-3 py-2.5 rounded-tr-md">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
                   <span className={reasons.length > 0 ? "text-red-600" : "text-zinc-700"}>
@@ -211,7 +211,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                         className="mt-1 w-full"
                         size="sm"
                         disabled={escalating}
-                        onClick={handleEscalate}
+                        onPress={handleEscalate}
                       >
                         {escalating ? t("ai.escalating") : ctaLabel}
                       </Button>
@@ -229,7 +229,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
         {/* ── Section 3: Paquete de Escalación ───────────────────────────── */}
         <Collapsible open={packetOpen} onOpenChange={setPacketOpen}>
           <Card className="gap-0 py-0 shadow-sm hover:shadow-md transition-shadow duration-150">
-            <CollapsibleTrigger asChild>
+            <CollapsibleTrigger>
               <CardHeader className="cursor-pointer px-3 py-2.5">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
                   {t("ai.escalationPacket")}
@@ -292,7 +292,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                             variant="outline"
                             size="sm"
                             className="flex-1 text-xs"
-                            onClick={() => setEditMode(false)}
+                            onPress={() => setEditMode(false)}
                           >
                             {t("ai.cancelEdit")}
                           </Button>
@@ -300,7 +300,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                             size="sm"
                             className="flex-1 text-xs"
                             disabled={escalating}
-                            onClick={handleEscalate}
+                            onPress={handleEscalate}
                           >
                             {escalating ? t("ai.escalating") : t("ai.confirmEscalation")}
                           </Button>
@@ -311,7 +311,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                             variant="outline"
                             size="sm"
                             className="text-xs"
-                            onClick={() => setEditMode(true)}
+                            onPress={() => setEditMode(true)}
                           >
                             {t("ai.editDetails")}
                           </Button>
@@ -319,7 +319,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                             size="sm"
                             className="flex-1 text-xs"
                             disabled={escalating}
-                            onClick={handleEscalate}
+                            onPress={handleEscalate}
                           >
                             {escalating ? t("ai.escalating") : ctaLabel}
                           </Button>
