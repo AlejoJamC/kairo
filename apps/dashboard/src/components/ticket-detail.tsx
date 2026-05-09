@@ -1,4 +1,4 @@
-import { Mail } from "lucide-react";
+import { Mail, Sparkles } from "lucide-react";
 import { ReplyBar } from "./reply-bar";
 import { TicketHeader } from "./ticket-header";
 import { useTriageStore } from "@/stores/triage-store";
@@ -13,38 +13,123 @@ export function TicketDetail() {
 
   if (!ticket) {
     return (
-      <div className="flex min-w-0 flex-1 flex-col items-center justify-center bg-zinc-50">
-        <Mail className="mb-3 h-10 w-10 text-zinc-300" />
-        <p className="text-sm text-zinc-400">Select a ticket to view details</p>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "var(--k-surface)",
+          gap: 8,
+        }}
+      >
+        <Mail style={{ width: 40, height: 40, color: "var(--k-border)" }} />
+        <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>
+          Select a ticket to view details
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-zinc-50">
+    <div
+      style={{
+        flex: 1,
+        minWidth: 0,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        background: "var(--k-surface)",
+      }}
+    >
       <TicketHeader ticket={ticket} />
 
       {/* Scrollable body */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-        <div className="rounded-lg border border-zinc-200 bg-white p-5">
-          {ticket.body_plain ? (
-            <pre className="overflow-x-hidden whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-zinc-800">
-              {ticket.body_plain}
-            </pre>
-          ) : ticket.snippet ? (
-            <p className="text-sm leading-relaxed text-zinc-800">{ticket.snippet}</p>
-          ) : (
-            <p className="text-sm italic text-zinc-400">No email body available.</p>
-          )}
-        </div>
-
-        {/* AI reasoning (if classified) */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          padding: "20px 28px",
+        }}
+      >
+        {/* AI annotation row — only when classified */}
         {ticket.ai_reasoning && (
-          <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
-            <p className="mb-1 text-xs font-semibold text-blue-700">AI Reasoning</p>
-            <p className="text-xs leading-relaxed text-blue-800">{ticket.ai_reasoning}</p>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              alignItems: "flex-start",
+              marginBottom: 16,
+              padding: "8px 10px",
+              background: "var(--k-accent-subtle)",
+              borderRadius: 6,
+              border: "1px solid #DBE3FF",
+            }}
+          >
+            <Sparkles
+              style={{ width: 13, height: 13, color: "var(--k-accent)", flexShrink: 0, marginTop: 1 }}
+            />
+            <div
+              style={{ fontSize: 12, color: "var(--k-text-secondary)", flex: 1, lineHeight: 1.5 }}
+            >
+              <span style={{ color: "var(--k-accent)", fontWeight: 500 }}>
+                Triage Intelligence
+              </span>{" "}
+              {ticket.ai_reasoning}
+            </div>
           </div>
         )}
+
+        {/* Email body card */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid var(--k-border)",
+            borderRadius: 12,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "18px 16px 22px",
+              fontSize: 14,
+              color: "var(--k-text-primary)",
+              lineHeight: 1.65,
+            }}
+          >
+            {ticket.body_plain ? (
+              <pre
+                style={{
+                  fontFamily: "inherit",
+                  fontSize: 14,
+                  lineHeight: 1.65,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  overflowX: "hidden",
+                  color: "var(--k-text-primary)",
+                  margin: 0,
+                }}
+              >
+                {ticket.body_plain}
+              </pre>
+            ) : ticket.snippet ? (
+              <p style={{ margin: 0, lineHeight: 1.65 }}>{ticket.snippet}</p>
+            ) : (
+              <p
+                style={{
+                  margin: 0,
+                  fontStyle: "italic",
+                  color: "var(--k-text-tertiary)",
+                }}
+              >
+                No email body available.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Fixed bottom reply bar */}

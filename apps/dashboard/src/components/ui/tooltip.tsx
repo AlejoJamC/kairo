@@ -19,8 +19,9 @@ function TooltipContent({
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
         sideOffset={sideOffset}
+        style={{ background: "#18181B", color: "#F4F4F5" }}
         className={cn(
-          "z-50 overflow-hidden rounded-md bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100 shadow-md",
+          "z-50 overflow-hidden rounded-md px-2.5 py-1.5 text-xs shadow-md",
           "animate-in fade-in-0 zoom-in-95",
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
           "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",
@@ -30,7 +31,7 @@ function TooltipContent({
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="fill-zinc-800" />
+        <TooltipPrimitive.Arrow style={{ fill: "#18181B" }} />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   )

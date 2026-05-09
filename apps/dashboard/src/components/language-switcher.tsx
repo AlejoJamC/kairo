@@ -1,10 +1,4 @@
 import { Globe } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@kairo/ui";
 import { useLocale } from "@/hooks/useLocale";
 import type { SupportedLanguage } from "@/i18n/types";
 
@@ -13,28 +7,30 @@ export function LanguageSwitcher() {
     useLocale();
 
   return (
-    <DropdownMenu>
-      {/* asChild removed — DropdownMenuTrigger is already a <button>; use Tailwind classes for ghost/sm visual parity */}
-      <DropdownMenuTrigger className="flex h-8 items-center gap-1.5 rounded-md px-3 text-sm hover:bg-accent transition-colors">
-        <Globe className="h-4 w-4" />
-        <span className="text-xs">
-          {languageMeta[language].nativeLabel}
-        </span>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
+    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+      <Globe
+        style={{
+          position: "absolute",
+          left: 8,
+          width: 13,
+          height: 13,
+          color: "var(--k-text-tertiary)",
+          pointerEvents: "none",
+          zIndex: 1,
+        }}
+      />
+      <select
+        className="k-select"
+        value={language}
+        onChange={(e) => setLanguage(e.target.value as SupportedLanguage)}
+        style={{ paddingLeft: 26, height: 30, fontSize: 12, minWidth: 110 }}
+      >
         {supportedLanguages.map((lang: SupportedLanguage) => (
-          <DropdownMenuItem
-            key={lang}
-            onPress={() => setLanguage(lang)}
-            className={lang === language ? "bg-accent" : ""}
-          >
-            <span className="mr-2 text-sm">{languageMeta[lang].nativeLabel}</span>
-            {lang === language && (
-              <span className="ml-auto text-xs text-muted-foreground">✓</span>
-            )}
-          </DropdownMenuItem>
+          <option key={lang} value={lang}>
+            {languageMeta[lang].nativeLabel}
+          </option>
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </select>
+    </div>
   );
 }

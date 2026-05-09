@@ -45,27 +45,67 @@ export function SyncButton({ onSyncComplete }: SyncButtonProps) {
   };
 
   return (
-    <div className="border-b px-4 py-3">
+    <div
+      style={{
+        borderBottom: "1px solid var(--k-border-subtle)",
+        padding: "6px 14px 8px",
+      }}
+    >
       <button
         onClick={handleSync}
         disabled={syncing}
-        className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-zinc-300 transition-colors"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          fontSize: 11,
+          padding: "4px 9px",
+          borderRadius: 5,
+          border: "1px solid var(--k-border)",
+          color: syncing ? "var(--k-text-tertiary)" : "var(--k-text-secondary)",
+          background: "white",
+          fontFamily: "var(--k-font-mono)",
+          cursor: syncing ? "not-allowed" : "pointer",
+          opacity: syncing ? 0.6 : 1,
+        }}
       >
-        <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
-        {syncing ? 'Syncing...' : 'Sync Gmail'}
+        <RefreshCw
+          style={{ width: 11, height: 11 }}
+          className={syncing ? 'animate-spin' : ''}
+        />
+        {syncing ? 'Syncing…' : 'Sync Gmail'}
       </button>
 
       {summary && (
-        <div className="mt-2 rounded-md bg-green-50 border border-green-200 p-2 text-xs text-green-800">
-          <p className="font-medium">Sync complete</p>
-          <p className="mt-0.5 text-green-700">
-            {summary.created} new · {summary.skipped} skipped
-          </p>
+        <div
+          style={{
+            marginTop: 6,
+            padding: "5px 8px",
+            borderRadius: 4,
+            background: "#ECFDF5",
+            border: "1px solid #A7F3D0",
+            fontSize: 11,
+            color: "#065F46",
+            fontFamily: "var(--k-font-mono)",
+          }}
+        >
+          {summary.created} new · {summary.skipped} skipped
         </div>
       )}
 
       {error && (
-        <div className="mt-2 rounded-md bg-red-50 border border-red-200 p-2 text-xs text-red-800">
+        <div
+          style={{
+            marginTop: 6,
+            padding: "5px 8px",
+            borderRadius: 4,
+            background: "#FEF2F2",
+            border: "1px solid #FECACA",
+            fontSize: 11,
+            color: "#991B1B",
+            fontFamily: "var(--k-font-mono)",
+          }}
+        >
           {error}
         </div>
       )}

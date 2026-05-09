@@ -117,8 +117,8 @@ export const tier1FastPath = inngest.createFunction(
   {
     id: "tier1-fast-path",
     concurrency: { limit: env.FAST_PATH_CONCURRENCY },
+    triggers: [{ event: "pipeline/tier1.triggered" }],
   },
-  { event: "pipeline/tier1.triggered" },
   async ({ event, step }) => {
     const { userId, gmailAccessToken } = event.data;
 

@@ -331,8 +331,8 @@ export const tier3Deferred = inngest.createFunction(
   {
     id: "tier3-deferred",
     concurrency: { limit: env.BACKGROUND_CONCURRENCY },
+    triggers: [{ event: "pipeline/tier3.triggered" }],
   },
-  { event: "pipeline/tier3.triggered" },
   async ({ event, step }) => {
     const { userId } = event.data;
 

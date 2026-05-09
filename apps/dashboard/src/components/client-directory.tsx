@@ -1,35 +1,48 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Building2, Search, Plus, Edit2, Trash2, Loader2 } from "lucide-react";
-import {
-  Input,
-  Badge,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@kairo/ui";
+import { Building2, Search, Plus, Edit2, Trash2, Loader2, X } from "lucide-react";
+import { Input } from "@kairo/ui";
 import { ClientFormModal } from "@/components/client-form-modal";
 import { apiCall } from "@/lib/api-client";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
 
-const planColors: Record<PlanType, string> = {
-  Enterprise: "bg-violet-100 text-violet-800 hover:bg-violet-100",
-  Pro: "bg-blue-100 text-blue-800 hover:bg-blue-100",
-  Starter: "bg-gray-100 text-gray-800 hover:bg-gray-100",
+// ---------------------------------------------------------------------------
+// Badge helpers
+// ---------------------------------------------------------------------------
+
+const planStyle: Record<PlanType, { bg: string; color: string }> = {
+  Enterprise: { bg: "#F3F0FF", color: "#6D28D9" },
+  Pro:        { bg: "#EEF2FF", color: "#2B5BFF" },
+  Starter:    { bg: "#F4F4F5", color: "#52525B" },
 };
 
-const slaColors: Record<SlaLevel, string> = {
-  Critical: "bg-red-100 text-red-800 hover:bg-red-100",
-  High: "bg-amber-100 text-amber-800 hover:bg-amber-100",
-  Standard: "bg-green-100 text-green-800 hover:bg-green-100",
+const slaStyle: Record<SlaLevel, { bg: string; color: string }> = {
+  Critical: { bg: "#FEF2F2", color: "#DC2626" },
+  High:     { bg: "#FFFBEB", color: "#B45309" },
+  Standard: { bg: "#ECFDF5", color: "#047857" },
 };
+
+function PlanBadge({ plan }: { plan: PlanType }) {
+  const s = planStyle[plan];
+  return (
+    <span style={{ fontSize: 11, fontWeight: 500, padding: "2px 7px", borderRadius: 999, background: s.bg, color: s.color }}>
+      {plan}
+    </span>
+  );
+}
+
+function SlaBadge({ level }: { level: SlaLevel }) {
+  const s = slaStyle[level];
+  return (
+    <span style={{ fontSize: 11, fontWeight: 500, padding: "2px 7px", borderRadius: 999, background: s.bg, color: s.color }}>
+      {level}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function mapRow(row: Record<string, unknown>): Client {
   return {
@@ -44,6 +57,10 @@ function mapRow(row: Record<string, unknown>): Client {
     slaLevel: (row.sla_level as SlaLevel | null) ?? null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// ClientDirectory
+// ---------------------------------------------------------------------------
 
 export function ClientDirectory() {
   const { t } = useTranslation("clients");
@@ -63,9 +80,7 @@ export function ClientDirectory() {
     try {
       const res = await apiCall("/bff/clients");
       const data = await res.json();
-      setClients(
-        (data.clients as Record<string, unknown>[]).map(mapRow)
-      );
+      setClients((data.clients as Record<string, unknown>[]).map(mapRow));
     } catch {
       // leave empty on error
     } finally {
@@ -83,14 +98,11 @@ export function ClientDirectory() {
       }
       return [...prev, saved].sort((a, b) => a.name.localeCompare(b.name));
     });
-    // Refresh detail sheet if it was the selected client
     if (selectedClient?.id === saved.id) setSelectedClient(saved);
   };
 
   const handleDelete = async (client: Client) => {
-    const confirmed = window.confirm(
-      t("actions.confirmDelete", { name: client.name })
-    );
+    const confirmed = window.confirm(t("actions.confirmDelete", { name: client.name }));
     if (!confirmed) return;
 
     setDeleting(client.id);
@@ -128,235 +140,250 @@ export function ClientDirectory() {
 
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center gap-2 text-sm text-zinc-400">
-        <Loader2 className="h-4 w-4 animate-spin" />
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 13, color: "var(--k-text-tertiary)" }}>
+        <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" />
         {t("loading")}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-white">
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--k-surface)" }}>
       {/* Header */}
-      <div className="flex items-center gap-3 border-b px-6 py-4">
-        <Building2 className="h-5 w-5 text-zinc-600" />
-        <h1 className="text-lg font-semibold">{t("title")}</h1>
-        <div className="relative ml-auto flex items-center gap-3">
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--k-border)", background: "white", padding: "16px 24px", flexShrink: 0 }}>
+        <Building2 style={{ width: 18, height: 18, color: "var(--k-text-tertiary)" }} />
+        <h1 style={{ fontSize: 18, fontWeight: 600, color: "var(--k-text-primary)", letterSpacing: "-0.01em", fontFamily: "var(--k-font-display)", margin: 0 }}>
+          {t("title")}
+        </h1>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Search */}
+          <div style={{ position: "relative", width: 240 }}>
+            <Search style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "var(--k-text-tertiary)" }} />
             <Input
               value={search}
               onChangeText={(text) => setSearch(text)}
               placeholder={t("searchPlaceholder")}
-              className="pl-9"
+              style={{ paddingLeft: 30 }}
             />
           </div>
           <button
             onClick={openCreate}
-            className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            className="k-btn-primary"
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
           >
-            <Plus className="h-4 w-4" />
+            <Plus style={{ width: 14, height: 14 }} />
             {t("addClient")}
           </button>
         </div>
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto px-6 py-4">
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
         {filtered.length === 0 ? (
-          <div className="flex h-40 items-center justify-center text-sm text-zinc-400">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 160, fontSize: 13, color: "var(--k-text-tertiary)" }}>
             {search.trim() ? t("empty.noResults") : t("empty.noClients")}
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("table.name")}</TableHead>
-                <TableHead>{t("table.planType")}</TableHead>
-                <TableHead>{t("table.slaLevel")}</TableHead>
-                <TableHead className="w-20" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((client) => (
-                <TableRow
-                  key={client.id}
-                  className="cursor-pointer"
-                  onClick={() => setSelectedClient(client)}
-                >
-                  <TableCell>
-                    <div className="font-medium">{client.name}</div>
-                    <div className="text-xs text-zinc-400">{client.internalId}</div>
-                  </TableCell>
-                  <TableCell>
-                    {client.plan && (
-                      <Badge
-                        variant="secondary"
-                        className={planColors[client.plan]}
-                      >
-                        {client.plan}
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {client.slaLevel && (
-                      <Badge
-                        variant="secondary"
-                        className={slaColors[client.slaLevel]}
-                      >
-                        {client.slaLevel}
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <button
-                      onClick={(e) => openEdit(client, e)}
-                      className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-                      title={t("actions.edit")}
-                    >
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(client);
+          <div style={{ borderRadius: 10, border: "1px solid var(--k-border)", background: "white", overflow: "hidden", boxShadow: "0 1px 2px rgba(9,9,11,0.04)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--k-border)" }}>
+                  {[t("table.name"), t("table.planType"), t("table.slaLevel"), ""].map((h, i) => (
+                    <th
+                      key={i}
+                      style={{
+                        padding: "9px 16px",
+                        textAlign: "left",
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: "var(--k-text-tertiary)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        background: "var(--k-surface)",
+                        width: i === 3 ? 80 : undefined,
                       }}
-                      disabled={deleting === client.id}
-                      className="rounded p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
-                      title={t("actions.delete")}
                     >
-                      {deleting === client.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((client, idx) => (
+                  <tr
+                    key={client.id}
+                    onClick={() => setSelectedClient(client)}
+                    style={{
+                      cursor: "pointer",
+                      borderBottom: idx < filtered.length - 1 ? "1px solid var(--k-border-subtle)" : "none",
+                      transition: "background 0.1s",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--k-surface)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)" }}>{client.name}</div>
+                      <div style={{ fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", marginTop: 1 }}>{client.internalId}</div>
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      {client.plan && <PlanBadge plan={client.plan} />}
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      {client.slaLevel && <SlaBadge level={client.slaLevel} />}
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                      <button
+                        onClick={(e) => openEdit(client, e)}
+                        title={t("actions.edit")}
+                        style={{ borderRadius: 6, padding: 5, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", marginRight: 2 }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--k-surface-2)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--k-text-secondary)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; (e.currentTarget as HTMLButtonElement).style.color = "var(--k-text-tertiary)"; }}
+                      >
+                        <Edit2 style={{ width: 13, height: 13 }} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(client); }}
+                        disabled={deleting === client.id}
+                        title={t("actions.delete")}
+                        style={{ borderRadius: 6, padding: 5, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", opacity: deleting === client.id ? 0.5 : 1 }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#FEF2F2"; (e.currentTarget as HTMLButtonElement).style.color = "#DC2626"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; (e.currentTarget as HTMLButtonElement).style.color = "var(--k-text-tertiary)"; }}
+                      >
+                        {deleting === client.id ? (
+                          <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />
+                        ) : (
+                          <Trash2 style={{ width: 13, height: 13 }} />
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* Detail Sheet */}
-      <Sheet
-        open={selectedClient !== null}
-        onOpenChange={(open) => !open && setSelectedClient(null)}
-      >
-        <SheetContent className="overflow-y-auto sm:max-w-md">
-          {selectedClient && (
-            <>
-              <SheetHeader>
-                <div className="flex items-start justify-between gap-2">
-                  <SheetTitle>{selectedClient.name}</SheetTitle>
-                  <div className="flex shrink-0 gap-1">
-                    <button
-                      onClick={() => openEdit(selectedClient)}
-                      className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-                      title={t("actions.edit")}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(selectedClient)}
-                      disabled={deleting === selectedClient.id}
-                      className="rounded p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
-                      title={t("actions.delete")}
-                    >
-                      {deleting === selectedClient.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </button>
+      {/* Detail Panel (slide-in from right) */}
+      {selectedClient && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setSelectedClient(null)}
+            style={{ position: "fixed", inset: 0, zIndex: 30, background: "rgba(0,0,0,0.2)" }}
+          />
+          {/* Panel */}
+          <div style={{
+            position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 40,
+            width: 400, background: "white", boxShadow: "-4px 0 16px rgba(9,9,11,0.08)",
+            overflowY: "auto", display: "flex", flexDirection: "column",
+          }}>
+            {/* Panel header */}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "20px 24px 16px", borderBottom: "1px solid var(--k-border)", flexShrink: 0 }}>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--k-text-primary)", fontFamily: "var(--k-font-display)", margin: 0 }}>
+                  {selectedClient.name}
+                </h2>
+                <span style={{ fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>
+                  {selectedClient.internalId}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                <button
+                  onClick={() => openEdit(selectedClient)}
+                  title={t("actions.edit")}
+                  style={{ borderRadius: 6, padding: 6, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)" }}
+                >
+                  <Edit2 style={{ width: 14, height: 14 }} />
+                </button>
+                <button
+                  onClick={() => handleDelete(selectedClient)}
+                  disabled={deleting === selectedClient.id}
+                  title={t("actions.delete")}
+                  style={{ borderRadius: 6, padding: 6, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", opacity: deleting === selectedClient.id ? 0.5 : 1 }}
+                >
+                  {deleting === selectedClient.id ? (
+                    <Loader2 style={{ width: 14, height: 14 }} className="animate-spin" />
+                  ) : (
+                    <Trash2 style={{ width: 14, height: 14 }} />
+                  )}
+                </button>
+                <button
+                  onClick={() => setSelectedClient(null)}
+                  style={{ borderRadius: 6, padding: 6, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", marginLeft: 4 }}
+                >
+                  <X style={{ width: 14, height: 14 }} />
+                </button>
+              </div>
+            </div>
+
+            {/* Panel body */}
+            <div style={{ flex: 1, overflowY: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+              <DetailField label={t("detail.internalId")} value={selectedClient.internalId} mono />
+              <DetailField label={t("detail.legalId")} value={selectedClient.legalId} />
+              <DetailField label={t("detail.telephone")} value={selectedClient.telephone} />
+
+              {/* Plan & SLA */}
+              {(selectedClient.plan || selectedClient.slaLevel) && (
+                <div style={{ display: "flex", gap: 24 }}>
+                  {selectedClient.plan && (
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
+                        {t("detail.plan")}
+                      </p>
+                      <PlanBadge plan={selectedClient.plan} />
+                    </div>
+                  )}
+                  {selectedClient.slaLevel && (
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
+                        {t("detail.sla")}
+                      </p>
+                      <SlaBadge level={selectedClient.slaLevel} />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Authorized Emails */}
+              {selectedClient.authorizedEmails.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
+                    {t("detail.authorizedEmails")}
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {selectedClient.authorizedEmails.map((email) => (
+                      <span
+                        key={email}
+                        style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--k-border)", color: "var(--k-text-secondary)", fontFamily: "var(--k-font-mono)" }}
+                      >
+                        {email}
+                      </span>
+                    ))}
                   </div>
                 </div>
-              </SheetHeader>
+              )}
 
-              <div className="mt-6 space-y-5">
-                <DetailField
-                  label={t("detail.internalId")}
-                  value={selectedClient.internalId}
-                />
-                <DetailField
-                  label={t("detail.legalId")}
-                  value={selectedClient.legalId}
-                />
-                <DetailField
-                  label={t("detail.telephone")}
-                  value={selectedClient.telephone}
-                />
-
-                {/* Plan & SLA */}
-                {(selectedClient.plan || selectedClient.slaLevel) && (
-                  <div className="flex gap-6">
-                    {selectedClient.plan && (
-                      <div>
-                        <p className="text-xs font-medium text-zinc-500">
-                          {t("detail.plan")}
-                        </p>
-                        <Badge
-                          variant="secondary"
-                          className={`mt-1 ${planColors[selectedClient.plan]}`}
-                        >
-                          {selectedClient.plan}
-                        </Badge>
+              {/* Contact Persons */}
+              {selectedClient.contactPersons.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
+                    {t("detail.contactPersons")}
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {selectedClient.contactPersons.map((cp) => (
+                      <div key={cp.name} style={{ borderRadius: 8, border: "1px solid var(--k-border)", padding: "8px 12px" }}>
+                        <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", margin: 0 }}>{cp.name}</p>
+                        <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", margin: 0 }}>{cp.role}</p>
                       </div>
-                    )}
-                    {selectedClient.slaLevel && (
-                      <div>
-                        <p className="text-xs font-medium text-zinc-500">
-                          {t("detail.sla")}
-                        </p>
-                        <Badge
-                          variant="secondary"
-                          className={`mt-1 ${slaColors[selectedClient.slaLevel]}`}
-                        >
-                          {selectedClient.slaLevel}
-                        </Badge>
-                      </div>
-                    )}
+                    ))}
                   </div>
-                )}
-
-                {/* Authorized Emails */}
-                {selectedClient.authorizedEmails.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-zinc-500">
-                      {t("detail.authorizedEmails")}
-                    </p>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {selectedClient.authorizedEmails.map((email) => (
-                        <Badge key={email} variant="outline" className="text-xs">
-                          {email}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Contact Persons */}
-                {selectedClient.contactPersons.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-zinc-500">
-                      {t("detail.contactPersons")}
-                    </p>
-                    <div className="mt-2 space-y-2">
-                      {selectedClient.contactPersons.map((cp) => (
-                        <div key={cp.name} className="rounded-md border px-3 py-2">
-                          <p className="text-sm font-medium">{cp.name}</p>
-                          <p className="text-xs text-zinc-500">{cp.role}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Create / Edit Modal */}
       <ClientFormModal
@@ -369,18 +396,28 @@ export function ClientDirectory() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// DetailField
+// ---------------------------------------------------------------------------
+
 function DetailField({
   label,
   value,
+  mono,
 }: {
   label: string;
   value: string | null;
+  mono?: boolean;
 }) {
   if (!value) return null;
   return (
     <div>
-      <p className="text-xs font-medium text-zinc-500">{label}</p>
-      <p className="mt-0.5 text-sm">{value}</p>
+      <p style={{ fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>
+        {label}
+      </p>
+      <p style={{ fontSize: 13, color: "var(--k-text-primary)", fontFamily: mono ? "var(--k-font-mono)" : undefined, margin: 0 }}>
+        {value}
+      </p>
     </div>
   );
 }
