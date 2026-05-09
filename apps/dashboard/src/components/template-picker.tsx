@@ -88,13 +88,22 @@ export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
           side="top"
           align="end"
           sideOffset={8}
-          className="z-50 w-80 rounded-lg border border-zinc-200 bg-white shadow-lg outline-none animate-in fade-in-0 zoom-in-95"
+          style={{
+            zIndex: 50,
+            width: 320,
+            borderRadius: 10,
+            border: "1px solid var(--k-border)",
+            background: "white",
+            boxShadow: "0 4px 16px rgba(9,9,11,0.08), 0 1px 2px rgba(9,9,11,0.04)",
+            outline: "none",
+          }}
+          className="animate-in fade-in-0 zoom-in-95"
         >
           {/* Search bar */}
-          <div className="flex items-center gap-2 border-b border-zinc-100 px-3 py-2">
-            <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--k-border-subtle)", padding: "8px 12px" }}>
+            <Search style={{ width: 13, height: 13, flexShrink: 0, color: "var(--k-text-tertiary)" }} />
             <input
-              className="flex-1 text-sm text-zinc-700 outline-none placeholder:text-zinc-400"
+              style={{ flex: 1, fontSize: 13, color: "var(--k-text-primary)", outline: "none", background: "none", border: "none" }}
               placeholder={t("templatePicker.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -103,22 +112,22 @@ export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
           </div>
 
           {/* Body */}
-          <div className="flex" style={{ maxHeight: "18rem" }}>
+          <div style={{ display: "flex", maxHeight: "18rem" }}>
             {/* List */}
             <div
-              className="min-w-0 flex-1 overflow-y-auto py-1"
+              style={{ minWidth: 0, flex: 1, overflowY: "auto", padding: "4px 0" }}
               onMouseLeave={() => setHoveredId(null)}
             >
               {loading && (
-                <p className="px-3 py-4 text-center text-xs text-zinc-400">
+                <p style={{ padding: "16px 12px", textAlign: "center", fontSize: 12, color: "var(--k-text-tertiary)" }}>
                   {t("templatePicker.loading")}
                 </p>
               )}
               {error && (
-                <p className="px-3 py-4 text-center text-xs text-red-500">{error}</p>
+                <p style={{ padding: "16px 12px", textAlign: "center", fontSize: 12, color: "#EF4444" }}>{error}</p>
               )}
               {!loading && !error && Object.keys(grouped).length === 0 && (
-                <p className="px-3 py-4 text-center text-xs text-zinc-400">
+                <p style={{ padding: "16px 12px", textAlign: "center", fontSize: 12, color: "var(--k-text-tertiary)" }}>
                   {t("templatePicker.empty")}
                 </p>
               )}
@@ -126,14 +135,24 @@ export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
                 !error &&
                 Object.entries(grouped).map(([category, items]) => (
                   <div key={category}>
-                    <p className="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                    <p style={{ padding: "8px 12px 2px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--k-text-tertiary)" }}>
                       {category}
                     </p>
                     {items.map((tmpl) => (
                       <button
                         key={tmpl.id}
                         type="button"
-                        className="w-full px-3 py-1.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 focus:bg-zinc-50 outline-none"
+                        style={{
+                          width: "100%",
+                          padding: "6px 12px",
+                          textAlign: "left",
+                          fontSize: 13,
+                          color: "var(--k-text-primary)",
+                          background: hoveredId === tmpl.id ? "var(--k-surface)" : "none",
+                          border: "none",
+                          cursor: "pointer",
+                          outline: "none",
+                        }}
                         onMouseEnter={() => setHoveredId(tmpl.id)}
                         onClick={() => {
                           onSelect(tmpl.content);
@@ -147,22 +166,22 @@ export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
                 ))}
             </div>
 
-            {/* Fixed preview panel to avoid hover flicker from layout shifts */}
-            <div className="w-44 shrink-0 overflow-y-auto border-l border-zinc-100 bg-zinc-50 p-3">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+            {/* Fixed preview panel */}
+            <div style={{ width: 176, flexShrink: 0, overflowY: "auto", borderLeft: "1px solid var(--k-border-subtle)", background: "var(--k-surface)", padding: 12 }}>
+              <p style={{ marginBottom: 4, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--k-text-tertiary)" }}>
                 {t("templatePicker.preview")}
               </p>
               {hovered ? (
-                <p className="whitespace-pre-wrap text-xs leading-relaxed text-zinc-600">
+                <p style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.55, color: "var(--k-text-secondary)" }}>
                   {hovered.content}
                 </p>
               ) : (
-                <p className="text-xs text-zinc-400">{t("templatePicker.previewEmpty")}</p>
+                <p style={{ fontSize: 11, color: "var(--k-text-tertiary)" }}>{t("templatePicker.previewEmpty")}</p>
               )}
             </div>
           </div>
 
-          <Popover.Arrow className="fill-white" />
+          <Popover.Arrow style={{ fill: "white" }} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

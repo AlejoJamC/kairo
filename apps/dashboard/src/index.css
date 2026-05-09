@@ -285,6 +285,18 @@
   box-shadow: 0 1px 2px rgba(9, 9, 11, 0.04);
 }
 
+/* Shimmer skeleton animation */
+@keyframes k-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, var(--k-surface-2) 0%, var(--k-border-subtle) 50%, var(--k-surface-2) 100%);
+  background-size: 200% 100%;
+  animation: k-shimmer 1.4s infinite linear;
+  border-radius: 4px;
+}
+
 /* Auth-gate spinner — CSS animation using --k-accent */
 @keyframes kairo-spin {
   to { transform: rotate(360deg); }

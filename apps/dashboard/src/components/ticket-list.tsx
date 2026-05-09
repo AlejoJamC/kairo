@@ -13,13 +13,13 @@ import { RefreshCw } from "lucide-react";
 
 function TicketSkeleton() {
   return (
-    <div className="flex animate-pulse flex-col gap-2 border-b px-4 py-3">
-      <div className="flex items-center justify-between">
-        <div className="h-3 w-32 rounded bg-zinc-200" />
-        <div className="h-3 w-8 rounded bg-zinc-200" />
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, borderBottom: "1px solid var(--k-border-subtle)", padding: "12px 16px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="shimmer" style={{ height: 11, width: 128 }} />
+        <div className="shimmer" style={{ height: 11, width: 32 }} />
       </div>
-      <div className="h-2.5 w-full rounded bg-zinc-100" />
-      <div className="h-2 w-3/4 rounded bg-zinc-100" />
+      <div className="shimmer" style={{ height: 10, width: "100%" }} />
+      <div className="shimmer" style={{ height: 8, width: "75%" }} />
     </div>
   );
 }
