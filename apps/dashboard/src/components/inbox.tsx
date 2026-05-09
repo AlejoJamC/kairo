@@ -45,7 +45,7 @@ export function Inbox() {
 
   return (
     <>
-      <div className="flex h-screen w-[300px] flex-col border-r bg-white">
+      <div className="flex h-screen w-[360px] flex-col border-r bg-white" style={{ flexShrink: 0, borderRight: "1px solid var(--k-border)" }}>
         <SyncButton onSyncComplete={() => {
           // Realtime handles new tickets; just re-fetch to catch any we missed
           if (!user) return;

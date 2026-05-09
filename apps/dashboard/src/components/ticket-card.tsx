@@ -1,24 +1,66 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Users, ArrowUp, Mail } from "lucide-react";
-import { getEmotionTokens } from "@kairo/ui";
+import { Users, ArrowUp } from "lucide-react";
 import type { Ticket } from "@kairo/types";
 
 // ---------------------------------------------------------------------------
-// Channel icon
+// Priority stripe — left accent bar (color driven by sentiment)
 // ---------------------------------------------------------------------------
 
-function ChannelIcon({ channel }: { channel: string }) {
-  const lower = channel.toLowerCase();
-  if (lower === "whatsapp") {
-    return (
-      <span className="text-[10px] font-bold text-green-600" title="WhatsApp">
-        WA
-      </span>
-    );
-  }
-  // email and any other channel
-  return <Mail className="h-3 w-3 text-zinc-400" aria-label={channel} />;
+function stripeColor(sentiment: string | null | undefined): string {
+  const s = (sentiment ?? "").toLowerCase();
+  if (["urgent", "negative", "aggressive", "frustrated"].includes(s)) return "#EF4444";
+  if (s === "neutral") return "#F59E0B";
+  return "#10B981"; // positive / casual / unknown
+}
+
+// ---------------------------------------------------------------------------
+// Priority badge
+// ---------------------------------------------------------------------------
+
+const PRIORITY_STYLE: Record<string, React.CSSProperties> = {
+  P1: { background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" },
+  P2: { background: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA" },
+  P3: { background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" },
+  P4: { background: "#F4F4F5", color: "#71717A", border: "1px solid #E4E4E7" },
+};
+
+function PriorityBadge({ priority }: { priority: string | null | undefined }) {
+  if (!priority) return null;
+  const p = priority.toUpperCase();
+  const style = PRIORITY_STYLE[p] ?? { background: "#F4F4F5", color: "#71717A", border: "1px solid #E4E4E7" };
+  return (
+    <span
+      style={{
+        ...style,
+        fontSize: 10,
+        fontWeight: 600,
+        padding: "2px 6px",
+        borderRadius: 4,
+        letterSpacing: "0.02em",
+      }}
+    >
+      {p}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Type badge
+// ---------------------------------------------------------------------------
+
+function typeBadgeStyle(type: string | null | undefined): React.CSSProperties {
+  const t = (type ?? "").toLowerCase();
+  if (t === "lead" || t === "prospect") return { background: "#ECFDF5", color: "#047857" };
+  if (t === "spam") return { background: "#F4F4F5", color: "#71717A" };
+  return { background: "#EEF2FF", color: "#2B5BFF" };
+}
+
+function typeLabel(type: string | null | undefined): string {
+  const t = (type ?? "").toLowerCase();
+  if (t === "lead" || t === "prospect") return "LEAD";
+  if (t === "spam") return "SPAM";
+  return "SOPORTE";
 }
 
 // ---------------------------------------------------------------------------
@@ -45,26 +87,23 @@ function SlaBadge({ slaDate }: SlaBadgeProps) {
     const minutes = totalMinutes % 60;
 
     if (hours > 0) {
-      return {
-        text: t("ticketCard.slaHours_other", { count: hours, minutes }),
-        breached: false,
-      };
+      return { text: t("ticketCard.slaHours_other", { count: hours, minutes }), breached: false };
     }
-    return {
-      text: t("ticketCard.slaMinutes_other", { count: totalMinutes }),
-      breached: false,
-    };
+    return { text: t("ticketCard.slaMinutes_other", { count: totalMinutes }), breached: false };
   }, [slaDate, t]);
 
   if (!label) return null;
 
   return (
     <span
-      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-        label.breached
-          ? "bg-red-100 text-red-700"
-          : "bg-zinc-100 text-zinc-600"
-      }`}
+      style={{
+        fontSize: 10,
+        fontWeight: 600,
+        padding: "2px 6px",
+        borderRadius: 4,
+        background: label.breached ? "#FEF2F2" : "#F4F4F5",
+        color: label.breached ? "#DC2626" : "#71717A",
+      }}
     >
       {label.text}
     </span>
@@ -118,95 +157,230 @@ export function TicketCard({
   const { t } = useTranslation("dashboard");
   const [hovered, setHovered] = useState(false);
 
-  const emotion = getEmotionTokens(ticket.emotion);
+  const isSpam = (ticket.ticket_type ?? "").toLowerCase() === "spam";
   const relativeTime = useRelativeTime(ticket.received_at ?? ticket.created_at);
-
-  // Avatar initials from name or email
-  const initials = useMemo(() => {
-    const name = ticket.from_name ?? ticket.from_email ?? "?";
-    return name
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((w) => w[0]?.toUpperCase() ?? "")
-      .join("");
-  }, [ticket.from_name, ticket.from_email]);
 
   return (
     <button
       onClick={() => onSelect(ticket.id)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={[
-        "relative flex w-full flex-col border-b border-l-4 px-3 py-2.5 text-left transition-colors duration-150",
-        emotion.cardBorder,
-        selected
-          ? "bg-zinc-50"
+      style={{
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        width: "100%",
+        padding: "12px 14px 12px 18px",
+        borderBottom: "1px solid var(--k-border-subtle)",
+        background: selected
+          ? "var(--k-surface-2)"
           : hovered
-          ? "bg-gray-50"
-          : emotion.cardBg,
-      ].join(" ")}
+          ? "var(--k-surface)"
+          : "transparent",
+        borderLeft: selected
+          ? "2px solid var(--k-accent)"
+          : "2px solid transparent",
+        cursor: "pointer",
+        opacity: isSpam ? 0.55 : 1,
+        textAlign: "left",
+        transition: "background 0.1s ease",
+      }}
       aria-selected={selected}
     >
-      {/* Row 1: avatar + name + emotion emoji + channel + group indicator */}
-      <div className="flex items-center gap-2">
-        {/* Avatar */}
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600">
-          {initials}
-        </div>
+      {/* Priority stripe */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 8,
+          bottom: 8,
+          width: 3,
+          background: stripeColor(ticket.sentiment),
+          borderRadius: "0 2px 2px 0",
+        }}
+      />
 
-        {/* Name + emoji */}
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-900">
-          {emotion.emoji && (
-            <span className="mr-1" role="img" aria-label={emotion.ariaLabel}>
-              {emotion.emoji}
-            </span>
-          )}
-          {ticket.from_name ?? ticket.from_email ?? "Unknown"}
-        </span>
-
-        {/* Channel icon */}
-        <ChannelIcon channel={ticket.channel} />
-
-        {/* Group indicator */}
-        {ticket.group_id && (
-          <Users className="h-3 w-3 shrink-0 text-zinc-400" aria-label="In group" />
+      {/* Row 1: priority + type + corrected + time */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          marginBottom: 6,
+          flexWrap: "wrap",
+        }}
+      >
+        <PriorityBadge priority={ticket.priority} />
+        {ticket.ticket_type && (
+          <span
+            style={{
+              ...typeBadgeStyle(ticket.ticket_type),
+              fontSize: 11,
+              fontFamily: "var(--k-font-mono)",
+              padding: "2px 6px",
+              borderRadius: 4,
+            }}
+          >
+            {typeLabel(ticket.ticket_type)}
+          </span>
         )}
+        {isCorrected && (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              padding: "2px 6px",
+              borderRadius: 4,
+              background: "#FEF3C7",
+              color: "#B45309",
+            }}
+          >
+            {t("correction.correctedBadge")}
+          </span>
+        )}
+        <span
+          style={{
+            marginLeft: "auto",
+            fontSize: 11,
+            fontFamily: "var(--k-font-mono)",
+            color: "var(--k-text-tertiary)",
+          }}
+        >
+          {relativeTime}
+        </span>
       </div>
 
       {/* Row 2: subject */}
-      <p className="mt-1 truncate pl-8 text-xs text-zinc-700">{ticket.subject}</p>
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 500,
+          color: "var(--k-text-primary)",
+          marginBottom: 4,
+          lineHeight: 1.35,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {ticket.subject}
+      </div>
 
-      {/* Row 3: snippet */}
-      {ticket.snippet && (
-        <p className="mt-0.5 line-clamp-1 pl-8 text-xs text-zinc-400">
-          {ticket.snippet}
-        </p>
-      )}
+      {/* Row 3: from + confidence dot */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 12,
+          color: "var(--k-text-secondary)",
+        }}
+      >
+        <span
+          style={{
+            flex: 1,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {ticket.from_name ?? ticket.from_email ?? "Unknown"}
+        </span>
 
-      {/* Row 4: ticket number + SLA + timestamp + corrected badge */}
-      <div className="mt-1.5 flex items-center justify-between pl-8">
-        <span className="text-[10px] text-zinc-400">#{ticket.ticket_number}</span>
-        <div className="flex items-center gap-1.5">
-          {isCorrected && (
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-              {t("correction.correctedBadge")}
-            </span>
+        {ticket.classification_confidence !== null &&
+          ticket.classification_confidence !== undefined && (
+            <div
+              style={{
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <div
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background:
+                    ticket.classification_confidence > 0.9
+                      ? "#10B981"
+                      : ticket.classification_confidence > 0.7
+                      ? "#F59E0B"
+                      : "#EF4444",
+                }}
+              />
+              <span
+                style={{
+                  fontFamily: "var(--k-font-mono)",
+                  fontSize: 11,
+                  color: "var(--k-text-tertiary)",
+                }}
+              >
+                {ticket.classification_confidence.toFixed(2)}
+              </span>
+            </div>
           )}
-          <SlaBadge slaDate={ticket.sla_due_at} />
-          <span className="text-[10px] text-zinc-400">{relativeTime}</span>
-        </div>
+      </div>
+
+      {/* Row 4: ticket number + SLA + group indicator */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          marginTop: 6,
+        }}
+      >
+        {ticket.ticket_number && (
+          <span
+            style={{
+              fontSize: 10,
+              color: "var(--k-text-tertiary)",
+              fontFamily: "var(--k-font-mono)",
+            }}
+          >
+            #{ticket.ticket_number}
+          </span>
+        )}
+        <SlaBadge slaDate={ticket.sla_due_at} />
+        {ticket.group_id && (
+          <Users
+            style={{ width: 12, height: 12, color: "var(--k-text-tertiary)", flexShrink: 0 }}
+            aria-label="In group"
+          />
+        )}
       </div>
 
       {/* Hover quick actions */}
-      {hovered && (
-        <div className="absolute right-2 top-2 flex items-center gap-1">
+      {hovered && (onGroup || onEscalate) && (
+        <div
+          style={{
+            position: "absolute",
+            right: 8,
+            top: 8,
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
           {onGroup && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onGroup(ticket.id);
               }}
-              className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 shadow-sm ring-1 ring-zinc-200 hover:bg-zinc-50"
+              style={{
+                fontSize: 10,
+                fontWeight: 500,
+                padding: "2px 6px",
+                borderRadius: 4,
+                background: "white",
+                border: "1px solid var(--k-border)",
+                color: "var(--k-text-secondary)",
+                boxShadow: "0 1px 2px rgba(9,9,11,0.04)",
+                cursor: "pointer",
+              }}
             >
               {t("ticketCard.group")}
             </button>
@@ -217,9 +391,22 @@ export function TicketCard({
                 e.stopPropagation();
                 onEscalate(ticket.id);
               }}
-              className="flex items-center gap-0.5 rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 shadow-sm ring-1 ring-zinc-200 hover:bg-zinc-50"
+              style={{
+                fontSize: 10,
+                fontWeight: 500,
+                padding: "2px 6px",
+                borderRadius: 4,
+                background: "white",
+                border: "1px solid var(--k-border)",
+                color: "var(--k-text-secondary)",
+                boxShadow: "0 1px 2px rgba(9,9,11,0.04)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 3,
+              }}
             >
-              <ArrowUp className="h-2.5 w-2.5" />
+              <ArrowUp style={{ width: 10, height: 10 }} />
               {t("ticketCard.escalate")}
             </button>
           )}
@@ -233,29 +420,25 @@ export function TicketCard({
 // All-states documentation (replaces Storybook — no Storybook in this project)
 //
 // Semaphore order: aggressive → frustrated → neutral → positive
-// (🤬 → 😩 → 😐 → 😊) — from most to least critical. Never invert.
+// (urgent → neutral → casual/positive) — from most to least critical.
 //
-// State 1 — aggressive (most critical)
-//   emotion="aggressive" → 🤬 RED border + bg-red-50
-//   sla_due_at = future → "2h 15m" badge
-//   group_id = "abc"    → Users icon shown
-//   selected = true     → bg-zinc-50
+// State 1 — urgent sentiment (most critical)
+//   sentiment="urgent"/"aggressive"/"frustrated" → RED stripe
+//   priority="P1" → red badge
+//   ticket_type="support" → SOPORTE badge (blue)
+//   selected = true → var(--k-surface-2) bg + 2px solid var(--k-accent) left border
 //
-// State 2 — frustrated
-//   emotion="frustrated" → 😩 ORANGE border + bg-orange-50
-//   sla_due_at = past   → "VENCIDO" red badge
-//   group_id = null     → no group icon
-//   hovered = true      → quick action buttons (Group, Escalate) visible
+// State 2 — neutral sentiment
+//   sentiment="neutral" → AMBER stripe
+//   priority="P2" → orange badge
+//   ticket_type="lead" → LEAD badge (green)
 //
-// State 3 — neutral
-//   emotion="neutral" → 😐 BLUE border, transparent bg
-//   sla_due_at = null → no SLA badge rendered
+// State 3 — positive/casual (least critical)
+//   sentiment="positive"/"casual" → GREEN stripe
+//   priority="P3" → amber badge
+//   ticket_type="spam" → SPAM badge (gray), opacity 0.55
 //
-// State 4 — positive (least critical)
-//   emotion="positive" → 😊 GREEN border, transparent bg
-//
-// State 5 — null / unknown (silent fallback — must never throw)
-//   emotion = null | undefined | any unrecognized string
-//   → zinc border, no emoji, no tinted bg
-//   Renders normally, no error, no visual disruption
+// State 4 — null / unknown (silent fallback — must never throw)
+//   sentiment = null | undefined | any unrecognized string
+//   → green stripe (fallback), no priority badge if null
 // ---------------------------------------------------------------------------

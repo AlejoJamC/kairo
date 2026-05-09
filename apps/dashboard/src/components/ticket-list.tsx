@@ -3,7 +3,6 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import { useTriageStore, type Ticket } from "@/stores/triage-store";
 import { TicketCard } from "@/components/ticket-card";
-import { getPriorityTokens, getTicketTypeTokens } from "@kairo/ui";
 import { apiCall } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { RefreshCw } from "lucide-react";
@@ -62,21 +61,25 @@ function FilterChip({
   label,
   active,
   onClick,
-  activeClass,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
-  activeClass?: string;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
-        active
-          ? (activeClass ?? "bg-blue-600 text-white")
-          : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-      }`}
+      style={{
+        fontSize: 11,
+        padding: "4px 8px",
+        borderRadius: 4,
+        background: active ? "var(--k-surface-2)" : "transparent",
+        color: active ? "var(--k-text-primary)" : "var(--k-text-tertiary)",
+        fontFamily: "var(--k-font-mono)",
+        cursor: "pointer",
+        border: "none",
+        transition: "background 0.1s ease, color 0.1s ease",
+      }}
     >
       {label}
     </button>
@@ -276,101 +279,100 @@ export function TicketList() {
   // -------------------------------------------------------------------------
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-white">
+    <div style={{ display: "flex", flex: 1, flexDirection: "column", overflow: "hidden", background: "white" }}>
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <h2 className="text-sm font-semibold text-zinc-900">{t("ticketList.header")}</h2>
-        <span className="text-xs text-zinc-500">
-          {classifiedCount}/{tickets.length}
-        </span>
-      </div>
+      <div style={{ padding: "12px 14px 8px", borderBottom: "1px solid var(--k-border-subtle)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 2 }}>
+              <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--k-text-primary)" }}>
+                {t("ticketList.header")}
+              </span>
+              <span style={{ fontSize: 12, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>
+                {classifiedCount}/{tickets.length}
+              </span>
+            </div>
+          </div>
 
-      {/* Filter controls */}
-      <div className="flex flex-wrap gap-1 border-b px-3 py-2">
-        {(["P1", "P2", "P3", "P4"] as const).map((p) => {
-          const tok = getPriorityTokens(p);
-          return (
+          {tickets.length > 0 && (
+            <button
+              onClick={handleClassifyAll}
+              disabled={classifyingAll}
+              style={{
+                fontSize: 11,
+                padding: "5px 9px",
+                borderRadius: 5,
+                border: "1px solid var(--k-border)",
+                color: "var(--k-text-secondary)",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontFamily: "var(--k-font-mono)",
+                background: "white",
+                cursor: classifyingAll ? "not-allowed" : "pointer",
+                opacity: classifyingAll ? 0.5 : 1,
+              }}
+            >
+              <RefreshCw style={{ width: 11, height: 11 }} className={classifyingAll ? "animate-spin" : ""} />
+              {classifyingAll
+                ? (classifyProgress ?? t("ticketList.classifying"))
+                : t("ticketList.classifyAll")}
+            </button>
+          )}
+        </div>
+
+        {/* Filter chips */}
+        <div style={{ display: "flex", gap: 4 }}>
+          <FilterChip
+            label="Todos"
+            active={filters.priority === null && filters.type === null}
+            onClick={() => setFilters(INITIAL_FILTERS)}
+          />
+          {(["P1", "P2", "P3"] as const).map((p) => (
             <FilterChip
               key={p}
               label={p}
               active={filters.priority === p}
               onClick={() => toggleFilter("priority", p)}
-              activeClass={tok ? `${tok.badgeBg} ${tok.badgeText} border ${tok.badgeBorder}` : undefined}
             />
-          );
-        })}
-        <span className="w-px bg-zinc-200" />
-        {(["support", "prospect", "spam", "other"] as const).map((tp) => {
-          const tok = getTicketTypeTokens(tp);
-          return (
-            <FilterChip
-              key={tp}
-              label={tp}
-              active={filters.type === tp}
-              onClick={() => toggleFilter("type", tp)}
-              activeClass={`${tok.badgeBg} ${tok.badgeText} border ${tok.badgeBorder}`}
-            />
-          );
-        })}
-        <span className="w-px bg-zinc-200" />
-        {(["technical", "billing", "sales", "other"] as const).map((c) => (
-          <FilterChip
-            key={c}
-            label={c}
-            active={filters.category === c}
-            onClick={() => toggleFilter("category", c)}
-          />
-        ))}
-        <span className="w-px bg-zinc-200" />
-        {(["classified", "unclassified"] as const).map((s) => (
-          <FilterChip
-            key={s}
-            label={t(`ticketList.${s}`)}
-            active={filters.status === s}
-            onClick={() => toggleFilter("status", s)}
-          />
-        ))}
-      </div>
-
-      {/* Classify All button */}
-      {tickets.length > 0 && (
-        <div className="border-b px-3 py-2">
-          <button
-            onClick={handleClassifyAll}
-            disabled={classifyingAll}
-            className="flex items-center gap-1.5 rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw className={`h-3 w-3 ${classifyingAll ? "animate-spin" : ""}`} />
-            {classifyingAll
-              ? (classifyProgress ?? t("ticketList.classifying"))
-              : t("ticketList.classifyAll")}
-          </button>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Scanning banner */}
       {isScanning && tickets.length > 0 && (
-        <div className="border-b bg-blue-50 px-4 py-2 text-xs text-blue-700">
+        <div style={{
+          borderBottom: "1px solid var(--k-border-subtle)",
+          background: "var(--k-accent-subtle)",
+          padding: "6px 14px",
+          fontSize: 11,
+          fontFamily: "var(--k-font-mono)",
+          color: "var(--k-accent)",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}>
+          <span style={{ width: 5, height: 5, borderRadius: 999, background: "var(--k-accent)", display: "inline-block" }} className="animate-pulse" />
           {t("ticketList.scanning", { count: classifiedCount })}
         </div>
       )}
 
       {/* Skeleton while scanning with no tickets */}
       {isScanning && tickets.length === 0 ? (
-        <div className="flex-1 overflow-y-auto">
+        <div style={{ flex: 1, overflowY: "auto" }}>
           {Array.from({ length: 6 }).map((_, i) => (
             <TicketSkeleton key={i} />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 32, textAlign: "center" }}>
           {tickets.length === 0 ? (
             <>
-              <p className="text-sm text-zinc-500">{t("ticketList.noTickets")}</p>
-              <p className="text-xs text-zinc-400">{t("ticketList.checkingEmails")}</p>
+              <p style={{ fontSize: 13, color: "var(--k-text-secondary)" }}>{t("ticketList.noTickets")}</p>
+              <p style={{ fontSize: 12, color: "var(--k-text-tertiary)" }}>{t("ticketList.checkingEmails")}</p>
             </>
           ) : (
-            <p className="text-sm text-zinc-500">{t("ticketList.noMatch")}</p>
+            <p style={{ fontSize: 13, color: "var(--k-text-secondary)" }}>{t("ticketList.noMatch")}</p>
           )}
         </div>
       ) : filtered.length > VIRTUALIZE_THRESHOLD ? (
@@ -381,7 +383,7 @@ export function TicketList() {
           onSelect={selectTicket}
         />
       ) : (
-        <div className="flex-1 overflow-y-auto">
+        <div style={{ flex: 1, overflowY: "auto" }}>
           {filtered.map((ticket) => (
             <TicketCard
               key={ticket.id}
