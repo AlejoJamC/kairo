@@ -122,3 +122,37 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ─── Kairo design tokens ───────────────────────────────────────────────────
+   Mirrors packages/claude_design/prototype v0.1/tokens.css (read-only).
+   Prefixed --k-* to avoid conflicts with shadcn's --background/--border vars
+   during the migration period. Used by the cockpit shell (top chrome, sidebar).
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --k-bg:             #FFFFFF;
+  --k-surface:        #FAFAFA;
+  --k-surface-2:      #F4F4F5;
+  --k-border:         #E4E4E7;
+  --k-border-subtle:  #F0F0F1;
+  --k-text-primary:   #09090B;
+  --k-text-secondary: #52525B;
+  --k-text-tertiary:  #A1A1AA;
+  --k-accent:         #2B5BFF;
+  --k-accent-hover:   #1E48E5;
+  --k-accent-subtle:  #EEF2FF;
+  --k-font-mono:      "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+  --k-font-display:   "Inter Display", "Inter", system-ui, sans-serif;
+}
+
+/* Auth-gate spinner — CSS animation using --k-accent */
+@keyframes kairo-spin {
+  to { transform: rotate(360deg); }
+}
+.kairo-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--k-accent-subtle);
+  border-top-color: var(--k-accent);
+  border-radius: 50%;
+  animation: kairo-spin 0.7s linear infinite;
+}

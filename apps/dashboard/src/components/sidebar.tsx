@@ -1,3 +1,7 @@
+// Sidebar — collapsible nav panel.
+// Visual design: cockpit.jsx lines 139–187 (packages/claude_design).
+// Toggle button moved to TopChrome; sidebar only receives collapsed state.
+
 import { useRef, useState, useEffect } from "react";
 import {
   Home,
@@ -8,7 +12,6 @@ import {
   AlertTriangle,
   Users,
   Settings,
-  Menu,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -24,7 +27,7 @@ import { useSidebarCounts, VIEW_TO_STATUS } from "@/hooks/useSidebarCounts";
 import type { AppView } from "@/types";
 
 // ---------------------------------------------------------------------------
-// NavBadge — pill showing ticket count, pulses briefly when count changes
+// NavBadge — count pill / collapsed dot
 // ---------------------------------------------------------------------------
 
 function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
@@ -46,13 +49,13 @@ function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
   const label = count > 99 ? "99+" : String(count);
 
   if (collapsed) {
-    // Small dot overlay on icon (top-right), max "9+" to fit
     const collapsedLabel = count > 9 ? "9+" : String(count);
     return (
       <span
-        className={`absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold text-white leading-none ${
+        className={`absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[9px] font-bold text-white leading-none ${
           pulse ? "animate-pulse" : ""
         }`}
+        style={{ background: "var(--k-accent)" }}
       >
         {collapsedLabel}
       </span>
@@ -61,9 +64,15 @@ function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
 
   return (
     <span
-      className={`ml-auto rounded-full bg-zinc-700 px-2 py-0.5 text-xs font-medium tabular-nums text-zinc-300 ${
+      className={`ml-auto rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${
         pulse ? "animate-pulse" : ""
       }`}
+      style={{
+        background: "var(--k-surface-2)",
+        color: "var(--k-text-tertiary)",
+        fontFamily: "var(--k-font-mono)",
+        fontSize: 11,
+      }}
     >
       {label}
     </span>
@@ -82,12 +91,12 @@ type NavItem = {
 
 interface SidebarProps {
   collapsed: boolean;
-  onToggle: () => void;
+  onToggle: () => void; // kept for interface compat; toggle renders in TopChrome
   activeView: AppView;
   onViewChange: (view: AppView) => void;
 }
 
-export function Sidebar({ collapsed, onToggle, activeView, onViewChange }: SidebarProps) {
+export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
   const { t } = useTranslation(["dashboard"]);
   const { isAdmin } = useAuth();
   const counts = useSidebarCounts();
@@ -119,21 +128,37 @@ export function Sidebar({ collapsed, onToggle, activeView, onViewChange }: Sideb
     const btn = (
       <button
         onClick={() => onViewChange(item.view)}
-        className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-150 ${
-          collapsed ? "justify-center" : ""
-        } ${
-          isActive
-            ? "bg-zinc-800 text-white"
-            : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-        }`}
+        style={{
+          display: "flex",
+          width: "100%",
+          alignItems: "center",
+          gap: 10,
+          padding: collapsed ? "8px" : "7px 10px",
+          borderRadius: 6,
+          cursor: "pointer",
+          marginBottom: 1,
+          background: isActive ? "var(--k-bg)" : "transparent",
+          border: isActive ? "1px solid var(--k-border)" : "1px solid transparent",
+          color: isActive ? "var(--k-text-primary)" : "var(--k-text-secondary)",
+          fontSize: 13,
+          fontWeight: isActive ? 500 : 400,
+          justifyContent: collapsed ? "center" : "flex-start",
+          transition: "background 0.12s ease, color 0.12s ease",
+        }}
+        onMouseEnter={(e) => {
+          if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "var(--k-surface-2)";
+        }}
+        onMouseLeave={(e) => {
+          if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+        }}
       >
         <span className="relative shrink-0">
-          <item.icon className="h-4 w-4" />
+          <item.icon style={{ width: 16, height: 16 }} />
           {collapsed && <NavBadge count={count} collapsed />}
         </span>
         {!collapsed && (
           <>
-            <span className="flex-1 text-left">{item.label}</span>
+            <span style={{ flex: 1, textAlign: "left" }}>{item.label}</span>
             <NavBadge count={count} collapsed={false} />
           </>
         )}
@@ -153,40 +178,47 @@ export function Sidebar({ collapsed, onToggle, activeView, onViewChange }: Sideb
   return (
     <TooltipProvider>
       <aside
-        className={`flex h-screen flex-col bg-zinc-900 text-white transition-all duration-150 ${
-          collapsed ? "w-16" : "w-60"
-        }`}
+        style={{
+          width: collapsed ? 56 : 240,
+          flexShrink: 0,
+          borderRight: "1px solid var(--k-border)",
+          background: "var(--k-surface)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          transition: "width 0.18s ease",
+        }}
       >
-        <div className="flex items-center gap-3 px-5 py-5">
-          <button
-            onClick={onToggle}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-700 hover:bg-zinc-600 transition-colors duration-150"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          {!collapsed && (
-            <span className="text-base font-semibold">Kairo</span>
-          )}
-        </div>
-
-        <nav className="mt-2 flex flex-1 flex-col gap-0.5 px-3">
+        {/* Nav items */}
+        <nav style={{ padding: 8, flex: 1 }}>
           {mainNavItems.map(renderItem)}
 
           {isAdmin && (
             <>
-              <div className={`my-2 border-t border-zinc-700 ${collapsed ? "mx-1" : "mx-0"}`} />
+              <div
+                style={{
+                  margin: "8px 0",
+                  borderTop: "1px solid var(--k-border)",
+                }}
+              />
               {adminNavItems.map(renderItem)}
             </>
           )}
         </nav>
 
-        <div className="mt-auto">
+        {/* Sidebar bottom — language switcher + user menu */}
+        <div
+          style={{
+            borderTop: "1px solid var(--k-border)",
+            padding: collapsed ? "8px" : "8px 12px",
+          }}
+        >
           {!collapsed && (
-            <div className="px-3 pb-2">
+            <div style={{ marginBottom: 4 }}>
               <LanguageSwitcher />
             </div>
           )}
-          {!collapsed && <UserMenu />}
+          <UserMenu collapsed={collapsed} />
         </div>
       </aside>
     </TooltipProvider>
