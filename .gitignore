@@ -176,3 +176,6 @@ kairo-internal/*
 *.p12
 *.key
 *.mobileprovision
+
+# Tamagui generated cache (produced by vite-plugin and babel-plugin at build time)
+**/.tamagui/
