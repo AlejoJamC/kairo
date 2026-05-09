@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Plus, Trash2, Loader2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Input } from "@kairo/ui";
 import { apiCall } from "@/lib/api-client";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
 
@@ -177,7 +177,7 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
               </label>
               <Input
                 value={form.internal_id}
-                onChange={(e) => set("internal_id", e.target.value)}
+                onChangeText={(text) => set("internal_id", text)}
                 placeholder={t("form.internalIdPlaceholder")}
                 disabled={!!client}
               />
@@ -188,7 +188,7 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
               </label>
               <Input
                 value={form.name}
-                onChange={(e) => set("name", e.target.value)}
+                onChangeText={(text) => set("name", text)}
                 placeholder={t("form.namePlaceholder")}
               />
             </div>
@@ -202,7 +202,7 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
               </label>
               <Input
                 value={form.legal_id}
-                onChange={(e) => set("legal_id", e.target.value)}
+                onChangeText={(text) => set("legal_id", text)}
                 placeholder={t("form.legalIdPlaceholder")}
               />
             </div>
@@ -212,7 +212,7 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
               </label>
               <Input
                 value={form.telephone}
-                onChange={(e) => set("telephone", e.target.value)}
+                onChangeText={(text) => set("telephone", text)}
                 placeholder={t("form.telephonePlaceholder")}
               />
             </div>
@@ -286,13 +286,13 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
                 <div key={i} className="flex gap-2">
                   <Input
                     value={cp.name}
-                    onChange={(e) => updatePerson(i, "name", e.target.value)}
+                    onChangeText={(text) => updatePerson(i, "name", text)}
                     placeholder={t("form.personNamePlaceholder")}
                     className="flex-1"
                   />
                   <Input
                     value={cp.role}
-                    onChange={(e) => updatePerson(i, "role", e.target.value)}
+                    onChangeText={(text) => updatePerson(i, "role", text)}
                     placeholder={t("form.personRolePlaceholder")}
                     className="flex-1"
                   />

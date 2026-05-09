@@ -1,22 +1,20 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Building2, Search, Plus, Edit2, Trash2, Loader2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
+  Input,
+  Badge,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "@kairo/ui";
 import { ClientFormModal } from "@/components/client-form-modal";
 import { apiCall } from "@/lib/api-client";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
@@ -148,7 +146,7 @@ export function ClientDirectory() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
             <Input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChangeText={(text) => setSearch(text)}
               placeholder={t("searchPlaceholder")}
               className="pl-9"
             />

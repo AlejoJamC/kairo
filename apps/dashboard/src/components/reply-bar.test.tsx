@@ -1,10 +1,11 @@
 import * as React from "react";
 import { JSDOM } from "jsdom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReplyBar } from "./reply-bar";
 import { useTriageStore } from "@/stores/triage-store";
+import { renderWithProviders } from "@/test/render-with-providers";
 
 const apiCallMock = vi.fn();
 
@@ -47,7 +48,7 @@ describe("ReplyBar", () => {
   });
 
   it("auto-populates draft from aiSuggestedReply and clears store value", async () => {
-    render(<ReplyBar />);
+    renderWithProviders(<ReplyBar />);
     useTriageStore.getState().selectTicket("ticket-1");
     useTriageStore.getState().setSuggestedReply("AI drafted message");
 
@@ -63,7 +64,7 @@ describe("ReplyBar", () => {
       json: async () => ({}),
     });
 
-    render(<ReplyBar />);
+    renderWithProviders(<ReplyBar />);
     useTriageStore.getState().selectTicket("ticket-1");
     useTriageStore.getState().setSuggestedReply("Initial AI text");
 

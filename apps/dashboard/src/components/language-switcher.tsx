@@ -1,11 +1,10 @@
 import { Globe } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@kairo/ui";
 import { useLocale } from "@/hooks/useLocale";
 import type { SupportedLanguage } from "@/i18n/types";
 
@@ -15,19 +14,18 @@ export function LanguageSwitcher() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1.5">
-          <Globe className="h-4 w-4" />
-          <span className="text-xs">
-            {languageMeta[language].nativeLabel}
-          </span>
-        </Button>
+      {/* asChild removed — DropdownMenuTrigger is already a <button>; use Tailwind classes for ghost/sm visual parity */}
+      <DropdownMenuTrigger className="flex h-8 items-center gap-1.5 rounded-md px-3 text-sm hover:bg-accent transition-colors">
+        <Globe className="h-4 w-4" />
+        <span className="text-xs">
+          {languageMeta[language].nativeLabel}
+        </span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent>
         {supportedLanguages.map((lang: SupportedLanguage) => (
           <DropdownMenuItem
             key={lang}
-            onClick={() => setLanguage(lang)}
+            onPress={() => setLanguage(lang)}
             className={lang === language ? "bg-accent" : ""}
           >
             <span className="mr-2 text-sm">{languageMeta[lang].nativeLabel}</span>

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, BookOpen, Clock, MessageSquarePlus } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
+  Card, CardContent, CardHeader, CardTitle,
+  Button,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+} from "@kairo/ui";
 import { useTriageStore } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
 
@@ -109,7 +109,7 @@ export function KnowledgePanel({ ticketId }: KnowledgePanelProps) {
       {/* ── KB Articles ────────────────────────────────────────────────────── */}
       <Collapsible open={kbOpen} onOpenChange={setKbOpen}>
         <Card className="gap-0 py-0 shadow-sm hover:shadow-md transition-shadow duration-150">
-          <CollapsibleTrigger asChild>
+          <CollapsibleTrigger>
             <CardHeader className="cursor-pointer px-3 py-2.5">
               <CardTitle className="flex items-center justify-between text-sm font-medium text-zinc-700">
                 <span className="flex items-center gap-1.5">
@@ -167,7 +167,7 @@ export function KnowledgePanel({ ticketId }: KnowledgePanelProps) {
                         variant="outline"
                         size="sm"
                         className="h-6 w-full gap-1 text-[11px]"
-                        onClick={() => setSuggestedReply(article.content)}
+                        onPress={() => setSuggestedReply(article.content)}
                       >
                         <MessageSquarePlus className="h-3 w-3" />
                         {t("ai.useInReply")}
@@ -184,7 +184,7 @@ export function KnowledgePanel({ ticketId }: KnowledgePanelProps) {
       {/* ── Similar Resolved Cases ──────────────────────────────────────────── */}
       <Collapsible open={casesOpen} onOpenChange={setCasesOpen}>
         <Card className="gap-0 py-0 shadow-sm hover:shadow-md transition-shadow duration-150">
-          <CollapsibleTrigger asChild>
+          <CollapsibleTrigger>
             <CardHeader className="cursor-pointer px-3 py-2.5">
               <CardTitle className="flex items-center justify-between text-sm font-medium text-zinc-700">
                 <span className="flex items-center gap-1.5">
