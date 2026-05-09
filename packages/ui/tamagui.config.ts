@@ -1,19 +1,19 @@
 import { createFont, createTamagui, createTokens, createTheme } from '@tamagui/core'
 
 // ---------------------------------------------------------------------------
-// KAIRO DESIGN TOKENS — PLACEHOLDER (KAI-134)
+// KAIRO DESIGN TOKENS (KAI-153)
 //
-// Token names and structure mirror packages/claude_design/tokens.css so that
-// KAI-151 (gap analysis) can diff this config against the read-only source of
-// truth. Real values (#2B5BFF accent, Inter Display, etc.) are applied when
-// the claude_design source is read in a follow-up task.
+// Token names and structure mirror packages/claude_design/tokens.css (read-only
+// source of truth). All values are reconciled against that file — no placeholders
+// remain. Gradient and multi-stop shadow values are exported as raw string
+// constants below (not in createTokens) because Tamagui's token system does not
+// have first-class gradient or multi-value box-shadow types.
 //
 // DO NOT edit packages/claude_design/* — it is read-only.
 // ---------------------------------------------------------------------------
 
 // ─── Color tokens ──────────────────────────────────────────────────────────
-// Named after the CSS variables in tokens.css. Placeholder neutrals used until
-// the real Kairo palette is wired in.
+// Named after the CSS variables in tokens.css.
 const tokens = createTokens({
   color: {
     // Backgrounds & surfaces
@@ -27,10 +27,10 @@ const tokens = createTokens({
     textPrimary:   '#09090b',
     textSecondary: '#52525b',
     textTertiary:  '#a1a1aa',
-    // Accent  (placeholder — real value: #2B5BFF / #1E48E5 / #EEF2FF)
-    accent:        '#0000ff',
-    accentHover:   '#0000cc',
-    accentSubtle:  '#eff6ff',
+    // Accent — tokens.css: --accent / --accent-hover / --accent-subtle
+    accent:        '#2B5BFF',
+    accentHover:   '#1E48E5',
+    accentSubtle:  '#EEF2FF',
     // Semantic status
     success:       '#10b981',
     warning:       '#f59e0b',
@@ -274,3 +274,23 @@ declare module '@tamagui/core' {
 }
 
 export default tamaguiConfig
+
+// ---------------------------------------------------------------------------
+// Non-token design constants (KAI-153)
+//
+// These values exist in tokens.css but cannot be represented as Tamagui tokens:
+//   • gradients are not a first-class token type
+//   • multi-stop box-shadow strings are not a first-class token type
+//
+// Use these constants directly in CSS-in-JS / inline styles on web, or
+// platform-split them in individual components for React Native.
+// ---------------------------------------------------------------------------
+
+/** --ai-glow: linear-gradient(135deg, #2B5BFF 0%, #6E8BFF 100%) */
+export const aiGlow = 'linear-gradient(135deg, #2B5BFF 0%, #6E8BFF 100%)' as const
+
+/** --shadow-card: 0 1px 2px rgba(9, 9, 11, 0.04) */
+export const shadowCard = '0 1px 2px rgba(9, 9, 11, 0.04)' as const
+
+/** --shadow-popover: 0 4px 16px rgba(9, 9, 11, 0.08), 0 1px 2px rgba(9, 9, 11, 0.04) */
+export const shadowPopover = '0 4px 16px rgba(9, 9, 11, 0.08), 0 1px 2px rgba(9, 9, 11, 0.04)' as const
