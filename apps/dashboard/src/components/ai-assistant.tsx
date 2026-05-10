@@ -276,9 +276,30 @@ function ArticlesTab({ ticketId }: { ticketId: string | null }) {
   const { t } = useTranslation("dashboard");
   const setSuggestedReply = useTriageStore((s) => s.setSuggestedReply);
 
-  // Endpoint not yet implemented — degrades to empty state silently.
-  // Wire up GET /api/v1/tickets/:id/knowledge-context when available.
-  const articles: KbArticle[] = [];
+  const [articles, setArticles] = useState<KbArticle[]>([]);
+  const [loading,  setLoading]  = useState(false);
+
+  useEffect(() => {
+    if (!ticketId) { setArticles([]); return; }
+    setArticles([]); setLoading(true);
+    apiCall(`/api/v1/tickets/${ticketId}/knowledge-context`)
+      .then(async (res) => {
+        if (!res.ok) return;
+        const json: { kbArticles: KbArticle[] } = await res.json();
+        setArticles(json.kbArticles ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [ticketId]);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="shimmer" style={{ height: 72, borderRadius: 8 }} />
+        <div className="shimmer" style={{ height: 72, borderRadius: 8 }} />
+      </div>
+    );
+  }
 
   if (!ticketId || articles.length === 0) {
     return (
