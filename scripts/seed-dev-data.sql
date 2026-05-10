@@ -18,7 +18,6 @@ DECLARE
   v_ticket_id      uuid;
   v_from_email     text;
   v_client_id      uuid := gen_random_uuid();
-  v_next_number    bigint;
 BEGIN
 
   -- ─── 1. Discover the first registered user ──────────────────────────────────
@@ -84,17 +83,13 @@ BEGIN
   WHERE id      = v_ticket_id
     AND user_id = v_user_id;
 
-  -- ─── 5. Compute a safe next ticket_number ───────────────────────────────────
-  SELECT COALESCE(MAX(ticket_number), 0) + 1 INTO v_next_number
-  FROM public.tickets
-  WHERE user_id = v_user_id;
-
-  -- ─── 6. Insert 3 resolved tickets from the same sender ──────────────────────
+  -- ─── 5. Insert 3 resolved tickets from the same sender ─────────────────────
+  -- ticket_number is GENERATED ALWAYS — omit it and let Postgres auto-assign.
   INSERT INTO public.tickets (
     id, user_id, subject, from_email, from_name,
     status, resolved_at, resolution_summary,
     ticket_type, priority, category, sentiment,
-    ticket_number, client_id
+    client_id
   ) VALUES
   (
     gen_random_uuid(), v_user_id,
@@ -103,8 +98,8 @@ BEGIN
     'resolved',
     now() - interval '12 days',
     'Se detectó que el nodo HTTP tenía el método configurado en GET en lugar de POST. Se corrigió y el flujo procesó correctamente. Verificar siempre el método HTTP y los headers de autorización.',
-    'technical', 'P2', 'technical', 'neutral',
-    v_next_number, v_client_id
+    'support', 'P2', 'technical', 'neutral',
+    v_client_id
   ),
   (
     gen_random_uuid(), v_user_id,
@@ -113,8 +108,8 @@ BEGIN
     'resolved',
     now() - interval '25 days',
     'El token de OAuth de Gmail expiró. Se guió al cliente para revocar y volver a autorizar la integración desde Configuración → Integraciones → Gmail. El flujo de lectura de correos quedó operativo en 10 minutos.',
-    'technical', 'P2', 'account', 'neutral',
-    v_next_number + 1, v_client_id
+    'support', 'P2', 'account', 'neutral',
+    v_client_id
   ),
   (
     gen_random_uuid(), v_user_id,
@@ -123,8 +118,8 @@ BEGIN
     'resolved',
     now() - interval '40 days',
     'Se explicó el proceso de escalación: tras 48 horas sin respuesta del cliente se puede marcar el ticket como "En espera" y enviar un seguimiento automático. Si en 72 horas adicionales no responde, escalar a L2 con el botón "Escalar" del panel derecho.',
-    'general', 'P3', 'general', 'neutral',
-    v_next_number + 2, v_client_id
+    'support', 'P3', 'general', 'neutral',
+    v_client_id
   );
 
   -- ─── 7. Insert 3 published KB articles ──────────────────────────────────────
