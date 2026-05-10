@@ -1406,11 +1406,12 @@ tickets.post("/:id/correct-classification", async (c) => {
 
 // ---------------------------------------------------------------------------
 // GET /v1/tickets/:id/knowledge-context — KAI-42
-// Returns the right-panel "Conocimiento Relacionado" payload:
+// Returns the right-panel "Artículos" payload:
 //   { kbArticles: [...], similarResolvedCases: [...] }
-// Generates a fresh query embedding from subject + first 200 chars of body,
-// then calls the two pgvector RPCs. Threshold 0.75 for both. Graceful empty
-// response when no embeddings exist or RPC fails (e.g. pgvector not deployed).
+// Primary: pgvector RPC find_relevant_kb (threshold 0.75).
+// Fallback: if embedding unavailable or RPC returns 0 results, list all
+//   published articles for the user (useful in dev / before embeddings exist).
+// Articles are enriched with content + tags from the kb_articles table.
 // ---------------------------------------------------------------------------
 
 const KNOWLEDGE_CONTEXT_THRESHOLD = 0.75;
@@ -1433,13 +1434,40 @@ tickets.get("/:id/knowledge-context", async (c) => {
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
+  const userId = user.id;
+
+  // Helper: fetch published articles and optionally enrich with similarity
+  async function fetchPublishedArticles(ids?: string[], similarities?: Map<string, number>) {
+    const q = supabase
+      .from("kb_articles")
+      .select("id, title, content, tags")
+      .eq("user_id", userId)
+      .eq("is_published", true);
+
+    if (ids && ids.length > 0) {
+      q.in("id", ids);
+    } else {
+      q.limit(KB_LIMIT);
+    }
+
+    const { data } = await q;
+    return (data ?? []).map((a) => ({
+      id:         a.id,
+      title:      a.title,
+      content:    a.content,
+      tags:       a.tags ?? [],
+      similarity: similarities?.get(a.id) ?? null,
+    }));
+  }
+
   const subject = (ticket.subject ?? "").trim();
   const bodyPreview = (ticket.body_plain ?? "").trim().slice(0, BODY_PREVIEW_CHARS);
   const queryText = [subject, bodyPreview].filter(Boolean).join("\n\n");
 
-  // No text to embed → empty graceful response.
+  // No text to embed — fall back to listing published articles
   if (queryText.length === 0) {
-    return c.json({ kbArticles: [], similarResolvedCases: [] });
+    const kbArticles = await fetchPublishedArticles();
+    return c.json({ kbArticles, similarResolvedCases: [] });
   }
 
   let queryVector: number[];
@@ -1447,18 +1475,20 @@ tickets.get("/:id/knowledge-context", async (c) => {
     queryVector = await generateEmbedding(queryText);
   } catch (err) {
     console.error(`[knowledge-context] generateEmbedding failed for ticket ${id}:`, err);
-    return c.json({ kbArticles: [], similarResolvedCases: [], degraded: true });
+    // Embedding service unavailable — fall back to published list
+    const kbArticles = await fetchPublishedArticles();
+    return c.json({ kbArticles, similarResolvedCases: [], degraded: true });
   }
 
   const [kbResult, similarResult] = await Promise.allSettled([
     supabase.rpc("find_relevant_kb", {
       p_query_embedding: queryVector,
-      p_user_id: user.id,
+      p_user_id: userId,
       p_limit: KB_LIMIT,
     }),
     supabase.rpc("find_similar_tickets", {
       p_ticket_id: id,
-      p_user_id: user.id,
+      p_user_id: userId,
       p_limit: SIMILAR_CASES_LIMIT,
       p_threshold: KNOWLEDGE_CONTEXT_THRESHOLD,
       p_status_filter: "resolved",
@@ -1475,12 +1505,22 @@ tickets.get("/:id/knowledge-context", async (c) => {
     similarity: number;
   };
 
-  const kbArticles =
+  // Build similarity map from RPC result
+  const rpcRows: KbRow[] =
     kbResult.status === "fulfilled" && !kbResult.value.error
-      ? ((kbResult.value.data ?? []) as KbRow[])
-          .filter((r) => r.similarity > KNOWLEDGE_CONTEXT_THRESHOLD)
-          .map((r) => ({ id: r.article_id, title: r.title, similarity: r.similarity }))
+      ? ((kbResult.value.data ?? []) as KbRow[]).filter(
+          (r) => r.similarity > KNOWLEDGE_CONTEXT_THRESHOLD,
+        )
       : [];
+
+  let kbArticles: Awaited<ReturnType<typeof fetchPublishedArticles>>;
+  if (rpcRows.length > 0) {
+    const simMap = new Map(rpcRows.map((r) => [r.article_id, r.similarity]));
+    kbArticles = await fetchPublishedArticles(rpcRows.map((r) => r.article_id), simMap);
+  } else {
+    // RPC returned nothing (no embeddings yet) — fall back to published list
+    kbArticles = await fetchPublishedArticles();
+  }
 
   const similarResolvedCases =
     similarResult.status === "fulfilled" && !similarResult.value.error

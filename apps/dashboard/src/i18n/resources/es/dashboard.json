@@ -208,6 +208,19 @@
     "hideResolution": "Ocultar",
     "similarity": "Similitud",
     "resolvedOn": "Resuelto el",
-    "ticketNumber": "Caso #{{number}}"
+    "ticketNumber": "Caso #{{number}}",
+    "panelTitle": "Contexto del Cliente",
+    "tabClient": "Cliente",
+    "tabSimilar": "Similares",
+    "tabArticles": "Artículos",
+    "tabEscalate": "Escalar",
+    "kpiPlan": "Plan",
+    "kpiMrr": "MRR",
+    "kpiSince": "Desde",
+    "kpiTickets": "Tickets",
+    "kpiCsat": "CSAT",
+    "kpiNps": "NPS",
+    "lastInteractions": "Últimas interacciones",
+    "resolvedCases": "casos resueltos"
   }
 }

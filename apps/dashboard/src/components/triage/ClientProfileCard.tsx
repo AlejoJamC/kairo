@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Circle,
@@ -11,8 +11,6 @@ import {
   Check,
 } from "lucide-react";
 import { useTriageStore } from "@/stores/triage-store";
-import { apiCall } from "@/lib/api-client";
-import type { ClientProfile } from "@/stores/triage-store";
 
 // ---------------------------------------------------------------------------
 // Plan badge styles
@@ -58,13 +56,12 @@ function initials(name: string | null): string {
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton
+// Skeleton — exported so parent can compose it
 // ---------------------------------------------------------------------------
 
-function Skeleton() {
+export function ClientProfileSkeleton() {
   return (
-    <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: 10 }}>
-      {/* Avatar + name row */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div className="shimmer" style={{ width: 36, height: 36, borderRadius: 999, flexShrink: 0 }} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -72,54 +69,39 @@ function Skeleton() {
           <div className="shimmer" style={{ height: 9, width: 64 }} />
         </div>
       </div>
-      {/* Badges row */}
       <div style={{ display: "flex", gap: 6 }}>
         <div className="shimmer" style={{ height: 16, width: 56, borderRadius: 999 }} />
         <div className="shimmer" style={{ height: 16, width: 80, borderRadius: 999 }} />
       </div>
-      {/* Stats row */}
       <div className="shimmer" style={{ height: 10, width: 144 }} />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// ClientProfileCard
+// ClientProfileCard — pure display, reads from store.
+// Fetch is owned by the parent (AiAssistant) so it runs regardless of
+// which tab is active.
 // ---------------------------------------------------------------------------
 
-export function ClientProfileCard() {
+interface ClientProfileCardProps {
+  /** When true the parent is still loading — show skeleton */
+  loading?: boolean;
+}
+
+export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
   const { t, i18n } = useTranslation("dashboard");
-  const { selectedTicketId, clientProfile, setClientProfile } = useTriageStore();
+  const { selectedTicketId, clientProfile } = useTriageStore();
 
-  const [loading,  setLoading]  = useState(false);
-  const [copied,   setCopied]   = useState(false);
-
-  useEffect(() => {
-    if (!selectedTicketId) {
-      setClientProfile(null);
-      return;
-    }
-
-    setClientProfile(null);
-    setLoading(true);
-
-    apiCall(`/api/v1/tickets/${selectedTicketId}/client-profile`)
-      .then(async (res) => {
-        if (!res.ok) return;
-        const data: ClientProfile = await res.json();
-        setClientProfile(data);
-      })
-      .catch(() => { /* no client linked — silent empty state */ })
-      .finally(() => setLoading(false));
-  }, [selectedTicketId]);
+  const [copied, setCopied] = useState(false);
 
   if (!selectedTicketId) return null;
 
-  if (loading) return <Skeleton />;
+  if (loading) return <ClientProfileSkeleton />;
 
   if (!clientProfile) {
     return (
-      <p style={{ padding: "10px 12px", fontSize: 12, color: "var(--k-text-tertiary)", fontStyle: "italic" }}>
+      <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", fontStyle: "italic", margin: 0 }}>
         {t("clientProfile.noData")}
       </p>
     );
@@ -137,9 +119,9 @@ export function ClientProfileCard() {
     recentTickets,
   } = clientProfile;
 
-  const lang        = i18n.language === "en" ? "en" : "es";
-  const planLabel   = PLAN_LABEL[clientType]?.[lang] ?? PLAN_LABEL.unknown[lang];
-  const planStyle   = PLAN_STYLE[clientType]  ?? PLAN_STYLE.unknown;
+  const lang      = i18n.language === "en" ? "en" : "es";
+  const planLabel = PLAN_LABEL[clientType]?.[lang] ?? PLAN_LABEL.unknown[lang];
+  const planStyle = PLAN_STYLE[clientType]  ?? PLAN_STYLE.unknown;
 
   function handleCopyPhone() {
     if (!phone) return;
@@ -150,9 +132,9 @@ export function ClientProfileCard() {
   }
 
   return (
-    <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
-      {/* ── Avatar + name ───────────────────────────────────────────────── */}
+      {/* Avatar + name */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{
           width: 36, height: 36, borderRadius: 999, flexShrink: 0,
@@ -174,7 +156,7 @@ export function ClientProfileCard() {
         </div>
       </div>
 
-      {/* ── Badges row ──────────────────────────────────────────────────── */}
+      {/* Badges */}
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
         <span style={{
           display: "inline-flex", alignItems: "center", borderRadius: 999,
@@ -183,13 +165,11 @@ export function ClientProfileCard() {
         }}>
           {planLabel}
         </span>
-
         {isNewClient && (
           <span style={{ display: "inline-flex", alignItems: "center", borderRadius: 999, padding: "2px 8px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", background: "#E0F2FE", color: "#0369A1", border: "1px solid #BAE6FD" }}>
             {t("clientProfile.newClient")}
           </span>
         )}
-
         {isRecurrent && (
           <span
             style={{ display: "inline-flex", alignItems: "center", borderRadius: 999, padding: "2px 8px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A", cursor: "default" }}
@@ -200,15 +180,11 @@ export function ClientProfileCard() {
         )}
       </div>
 
-      {/* ── Phone ───────────────────────────────────────────────────────── */}
+      {/* Phone copy */}
       {phone && (
         <button
           onClick={handleCopyPhone}
-          style={{
-            display: "flex", width: "100%", alignItems: "center", gap: 6,
-            borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--k-text-secondary)",
-            background: "none", border: "none", cursor: "pointer", transition: "background 0.1s",
-          }}
+          style={{ display: "flex", width: "100%", alignItems: "center", gap: 6, borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--k-text-secondary)", background: "none", border: "none", cursor: "pointer", transition: "background 0.1s" }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--k-surface-2)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
         >
@@ -216,12 +192,11 @@ export function ClientProfileCard() {
           <span style={{ flex: 1, textAlign: "left", fontFamily: "var(--k-font-mono)" }}>{phone}</span>
           {copied
             ? <Check style={{ width: 11, height: 11, color: "#10B981", flexShrink: 0 }} />
-            : <Copy  style={{ width: 11, height: 11, color: "var(--k-text-tertiary)", flexShrink: 0 }} />
-          }
+            : <Copy  style={{ width: 11, height: 11, color: "var(--k-text-tertiary)", flexShrink: 0 }} />}
         </button>
       )}
 
-      {/* ── Stats row ───────────────────────────────────────────────────── */}
+      {/* Stats row */}
       <p style={{ padding: "0 4px", fontSize: 11, color: "var(--k-text-secondary)", margin: 0 }}>
         <span style={{ fontWeight: 600, color: "var(--k-text-primary)" }}>{totalTickets}</span>
         {" "}{t("clientProfile.ticketsTotal")}
@@ -230,7 +205,7 @@ export function ClientProfileCard() {
         {" "}{t("clientProfile.ticketsThisMonth")}
       </p>
 
-      {/* ── Recent tickets ──────────────────────────────────────────────── */}
+      {/* Recent tickets */}
       {recentTickets.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <p style={{ padding: "0 4px", fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--k-text-tertiary)", margin: 0 }}>
@@ -239,11 +214,7 @@ export function ClientProfileCard() {
           {recentTickets.map((rt) => (
             <div
               key={rt.id}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                borderRadius: 6, padding: "5px 8px", fontSize: 11, color: "var(--k-text-secondary)",
-                transition: "background 0.1s",
-              }}
+              style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 6, padding: "5px 8px", fontSize: 11, color: "var(--k-text-secondary)", transition: "background 0.1s" }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--k-surface-2)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
             >
