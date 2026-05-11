@@ -32,7 +32,9 @@
     "slaHours_one": "{{count}}h {{minutes}}m",
     "slaHours_other": "{{count}}h {{minutes}}m",
     "slaMinutes_one": "{{count}}m",
-    "slaMinutes_other": "{{count}}m"
+    "slaMinutes_other": "{{count}}m",
+    "similares": "similar grouped",
+    "priorityScoreTooltip": "Priority weight"
   },
   "ticketList": {
     "header": "Tickets",
@@ -44,7 +46,14 @@
     "checkingEmails": "Checking your recent emails...",
     "noMatch": "No tickets match the current filters.",
     "classified": "classified",
-    "unclassified": "unclassified"
+    "unclassified": "unclassified",
+    "filterAll": "All",
+    "filterPrioritized": "PX",
+    "moreActions": "More actions",
+    "syncGmail": "Sync Gmail",
+    "syncing": "Syncing...",
+    "syncSuccess": "{{created}} new · {{skipped}} skipped",
+    "syncError": "Sync failed"
   },
   "tickets": {
     "title": "Open Tickets",
@@ -67,6 +76,41 @@
     "guided": "Guided",
     "autoResolvable": "Auto Resolved",
     "clients": "Clients"
+  },
+  "topChrome": {
+    "searchPlaceholder": "Search tickets, clients, KB…",
+    "notifications": {
+      "title": "Activity",
+      "unreadCount": "{{count}} unread",
+      "markRead": "Mark read",
+      "tabAll": "All",
+      "tabUnread": "Unread",
+      "tabMentions": "@mentions",
+      "empty": "◌ no notifications",
+      "liveStream": "live stream",
+      "viewAll": "View all activity →"
+    },
+    "account": {
+      "roleBadge": "Agent · Support",
+      "statusSection": "Status",
+      "statusOnline": "Online",
+      "statusBusy": "On call",
+      "statusAway": "Away",
+      "statusOffline": "Invisible",
+      "workspaceSection": "Workspace",
+      "workspaceName": "Kairo Workspace",
+      "workspacePlan": "Pro plan",
+      "workspaceChange": "change",
+      "menuProfile": "My profile",
+      "menuSettings": "Settings",
+      "menuShortcuts": "Keyboard shortcuts",
+      "menuDocs": "Documentation",
+      "appearanceSection": "Appearance",
+      "themeLight": "Light",
+      "themeAuto": "Auto",
+      "themeDark": "Dark",
+      "signOut": "Sign out"
+    }
   },
   "awaitingView": {
     "title": "Awaiting Reply",
@@ -91,13 +135,90 @@
     "saving": "Saving...",
     "saveSuccess": "Profile updated successfully",
     "saveError": "Failed to update profile",
+    "navHeading": "Settings",
+    "discard": "Discard",
+    "saveChanges": "Save changes",
+    "savingState": "Saving…",
+    "savedSuccess": "Changes saved",
+    "savedError": "Error saving",
+    "comingSoon": "Section under construction.",
+    "nav": {
+      "workspace": "Workspace",
+      "team": "Team",
+      "integrations": "Integrations",
+      "triage": "Triage Engine",
+      "kb": "Knowledge Base",
+      "billing": "Billing",
+      "security": "Security",
+      "api": "API & Webhooks"
+    },
+    "workspace": {
+      "title": "Workspace",
+      "nameLabel": "Workspace name",
+      "urlLabel": "URL",
+      "urlPlaceholder": "kairo.app/my-company",
+      "timezoneLabel": "Timezone",
+      "timezonePlaceholder": "America/Bogotá (UTC-5)",
+      "langTitle": "Default workspace language",
+      "langDesc": "Affects classification, drafts and KB.",
+      "langLatam": "Español (LATAM)",
+      "langSpain": "Español (España)",
+      "langEnglish": "English"
+    },
+    "team": {
+      "title": "Team",
+      "seats": "{{used}} / {{total}} seats used in {{plan}} plan.",
+      "invite": "Invite",
+      "statusActive": "active",
+      "statusAway": "away"
+    },
+    "integrations": {
+      "title": "Integrations",
+      "subtitle": "Connect the channels where your support arrives.",
+      "configure": "Configure",
+      "connect": "Connect",
+      "requestAccess": "Request access",
+      "comingSoon": "COMING SOON"
+    },
+    "triage": {
+      "title": "Triage Engine",
+      "subtitle": "How Kairo decides what enters your cockpit and what gets filtered.",
+      "tiersLabel": "Active tiers",
+      "tier0Name": "Heuristics — spam filter",
+      "tier0Desc": "Simple rules + blacklists. ~40% of volume.",
+      "tier1Name": "Urgent — top 1",
+      "tier1Desc": "Full LLM on the most urgent ticket, < 5s.",
+      "tier2Name": "Rest — classifier",
+      "tier2Desc": "Embeddings + background classifier.",
+      "tier3Name": "Long tail — clustering",
+      "tier3Desc": "Semantic clusters without SLA.",
+      "confidenceTitle": "Auto-resolution confidence threshold",
+      "confidenceDesc": "Tickets with confidence ≥ {{threshold}} are resolved automatically. Below that they go to the cockpit.",
+      "confidenceLow": "0.50 conservative",
+      "confidenceHigh": "1.00 strict",
+      "categoriesLabel": "Custom categories",
+      "categoryPlaceholder": "New category",
+      "addCategory": "Add",
+      "cat_billing": "Billing",
+      "cat_apiBugs": "API · Bugs",
+      "cat_configuration": "Configuration",
+      "cat_sales": "Sales",
+      "cat_product": "Product",
+      "cat_onboarding": "Onboarding",
+      "cat_account": "Account"
+    },
     "security": {
       "title": "Security",
       "passwordLabel": "Password",
       "passwordEnabledDesc": "Email/password login is enabled on your account",
       "passwordDisabledDesc": "Add a password to enable email/password login",
       "changePassword": "Change Password",
-      "setPassword": "Set Password"
+      "setPassword": "Set Password",
+      "passwordActiveDesc": "Password login is active on your account",
+      "passwordNoneDesc": "No password — magic link access only",
+      "twoFaLabel": "Two-factor authentication",
+      "twoFaDesc": "Extra security layer with TOTP app.",
+      "comingSoon": "COMING SOON"
     }
   },
   "changePassword": {
@@ -133,7 +254,16 @@
     "escalate": "Escalate",
     "attach": "Attach",
     "quickReply": "Quick Reply",
-    "sendHint": "⌘ + Enter to send"
+    "sendHint": "⌘ + Enter to send",
+    "selectPrompt": "Select a ticket to view details",
+    "unknownSender": "Unknown sender",
+    "noSubject": "(No subject)",
+    "noBody": "No email body available."
+  },
+  "ticketHeader": {
+    "assignToMe": "Assign to me",
+    "assigning": "Assigning…",
+    "assigned": "Assigned"
   },
   "replyBar": {
     "sending": "Sending...",
@@ -142,7 +272,14 @@
     "dismissSuggestion": "Dismiss suggestion",
     "errorGeneric": "Failed to send. Please try again.",
     "errorTokenExpired": "Your Gmail session expired. Reconnect your account in Settings.",
-    "errorNoGmail": "No active Gmail integration found for this ticket."
+    "errorNoGmail": "No active Gmail integration found for this ticket.",
+    "aiBadge": "AI DRAFT",
+    "aiDraftSource": "generated from similar cases + KB",
+    "regenerate": "Regenerate",
+    "sendAndResolve": "Send & Resolve",
+    "actionReconocer": "Acknowledge",
+    "actionResolver": "Resolve",
+    "actionEscalar": "Escalate"
   },
   "templatePicker": {
     "searchPlaceholder": "Search template...",
@@ -218,9 +355,12 @@
     "kpiMrr": "MRR",
     "kpiSince": "Since",
     "kpiTickets": "Tickets",
+    "kpiTicketsTooltip": "{{total}} tickets total · {{month}} this month",
     "kpiCsat": "CSAT",
     "kpiNps": "NPS",
     "lastInteractions": "Last interactions",
-    "resolvedCases": "resolved cases"
+    "resolvedCases": "resolved cases",
+    "featureDisabledTitle": "Feature disabled",
+    "featureDisabledEscalate": "The escalation flow is not ready yet. Come back when it's been refined."
   }
 }

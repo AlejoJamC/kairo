@@ -32,11 +32,13 @@
     "slaHours_one": "{{count}}h {{minutes}}m",
     "slaHours_other": "{{count}}h {{minutes}}m",
     "slaMinutes_one": "{{count}}m",
-    "slaMinutes_other": "{{count}}m"
+    "slaMinutes_other": "{{count}}m",
+    "similares": "similares agrupados",
+    "priorityScoreTooltip": "Peso de prioridad"
   },
   "ticketList": {
     "header": "Tickets",
-    "classifyAll": "Clasificar Todo",
+    "classifyAll": "Clasificar todo",
     "classifying": "Clasificando...",
     "scanning": "Escaneando correos... {{count}} ticket clasificado",
     "scanning_other": "Escaneando correos... {{count}} tickets clasificados",
@@ -44,7 +46,14 @@
     "checkingEmails": "Revisando tus correos recientes...",
     "noMatch": "Ningún ticket coincide con los filtros actuales.",
     "classified": "clasificado",
-    "unclassified": "sin clasificar"
+    "unclassified": "sin clasificar",
+    "filterAll": "Todos",
+    "filterPrioritized": "PX",
+    "moreActions": "Más acciones",
+    "syncGmail": "Sincronizar Gmail",
+    "syncing": "Sincronizando...",
+    "syncSuccess": "{{created}} nuevos · {{skipped}} omitidos",
+    "syncError": "Error al sincronizar"
   },
   "tickets": {
     "title": "Tickets Abiertos",
@@ -67,6 +76,41 @@
     "guided": "Guiado",
     "autoResolvable": "Auto Resuelto",
     "clients": "Clientes"
+  },
+  "topChrome": {
+    "searchPlaceholder": "Buscar tickets, clientes, KB…",
+    "notifications": {
+      "title": "Actividad",
+      "unreadCount": "{{count}} sin leer",
+      "markRead": "Marcar leídas",
+      "tabAll": "Todas",
+      "tabUnread": "No leídas",
+      "tabMentions": "@menciones",
+      "empty": "◌ sin notificaciones",
+      "liveStream": "stream en vivo",
+      "viewAll": "Ver toda la actividad →"
+    },
+    "account": {
+      "roleBadge": "Agente · Soporte",
+      "statusSection": "Estado",
+      "statusOnline": "En línea",
+      "statusBusy": "En llamada",
+      "statusAway": "Ausente",
+      "statusOffline": "Invisible",
+      "workspaceSection": "Workspace",
+      "workspaceName": "Kairo Workspace",
+      "workspacePlan": "plan Pro",
+      "workspaceChange": "cambiar",
+      "menuProfile": "Mi perfil",
+      "menuSettings": "Configuración",
+      "menuShortcuts": "Atajos de teclado",
+      "menuDocs": "Documentación",
+      "appearanceSection": "Apariencia",
+      "themeLight": "Claro",
+      "themeAuto": "Auto",
+      "themeDark": "Oscuro",
+      "signOut": "Cerrar sesión"
+    }
   },
   "awaitingView": {
     "title": "En espera del cliente",
@@ -91,13 +135,90 @@
     "saving": "Guardando...",
     "saveSuccess": "Perfil actualizado exitosamente",
     "saveError": "Error al actualizar el perfil",
+    "navHeading": "Configuración",
+    "discard": "Descartar",
+    "saveChanges": "Guardar cambios",
+    "savingState": "Guardando…",
+    "savedSuccess": "Cambios guardados",
+    "savedError": "Error al guardar",
+    "comingSoon": "Sección en construcción.",
+    "nav": {
+      "workspace": "Workspace",
+      "team": "Equipo",
+      "integrations": "Integraciones",
+      "triage": "Triage Engine",
+      "kb": "Base de Conocimiento",
+      "billing": "Facturación",
+      "security": "Seguridad",
+      "api": "API & Webhooks"
+    },
+    "workspace": {
+      "title": "Workspace",
+      "nameLabel": "Nombre del workspace",
+      "urlLabel": "URL",
+      "urlPlaceholder": "kairo.app/mi-empresa",
+      "timezoneLabel": "Zona horaria",
+      "timezonePlaceholder": "América/Bogotá (UTC-5)",
+      "langTitle": "Idioma por defecto del workspace",
+      "langDesc": "Afecta clasificación, borradores y KB.",
+      "langLatam": "Español (LATAM)",
+      "langSpain": "Español (España)",
+      "langEnglish": "English"
+    },
+    "team": {
+      "title": "Equipo",
+      "seats": "{{used}} / {{total}} asientos usados en el plan {{plan}}.",
+      "invite": "Invitar",
+      "statusActive": "activo",
+      "statusAway": "ausente"
+    },
+    "integrations": {
+      "title": "Integraciones",
+      "subtitle": "Conectá los canales por donde llega tu soporte.",
+      "configure": "Configurar",
+      "connect": "Conectar",
+      "requestAccess": "Solicitar acceso",
+      "comingSoon": "PRÓXIMAMENTE"
+    },
+    "triage": {
+      "title": "Triage Engine",
+      "subtitle": "Cómo Kairo decide qué entra a tu cockpit y qué se filtra.",
+      "tiersLabel": "Tiers activos",
+      "tier0Name": "Heurística — filtro de spam",
+      "tier0Desc": "Reglas simples + listas negras. ~40% del volumen.",
+      "tier1Name": "Urgente — top 1",
+      "tier1Desc": "LLM completo en el ticket más urgente, < 5s.",
+      "tier2Name": "Resto — clasificador",
+      "tier2Desc": "Embeddings + clasificador en background.",
+      "tier3Name": "Cola larga — agrupamiento",
+      "tier3Desc": "Clusters semánticos sin SLA.",
+      "confidenceTitle": "Umbral de confianza para auto-resolución",
+      "confidenceDesc": "Tickets con confianza ≥ {{threshold}} se resuelven automáticamente. Por debajo van al cockpit.",
+      "confidenceLow": "0.50 conservador",
+      "confidenceHigh": "1.00 estricto",
+      "categoriesLabel": "Categorías personalizadas",
+      "categoryPlaceholder": "Nueva categoría",
+      "addCategory": "Agregar",
+      "cat_billing": "Facturación",
+      "cat_apiBugs": "API · Bugs",
+      "cat_configuration": "Configuración",
+      "cat_sales": "Ventas",
+      "cat_product": "Producto",
+      "cat_onboarding": "Onboarding",
+      "cat_account": "Cuenta"
+    },
     "security": {
       "title": "Seguridad",
       "passwordLabel": "Contraseña",
       "passwordEnabledDesc": "El inicio de sesión con correo y contraseña está habilitado",
       "passwordDisabledDesc": "Agrega una contraseña para habilitar el inicio de sesión",
       "changePassword": "Cambiar Contraseña",
-      "setPassword": "Establecer Contraseña"
+      "setPassword": "Establecer Contraseña",
+      "passwordActiveDesc": "Contraseña activa en tu cuenta",
+      "passwordNoneDesc": "Sin contraseña — acceso sólo por link mágico",
+      "twoFaLabel": "Autenticación de dos factores",
+      "twoFaDesc": "Capa extra de seguridad con app TOTP.",
+      "comingSoon": "PRÓXIMAMENTE"
     }
   },
   "changePassword": {
@@ -133,7 +254,16 @@
     "escalate": "Escalar",
     "attach": "Adjuntar",
     "quickReply": "Respuesta Rápida",
-    "sendHint": "⌘ + Enter para enviar"
+    "sendHint": "⌘ + Enter para enviar",
+    "selectPrompt": "Selecciona un ticket para ver los detalles",
+    "unknownSender": "Remitente desconocido",
+    "noSubject": "(Sin asunto)",
+    "noBody": "No hay cuerpo de correo disponible."
+  },
+  "ticketHeader": {
+    "assignToMe": "Asignar a mí",
+    "assigning": "Asignando…",
+    "assigned": "Asignado"
   },
   "replyBar": {
     "sending": "Enviando...",
@@ -142,7 +272,14 @@
     "dismissSuggestion": "Descartar sugerencia",
     "errorGeneric": "Error al enviar. Intenta de nuevo.",
     "errorTokenExpired": "Tu sesión de Gmail expiró. Reconecta tu cuenta en Configuración.",
-    "errorNoGmail": "No hay una integración de Gmail activa para este ticket."
+    "errorNoGmail": "No hay una integración de Gmail activa para este ticket.",
+    "aiBadge": "BORRADOR IA",
+    "aiDraftSource": "generado a partir de casos similares + KB",
+    "regenerate": "Regenerar",
+    "sendAndResolve": "Enviar y resolver",
+    "actionReconocer": "Reconocer",
+    "actionResolver": "Resolver",
+    "actionEscalar": "Escalar"
   },
   "templatePicker": {
     "searchPlaceholder": "Buscar plantilla...",
@@ -218,9 +355,12 @@
     "kpiMrr": "MRR",
     "kpiSince": "Desde",
     "kpiTickets": "Tickets",
+    "kpiTicketsTooltip": "{{total}} tickets en total · {{month}} este mes",
     "kpiCsat": "CSAT",
     "kpiNps": "NPS",
     "lastInteractions": "Últimas interacciones",
-    "resolvedCases": "casos resueltos"
+    "resolvedCases": "casos resueltos",
+    "featureDisabledTitle": "Feature deshabilitado",
+    "featureDisabledEscalate": "El flujo de escalación aún no está listo. Vuelve cuando esté refinado."
   }
 }

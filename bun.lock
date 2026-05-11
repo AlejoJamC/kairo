@@ -31,6 +31,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@kairo/env": "workspace:*",
+        "@kairo/feature-flags": "workspace:*",
         "@kairo/types": "workspace:*",
         "@kairo/ui": "workspace:*",
         "@supabase/supabase-js": "^2.105.3",
@@ -152,6 +153,13 @@
       },
       "devDependencies": {
         "@types/node": "^25.6.0",
+        "typescript": "~6.0.3",
+      },
+    },
+    "packages/feature-flags": {
+      "name": "@kairo/feature-flags",
+      "version": "0.0.0",
+      "devDependencies": {
         "typescript": "~6.0.3",
       },
     },
@@ -651,6 +659,8 @@
     "@kairo/dashboard": ["@kairo/dashboard@workspace:apps/dashboard"],
 
     "@kairo/env": ["@kairo/env@workspace:packages/env"],
+
+    "@kairo/feature-flags": ["@kairo/feature-flags@workspace:packages/feature-flags"],
 
     "@kairo/i18n": ["@kairo/i18n@workspace:packages/i18n"],
 

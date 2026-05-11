@@ -1,21 +1,73 @@
 import * as React from "react";
-import { Paperclip, Send, X, Zap, Sparkles } from "lucide-react";
+import { Paperclip, Send, X, Zap, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { TemplatePicker } from "./template-picker";
 import { useTriageStore } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
 
+// ---------------------------------------------------------------------------
+// Action button types
+// ---------------------------------------------------------------------------
+
+type TicketAction = "reconocer" | "resolver" | "escalar";
+
+const ACTION_CONFIG: Record<
+  TicketAction,
+  { labelKey: string; defaultLabel: string; status: string; style: React.CSSProperties }
+> = {
+  reconocer: {
+    labelKey: "replyBar.actionReconocer",
+    defaultLabel: "Reconocer",
+    status: "in_progress",
+    style: {
+      background: "#EEF2FF",
+      color: "#2B5BFF",
+      border: "1px solid #C7D2FE",
+    },
+  },
+  resolver: {
+    labelKey: "replyBar.actionResolver",
+    defaultLabel: "Resolver",
+    status: "resolved",
+    style: {
+      background: "#ECFDF5",
+      color: "#047857",
+      border: "1px solid #A7F3D0",
+    },
+  },
+  escalar: {
+    labelKey: "replyBar.actionEscalar",
+    defaultLabel: "Escalar",
+    status: "escalated",
+    style: {
+      background: "#FFF7ED",
+      color: "#C2410C",
+      border: "1px solid #FED7AA",
+    },
+  },
+};
+
+// ---------------------------------------------------------------------------
+// ReplyBar
+// ---------------------------------------------------------------------------
+
 export function ReplyBar() {
   const { t } = useTranslation("dashboard");
   const selectedTicketId = useTriageStore((s) => s.selectedTicketId);
+  const tickets = useTriageStore((s) => s.tickets);
   const aiSuggestedReply = useTriageStore((s) => s.aiSuggestedReply);
   const clearSuggestedReply = useTriageStore((s) => s.clearSuggestedReply);
+  const updateClassification = useTriageStore((s) => s.updateClassification);
+
+  const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
+  const currentStatus = ticket?.status ?? "open";
 
   const [draft, setDraft] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sendError, setSendError] = React.useState<string | null>(null);
   const [sendSuccess, setSendSuccess] = React.useState(false);
   const [showAiBanner, setShowAiBanner] = React.useState(false);
+  const [actionLoading, setActionLoading] = React.useState<TicketAction | null>(null);
 
   React.useEffect(() => {
     if (!aiSuggestedReply?.trim()) return;
@@ -36,7 +88,7 @@ export function ReplyBar() {
     setShowAiBanner(false);
   }
 
-  async function handleSend() {
+  async function handleSend(resolveAfter = false) {
     if (!draft.trim() || !selectedTicketId || sending) return;
     setSending(true);
     setSendError(null);
@@ -58,7 +110,6 @@ export function ReplyBar() {
               ? t("replyBar.errorNoGmail")
               : t("replyBar.errorGeneric");
         setSendError(msg);
-        console.error("[ReplyBar] send failed", body);
         return;
       }
 
@@ -66,22 +117,55 @@ export function ReplyBar() {
       setSendSuccess(true);
       setShowAiBanner(false);
       clearSuggestedReply();
-    } catch (err) {
-      console.error("[ReplyBar] send error", err);
+
+      if (resolveAfter) {
+        await patchStatus("resolved");
+      }
+    } catch {
       setSendError(t("replyBar.errorGeneric"));
     } finally {
       setSending(false);
     }
   }
 
+  async function patchStatus(status: string) {
+    if (!selectedTicketId) return;
+    try {
+      const res = await apiCall(`/api/v1/tickets/${selectedTicketId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        const body = await res.json() as { ticket?: { status?: string } };
+        if (body.ticket?.status) updateClassification(selectedTicketId, body.ticket as never);
+      }
+    } catch {
+      // silent — status is best-effort
+    }
+  }
+
+  async function handleAction(action: TicketAction) {
+    if (!selectedTicketId || actionLoading) return;
+    setActionLoading(action);
+    await patchStatus(ACTION_CONFIG[action].status);
+    setActionLoading(null);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
-      handleSend();
+      handleSend(false);
     }
   }
 
   const canSend = !!draft.trim() && !!selectedTicketId && !sending;
+
+  // Which action buttons to show based on current status
+  const visibleActions: TicketAction[] = currentStatus === "open"
+    ? ["reconocer", "resolver", "escalar"]
+    : currentStatus === "in_progress"
+      ? ["resolver", "escalar"]
+      : [];
 
   return (
     <div
@@ -89,11 +173,11 @@ export function ReplyBar() {
         position: "relative",
         borderTop: "1px solid var(--k-border)",
         background: "white",
-        padding: "10px 16px",
+        padding: "12px 16px 10px",
         flexShrink: 0,
       }}
     >
-      {/* Left accent stripe (cockpit composer signature) */}
+      {/* Left accent stripe */}
       <div
         style={{
           position: "absolute",
@@ -105,101 +189,193 @@ export function ReplyBar() {
         }}
       />
 
-      {/* AI draft banner */}
-      {showAiBanner && (
+      {/* BORRADOR IA card */}
+      {showAiBanner ? (
         <div
           style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 8,
-            marginBottom: 8,
-            padding: "6px 10px",
+            marginBottom: 10,
+            border: "1px solid #C7D2FE",
+            borderRadius: 10,
+            overflow: "hidden",
             background: "var(--k-accent-subtle)",
-            borderRadius: 6,
-            border: "1px solid #DBE3FF",
           }}
         >
+          {/* Card header */}
           <div
-            style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}
-          >
-            <Sparkles
-              style={{ width: 12, height: 12, color: "var(--k-accent)", flexShrink: 0 }}
-            />
-            <p
-              style={{ fontSize: 12, color: "var(--k-text-secondary)", margin: 0 }}
-            >
-              {t("replyBar.aiSuggestionBanner")}
-            </p>
-          </div>
-          <button
-            type="button"
             style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: 2,
-              color: "var(--k-accent)",
               display: "flex",
               alignItems: "center",
-              borderRadius: 3,
+              justifyContent: "space-between",
+              padding: "7px 10px 6px",
+              borderBottom: "1px solid #DBE3FF",
             }}
-            onClick={() => setShowAiBanner(false)}
-            aria-label={t("replyBar.dismissSuggestion")}
           >
-            <X style={{ width: 14, height: 14 }} />
-          </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: "2px 7px",
+                  borderRadius: 999,
+                  background: "var(--k-accent)",
+                  color: "white",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                ✦ {t("replyBar.aiBadge", "BORRADOR IA")}
+              </span>
+              <span style={{ fontSize: 11, color: "var(--k-text-tertiary)" }}>
+                {t("replyBar.aiDraftSource", "generado a partir de casos similares + KB")}
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft("");
+                  clearSuggestedReply();
+                  setShowAiBanner(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 3,
+                  fontSize: 11,
+                  color: "var(--k-accent)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "2px 4px",
+                  borderRadius: 4,
+                }}
+              >
+                <RefreshCw style={{ width: 10, height: 10 }} />
+                {t("replyBar.regenerate", "Regenerar")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAiBanner(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 2,
+                  color: "var(--k-text-tertiary)",
+                  display: "flex",
+                  alignItems: "center",
+                  borderRadius: 3,
+                }}
+                aria-label={t("replyBar.dismissSuggestion")}
+              >
+                <X style={{ width: 13, height: 13 }} />
+              </button>
+            </div>
+          </div>
+
+          {/* Editable draft text */}
+          <textarea
+            rows={4}
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              if (sendError) setSendError(null);
+              if (sendSuccess) setSendSuccess(false);
+            }}
+            onKeyDown={handleKeyDown}
+            style={{
+              width: "100%",
+              resize: "vertical",
+              border: "none",
+              background: "transparent",
+              padding: "10px 12px",
+              fontSize: 13,
+              lineHeight: 1.6,
+              color: "var(--k-text-primary)",
+              outline: "none",
+              fontFamily: "inherit",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+      ) : (
+        /* Standard composer textarea */
+        <textarea
+          rows={3}
+          placeholder={t("ticketDetail.replyPlaceholder")}
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (sendError) setSendError(null);
+            if (sendSuccess) setSendSuccess(false);
+          }}
+          onKeyDown={handleKeyDown}
+          style={{
+            width: "100%",
+            resize: "vertical",
+            borderRadius: 8,
+            border: "1px solid var(--k-border)",
+            background: "var(--k-surface)",
+            padding: "10px 12px",
+            fontSize: 14,
+            lineHeight: 1.6,
+            color: "var(--k-text-primary)",
+            outline: "none",
+            fontFamily: "inherit",
+            boxSizing: "border-box",
+            marginBottom: 8,
+            transition: "border-color 0.1s ease",
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = "var(--k-accent)";
+            e.currentTarget.style.boxShadow = "0 0 0 2px #EEF2FF";
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = "var(--k-border)";
+            e.currentTarget.style.boxShadow = "none";
+          }}
+        />
+      )}
+
+      {/* Action buttons row — Reconocer / Resolver / Escalar */}
+      {visibleActions.length > 0 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          {visibleActions.map((action) => {
+            const cfg = ACTION_CONFIG[action];
+            const loading = actionLoading === action;
+            return (
+              <button
+                key={action}
+                type="button"
+                disabled={!!actionLoading}
+                onClick={() => handleAction(action)}
+                style={{
+                  ...cfg.style,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: "4px 11px",
+                  borderRadius: 999,
+                  cursor: actionLoading ? "wait" : "pointer",
+                  opacity: actionLoading && !loading ? 0.5 : 1,
+                  transition: "opacity 0.1s ease",
+                }}
+              >
+                {loading ? "…" : t(cfg.labelKey, cfg.defaultLabel)}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* Composer area */}
-      <textarea
-        rows={3}
-        placeholder={t("ticketDetail.replyPlaceholder")}
-        value={draft}
-        onChange={(e) => {
-          setDraft(e.target.value);
-          if (sendError) setSendError(null);
-          if (sendSuccess) setSendSuccess(false);
-          if (showAiBanner) setShowAiBanner(false);
-        }}
-        onKeyDown={handleKeyDown}
-        style={{
-          width: "100%",
-          resize: "vertical",
-          borderRadius: 8,
-          border: "1px solid var(--k-border)",
-          background: "var(--k-surface)",
-          padding: "10px 12px",
-          fontSize: 14,
-          lineHeight: 1.6,
-          color: "var(--k-text-primary)",
-          outline: "none",
-          fontFamily: "inherit",
-          boxSizing: "border-box",
-          transition: "border-color 0.1s ease",
-        }}
-        onFocus={(e) => {
-          e.currentTarget.style.borderColor = "var(--k-accent)";
-          e.currentTarget.style.boxShadow = "0 0 0 2px #EEF2FF";
-        }}
-        onBlur={(e) => {
-          e.currentTarget.style.borderColor = "var(--k-border)";
-          e.currentTarget.style.boxShadow = "none";
-        }}
-      />
-
-      {/* Action row */}
+      {/* Bottom action row */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginTop: 8,
           gap: 8,
         }}
       >
-        {/* Secondary actions */}
+        {/* Secondary tools */}
         <div style={{ display: "flex", gap: 4 }}>
           <TemplatePicker onSelect={handleTemplateSelect}>
             <button
@@ -242,52 +418,61 @@ export function ReplyBar() {
         </div>
 
         {/* Send CTA */}
-        <button
-          type="button"
-          disabled={!canSend}
-          onClick={handleSend}
-          aria-label={sending ? t("replyBar.sending") : t("ticketDetail.send")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-            fontWeight: 500,
-            padding: "6px 14px",
-            borderRadius: 6,
-            border: "none",
-            background: canSend ? "var(--k-accent)" : "var(--k-border)",
-            color: canSend ? "white" : "var(--k-text-tertiary)",
-            cursor: canSend ? "pointer" : "not-allowed",
-            transition: "background 0.1s ease",
-          }}
-        >
-          <Send style={{ width: 13, height: 13 }} />
-          {sending ? t("replyBar.sending") : t("ticketDetail.send")}
-        </button>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {/* Plain send (when reply doesn't auto-resolve) */}
+          <button
+            type="button"
+            disabled={!canSend}
+            onClick={() => handleSend(false)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: 12,
+              fontWeight: 500,
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: "1px solid var(--k-border)",
+              background: "white",
+              color: canSend ? "var(--k-text-secondary)" : "var(--k-text-tertiary)",
+              cursor: canSend ? "pointer" : "not-allowed",
+            }}
+          >
+            <Send style={{ width: 12, height: 12 }} />
+            {sending ? t("replyBar.sending") : t("ticketDetail.send")}
+          </button>
+
+          {/* Enviar y resolver */}
+          <button
+            type="button"
+            disabled={!canSend}
+            onClick={() => handleSend(true)}
+            aria-label={t("replyBar.sendAndResolve", "Enviar y resolver")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: 12,
+              fontWeight: 500,
+              padding: "6px 14px",
+              borderRadius: 6,
+              border: "none",
+              background: canSend ? "var(--k-accent)" : "var(--k-border)",
+              color: canSend ? "white" : "var(--k-text-tertiary)",
+              cursor: canSend ? "pointer" : "not-allowed",
+              transition: "background 0.1s ease",
+            }}
+          >
+            {sending ? t("replyBar.sending") : t("replyBar.sendAndResolve", "Enviar y resolver")}
+          </button>
+        </div>
       </div>
 
       {/* Status messages */}
       {sendError ? (
-        <p
-          style={{
-            marginTop: 6,
-            fontSize: 12,
-            color: "#EF4444",
-          }}
-        >
-          {sendError}
-        </p>
+        <p style={{ marginTop: 6, fontSize: 12, color: "#EF4444" }}>{sendError}</p>
       ) : sendSuccess ? (
-        <p
-          style={{
-            marginTop: 6,
-            fontSize: 12,
-            color: "#10B981",
-          }}
-        >
-          {t("replyBar.sendSuccess")}
-        </p>
+        <p style={{ marginTop: 6, fontSize: 12, color: "#10B981" }}>{t("replyBar.sendSuccess")}</p>
       ) : (
         <p
           style={{

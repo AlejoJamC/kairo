@@ -1,4 +1,4 @@
-import { createClient, getUserFromRequest } from "@/lib/supabase/server";
+import { createClientForRequest } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 // GET /bff/clients/:id
@@ -8,11 +8,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const supabase = await createClientForRequest(request);
     const {
       data: { user },
       error: authError,
-    } = await getUserFromRequest(request, supabase);
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -44,11 +44,11 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const supabase = await createClientForRequest(request);
     const {
       data: { user },
       error: authError,
-    } = await getUserFromRequest(request, supabase);
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -95,11 +95,11 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const supabase = await createClientForRequest(request);
     const {
       data: { user },
       error: authError,
-    } = await getUserFromRequest(request, supabase);
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });

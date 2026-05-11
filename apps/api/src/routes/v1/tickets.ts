@@ -223,7 +223,7 @@ tickets.get("/:id/related-history", async (c) => {
     p_status_filter: "resolved",
   });
 
-  if (!rpcError) {
+  if (!rpcError && rpcData && rpcData.length > 0) {
     const results = (rpcData ?? []).map((r: Record<string, unknown>) => ({
       id: r.id,
       subject: r.subject,
@@ -687,6 +687,44 @@ tickets.patch("/:id/status", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /v1/tickets/:id/assign — assign ticket to the calling agent (KAI-162)
+// ---------------------------------------------------------------------------
+
+tickets.patch("/:id/assign", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  const { data: ticket, error: fetchErr } = await supabase
+    .from("tickets")
+    .select("id, assigned_to")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  const { data: updatedTicket, error: updateErr } = await supabase
+    .from("tickets")
+    .update({ assigned_to: user.id })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (updateErr) return c.json({ error: updateErr.message }, 500);
+
+  await emitTicketEvent({
+    ticketId: id,
+    authorId: user.id,
+    eventType: "assignment",
+    metadata: { assigned_to: user.id },
+  });
+
+  return c.json({ success: true, ticket: updatedTicket });
+});
+
+// ---------------------------------------------------------------------------
 // POST /v1/tickets/:id/escalate — escalate ticket (KAI-28)
 // ---------------------------------------------------------------------------
 
@@ -1128,7 +1166,7 @@ tickets.get("/:id/client-profile", async (c) => {
   const [clientRes, totalRes, last30Res, last90Res, recentRes] = await Promise.all([
     supabase
       .from("clients")
-      .select("id, name, telephone, authorized_emails, plan_type, sla_level, internal_id")
+      .select("id, name, telephone, authorized_emails, plan_type, sla_level, internal_id, created_at")
       .eq("id", ticket.client_id)
       .eq("user_id", user.id)
       .single(),
@@ -1182,6 +1220,7 @@ tickets.get("/:id/client-profile", async (c) => {
     clientType:      normalizePlanTier(client.plan_type) as "enterprise" | "pro" | "starter" | "unknown",
     activePlan:      client.plan_type ?? null,
     planScore:       planScoreFromTier(client.plan_type),
+    clientSince:     client.created_at ?? null,
     isNewClient,
     isRecurrent,
     totalTickets,

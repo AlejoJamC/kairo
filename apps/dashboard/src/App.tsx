@@ -85,7 +85,7 @@ function AppContent() {
       }}
     >
       {/* Top chrome — 56 px: logo/toggle | search | bell + avatar */}
-      <TopChrome collapsed={sidebarCollapsed} onToggle={handleToggle} />
+      <TopChrome collapsed={sidebarCollapsed} onToggle={handleToggle} onViewChange={setActiveView} />
 
       {/* Body — sidebar + main content */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>

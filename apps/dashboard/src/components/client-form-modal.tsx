@@ -34,6 +34,10 @@ function mapRow(row: Record<string, unknown>): Client {
     contactPersons: (row.contact_persons as ContactPerson[]) ?? [],
     plan: (row.plan_type as PlanType | null) ?? null,
     slaLevel: (row.sla_level as SlaLevel | null) ?? null,
+    // Enriched fields are computed by the BFF list query; default to 0/null after create/edit
+    ticketCount: (row.ticketCount as number) ?? 0,
+    csatAvg: (row.csatAvg as number | null) ?? null,
+    lastContactAt: (row.lastContactAt as string | null) ?? null,
   };
 }
 

@@ -2,16 +2,22 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Users, ArrowUp } from "lucide-react";
 import type { Ticket } from "@kairo/types";
+import { getEmotionTokens } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
-// Priority stripe — left accent bar (color driven by sentiment)
+// Sentiment helpers — sourced from @kairo/ui triage-tokens
+// aggressive(🤬red) → frustrated(😩orange) → neutral(😐blue) → positive(😊green)
 // ---------------------------------------------------------------------------
+
+const STRIPE_COLOR: Record<string, string> = {
+  aggressive: "#EF4444",
+  frustrated: "#F97316",
+  neutral:    "#60A5FA",
+  positive:   "#10B981",
+};
 
 function stripeColor(sentiment: string | null | undefined): string {
-  const s = (sentiment ?? "").toLowerCase();
-  if (["urgent", "negative", "aggressive", "frustrated"].includes(s)) return "#EF4444";
-  if (s === "neutral") return "#F59E0B";
-  return "#10B981"; // positive / casual / unknown
+  return STRIPE_COLOR[(sentiment ?? "").toLowerCase()] ?? "#D4D4D8";
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +150,7 @@ export interface TicketCardProps {
   onGroup?: (id: string) => void;
   onEscalate?: (id: string) => void;
   isCorrected?: boolean;
+  groupCount?: number;
 }
 
 export function TicketCard({
@@ -153,12 +160,14 @@ export function TicketCard({
   onGroup,
   onEscalate,
   isCorrected = false,
+  groupCount = 0,
 }: TicketCardProps) {
   const { t } = useTranslation("dashboard");
   const [hovered, setHovered] = useState(false);
 
   const isSpam = (ticket.ticket_type ?? "").toLowerCase() === "spam";
   const relativeTime = useRelativeTime(ticket.received_at ?? ticket.created_at);
+  const emotion = getEmotionTokens(ticket.sentiment);
 
   return (
     <button
@@ -266,16 +275,24 @@ export function TicketCard({
         {ticket.subject}
       </div>
 
-      {/* Row 3: from + confidence dot */}
+      {/* Row 3: sentiment emoji + name | priority score + confidence */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: 6,
           fontSize: 12,
           color: "var(--k-text-secondary)",
         }}
       >
+        {emotion.emoji && (
+          <span
+            style={{ fontSize: 13, flexShrink: 0, lineHeight: 1 }}
+            aria-label={emotion.ariaLabel}
+          >
+            {emotion.emoji}
+          </span>
+        )}
         <span
           style={{
             flex: 1,
@@ -287,29 +304,25 @@ export function TicketCard({
           {ticket.from_name ?? ticket.from_email ?? "Unknown"}
         </span>
 
-        {ticket.classification_confidence !== null &&
-          ticket.classification_confidence !== undefined && (
-            <div
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+          {ticket.priority_score !== null && ticket.priority_score !== undefined && (
+            <span
               style={{
-                flexShrink: 0,
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
+                fontFamily: "var(--k-font-mono)",
+                fontSize: 10,
+                fontWeight: 600,
+                padding: "1px 5px",
+                borderRadius: 4,
+                background: "var(--k-surface-2)",
+                color: "var(--k-text-tertiary)",
               }}
+              title={t("ticketCard.priorityScoreTooltip", "Peso de prioridad")}
             >
-              <div
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 999,
-                  background:
-                    ticket.classification_confidence > 0.9
-                      ? "#10B981"
-                      : ticket.classification_confidence > 0.7
-                      ? "#F59E0B"
-                      : "#EF4444",
-                }}
-              />
+              {Math.round(ticket.priority_score)}
+            </span>
+          )}
+          {ticket.classification_confidence !== null &&
+            ticket.classification_confidence !== undefined && (
               <span
                 style={{
                   fontFamily: "var(--k-font-mono)",
@@ -319,11 +332,11 @@ export function TicketCard({
               >
                 {ticket.classification_confidence.toFixed(2)}
               </span>
-            </div>
-          )}
+            )}
+        </div>
       </div>
 
-      {/* Row 4: ticket number + SLA + group indicator */}
+      {/* Row 4: ticket number + SLA + grouped badge */}
       <div
         style={{
           display: "flex",
@@ -344,10 +357,27 @@ export function TicketCard({
           </span>
         )}
         <SlaBadge slaDate={ticket.sla_due_at} />
-        {ticket.group_id && (
+        {ticket.group_id && groupCount > 1 && (
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 10,
+              color: "var(--k-text-tertiary)",
+              padding: "2px 7px",
+              borderRadius: 4,
+              border: "1px dashed var(--k-border)",
+              fontFamily: "var(--k-font-mono)",
+            }}
+          >
+            <Users style={{ width: 10, height: 10, flexShrink: 0 }} />
+            + {groupCount - 1} {t("ticketCard.similares", "similares agrupados")}
+          </span>
+        )}
+        {ticket.group_id && groupCount <= 1 && (
           <Users
             style={{ width: 12, height: 12, color: "var(--k-text-tertiary)", flexShrink: 0 }}
-            aria-label="In group"
           />
         )}
       </div>

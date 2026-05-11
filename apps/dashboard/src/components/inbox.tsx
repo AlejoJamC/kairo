@@ -6,17 +6,14 @@ import { useRealtimeTickets } from "@/hooks/use-realtime-tickets";
 import { TicketList } from "./ticket-list";
 import { TicketDetail } from "./ticket-detail";
 import { AiAssistant } from "./ai-assistant";
-import { SyncButton } from "./sync-button";
 import type { Ticket } from "@kairo/types";
 
 export function Inbox() {
   const { user } = useAuth();
   const { tickets, selectedTicketId, setTickets, setScanning } = useTriageStore();
 
-  // Subscribe to realtime ticket events
   useRealtimeTickets();
 
-  // Initial fetch
   useEffect(() => {
     if (!user) return;
 
@@ -46,21 +43,6 @@ export function Inbox() {
   return (
     <>
       <div className="flex h-screen w-[360px] flex-col border-r bg-white" style={{ flexShrink: 0, borderRight: "1px solid var(--k-border)" }}>
-        <SyncButton onSyncComplete={() => {
-          // Realtime handles new tickets; just re-fetch to catch any we missed
-          if (!user) return;
-          const supabase = createClient();
-          supabase
-            .from("tickets")
-            .select("*")
-            .eq("user_id", user.id)
-            .neq("status", "awaiting_customer")
-            .order("priority_score", { ascending: false, nullsFirst: false })
-            .limit(200)
-            .then(({ data }) => {
-              if (data) setTickets(data as Ticket[]);
-            });
-        }} />
         <TicketList />
       </div>
       <TicketDetail />

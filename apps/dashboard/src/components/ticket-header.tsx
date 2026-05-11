@@ -4,6 +4,7 @@ import type { Ticket } from "@kairo/types";
 import { useTriageStore } from "@/stores/triage-store";
 import { CorrectionDialog } from "@/components/correction-dialog";
 import type { CorrectionFields } from "@/components/correction-dialog";
+import { apiCall } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Priority badge
@@ -21,15 +22,7 @@ function PriorityBadge({ priority }: { priority: string | null | undefined }) {
   const p = priority.toUpperCase();
   const style = PRIORITY_STYLE[p] ?? { background: "#F4F4F5", color: "#71717A", border: "1px solid #E4E4E7" };
   return (
-    <span
-      style={{
-        ...style,
-        fontSize: 11,
-        fontWeight: 600,
-        padding: "3px 8px",
-        borderRadius: 999,
-      }}
-    >
+    <span style={{ ...style, fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 999 }}>
       {p}
     </span>
   );
@@ -51,43 +44,8 @@ function TypeBadge({ type }: { type: string | null | undefined }) {
     style = { background: "#EEF2FF", color: "#2B5BFF", border: "1px solid #C7D2FE" };
 
   return (
-    <span
-      style={{
-        ...style,
-        fontSize: 11,
-        fontWeight: 500,
-        padding: "3px 8px",
-        borderRadius: 999,
-      }}
-    >
+    <span style={{ ...style, fontSize: 11, fontWeight: 500, padding: "2px 7px", borderRadius: 999 }}>
       {type}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Confidence dot
-// ---------------------------------------------------------------------------
-
-function ConfidenceDot({ confidence }: { confidence: number }) {
-  const dotColor =
-    confidence >= 0.9 ? "#10B981" : confidence >= 0.7 ? "#F59E0B" : "#EF4444";
-  const label =
-    confidence >= 0.9 ? "high" : confidence >= 0.7 ? "medium" : "low — manual review suggested";
-  return (
-    <span
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        fontSize: 12,
-        color: "var(--k-text-tertiary)",
-      }}
-    >
-      <span
-        style={{ width: 8, height: 8, borderRadius: 999, background: dotColor, flexShrink: 0 }}
-      />
-      {Math.round(confidence * 100)}% confidence ({label})
     </span>
   );
 }
@@ -102,10 +60,12 @@ interface TicketHeaderProps {
 
 export function TicketHeader({ ticket }: TicketHeaderProps) {
   const { t } = useTranslation("dashboard");
-  const { applyCorrection, correctedTicketIds } = useTriageStore();
+  const { applyCorrection, correctedTicketIds, updateClassification } = useTriageStore();
   const [correctionOpen, setCorrectionOpen] = useState(false);
+  const [assigning, setAssigning] = useState(false);
 
   const isCorrected = correctedTicketIds.has(ticket.id);
+  const isAssigned = !!ticket.assigned_to;
 
   function handleCorrected(fields: CorrectionFields) {
     const patch: Partial<Ticket> = {};
@@ -116,6 +76,24 @@ export function TicketHeader({ ticket }: TicketHeaderProps) {
     applyCorrection(ticket.id, patch);
   }
 
+  async function handleAssign() {
+    if (assigning || isAssigned) return;
+    setAssigning(true);
+    try {
+      const res = await apiCall(`/api/v1/tickets/${ticket.id}/assign`, { method: "PATCH" });
+      if (res.ok) {
+        const body = await res.json() as { ticket?: Partial<Ticket> };
+        if (body.ticket) updateClassification(ticket.id, body.ticket);
+      }
+    } catch {
+      // silent fail — user can retry
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  const ticketNum = ticket.ticket_number ? `KAI-T-${ticket.ticket_number}` : null;
+
   return (
     <div
       style={{
@@ -123,107 +101,96 @@ export function TicketHeader({ ticket }: TicketHeaderProps) {
         top: 0,
         zIndex: 10,
         display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 8,
         borderBottom: "1px solid var(--k-border)",
-        padding: "10px 16px",
+        padding: "8px 16px",
         background: "white",
         flexShrink: 0,
+        minHeight: 44,
       }}
     >
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-        {/* Subject */}
-        <h2
+      {/* Ticket number pill */}
+      {ticketNum && (
+        <span
           style={{
-            fontSize: 15,
+            fontSize: 11,
+            fontFamily: "var(--k-font-mono)",
             fontWeight: 600,
-            color: "var(--k-text-primary)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            letterSpacing: "-0.01em",
-            margin: 0,
+            padding: "3px 8px",
+            borderRadius: 4,
+            background: "var(--k-surface-2)",
+            color: "var(--k-text-tertiary)",
+            flexShrink: 0,
+            letterSpacing: "0.02em",
           }}
         >
-          {ticket.subject}
-        </h2>
+          {ticketNum}
+        </span>
+      )}
 
-        {/* From */}
-        <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", margin: 0 }}>
-          {t("ticketHeader.from", "From")}:{" "}
-          <span style={{ fontWeight: 500, color: "var(--k-text-secondary)" }}>
-            {ticket.from_name
-              ? `${ticket.from_name} <${ticket.from_email ?? ""}>`
-              : (ticket.from_email ?? "Unknown")}
-          </span>
-        </p>
-
-        {/* Badges */}
-        {(ticket.priority || ticket.ticket_type || ticket.category) && (
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 2 }}>
-            <PriorityBadge priority={ticket.priority} />
-            <TypeBadge type={ticket.ticket_type} />
-            {ticket.category && (
-              <span
-                style={{
-                  fontSize: 11,
-                  padding: "3px 8px",
-                  borderRadius: 999,
-                  background: "#F4F4F5",
-                  color: "#52525B",
-                  border: "1px solid #E4E4E7",
-                }}
-              >
-                {ticket.category}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Confidence */}
-        {ticket.classification_confidence !== null &&
-          ticket.classification_confidence !== undefined && (
-            <ConfidenceDot confidence={ticket.classification_confidence} />
-          )}
-
-        {/* Correction trigger */}
-        {ticket.classified_at && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
-            {isCorrected && (
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  background: "#FEF3C7",
-                  color: "#B45309",
-                }}
-              >
-                {t("correction.correctedBadge")}
-              </span>
-            )}
-            <button
-              onClick={() => setCorrectionOpen(true)}
+      {/* Classification badges */}
+      {(ticket.priority || ticket.ticket_type || ticket.category) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          <PriorityBadge priority={ticket.priority} />
+          <TypeBadge type={ticket.ticket_type} />
+          {ticket.category && (
+            <span
               style={{
                 fontSize: 11,
-                color: "var(--k-text-tertiary)",
-                textDecoration: "underline",
-                textUnderlineOffset: 2,
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
+                padding: "2px 7px",
+                borderRadius: 999,
+                background: "#F4F4F5",
+                color: "#52525B",
+                border: "1px solid #E4E4E7",
               }}
             >
-              {t("correction.triggerLabel")}
-            </button>
-          </div>
-        )}
-      </div>
+              {ticket.category}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Correction trigger */}
+      {ticket.classified_at && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {isCorrected && (
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                padding: "2px 7px",
+                borderRadius: 999,
+                background: "#FEF3C7",
+                color: "#B45309",
+              }}
+            >
+              {t("correction.correctedBadge")}
+            </span>
+          )}
+          <button
+            onClick={() => setCorrectionOpen(true)}
+            style={{
+              fontSize: 11,
+              color: "var(--k-text-tertiary)",
+              textDecoration: "underline",
+              textUnderlineOffset: 2,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            {t("correction.triggerLabel")}
+          </button>
+        </div>
+      )}
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
 
       {/* Timestamp */}
-      <div style={{ marginLeft: 16, flexShrink: 0 }}>
+      {ticket.received_at && (
         <span
           style={{
             fontSize: 11,
@@ -232,11 +199,39 @@ export function TicketHeader({ ticket }: TicketHeaderProps) {
             borderRadius: 4,
             background: "var(--k-surface-2)",
             color: "var(--k-text-tertiary)",
+            flexShrink: 0,
           }}
         >
-          {ticket.received_at ? new Date(ticket.received_at).toLocaleString() : ""}
+          {new Date(ticket.received_at).toLocaleString()}
         </span>
-      </div>
+      )}
+
+      {/* Asignar a mí button */}
+      <button
+        type="button"
+        disabled={assigning || isAssigned}
+        onClick={handleAssign}
+        style={{
+          fontSize: 12,
+          fontWeight: 500,
+          padding: "5px 12px",
+          borderRadius: 6,
+          border: isAssigned
+            ? "1px solid #A7F3D0"
+            : "1px solid var(--k-accent)",
+          background: isAssigned ? "#ECFDF5" : "var(--k-accent)",
+          color: isAssigned ? "#047857" : "white",
+          cursor: assigning || isAssigned ? "default" : "pointer",
+          flexShrink: 0,
+          transition: "background 0.1s ease, color 0.1s ease",
+        }}
+      >
+        {isAssigned
+          ? t("ticketHeader.assigned", "Asignado")
+          : assigning
+            ? t("ticketHeader.assigning", "Asignando…")
+            : t("ticketHeader.assignToMe", "Asignar a mí")}
+      </button>
 
       <CorrectionDialog
         ticket={ticket}
