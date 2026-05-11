@@ -687,6 +687,44 @@ tickets.patch("/:id/status", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /v1/tickets/:id/assign — assign ticket to the calling agent (KAI-162)
+// ---------------------------------------------------------------------------
+
+tickets.patch("/:id/assign", async (c) => {
+  const user = await resolveUser(c.req.header("Authorization") ?? "");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  const { data: ticket, error: fetchErr } = await supabase
+    .from("tickets")
+    .select("id, assigned_to")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  const { data: updatedTicket, error: updateErr } = await supabase
+    .from("tickets")
+    .update({ assigned_to: user.id })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (updateErr) return c.json({ error: updateErr.message }, 500);
+
+  await emitTicketEvent({
+    ticketId: id,
+    authorId: user.id,
+    eventType: "assignment",
+    metadata: { assigned_to: user.id },
+  });
+
+  return c.json({ success: true, ticket: updatedTicket });
+});
+
+// ---------------------------------------------------------------------------
 // POST /v1/tickets/:id/escalate — escalate ticket (KAI-28)
 // ---------------------------------------------------------------------------
 

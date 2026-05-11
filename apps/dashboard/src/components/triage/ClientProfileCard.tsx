@@ -4,24 +4,6 @@ import { Phone, Copy, Check } from "lucide-react";
 import { useTriageStore } from "@/stores/triage-store";
 
 // ---------------------------------------------------------------------------
-// Plan badge styles
-// ---------------------------------------------------------------------------
-
-const PLAN_STYLE: Record<string, { bg: string; color: string; border: string }> = {
-  enterprise: { bg: "#F3F0FF", color: "#6D28D9", border: "#DDD6FE" },
-  pro:        { bg: "#EEF2FF", color: "#2B5BFF", border: "#C7D2FE" },
-  starter:    { bg: "#ECFDF5", color: "#047857", border: "#A7F3D0" },
-  unknown:    { bg: "var(--k-surface-2)", color: "var(--k-text-tertiary)", border: "var(--k-border)" },
-};
-
-const PLAN_LABEL: Record<string, { en: string; es: string }> = {
-  enterprise: { en: "Enterprise", es: "Enterprise" },
-  pro:        { en: "Pro",        es: "Pro"        },
-  starter:    { en: "Starter",    es: "Starter"    },
-  unknown:    { en: "No plan",    es: "Sin plan"   },
-};
-
-// ---------------------------------------------------------------------------
 // Avatar initials
 // ---------------------------------------------------------------------------
 

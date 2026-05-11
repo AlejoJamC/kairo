@@ -133,7 +133,16 @@
     "escalate": "Escalar",
     "attach": "Adjuntar",
     "quickReply": "Respuesta Rápida",
-    "sendHint": "⌘ + Enter para enviar"
+    "sendHint": "⌘ + Enter para enviar",
+    "selectPrompt": "Selecciona un ticket para ver los detalles",
+    "unknownSender": "Remitente desconocido",
+    "noSubject": "(Sin asunto)",
+    "noBody": "No hay cuerpo de correo disponible."
+  },
+  "ticketHeader": {
+    "assignToMe": "Asignar a mí",
+    "assigning": "Asignando…",
+    "assigned": "Asignado"
   },
   "replyBar": {
     "sending": "Enviando...",
@@ -142,7 +151,14 @@
     "dismissSuggestion": "Descartar sugerencia",
     "errorGeneric": "Error al enviar. Intenta de nuevo.",
     "errorTokenExpired": "Tu sesión de Gmail expiró. Reconecta tu cuenta en Configuración.",
-    "errorNoGmail": "No hay una integración de Gmail activa para este ticket."
+    "errorNoGmail": "No hay una integración de Gmail activa para este ticket.",
+    "aiBadge": "BORRADOR IA",
+    "aiDraftSource": "generado a partir de casos similares + KB",
+    "regenerate": "Regenerar",
+    "sendAndResolve": "Enviar y resolver",
+    "actionReconocer": "Reconocer",
+    "actionResolver": "Resolver",
+    "actionEscalar": "Escalar"
   },
   "templatePicker": {
     "searchPlaceholder": "Buscar plantilla...",
