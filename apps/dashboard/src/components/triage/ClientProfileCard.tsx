@@ -1,15 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Circle,
-  Clock,
-  PauseCircle,
-  CheckCircle2,
-  XCircle,
-  Phone,
-  Copy,
-  Check,
-} from "lucide-react";
+import { Phone, Copy, Check } from "lucide-react";
 import { useTriageStore } from "@/stores/triage-store";
 
 // ---------------------------------------------------------------------------
@@ -29,20 +20,6 @@ const PLAN_LABEL: Record<string, { en: string; es: string }> = {
   starter:    { en: "Starter",    es: "Starter"    },
   unknown:    { en: "No plan",    es: "Sin plan"   },
 };
-
-// ---------------------------------------------------------------------------
-// Status icon
-// ---------------------------------------------------------------------------
-
-function StatusIcon({ status }: { status: string }) {
-  switch (status) {
-    case "in_progress": return <Clock       style={{ width: 11, height: 11, color: "var(--k-accent)", flexShrink: 0 }} />;
-    case "waiting":     return <PauseCircle style={{ width: 11, height: 11, color: "#F59E0B", flexShrink: 0 }} />;
-    case "resolved":    return <CheckCircle2 style={{ width: 11, height: 11, color: "#10B981", flexShrink: 0 }} />;
-    case "closed":      return <XCircle     style={{ width: 11, height: 11, color: "var(--k-text-tertiary)", flexShrink: 0 }} />;
-    default:            return <Circle      style={{ width: 11, height: 11, color: "var(--k-text-tertiary)", flexShrink: 0 }} />;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Avatar initials
@@ -90,7 +67,7 @@ interface ClientProfileCardProps {
 }
 
 export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
-  const { t, i18n } = useTranslation("dashboard");
+  const { t } = useTranslation("dashboard");
   const { selectedTicketId, clientProfile } = useTriageStore();
 
   const [copied, setCopied] = useState(false);
@@ -107,21 +84,7 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
     );
   }
 
-  const {
-    name,
-    phone,
-    clientId,
-    clientType,
-    isNewClient,
-    isRecurrent,
-    totalTickets,
-    ticketsLast30Days,
-    recentTickets,
-  } = clientProfile;
-
-  const lang      = i18n.language === "en" ? "en" : "es";
-  const planLabel = PLAN_LABEL[clientType]?.[lang] ?? PLAN_LABEL.unknown[lang];
-  const planStyle = PLAN_STYLE[clientType]  ?? PLAN_STYLE.unknown;
+  const { name, phone, clientId } = clientProfile;
 
   function handleCopyPhone() {
     if (!phone) return;
@@ -156,30 +119,6 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
         </div>
       </div>
 
-      {/* Badges */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
-        <span style={{
-          display: "inline-flex", alignItems: "center", borderRadius: 999,
-          padding: "2px 8px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em",
-          background: planStyle.bg, color: planStyle.color, border: `1px solid ${planStyle.border}`,
-        }}>
-          {planLabel}
-        </span>
-        {isNewClient && (
-          <span style={{ display: "inline-flex", alignItems: "center", borderRadius: 999, padding: "2px 8px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", background: "#E0F2FE", color: "#0369A1", border: "1px solid #BAE6FD" }}>
-            {t("clientProfile.newClient")}
-          </span>
-        )}
-        {isRecurrent && (
-          <span
-            style={{ display: "inline-flex", alignItems: "center", borderRadius: 999, padding: "2px 8px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A", cursor: "default" }}
-            title={t("clientProfile.recurrentTooltip", { count: ticketsLast30Days })}
-          >
-            {t("clientProfile.recurrent")} 🔁
-          </span>
-        )}
-      </div>
-
       {/* Phone copy */}
       {phone && (
         <button
@@ -196,35 +135,6 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
         </button>
       )}
 
-      {/* Stats row */}
-      <p style={{ padding: "0 4px", fontSize: 11, color: "var(--k-text-secondary)", margin: 0 }}>
-        <span style={{ fontWeight: 600, color: "var(--k-text-primary)" }}>{totalTickets}</span>
-        {" "}{t("clientProfile.ticketsTotal")}
-        {" · "}
-        <span style={{ fontWeight: 600, color: "var(--k-text-primary)" }}>{ticketsLast30Days}</span>
-        {" "}{t("clientProfile.ticketsThisMonth")}
-      </p>
-
-      {/* Recent tickets */}
-      {recentTickets.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <p style={{ padding: "0 4px", fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--k-text-tertiary)", margin: 0 }}>
-            {t("clientProfile.recentTickets")}
-          </p>
-          {recentTickets.map((rt) => (
-            <div
-              key={rt.id}
-              style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 6, padding: "5px 8px", fontSize: 11, color: "var(--k-text-secondary)", transition: "background 0.1s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--k-surface-2)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-            >
-              <StatusIcon status={rt.status} />
-              <span style={{ flexShrink: 0, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)" }}>#{rt.ticket_number}</span>
-              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rt.subject ?? "—"}</span>
-            </div>
-          ))}
-        </div>
-      )}
 
     </div>
   );

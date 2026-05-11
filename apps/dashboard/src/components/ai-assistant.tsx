@@ -10,6 +10,7 @@ import {
   ClientProfileCard,
   ClientProfileSkeleton,
 } from "@/components/triage/ClientProfileCard";
+import { FLAGS } from "@kairo/feature-flags";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -93,7 +94,7 @@ type TabId = typeof TAB_IDS[number];
 // ---------------------------------------------------------------------------
 
 function ClientTab({ loading }: { loading: boolean }) {
-  const { t } = useTranslation("dashboard");
+  const { t, i18n } = useTranslation("dashboard");
   const clientProfile = useTriageStore((s) => s.clientProfile);
 
   if (loading) {
@@ -110,37 +111,69 @@ function ClientTab({ loading }: { loading: boolean }) {
     );
   }
 
-  const kpis = [
-    { label: t("ai.kpiPlan"),    value: clientProfile?.activePlan ?? clientProfile?.clientType ?? "—" },
+  const PLAN_STYLE: Record<string, { bg: string; color: string; border: string }> = {
+    enterprise: { bg: "#F3F0FF", color: "#6D28D9", border: "#DDD6FE" },
+    pro:        { bg: "#EEF2FF", color: "#2B5BFF", border: "#C7D2FE" },
+    starter:    { bg: "#ECFDF5", color: "#047857", border: "#A7F3D0" },
+    unknown:    { bg: "var(--k-surface-2)", color: "var(--k-text-tertiary)", border: "var(--k-border)" },
+  };
+
+  const ticketsTooltip = clientProfile
+    ? t("ai.kpiTicketsTooltip", { total: clientProfile.totalTickets, month: clientProfile.ticketsLast30Days })
+    : undefined;
+
+  const kpis: { label: string; value: string; isBadge?: boolean; tooltip?: string; accent?: boolean }[] = [
+    { label: t("ai.kpiPlan"),    value: clientProfile?.clientType ?? "unknown", isBadge: true },
     { label: t("ai.kpiMrr"),     value: "—" },
-    { label: t("ai.kpiSince"),   value: "—" },
-    { label: t("ai.kpiTickets"), value: clientProfile ? String(clientProfile.totalTickets) : "—" },
+    { label: t("ai.kpiSince"),   value: clientProfile?.clientSince
+        ? new Date(clientProfile.clientSince).toLocaleDateString(i18n.language === "en" ? "en-US" : "es-ES", { month: "short", year: "numeric" })
+        : "—" },
+    { label: t("ai.kpiTickets"), value: clientProfile ? String(clientProfile.totalTickets) : "—", accent: true, tooltip: ticketsTooltip },
     { label: t("ai.kpiCsat"),    value: "—" },
     { label: t("ai.kpiNps"),     value: "—" },
   ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* Existing ClientProfileCard — avatar, name, badges, phone, recent tickets */}
       <ClientProfileCard />
 
-      {/* KPI grid — additive metrics on top of the base profile */}
+      {/* KPI grid */}
       {clientProfile && (
         <div style={{
           display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1,
           background: "var(--k-border-subtle)", border: "1px solid var(--k-border)",
           borderRadius: 8, overflow: "hidden",
         }}>
-          {kpis.map((kpi) => (
-            <div key={kpi.label} style={{ background: "white", padding: 10 }}>
-              <div style={{ fontSize: 10, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                {kpi.label}
+          {kpis.map((kpi) => {
+            const planStyle = PLAN_STYLE[kpi.value] ?? PLAN_STYLE.unknown;
+            return (
+              <div key={kpi.label} style={{ background: "white", padding: 10 }}>
+                <div style={{ fontSize: 10, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {kpi.label}
+                </div>
+                {kpi.isBadge ? (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", borderRadius: 999, marginTop: 4,
+                    padding: "2px 8px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em",
+                    background: planStyle.bg, color: planStyle.color, border: `1px solid ${planStyle.border}`,
+                  }}>
+                    {kpi.value}
+                  </span>
+                ) : (
+                  <div
+                    title={kpi.tooltip}
+                    style={{
+                      fontSize: 14, fontWeight: 500, marginTop: 2,
+                      color: kpi.accent ? "var(--k-accent)" : "var(--k-text-primary)",
+                      cursor: kpi.tooltip ? "default" : undefined,
+                    }}
+                  >
+                    {kpi.value}
+                  </div>
+                )}
               </div>
-              <div style={{ fontSize: 14, fontWeight: 500, marginTop: 2, color: "var(--k-text-primary)" }}>
-                {kpi.value}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -150,19 +183,25 @@ function ClientTab({ loading }: { loading: boolean }) {
           <p style={{ fontSize: 10, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 8px" }}>
             {t("ai.lastInteractions")}
           </p>
-          {clientProfile.recentTickets.slice(0, 3).map((rt, i) => (
-            <div key={rt.id} style={{
-              display: "flex", gap: 10, padding: "8px 0", fontSize: 12,
-              borderTop: i > 0 ? "1px solid var(--k-border-subtle)" : "none",
-            }}>
-              <span style={{ fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", width: 44, flexShrink: 0 }}>
-                #{rt.ticket_number}
-              </span>
-              <span style={{ color: "var(--k-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                {rt.subject ?? "—"}
-              </span>
-            </div>
-          ))}
+          {clientProfile.recentTickets.slice(0, 3).map((rt, i) => {
+            const dateStr = rt.resolved_at ?? rt.created_at;
+            const label = dateStr
+              ? new Date(dateStr).toLocaleDateString(i18n.language === "en" ? "en-US" : "es-ES", { day: "2-digit", month: "short" })
+              : "—";
+            return (
+              <div key={rt.id} style={{
+                display: "flex", gap: 10, padding: "8px 0", fontSize: 12,
+                borderTop: i > 0 ? "1px solid var(--k-border-subtle)" : "none",
+              }}>
+                <span style={{ fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", width: 44, flexShrink: 0 }}>
+                  {label}
+                </span>
+                <span style={{ color: "var(--k-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                  {rt.subject ?? "—"}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -560,11 +599,11 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   // Reset to "client" tab when ticket changes
   useEffect(() => { setActiveTab("client"); }, [selectedTicketId]);
 
-  const tabs: { id: TabId; label: string }[] = [
+  const tabs: { id: TabId; label: string; disabled?: boolean }[] = [
     { id: "client",   label: t("ai.tabClient")   },
     { id: "similar",  label: t("ai.tabSimilar")  },
     { id: "articles", label: t("ai.tabArticles") },
-    { id: "escalate", label: t("ai.tabEscalate") },
+    { id: "escalate", label: t("ai.tabEscalate"), disabled: !FLAGS.dashboard.rightPanel.escalateTab },
   ];
 
   return (
@@ -576,24 +615,28 @@ export function AiAssistant({ customer }: AiAssistantProps) {
           {t("ai.panelTitle")}
         </p>
         <div style={{ display: "flex", borderBottom: "1px solid var(--k-border)" }}>
-          {tabs.map(({ id, label }) => (
+          {tabs.map(({ id, label, disabled }) => (
             <button
               key={id}
               type="button"
-              onClick={() => setActiveTab(id)}
+              onClick={() => !disabled && setActiveTab(id)}
+              disabled={disabled}
               style={{
                 fontSize: 12,
                 padding: "8px 10px",
                 fontWeight: activeTab === id ? 500 : 400,
-                color: activeTab === id ? "var(--k-text-primary)" : "var(--k-text-tertiary)",
+                color: disabled
+                  ? "var(--k-text-disabled, #C0C0C0)"
+                  : activeTab === id ? "var(--k-text-primary)" : "var(--k-text-tertiary)",
                 borderBottom: `2px solid ${activeTab === id ? "var(--k-accent)" : "transparent"}`,
                 marginBottom: -1,
                 background: "none",
                 border: "none",
                 borderBottomStyle: "solid",
-                cursor: "pointer",
+                cursor: disabled ? "not-allowed" : "pointer",
                 whiteSpace: "nowrap",
                 transition: "color 0.1s",
+                opacity: disabled ? 0.5 : 1,
               }}
             >
               {label}
@@ -614,13 +657,30 @@ export function AiAssistant({ customer }: AiAssistantProps) {
           <ArticlesTab ticketId={selectedTicketId} />
         )}
         {activeTab === "escalate" && (
-          <EscalateTab
-            ticketId={selectedTicketId}
-            customer={customer}
-            selectedTicketStatus={selectedTicket?.status ?? null}
-            selectedTicketCategory={selectedTicket?.category ?? null}
-            lang={i18n.language}
-          />
+          FLAGS.dashboard.rightPanel.escalateTab ? (
+            <EscalateTab
+              ticketId={selectedTicketId}
+              customer={customer}
+              selectedTicketStatus={selectedTicket?.status ?? null}
+              selectedTicketCategory={selectedTicket?.category ?? null}
+              lang={i18n.language}
+            />
+          ) : (
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              gap: 8, padding: "32px 16px", textAlign: "center",
+              border: "1px dashed #E5E7EB", borderRadius: 10, background: "#FAFAFA",
+              marginTop: 8,
+            }}>
+              <span style={{ fontSize: 20 }}>🚧</span>
+              <p style={{ fontSize: 13, fontWeight: 600, color: "#374151", margin: 0 }}>
+                {t("ai.featureDisabledTitle")}
+              </p>
+              <p style={{ fontSize: 11, color: "#9CA3AF", margin: 0, lineHeight: 1.5 }}>
+                {t("ai.featureDisabledEscalate")}
+              </p>
+            </div>
+          )
         )}
       </div>
     </div>

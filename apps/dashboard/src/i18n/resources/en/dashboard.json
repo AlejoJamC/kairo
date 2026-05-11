@@ -218,9 +218,12 @@
     "kpiMrr": "MRR",
     "kpiSince": "Since",
     "kpiTickets": "Tickets",
+    "kpiTicketsTooltip": "{{total}} tickets total · {{month}} this month",
     "kpiCsat": "CSAT",
     "kpiNps": "NPS",
     "lastInteractions": "Last interactions",
-    "resolvedCases": "resolved cases"
+    "resolvedCases": "resolved cases",
+    "featureDisabledTitle": "Feature disabled",
+    "featureDisabledEscalate": "The escalation flow is not ready yet. Come back when it's been refined."
   }
 }

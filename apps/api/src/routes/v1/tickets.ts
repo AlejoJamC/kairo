@@ -1128,7 +1128,7 @@ tickets.get("/:id/client-profile", async (c) => {
   const [clientRes, totalRes, last30Res, last90Res, recentRes] = await Promise.all([
     supabase
       .from("clients")
-      .select("id, name, telephone, authorized_emails, plan_type, sla_level, internal_id")
+      .select("id, name, telephone, authorized_emails, plan_type, sla_level, internal_id, created_at")
       .eq("id", ticket.client_id)
       .eq("user_id", user.id)
       .single(),
@@ -1182,6 +1182,7 @@ tickets.get("/:id/client-profile", async (c) => {
     clientType:      normalizePlanTier(client.plan_type) as "enterprise" | "pro" | "starter" | "unknown",
     activePlan:      client.plan_type ?? null,
     planScore:       planScoreFromTier(client.plan_type),
+    clientSince:     client.created_at ?? null,
     isNewClient,
     isRecurrent,
     totalTickets,

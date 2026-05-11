@@ -218,9 +218,12 @@
     "kpiMrr": "MRR",
     "kpiSince": "Desde",
     "kpiTickets": "Tickets",
+    "kpiTicketsTooltip": "{{total}} tickets en total · {{month}} este mes",
     "kpiCsat": "CSAT",
     "kpiNps": "NPS",
     "lastInteractions": "Últimas interacciones",
-    "resolvedCases": "casos resueltos"
+    "resolvedCases": "casos resueltos",
+    "featureDisabledTitle": "Feature deshabilitado",
+    "featureDisabledEscalate": "El flujo de escalación aún no está listo. Vuelve cuando esté refinado."
   }
 }

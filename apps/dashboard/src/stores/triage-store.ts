@@ -9,6 +9,7 @@ export interface RecentTicket {
   subject:       string | null;
   status:        string;
   created_at:    string;
+  resolved_at:   string | null;
 }
 
 export interface ClientProfile {
@@ -19,6 +20,7 @@ export interface ClientProfile {
   clientType:       "enterprise" | "pro" | "starter" | "unknown";
   activePlan:       string | null;
   planScore:        number;
+  clientSince:      string | null;
   isNewClient:      boolean;
   isRecurrent:      boolean;
   totalTickets:     number;

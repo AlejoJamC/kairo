@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@kairo/env": "workspace:*",
+    "@kairo/feature-flags": "workspace:*",
     "@kairo/types": "workspace:*",
     "@kairo/ui": "workspace:*",
     "@tamagui/core": "^1.144.3",
