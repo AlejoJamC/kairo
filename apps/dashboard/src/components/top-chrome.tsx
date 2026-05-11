@@ -259,7 +259,6 @@ const STATUS_DOTS: Record<UserStatus, string> = {
 };
 
 type Theme = "light" | "auto" | "dark";
-const THEME_IDS: Theme[] = ["light", "auto", "dark"];
 
 interface ProfilePopoverProps {
   initials: string;
@@ -431,7 +430,7 @@ function ProfilePopover({
 
 function StatusOptionButton({
   s, active, onClick,
-}: { s: (typeof STATUS_OPTIONS)[number]; active: boolean; onClick: () => void }) {
+}: { s: { id: UserStatus; label: string; dot: string }; active: boolean; onClick: () => void }) {
   const [hov, setHov] = useState(false);
   return (
     <button
