@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/auth-helpers-nextjs";
+import { createClient as createBaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
@@ -22,6 +23,35 @@ export async function getUserFromRequest(
     return supabase.auth.getUser(token);
   }
   return supabase.auth.getUser();
+}
+
+/**
+ * Creates a Supabase client whose queries run under the caller's identity.
+ *
+ * Priority:
+ *  1. Authorization: Bearer <jwt> header (dashboard SPA — session in localStorage)
+ *  2. Cookie-based session (Next.js server components / SSR flows)
+ *
+ * Using a plain supabase-js client with the JWT in `global.headers` ensures
+ * PostgREST receives the token in every query, so RLS `auth.uid()` resolves
+ * to the correct user instead of NULL.
+ */
+export async function createClientForRequest(request: Request) {
+  const authHeader = request.headers.get("authorization");
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  if (token) {
+    return createBaseClient<Database>(
+      env.NEXT_PUBLIC_SUPABASE_URL,
+      env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+        auth: { persistSession: false },
+      }
+    );
+  }
+
+  return createClient();
 }
 
 export async function createClient() {

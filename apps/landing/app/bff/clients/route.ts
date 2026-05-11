@@ -1,14 +1,14 @@
-import { createClient, getUserFromRequest } from "@/lib/supabase/server";
+import { createClientForRequest } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 // GET /bff/clients — list all clients for the authenticated user
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient();
+    const supabase = await createClientForRequest(request);
     const {
       data: { user },
       error: authError,
-    } = await getUserFromRequest(request, supabase);
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -27,7 +27,72 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({ clients: clients ?? [] });
+    const clientList = clients ?? [];
+    if (clientList.length === 0) {
+      return NextResponse.json({ clients: [] });
+    }
+
+    const clientIds = clientList.map((c) => c.id);
+
+    // Ticket counts + last contact per client
+    const { data: ticketRows } = await supabase
+      .from("tickets")
+      .select("client_id, received_at")
+      .in("client_id", clientIds);
+
+    // Build ticket_id → client_id map + ticket stats
+    const ticketCountMap: Record<string, number> = {};
+    const lastContactMap: Record<string, string> = {};
+    const ticketToClient: Record<string, string> = {};
+    const ticketIds: string[] = [];
+
+    for (const t of ticketRows ?? []) {
+      if (!t.client_id) continue;
+      ticketCountMap[t.client_id] = (ticketCountMap[t.client_id] ?? 0) + 1;
+      const prev = lastContactMap[t.client_id];
+      if (!prev || (t.received_at && t.received_at > prev)) {
+        lastContactMap[t.client_id] = t.received_at ?? "";
+      }
+    }
+
+    // Need ticket ids for CSAT lookup — re-query with id
+    const { data: ticketWithIds } = await supabase
+      .from("tickets")
+      .select("id, client_id")
+      .in("client_id", clientIds);
+
+    for (const t of ticketWithIds ?? []) {
+      if (t.client_id) { ticketToClient[t.id] = t.client_id; ticketIds.push(t.id); }
+    }
+
+    // CSAT per ticket
+    let csatRows: { ticket_id: string; score: number | null }[] = [];
+    if (ticketIds.length) {
+      const { data } = await supabase
+        .from("csat_events")
+        .select("ticket_id, score")
+        .in("ticket_id", ticketIds);
+      csatRows = (data ?? []) as { ticket_id: string; score: number | null }[];
+    }
+
+    const csatSumMap: Record<string, { sum: number; count: number }> = {};
+    for (const row of csatRows) {
+      const cid = ticketToClient[row.ticket_id];
+      if (!cid || row.score == null) continue;
+      const prev = csatSumMap[cid] ?? { sum: 0, count: 0 };
+      csatSumMap[cid] = { sum: prev.sum + row.score, count: prev.count + 1 };
+    }
+
+    const enriched = clientList.map((c) => ({
+      ...c,
+      ticketCount: ticketCountMap[c.id] ?? 0,
+      lastContactAt: lastContactMap[c.id] ?? null,
+      csatAvg: csatSumMap[c.id]
+        ? Math.round((csatSumMap[c.id].sum / csatSumMap[c.id].count) * 10) / 10
+        : null,
+    }));
+
+    return NextResponse.json({ clients: enriched });
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },
@@ -39,11 +104,11 @@ export async function GET(request: Request) {
 // POST /bff/clients — create a new client
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
+    const supabase = await createClientForRequest(request);
     const {
       data: { user },
       error: authError,
-    } = await getUserFromRequest(request, supabase);
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });

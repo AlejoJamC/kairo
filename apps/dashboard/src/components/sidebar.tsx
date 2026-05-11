@@ -4,12 +4,12 @@
 
 import { useRef, useState, useEffect } from "react";
 import {
-  Home,
-  LayoutDashboard,
+  Inbox,
+  Activity,
   Clock,
-  RefreshCw,
-  ClipboardList,
-  AlertTriangle,
+  CircleCheck,
+  Compass,
+  ArrowUpCircle,
   Users,
   Settings,
 } from "lucide-react";
@@ -30,14 +30,22 @@ import type { AppView } from "@/types";
 // NavBadge — count pill / collapsed dot
 // ---------------------------------------------------------------------------
 
-function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
+function NavBadge({
+  count,
+  collapsed,
+  isActive = false,
+}: {
+  count: number;
+  collapsed: boolean;
+  isActive?: boolean;
+}) {
   const prevRef = useRef(count);
-  const [pulse, setPulse] = useState(false);
+  const [flashPulse, setFlashPulse] = useState(false);
 
   useEffect(() => {
     if (prevRef.current !== count && count > 0) {
-      setPulse(true);
-      const t = setTimeout(() => setPulse(false), 600);
+      setFlashPulse(true);
+      const t = setTimeout(() => setFlashPulse(false), 600);
       prevRef.current = count;
       return () => clearTimeout(t);
     }
@@ -46,14 +54,12 @@ function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
 
   if (count === 0) return null;
 
-  const label = count > 99 ? "99+" : String(count);
-
   if (collapsed) {
     const collapsedLabel = count > 9 ? "9+" : String(count);
     return (
       <span
         className={`absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[9px] font-bold text-white leading-none ${
-          pulse ? "animate-pulse" : ""
+          flashPulse ? "animate-pulse" : ""
         }`}
         style={{ background: "var(--k-accent)" }}
       >
@@ -62,18 +68,19 @@ function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
     );
   }
 
+  const label = count > 99 ? "99+" : String(count);
+
   return (
     <span
-      className={`ml-auto rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${
-        pulse ? "animate-pulse" : ""
-      }`}
-      style={{
-        background: "var(--k-surface-2)",
-        color: "var(--k-text-tertiary)",
-        fontFamily: "var(--k-font-mono)",
-        fontSize: 11,
-      }}
+      className="ml-auto flex items-center gap-1 tabular-nums"
+      style={{ fontFamily: "var(--k-font-mono)", fontSize: 11, color: "var(--k-text-tertiary)" }}
     >
+      {isActive && (
+        <span
+          className="animate-pulse inline-block rounded-full shrink-0"
+          style={{ width: 5, height: 5, background: "var(--k-accent)" }}
+        />
+      )}
       {label}
     </span>
   );
@@ -84,7 +91,7 @@ function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
 // ---------------------------------------------------------------------------
 
 type NavItem = {
-  icon: typeof Home;
+  icon: typeof Inbox;
   label: string;
   view: AppView;
 };
@@ -102,12 +109,12 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
   const counts = useSidebarCounts();
 
   const mainNavItems: NavItem[] = [
-    { icon: Home,            label: t("dashboard:sidebar.inbox"),          view: "inbox" },
-    { icon: LayoutDashboard, label: t("dashboard:sidebar.panel"),          view: "panel" },
-    { icon: Clock,           label: t("dashboard:sidebar.pendingClient"),  view: "awaiting" },
-    { icon: RefreshCw,       label: t("dashboard:sidebar.autoResolvable"), view: "auto-resolved" },
-    { icon: ClipboardList,   label: t("dashboard:sidebar.guided"),         view: "guided" },
-    { icon: AlertTriangle,   label: t("dashboard:sidebar.escalation"),     view: "escalated" },
+    { icon: Inbox,         label: t("dashboard:sidebar.inbox"),          view: "inbox" },
+    { icon: Activity,      label: t("dashboard:sidebar.panel"),          view: "panel" },
+    { icon: Clock,         label: t("dashboard:sidebar.pendingClient"),  view: "awaiting" },
+    { icon: CircleCheck,   label: t("dashboard:sidebar.autoResolvable"), view: "auto-resolved" },
+    { icon: Compass,       label: t("dashboard:sidebar.guided"),         view: "guided" },
+    { icon: ArrowUpCircle, label: t("dashboard:sidebar.escalation"),     view: "escalated" },
   ];
 
   const adminNavItems: NavItem[] = [
@@ -154,12 +161,12 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
       >
         <span className="relative shrink-0">
           <item.icon style={{ width: 16, height: 16 }} />
-          {collapsed && <NavBadge count={count} collapsed />}
+          {collapsed && <NavBadge count={count} collapsed isActive={isActive} />}
         </span>
         {!collapsed && (
           <>
             <span style={{ flex: 1, textAlign: "left" }}>{item.label}</span>
-            <NavBadge count={count} collapsed={false} />
+            <NavBadge count={count} collapsed={false} isActive={isActive} />
           </>
         )}
       </button>

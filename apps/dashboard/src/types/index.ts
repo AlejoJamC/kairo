@@ -90,4 +90,8 @@ export interface Client {
   contactPersons: ContactPerson[];
   plan: PlanType | null;
   slaLevel: SlaLevel | null;
+  // computed fields returned by the enriched BFF query
+  ticketCount: number;
+  csatAvg: number | null;
+  lastContactAt: string | null;
 }

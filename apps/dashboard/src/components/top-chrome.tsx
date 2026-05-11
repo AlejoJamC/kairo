@@ -46,19 +46,47 @@ export function TopChrome({ collapsed, onToggle }: TopChromeProps) {
           transition: "width 0.18s ease",
         }}
       >
-        {!collapsed && (
-          <span
+        {/* KairoLogo — blue square with lightning bolt + wordmark */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div
             style={{
-              fontSize: 15,
-              fontWeight: 600,
-              color: "var(--k-text-primary)",
-              fontFamily: "var(--k-font-display)",
-              letterSpacing: "-0.01em",
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              background: "#2B5BFF",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
             }}
           >
-            Kairo
-          </span>
-        )}
+            <svg
+              width={15}
+              height={15}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth={2.4}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
+            </svg>
+          </div>
+          {!collapsed && (
+            <span
+              style={{
+                fontSize: 15,
+                fontWeight: 600,
+                color: "var(--k-text-primary)",
+                fontFamily: "var(--k-font-display)",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              Kairo
+            </span>
+          )}
+        </div>
         <button
           onClick={onToggle}
           aria-label="Toggle sidebar"
