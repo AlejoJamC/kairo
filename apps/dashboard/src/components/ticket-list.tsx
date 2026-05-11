@@ -45,7 +45,13 @@ const INITIAL_FILTERS: FilterState = {
 
 function applyFilters(tickets: Ticket[], f: FilterState): Ticket[] {
   return tickets.filter((t) => {
-    if (f.priority && t.priority !== f.priority) return false;
+    if (f.priority === "PX") {
+      // Only tickets that have a real priority and are not spam
+      if (!t.priority) return false;
+      if ((t.ticket_type ?? "").toLowerCase() === "spam") return false;
+    } else if (f.priority) {
+      if (t.priority !== f.priority) return false;
+    }
     if (f.type && t.ticket_type !== f.type) return false;
     if (f.category && t.category !== f.category) return false;
     if (f.status === "classified" && !t.classified_at) return false;
@@ -464,6 +470,11 @@ export function TicketList() {
             label={t("ticketList.filterAll", "Todos")}
             active={filters.priority === null && filters.type === null}
             onClick={() => setFilters(INITIAL_FILTERS)}
+          />
+          <FilterChip
+            label={t("ticketList.filterPrioritized", "PX")}
+            active={filters.priority === "PX"}
+            onClick={() => toggleFilter("priority", "PX")}
           />
           {(["P1", "P2", "P3"] as const).map((p) => (
             <FilterChip
