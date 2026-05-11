@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
 import {
   Check,
   AlertCircle,
@@ -36,7 +35,8 @@ type SettingsSection =
   | "security"
   | "api";
 
-function buildNavItems(t: TFunction): { id: SettingsSection; label: string; Icon: React.ElementType }[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildNavItems(t: (...args: any[]) => string): { id: SettingsSection; label: string; Icon: React.ElementType }[] {
   return [
     { id: "workspace",    label: t("dashboard:settings.nav.workspace"),    Icon: LayoutPanelLeft },
     { id: "team",         label: t("dashboard:settings.nav.team"),         Icon: Users },
