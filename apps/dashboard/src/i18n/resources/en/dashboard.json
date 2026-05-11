@@ -32,7 +32,9 @@
     "slaHours_one": "{{count}}h {{minutes}}m",
     "slaHours_other": "{{count}}h {{minutes}}m",
     "slaMinutes_one": "{{count}}m",
-    "slaMinutes_other": "{{count}}m"
+    "slaMinutes_other": "{{count}}m",
+    "similares": "similar grouped",
+    "priorityScoreTooltip": "Priority weight"
   },
   "ticketList": {
     "header": "Tickets",
@@ -44,7 +46,13 @@
     "checkingEmails": "Checking your recent emails...",
     "noMatch": "No tickets match the current filters.",
     "classified": "classified",
-    "unclassified": "unclassified"
+    "unclassified": "unclassified",
+    "filterAll": "All",
+    "moreActions": "More actions",
+    "syncGmail": "Sync Gmail",
+    "syncing": "Syncing...",
+    "syncSuccess": "{{created}} new · {{skipped}} skipped",
+    "syncError": "Sync failed"
   },
   "tickets": {
     "title": "Open Tickets",

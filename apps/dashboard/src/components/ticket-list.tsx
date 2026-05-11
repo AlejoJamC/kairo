@@ -1,11 +1,12 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
+import { MoreHorizontal, RefreshCw } from "lucide-react";
 import { useTriageStore, type Ticket } from "@/stores/triage-store";
 import { TicketCard } from "@/components/ticket-card";
 import { apiCall } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
-import { RefreshCw } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
 
 // ---------------------------------------------------------------------------
 // Skeleton placeholder
@@ -110,17 +111,19 @@ interface BatchTicketResult {
 // Virtualized ticket list — used when filtered count > 50
 // ---------------------------------------------------------------------------
 
-const ITEM_HEIGHT = 100; // px — approximate height of TicketCard
+const ITEM_HEIGHT = 100;
 
 function VirtualTicketList({
   tickets,
   selectedTicketId,
   correctedTicketIds,
+  groupCounts,
   onSelect,
 }: {
   tickets: Ticket[];
   selectedTicketId: string | null;
   correctedTicketIds: Set<string>;
+  groupCounts: Map<string, number>;
   onSelect: (id: string) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -153,6 +156,7 @@ function VirtualTicketList({
                 selected={selectedTicketId === ticket.id}
                 onSelect={onSelect}
                 isCorrected={correctedTicketIds.has(ticket.id)}
+                groupCount={ticket.group_id ? (groupCounts.get(ticket.group_id) ?? 1) : 0}
               />
             </div>
           );
@@ -170,16 +174,82 @@ const VIRTUALIZE_THRESHOLD = 50;
 
 export function TicketList() {
   const { t } = useTranslation("dashboard");
-  const { tickets, selectedTicketId, isScanning, classifiedCount, selectTicket, updateClassification, correctedTicketIds } =
+  const { user } = useAuth();
+  const { tickets, selectedTicketId, isScanning, classifiedCount, selectTicket, updateClassification, correctedTicketIds, setTickets } =
     useTriageStore();
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [classifyingAll, setClassifyingAll] = useState(false);
   const [classifyProgress, setClassifyProgress] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const filtered = applyFilters(tickets, filters);
 
+  // Count how many tickets share each group_id (for "similares agrupados" label)
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of tickets) {
+      if (t.group_id) counts.set(t.group_id, (counts.get(t.group_id) ?? 0) + 1);
+    }
+    return counts;
+  }, [tickets]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
+
   function toggleFilter<K extends keyof FilterState>(key: K, value: FilterState[K]) {
     setFilters((prev) => ({ ...prev, [key]: prev[key] === value ? null : value }));
+  }
+
+  // -------------------------------------------------------------------------
+  // Sync Gmail
+  // -------------------------------------------------------------------------
+
+  async function handleSyncGmail() {
+    if (syncing || !user) return;
+    setMenuOpen(false);
+    setSyncing(true);
+    setSyncResult(null);
+    setSyncError(null);
+
+    try {
+      const res = await apiCall("/bff/gmail/sync", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = (body as { error?: string }).error ?? t("ticketList.syncError", "Sync failed");
+        setSyncError(msg);
+        return;
+      }
+      const data = await res.json() as { summary?: { created: number; skipped: number } };
+      if (data.summary) setSyncResult(data.summary);
+
+      // Re-fetch to reflect new tickets
+      const supabase = createClient();
+      const { data: fresh } = await supabase
+        .from("tickets")
+        .select("*")
+        .eq("user_id", user.id)
+        .neq("status", "awaiting_customer")
+        .order("priority_score", { ascending: false, nullsFirst: false })
+        .limit(200);
+      if (fresh) setTickets(fresh as Ticket[]);
+    } catch {
+      setSyncError(t("ticketList.syncError", "Sync failed"));
+    } finally {
+      setSyncing(false);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -188,6 +258,7 @@ export function TicketList() {
 
   async function handleClassifyAll() {
     if (classifyingAll || tickets.length === 0) return;
+    setMenuOpen(false);
     setClassifyingAll(true);
     setClassifyProgress("Starting...");
 
@@ -278,53 +349,119 @@ export function TicketList() {
   // Render
   // -------------------------------------------------------------------------
 
+  const busy = classifyingAll || syncing;
+
   return (
     <div style={{ display: "flex", flex: 1, flexDirection: "column", overflow: "hidden", background: "white" }}>
       {/* Header */}
       <div style={{ padding: "12px 14px 8px", borderBottom: "1px solid var(--k-border-subtle)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 2 }}>
-              <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--k-text-primary)" }}>
-                {t("ticketList.header")}
-              </span>
-              <span style={{ fontSize: 12, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>
-                {classifiedCount}/{tickets.length}
-              </span>
-            </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 2 }}>
+            <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--k-text-primary)" }}>
+              {t("ticketList.header")}
+            </span>
+            <span style={{ fontSize: 12, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>
+              {classifiedCount}/{tickets.length}
+            </span>
           </div>
 
-          {tickets.length > 0 && (
+          {/* ⋯ actions dropdown */}
+          <div ref={menuRef} style={{ position: "relative" }}>
             <button
-              onClick={handleClassifyAll}
-              disabled={classifyingAll}
+              onClick={() => setMenuOpen((v) => !v)}
+              disabled={busy}
+              aria-label={t("ticketList.moreActions", "Más acciones")}
               style={{
-                fontSize: 11,
-                padding: "5px 9px",
-                borderRadius: 5,
-                border: "1px solid var(--k-border)",
-                color: "var(--k-text-secondary)",
                 display: "flex",
                 alignItems: "center",
-                gap: 4,
-                fontFamily: "var(--k-font-mono)",
-                background: "white",
-                cursor: classifyingAll ? "not-allowed" : "pointer",
-                opacity: classifyingAll ? 0.5 : 1,
+                justifyContent: "center",
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                border: "1px solid var(--k-border)",
+                background: menuOpen ? "var(--k-surface-2)" : "white",
+                cursor: busy ? "not-allowed" : "pointer",
+                opacity: busy ? 0.5 : 1,
+                color: "var(--k-text-secondary)",
               }}
             >
-              <RefreshCw style={{ width: 11, height: 11 }} className={classifyingAll ? "animate-spin" : ""} />
-              {classifyingAll
-                ? (classifyProgress ?? t("ticketList.classifying"))
-                : t("ticketList.classifyAll")}
+              {busy
+                ? <RefreshCw style={{ width: 13, height: 13 }} className="animate-spin" />
+                : <MoreHorizontal style={{ width: 15, height: 15 }} />}
             </button>
-          )}
+
+            {menuOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 4px)",
+                  right: 0,
+                  zIndex: 50,
+                  background: "white",
+                  border: "1px solid var(--k-border)",
+                  borderRadius: 8,
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.10)",
+                  minWidth: 180,
+                  overflow: "hidden",
+                }}
+              >
+                <button
+                  onClick={handleSyncGmail}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                    padding: "9px 14px",
+                    fontSize: 13,
+                    color: "var(--k-text-primary)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-surface)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                >
+                  <RefreshCw style={{ width: 13, height: 13, color: "var(--k-text-tertiary)", flexShrink: 0 }} />
+                  {t("ticketList.syncGmail", "Sincronizar Gmail")}
+                </button>
+
+                <div style={{ height: 1, background: "var(--k-border-subtle)", margin: "0 10px" }} />
+
+                <button
+                  onClick={handleClassifyAll}
+                  disabled={tickets.length === 0}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                    padding: "9px 14px",
+                    fontSize: 13,
+                    color: tickets.length === 0 ? "var(--k-text-tertiary)" : "var(--k-text-primary)",
+                    background: "none",
+                    border: "none",
+                    cursor: tickets.length === 0 ? "not-allowed" : "pointer",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => { if (tickets.length > 0) e.currentTarget.style.background = "var(--k-surface)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                >
+                  <RefreshCw style={{ width: 13, height: 13, color: "var(--k-text-tertiary)", flexShrink: 0 }} />
+                  {classifyingAll
+                    ? (classifyProgress ?? t("ticketList.classifying"))
+                    : t("ticketList.classifyAll")}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Filter chips */}
         <div style={{ display: "flex", gap: 4 }}>
           <FilterChip
-            label="Todos"
+            label={t("ticketList.filterAll", "Todos")}
             active={filters.priority === null && filters.type === null}
             onClick={() => setFilters(INITIAL_FILTERS)}
           />
@@ -338,6 +475,35 @@ export function TicketList() {
           ))}
         </div>
       </div>
+
+      {/* Sync result / error banner */}
+      {syncResult && (
+        <div style={{
+          borderBottom: "1px solid var(--k-border-subtle)",
+          background: "#ECFDF5",
+          padding: "5px 14px",
+          fontSize: 11,
+          fontFamily: "var(--k-font-mono)",
+          color: "#065F46",
+        }}>
+          {t("ticketList.syncSuccess", "{{created}} nuevos · {{skipped}} omitidos", {
+            created: syncResult.created,
+            skipped: syncResult.skipped,
+          })}
+        </div>
+      )}
+      {syncError && (
+        <div style={{
+          borderBottom: "1px solid var(--k-border-subtle)",
+          background: "#FEF2F2",
+          padding: "5px 14px",
+          fontSize: 11,
+          fontFamily: "var(--k-font-mono)",
+          color: "#991B1B",
+        }}>
+          {syncError}
+        </div>
+      )}
 
       {/* Scanning banner */}
       {isScanning && tickets.length > 0 && (
@@ -380,6 +546,7 @@ export function TicketList() {
           tickets={filtered}
           selectedTicketId={selectedTicketId}
           correctedTicketIds={correctedTicketIds}
+          groupCounts={groupCounts}
           onSelect={selectTicket}
         />
       ) : (
@@ -391,6 +558,7 @@ export function TicketList() {
               selected={selectedTicketId === ticket.id}
               onSelect={selectTicket}
               isCorrected={correctedTicketIds.has(ticket.id)}
+              groupCount={ticket.group_id ? (groupCounts.get(ticket.group_id) ?? 1) : 0}
             />
           ))}
         </div>

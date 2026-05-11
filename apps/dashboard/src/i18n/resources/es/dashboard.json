@@ -32,11 +32,13 @@
     "slaHours_one": "{{count}}h {{minutes}}m",
     "slaHours_other": "{{count}}h {{minutes}}m",
     "slaMinutes_one": "{{count}}m",
-    "slaMinutes_other": "{{count}}m"
+    "slaMinutes_other": "{{count}}m",
+    "similares": "similares agrupados",
+    "priorityScoreTooltip": "Peso de prioridad"
   },
   "ticketList": {
     "header": "Tickets",
-    "classifyAll": "Clasificar Todo",
+    "classifyAll": "Clasificar todo",
     "classifying": "Clasificando...",
     "scanning": "Escaneando correos... {{count}} ticket clasificado",
     "scanning_other": "Escaneando correos... {{count}} tickets clasificados",
@@ -44,7 +46,13 @@
     "checkingEmails": "Revisando tus correos recientes...",
     "noMatch": "Ningún ticket coincide con los filtros actuales.",
     "classified": "clasificado",
-    "unclassified": "sin clasificar"
+    "unclassified": "sin clasificar",
+    "filterAll": "Todos",
+    "moreActions": "Más acciones",
+    "syncGmail": "Sincronizar Gmail",
+    "syncing": "Sincronizando...",
+    "syncSuccess": "{{created}} nuevos · {{skipped}} omitidos",
+    "syncError": "Error al sincronizar"
   },
   "tickets": {
     "title": "Tickets Abiertos",
