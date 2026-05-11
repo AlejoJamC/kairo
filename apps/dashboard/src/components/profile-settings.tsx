@@ -1,6 +1,22 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, AlertCircle, Loader2 } from "lucide-react";
+import {
+  Check,
+  AlertCircle,
+  Loader2,
+  LayoutPanelLeft,
+  Users,
+  Layers,
+  Sparkles,
+  BookOpen,
+  Tag,
+  Lock,
+  Code,
+  Globe,
+  Plus,
+  X,
+  MoreHorizontal,
+} from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { createClient } from "@/lib/supabase/client";
 import type { AppView } from "@/types";
@@ -9,62 +25,529 @@ interface Props {
   onViewChange: (view: AppView) => void;
 }
 
-export function ProfileSettings({ onViewChange }: Props) {
-  const { t } = useTranslation(["dashboard", "common"]);
-  const { user, profile, refreshProfile } = useAuth();
-  const hasPassword = user?.identities?.some((id) => id.provider === "email") ?? false;
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    company_name: "",
-  });
+type SettingsSection =
+  | "workspace"
+  | "team"
+  | "integrations"
+  | "triage"
+  | "kb"
+  | "billing"
+  | "security"
+  | "api";
+
+const NAV_ITEMS: { id: SettingsSection; label: string; Icon: React.ElementType }[] = [
+  { id: "workspace", label: "Workspace", Icon: LayoutPanelLeft },
+  { id: "team", label: "Equipo", Icon: Users },
+  { id: "integrations", label: "Integraciones", Icon: Layers },
+  { id: "triage", label: "Triage Engine", Icon: Sparkles },
+  { id: "kb", label: "Base de Conocimiento", Icon: BookOpen },
+  { id: "billing", label: "Facturación", Icon: Tag },
+  { id: "security", label: "Seguridad", Icon: Lock },
+  { id: "api", label: "API & Webhooks", Icon: Code },
+];
+
+// ── Workspace ────────────────────────────────────────────────────────────────
+
+function WorkspaceSection() {
+  const { profile, refreshProfile } = useAuth();
+  const [name, setName] = useState(profile?.company_name ?? "");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
-    if (profile) {
-      setFormData({
-        name: profile.name || "",
-        email: profile.email || "",
-        phone: "",
-        company_name: profile.company_name || "",
-      });
-    }
+    if (profile) setName(profile.company_name ?? "");
   }, [profile]);
 
-  const handleSave = async () => {
+  const save = async () => {
     setSaving(true);
-    setMessage(null);
-
+    setMsg(null);
     try {
-      const supabase = createClient();
-
-      const { error } = await supabase
+      const sb = createClient();
+      const { error } = await sb
         .from("profiles")
-        .update({
-          name: formData.name.trim(),
-          company_name: formData.company_name.trim(),
-        })
+        .update({ name: name.trim(), company_name: name.trim() })
         .eq("id", profile!.id);
-
-      if (error) {
-        setMessage({ type: "error", text: t("dashboard:settings.saveError") });
-        return;
-      }
-
+      if (error) { setMsg({ type: "error", text: "Error al guardar" }); return; }
       await refreshProfile();
-      setMessage({ type: "success", text: t("dashboard:settings.saveSuccess") });
+      setMsg({ type: "success", text: "Cambios guardados" });
     } catch {
-      setMessage({ type: "error", text: t("dashboard:settings.saveError") });
+      setMsg({ type: "error", text: "Error al guardar" });
     } finally {
       setSaving(false);
-      setTimeout(() => setMessage(null), 3000);
+      setTimeout(() => setMsg(null), 3000);
     }
   };
+
+  return (
+    <div>
+      <h1 style={styles.pageTitle}>Workspace</h1>
+
+      <div style={{ ...styles.card, marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 20 }}>
+          <div style={styles.wsLogo}>
+            {(name || "W")[0].toUpperCase()}
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={styles.label}>Nombre del workspace</label>
+            <input
+              style={styles.input}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Mi empresa"
+            />
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div>
+            <label style={styles.label}>URL</label>
+            <input style={{ ...styles.input, color: "var(--k-text-tertiary)" }} placeholder="kairo.app/mi-empresa" readOnly />
+          </div>
+          <div>
+            <label style={styles.label}>Zona horaria</label>
+            <input style={{ ...styles.input, color: "var(--k-text-tertiary)" }} placeholder="América/Bogotá (UTC-5)" readOnly />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ ...styles.card, display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
+        <Globe size={16} style={{ color: "var(--k-text-tertiary)", flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>Idioma por defecto del workspace</div>
+          <div style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>Afecta clasificación, borradores y KB.</div>
+        </div>
+        <select style={styles.select}>
+          <option>Español (LATAM)</option>
+          <option>Español (España)</option>
+          <option>English</option>
+        </select>
+      </div>
+
+      {msg && (
+        <div style={{ ...styles.msgBanner, background: msg.type === "success" ? "#ECFDF5" : "#FEF2F2", color: msg.type === "success" ? "#065F46" : "#991B1B", border: `1px solid ${msg.type === "success" ? "#A7F3D0" : "#FECACA"}`, marginBottom: 16 }}>
+          {msg.type === "success" ? <Check size={14} /> : <AlertCircle size={14} />}
+          {msg.text}
+        </div>
+      )}
+
+      <div style={styles.formFooter}>
+        <button style={styles.btnGhost}>Descartar</button>
+        <button style={styles.btnPrimary} onClick={save} disabled={saving}>
+          {saving && <Loader2 size={13} className="animate-spin" />}
+          {saving ? "Guardando…" : "Guardar cambios"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Team ──────────────────────────────────────────────────────────────────────
+
+const TEAM_MEMBERS = [
+  { name: "Valentina Castro", email: "valentina@empresa.io", role: "Owner", status: "online", initials: "VC", gradient: "linear-gradient(135deg,#FFB199,#FF6E7F)" },
+  { name: "Mateo Ríos", email: "mateo@empresa.io", role: "Admin", status: "online", initials: "MR", gradient: "linear-gradient(135deg,#93C5FD,#60A5FA)" },
+  { name: "Lucía Bermúdez", email: "lucia@empresa.io", role: "Agente", status: "away", initials: "LB", gradient: "linear-gradient(135deg,#C4B5FD,#A855F7)" },
+];
+
+function TeamSection() {
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
+        <h1 style={{ ...styles.pageTitle, margin: 0 }}>Equipo</h1>
+        <button style={styles.btnPrimary}>
+          <Plus size={13} /> Invitar
+        </button>
+      </div>
+      <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "8px 0 24px" }}>
+        3 / 5 asientos usados en el plan Pro.
+      </p>
+      <div style={{ border: "1px solid var(--k-border)", borderRadius: 12, overflow: "hidden" }}>
+        {TEAM_MEMBERS.map((m, i) => (
+          <div
+            key={m.email}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "2fr 1fr 1fr 30px",
+              padding: "14px 18px",
+              alignItems: "center",
+              borderBottom: i < TEAM_MEMBERS.length - 1 ? "1px solid var(--k-border)" : "none",
+              background: "var(--k-bg)",
+            }}
+          >
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <div style={{ position: "relative" }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: m.gradient, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: 12 }}>
+                  {m.initials}
+                </div>
+                <span style={{ position: "absolute", bottom: -1, right: -1, width: 9, height: 9, borderRadius: "50%", background: m.status === "online" ? "#10B981" : "#F59E0B", border: "2px solid var(--k-bg)" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{m.name}</div>
+                <div style={{ fontSize: 12, color: "var(--k-text-tertiary)" }}>{m.email}</div>
+              </div>
+            </div>
+            <span style={{ fontSize: 13, color: "var(--k-text-primary)" }}>{m.role}</span>
+            <span style={{ fontSize: 12, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)" }}>
+              {m.status === "online" ? "activo" : "ausente"}
+            </span>
+            <button style={{ color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+              <MoreHorizontal size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Integrations ──────────────────────────────────────────────────────────────
+
+const INTEGRATIONS = [
+  { name: "Gmail", status: "connected", meta: "soporte@empresa.io · 2,341 mensajes", color: "#EA4335", letter: "G" },
+  { name: "Slack", status: "available", meta: "Notificaciones + crear tickets desde DM", color: "#4A154B", letter: "S" },
+  { name: "WhatsApp Business", status: "beta", meta: "Twilio + Meta WABA", color: "#25D366", letter: "W" },
+  { name: "Telegram", status: "soon", meta: "Q4 2026", color: "#26A5E4", letter: "T" },
+  { name: "Instagram DM", status: "soon", meta: "Q4 2026", color: "#E1306C", letter: "I" },
+  { name: "Zendesk", status: "available", meta: "Importar tickets históricos", color: "#03363D", letter: "Z" },
+];
+
+function IntegrationsSection() {
+  return (
+    <div>
+      <h1 style={styles.pageTitle}>Integraciones</h1>
+      <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "-16px 0 24px" }}>
+        Conectá los canales por donde llega tu soporte.
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {INTEGRATIONS.map((int) => (
+          <div
+            key={int.name}
+            style={{ padding: 16, border: "1px solid var(--k-border)", borderRadius: 10, display: "flex", gap: 12, alignItems: "center", background: "var(--k-bg)" }}
+          >
+            <div style={{ width: 38, height: 38, borderRadius: 8, background: int.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, flexShrink: 0 }}>
+              {int.letter}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>
+                {int.name}
+                {int.status === "connected" && (
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", flexShrink: 0 }} />
+                )}
+                {int.status === "beta" && (
+                  <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 5px", borderRadius: 4, background: "rgba(43,91,255,.12)", color: "#2B5BFF" }}>BETA</span>
+                )}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>{int.meta}</div>
+            </div>
+            {int.status === "connected" && (
+              <button style={{ fontSize: 12, color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer" }}>Configurar</button>
+            )}
+            {int.status === "available" && (
+              <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px" }}>Conectar</button>
+            )}
+            {int.status === "beta" && (
+              <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px" }}>Solicitar</button>
+            )}
+            {int.status === "soon" && (
+              <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)", whiteSpace: "nowrap" }}>PRÓXIMAMENTE</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Triage Engine ─────────────────────────────────────────────────────────────
+
+const TIERS = [
+  { tier: 0, name: "Heurística — filtro de spam", desc: "Reglas simples + listas negras. ~40% del volumen.", color: "#71717A" },
+  { tier: 1, name: "Urgente — top 1", desc: "LLM completo en el ticket más urgente, < 5s.", color: "#EF4444" },
+  { tier: 2, name: "Resto — clasificador", desc: "Embeddings + clasificador en background.", color: "#F59E0B" },
+  { tier: 3, name: "Cola larga — agrupamiento", desc: "Clusters semánticos sin SLA.", color: "#10B981" },
+];
+
+const DEFAULT_CATEGORIES = ["Facturación", "API · Bugs", "Configuración", "Ventas", "Producto", "Onboarding", "Cuenta"];
+
+function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
+  return (
+    <button
+      onClick={onChange}
+      style={{
+        width: 36, height: 20, borderRadius: 10, padding: 2,
+        background: on ? "#2B5BFF" : "var(--k-border)",
+        border: "none", cursor: "pointer", flexShrink: 0,
+        display: "flex", alignItems: "center",
+        justifyContent: on ? "flex-end" : "flex-start",
+        transition: "background 0.15s",
+      }}
+    >
+      <span style={{ width: 16, height: 16, borderRadius: "50%", background: "white", display: "block" }} />
+    </button>
+  );
+}
+
+function TriageSection() {
+  const [confidence, setConfidence] = useState(0.85);
+  const [tiers, setTiers] = useState([true, true, true, true]);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [newCat, setNewCat] = useState("");
+
+  const addCat = () => {
+    const v = newCat.trim();
+    if (v && !categories.includes(v)) { setCategories((p) => [...p, v]); }
+    setNewCat("");
+  };
+
+  return (
+    <div>
+      <h1 style={styles.pageTitle}>Triage Engine</h1>
+      <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "-16px 0 28px" }}>
+        Cómo Kairo decide qué entra a tu cockpit y qué se filtra.
+      </p>
+
+      {/* Tier toggles */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={styles.sectionLabel}>Tiers activos</div>
+        {TIERS.map((t, i) => (
+          <div key={t.tier} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px", border: "1px solid var(--k-border)", borderRadius: 10, marginBottom: 8, background: "var(--k-bg)" }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: t.color + "20", color: t.color, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--k-font-mono)", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+              T{t.tier}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t.name}</div>
+              <div style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t.desc}</div>
+            </div>
+            <Toggle on={tiers[i]} onChange={() => setTiers((p) => p.map((v, j) => j === i ? !v : v))} />
+          </div>
+        ))}
+      </div>
+
+      {/* Confidence slider */}
+      <div style={{ marginBottom: 32, padding: 18, border: "1px solid var(--k-border)", borderRadius: 10, background: "var(--k-bg)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>Umbral de confianza para auto-resolución</div>
+          <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 16, color: "var(--k-accent)", fontWeight: 500 }}>{confidence.toFixed(2)}</span>
+        </div>
+        <p style={{ fontSize: 13, color: "var(--k-text-tertiary)", margin: "0 0 14px" }}>
+          Tickets con confianza ≥ {confidence.toFixed(2)} se resuelven automáticamente. Por debajo van al cockpit.
+        </p>
+        <input
+          type="range" min={0.5} max={1} step={0.01}
+          value={confidence}
+          onChange={(e) => setConfidence(parseFloat(e.target.value))}
+          style={{ width: "100%", accentColor: "var(--k-accent)" }}
+        />
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", marginTop: 6 }}>
+          <span>0.50 conservador</span>
+          <span>1.00 estricto</span>
+        </div>
+      </div>
+
+      {/* Custom categories */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={styles.sectionLabel}>Categorías personalizadas</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input
+              style={{ ...styles.input, width: 140, padding: "4px 10px", fontSize: 12 }}
+              placeholder="Nueva categoría"
+              value={newCat}
+              onChange={(e) => setNewCat(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addCat()}
+            />
+            <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px", display: "flex", alignItems: "center", gap: 4 }} onClick={addCat}>
+              <Plus size={12} /> Agregar
+            </button>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {categories.map((c) => (
+            <span key={c} style={{ padding: "5px 10px", fontSize: 12, borderRadius: 6, border: "1px solid var(--k-border)", display: "flex", alignItems: "center", gap: 6, color: "var(--k-text-primary)", background: "var(--k-bg)" }}>
+              {c}
+              <button style={{ color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }} onClick={() => setCategories((p) => p.filter((x) => x !== c))}>
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div style={styles.formFooter}>
+        <button style={styles.btnGhost}>Descartar</button>
+        <button style={styles.btnPrimary}>Guardar cambios</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Security ──────────────────────────────────────────────────────────────────
+
+function SecuritySection({ onViewChange }: { onViewChange: (view: AppView) => void }) {
+  const { user } = useAuth();
+  const hasPassword = user?.identities?.some((id) => id.provider === "email") ?? false;
+
+  return (
+    <div>
+      <h1 style={styles.pageTitle}>Seguridad</h1>
+
+      <div style={{ border: "1px solid var(--k-border)", borderRadius: 12, overflow: "hidden", background: "var(--k-bg)" }}>
+        <div style={{ padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--k-border)" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>Contraseña</div>
+            <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>
+              {hasPassword ? "Contraseña activa en tu cuenta" : "Sin contraseña — acceso sólo por link mágico"}
+            </div>
+          </div>
+          <button
+            onClick={() => onViewChange("change-password")}
+            style={{ fontSize: 13, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer" }}
+          >
+            {hasPassword ? "Cambiar contraseña" : "Establecer contraseña"}
+          </button>
+        </div>
+
+        <div style={{ padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>Autenticación de dos factores</div>
+            <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>Capa extra de seguridad con app TOTP.</div>
+          </div>
+          <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)" }}>PRÓXIMAMENTE</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Coming soon stub ──────────────────────────────────────────────────────────
+
+function ComingSoonSection({ title }: { title: string }) {
+  return (
+    <div>
+      <h1 style={styles.pageTitle}>{title}</h1>
+      <div style={{ padding: 40, border: "1px dashed var(--k-border)", borderRadius: 12, color: "var(--k-text-tertiary)", fontSize: 14, textAlign: "center" }}>
+        Sección en construcción.
+      </div>
+    </div>
+  );
+}
+
+// ── Shared styles ─────────────────────────────────────────────────────────────
+
+const styles = {
+  pageTitle: {
+    fontSize: 26,
+    fontWeight: 600,
+    letterSpacing: "-0.02em",
+    margin: "0 0 24px",
+    fontFamily: "var(--k-font-display)",
+    color: "var(--k-text-primary)",
+  } as React.CSSProperties,
+  card: {
+    padding: 24,
+    border: "1px solid var(--k-border)",
+    borderRadius: 12,
+    background: "var(--k-bg)",
+  } as React.CSSProperties,
+  label: {
+    display: "block",
+    fontSize: 12,
+    fontWeight: 500,
+    color: "var(--k-text-secondary)",
+    marginBottom: 6,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.04em",
+  } as React.CSSProperties,
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: "var(--k-text-secondary)",
+    fontFamily: "var(--k-font-mono)",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.05em",
+    marginBottom: 12,
+  } as React.CSSProperties,
+  input: {
+    width: "100%",
+    height: 36,
+    padding: "0 10px",
+    borderRadius: 8,
+    border: "1px solid var(--k-border)",
+    background: "var(--k-surface)",
+    color: "var(--k-text-primary)",
+    fontSize: 13,
+    outline: "none",
+    boxSizing: "border-box" as const,
+  } as React.CSSProperties,
+  select: {
+    padding: "6px 10px",
+    border: "1px solid var(--k-border)",
+    borderRadius: 6,
+    fontSize: 13,
+    background: "var(--k-surface)",
+    color: "var(--k-text-primary)",
+  } as React.CSSProperties,
+  wsLogo: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    background: "#09090B",
+    color: "white",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 20,
+    fontWeight: 600,
+    flexShrink: 0,
+  } as React.CSSProperties,
+  btnPrimary: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "7px 16px",
+    borderRadius: 8,
+    background: "var(--k-accent)",
+    color: "white",
+    fontSize: 13,
+    fontWeight: 500,
+    border: "none",
+    cursor: "pointer",
+  } as React.CSSProperties,
+  btnGhost: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "7px 14px",
+    borderRadius: 8,
+    background: "transparent",
+    color: "var(--k-text-secondary)",
+    fontSize: 13,
+    fontWeight: 500,
+    border: "1px solid var(--k-border)",
+    cursor: "pointer",
+  } as React.CSSProperties,
+  formFooter: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
+    paddingTop: 20,
+    borderTop: "1px solid var(--k-border)",
+  } as React.CSSProperties,
+  msgBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 6,
+    padding: "8px 12px",
+    fontSize: 13,
+  } as React.CSSProperties,
+};
+
+// ── Root component ────────────────────────────────────────────────────────────
+
+export function ProfileSettings({ onViewChange }: Props) {
+  const { profile } = useAuth();
+  const { t } = useTranslation(["dashboard"]);
+  const [section, setSection] = useState<SettingsSection>("workspace");
 
   if (!profile) {
     return (
@@ -74,147 +557,53 @@ export function ProfileSettings({ onViewChange }: Props) {
     );
   }
 
-  // Initials avatar
-  const initials = (profile.name ?? profile.email ?? "?")
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w: string) => w[0]?.toUpperCase() ?? "")
-    .join("");
-
   return (
-    <div style={{ flex: 1, overflowY: "auto", background: "var(--k-surface)", padding: 32 }}>
-      <div style={{ maxWidth: 640, margin: "0 auto" }}>
-
-        {/* Page title */}
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--k-text-primary)", fontFamily: "var(--k-font-display)", margin: 0 }}>
-            {t("dashboard:settings.title")}
-          </h1>
-          <p style={{ marginTop: 4, fontSize: 13, color: "var(--k-text-tertiary)" }}>
-            {t("dashboard:settings.subtitle")}
-          </p>
+    <div style={{ flex: 1, display: "flex", height: "100%", overflow: "hidden", background: "var(--k-surface)" }}>
+      {/* Left nav */}
+      <div style={{ width: 220, borderRight: "1px solid var(--k-border)", padding: "24px 12px", flexShrink: 0, overflowY: "auto" }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", padding: "0 10px", marginBottom: 12 }}>
+          Configuración
         </div>
-
-        {/* Profile card */}
-        <div className="k-card" style={{ marginBottom: 16 }}>
-          {/* Avatar + name */}
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 999, background: "linear-gradient(135deg, var(--k-accent), #6E8BFF)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, flexShrink: 0 }}>
-              {initials}
-            </div>
-            <div>
-              <p style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>
-                {profile.name || profile.email}
-              </p>
-              <p style={{ fontSize: 12, color: "var(--k-text-tertiary)" }}>{profile.email}</p>
-            </div>
-          </div>
-
-          {/* Fields */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div>
-              <label className="k-label">{t("dashboard:settings.nameLabel")}</label>
-              <input
-                type="text"
-                className="k-input"
-                value={formData.name}
-                onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-                placeholder={t("dashboard:settings.namePlaceholder")}
-              />
-            </div>
-
-            <div>
-              <label className="k-label">{t("dashboard:settings.emailLabel")}</label>
-              <input
-                type="email"
-                className="k-input"
-                value={formData.email}
-                disabled
-              />
-            </div>
-
-            <div>
-              <label className="k-label">{t("dashboard:settings.phoneLabel")}</label>
-              <input
-                type="tel"
-                className="k-input"
-                value={formData.phone}
-                onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
-                placeholder={t("dashboard:settings.phonePlaceholder")}
-              />
-            </div>
-
-            <div>
-              <label className="k-label">{t("dashboard:settings.companyLabel")}</label>
-              <input
-                type="text"
-                className="k-input"
-                value={formData.company_name}
-                onChange={(e) => setFormData((p) => ({ ...p, company_name: e.target.value }))}
-                placeholder={t("dashboard:settings.companyPlaceholder")}
-              />
-            </div>
-          </div>
-
-          {/* Message */}
-          {message && (
-            <div
+        {NAV_ITEMS.map((item) => {
+          const active = section === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setSection(item.id)}
               style={{
-                marginTop: 16,
                 display: "flex",
                 alignItems: "center",
-                gap: 8,
+                gap: 10,
+                padding: "7px 10px",
                 borderRadius: 6,
-                padding: "8px 12px",
+                width: "100%",
+                textAlign: "left",
+                background: active ? "var(--k-surface-raised, rgba(0,0,0,0.06))" : "transparent",
+                color: active ? "var(--k-text-primary)" : "var(--k-text-secondary)",
                 fontSize: 13,
-                background: message.type === "success" ? "#ECFDF5" : "#FEF2F2",
-                color: message.type === "success" ? "#065F46" : "#991B1B",
-                border: `1px solid ${message.type === "success" ? "#A7F3D0" : "#FECACA"}`,
+                fontWeight: active ? 500 : 400,
+                marginBottom: 1,
+                border: "none",
+                cursor: "pointer",
               }}
             >
-              {message.type === "success"
-                ? <Check style={{ width: 14, height: 14, flexShrink: 0 }} />
-                : <AlertCircle style={{ width: 14, height: 14, flexShrink: 0 }} />}
-              {message.text}
-            </div>
-          )}
-
-          {/* Save */}
-          <div style={{ marginTop: 20 }}>
-            <button className="k-btn-primary" onClick={handleSave} disabled={saving}>
-              {saving && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
-              {saving ? t("dashboard:settings.saving") : t("dashboard:settings.saveButton")}
+              <item.Icon size={14} />
+              <span>{item.label}</span>
             </button>
-          </div>
-        </div>
+          );
+        })}
+      </div>
 
-        {/* Security card */}
-        <div className="k-card">
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: "var(--k-text-primary)", margin: "0 0 16px", fontFamily: "var(--k-font-display)" }}>
-            {t("dashboard:settings.security.title")}
-          </h2>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 8, background: "var(--k-surface)", padding: 14, border: "1px solid var(--k-border-subtle)" }}>
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)" }}>
-                {t("dashboard:settings.security.passwordLabel")}
-              </p>
-              <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>
-                {hasPassword
-                  ? t("dashboard:settings.security.passwordEnabledDesc")
-                  : t("dashboard:settings.security.passwordDisabledDesc")}
-              </p>
-            </div>
-            <button
-              onClick={() => onViewChange("change-password")}
-              style={{ fontSize: 13, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer" }}
-            >
-              {hasPassword
-                ? t("dashboard:settings.security.changePassword")
-                : t("dashboard:settings.security.setPassword")}
-            </button>
-          </div>
-        </div>
-
+      {/* Content */}
+      <div style={{ flex: 1, padding: "32px 40px 56px", maxWidth: 880, overflowY: "auto" }}>
+        {section === "workspace" && <WorkspaceSection />}
+        {section === "team" && <TeamSection />}
+        {section === "integrations" && <IntegrationsSection />}
+        {section === "triage" && <TriageSection />}
+        {section === "security" && <SecuritySection onViewChange={onViewChange} />}
+        {section === "kb" && <ComingSoonSection title="Base de Conocimiento" />}
+        {section === "billing" && <ComingSoonSection title="Facturación" />}
+        {section === "api" && <ComingSoonSection title="API & Webhooks" />}
       </div>
     </div>
   );
