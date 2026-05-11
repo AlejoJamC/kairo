@@ -3,6 +3,7 @@
 // FIG 2.5 · Cuenta popover
 
 import { useRef, useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Search,
   Bell,
@@ -101,6 +102,7 @@ interface NotifPopoverProps {
 }
 
 function NotificationsPopover({ items, onMarkAll }: NotifPopoverProps) {
+  const { t } = useTranslation(["dashboard"]);
   const [tab, setTab] = useState<"todas" | "no-leidas" | "menciones">("todas");
 
   const filtered =
@@ -110,7 +112,11 @@ function NotificationsPopover({ items, onMarkAll }: NotifPopoverProps) {
 
   const unread = items.filter((n) => n.unread).length;
 
-  const TABS: [string, string][] = [["todas","Todas"],["no-leidas","No leídas"],["menciones","@menciones"]];
+  const TABS: [string, string][] = [
+    ["todas",      t("dashboard:topChrome.notifications.tabAll")],
+    ["no-leidas",  t("dashboard:topChrome.notifications.tabUnread")],
+    ["menciones",  t("dashboard:topChrome.notifications.tabMentions")],
+  ];
 
   return (
     <div style={{
@@ -123,10 +129,10 @@ function NotificationsPopover({ items, onMarkAll }: NotifPopoverProps) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em", color: T.textPrimary }}>
-              Actividad
+              {t("dashboard:topChrome.notifications.title")}
             </span>
             <span style={{ fontSize: 11, fontFamily: T.mono, color: T.textTertiary }}>
-              {unread} sin leer
+              {t("dashboard:topChrome.notifications.unreadCount", { count: unread })}
             </span>
           </div>
           <button
@@ -137,7 +143,7 @@ function NotificationsPopover({ items, onMarkAll }: NotifPopoverProps) {
               border: `1px solid ${T.border}`, background: T.bg, cursor: "pointer",
             }}
           >
-            Marcar leídas
+            {t("dashboard:topChrome.notifications.markRead")}
           </button>
         </div>
         {/* Tabs */}
@@ -163,7 +169,7 @@ function NotificationsPopover({ items, onMarkAll }: NotifPopoverProps) {
       <div style={{ maxHeight: 420, overflowY: "auto" }}>
         {filtered.length === 0 && (
           <div style={{ padding: "40px 20px", textAlign: "center", fontSize: 12, color: T.textTertiary, fontFamily: T.mono }}>
-            ◌ sin notificaciones
+            {t("dashboard:topChrome.notifications.empty")}
           </div>
         )}
         {filtered.map((n) => (
@@ -178,10 +184,10 @@ function NotificationsPopover({ items, onMarkAll }: NotifPopoverProps) {
       }}>
         <span style={{ fontSize: 11, fontFamily: T.mono, color: T.textTertiary, display: "flex", alignItems: "center", gap: 5 }}>
           <span className="animate-pulse" style={{ width: 5, height: 5, borderRadius: 999, background: "#10B981", display: "inline-block" }}/>
-          stream en vivo
+          {t("dashboard:topChrome.notifications.liveStream")}
         </span>
         <button style={{ fontSize: 12, color: T.accent, fontWeight: 500, background: "none", border: "none", cursor: "pointer" }}>
-          Ver toda la actividad →
+          {t("dashboard:topChrome.notifications.viewAll")}
         </button>
       </div>
     </div>
@@ -244,15 +250,16 @@ function NotifRow({ n }: { n: NotifItem }) {
 // ─────────────────────────────────────────────────────────────────────────────
 type UserStatus = "online" | "busy" | "away" | "offline";
 
-const STATUS_OPTIONS: { id: UserStatus; label: string; dot: string }[] = [
-  { id: "online",  label: "En línea",   dot: "#10B981" },
-  { id: "busy",    label: "En llamada", dot: "#EF4444" },
-  { id: "away",    label: "Ausente",    dot: "#F59E0B" },
-  { id: "offline", label: "Invisible",  dot: "#A1A1AA" },
-];
+// Dots are semantic colors — not translated
+const STATUS_DOTS: Record<UserStatus, string> = {
+  online:  "#10B981",
+  busy:    "#EF4444",
+  away:    "#F59E0B",
+  offline: "#A1A1AA",
+};
 
 type Theme = "light" | "auto" | "dark";
-const THEME_OPTIONS: [Theme, string][] = [["light","Claro"],["auto","Auto"],["dark","Oscuro"]];
+const THEME_IDS: Theme[] = ["light", "auto", "dark"];
 
 interface ProfilePopoverProps {
   initials: string;
@@ -271,13 +278,28 @@ function ProfilePopover({
   status, setStatus, theme, setTheme,
   onNavigate, onSignOut,
 }: ProfilePopoverProps) {
+  const { t } = useTranslation(["dashboard"]);
+
+  const STATUS_OPTIONS: { id: UserStatus; label: string; dot: string }[] = [
+    { id: "online",  label: t("dashboard:topChrome.account.statusOnline"),  dot: STATUS_DOTS.online },
+    { id: "busy",    label: t("dashboard:topChrome.account.statusBusy"),    dot: STATUS_DOTS.busy },
+    { id: "away",    label: t("dashboard:topChrome.account.statusAway"),    dot: STATUS_DOTS.away },
+    { id: "offline", label: t("dashboard:topChrome.account.statusOffline"), dot: STATUS_DOTS.offline },
+  ];
+
+  const THEME_OPTIONS: [Theme, string][] = [
+    ["light", t("dashboard:topChrome.account.themeLight")],
+    ["auto",  t("dashboard:topChrome.account.themeAuto")],
+    ["dark",  t("dashboard:topChrome.account.themeDark")],
+  ];
+
   const cur = STATUS_OPTIONS.find((s) => s.id === status) ?? STATUS_OPTIONS[0];
 
   const MENU_ITEMS: { icon: React.ReactNode; label: string; kbd: string | null; action: () => void }[] = [
-    { icon: <User size={14} color={T.textTertiary}/>,     label: "Mi perfil",         kbd: null,  action: () => {} },
-    { icon: <Settings size={14} color={T.textTertiary}/>, label: "Configuración",     kbd: "⌘,",  action: () => onNavigate("settings") },
-    { icon: <Zap size={14} color={T.textTertiary}/>,      label: "Atajos de teclado", kbd: "⌘?",  action: () => {} },
-    { icon: <BookOpen size={14} color={T.textTertiary}/>, label: "Documentación",     kbd: null,  action: () => {} },
+    { icon: <User size={14} color={T.textTertiary}/>,     label: t("dashboard:topChrome.account.menuProfile"),   kbd: null,  action: () => {} },
+    { icon: <Settings size={14} color={T.textTertiary}/>, label: t("dashboard:topChrome.account.menuSettings"),  kbd: "⌘,",  action: () => onNavigate("settings") },
+    { icon: <Zap size={14} color={T.textTertiary}/>,      label: t("dashboard:topChrome.account.menuShortcuts"), kbd: "⌘?",  action: () => {} },
+    { icon: <BookOpen size={14} color={T.textTertiary}/>, label: t("dashboard:topChrome.account.menuDocs"),      kbd: null,  action: () => {} },
   ];
 
   return (
@@ -315,7 +337,7 @@ function ProfilePopover({
             }}>
               <Sparkles size={9} color={T.accent}/>
               <span style={{ fontSize: 10, fontFamily: T.mono, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Agente · Soporte
+                {t("dashboard:topChrome.account.roleBadge")}
               </span>
             </div>
           </div>
@@ -325,7 +347,7 @@ function ProfilePopover({
       {/* Status selector */}
       <div style={{ padding: "10px 8px", borderBottom: `1px solid ${T.borderSubtle}` }}>
         <div style={{ padding: "0 6px 6px", fontSize: 10, fontFamily: T.mono, color: T.textTertiary, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Estado
+          {t("dashboard:topChrome.account.statusSection")}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
           {STATUS_OPTIONS.map((s) => (
@@ -337,7 +359,7 @@ function ProfilePopover({
       {/* Workspace */}
       <div style={{ padding: 10, borderBottom: `1px solid ${T.borderSubtle}` }}>
         <div style={{ padding: "0 4px 6px", fontSize: 10, fontFamily: T.mono, color: T.textTertiary, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Workspace
+          {t("dashboard:topChrome.account.workspaceSection")}
         </div>
         <div style={{
           display: "flex", alignItems: "center", gap: 8, padding: 8, borderRadius: 6,
@@ -349,15 +371,15 @@ function ProfilePopover({
             fontSize: 10, fontWeight: 600, flexShrink: 0,
           }}>K</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 500, color: T.textPrimary }}>Kairo Workspace</div>
-            <div style={{ fontSize: 10, color: T.textTertiary, fontFamily: T.mono }}>plan Pro</div>
+            <div style={{ fontSize: 12, fontWeight: 500, color: T.textPrimary }}>{t("dashboard:topChrome.account.workspaceName")}</div>
+            <div style={{ fontSize: 10, color: T.textTertiary, fontFamily: T.mono }}>{t("dashboard:topChrome.account.workspacePlan")}</div>
           </div>
           <button style={{
             fontSize: 10, fontFamily: T.mono, color: T.textTertiary,
             padding: "2px 6px", border: `1px solid ${T.border}`,
             borderRadius: 4, background: "transparent", cursor: "pointer",
           }}>
-            cambiar
+            {t("dashboard:topChrome.account.workspaceChange")}
           </button>
         </div>
       </div>
@@ -372,7 +394,7 @@ function ProfilePopover({
       {/* Theme toggle */}
       <div style={{ padding: "6px 10px 10px", borderTop: `1px solid ${T.borderSubtle}` }}>
         <div style={{ padding: "4px 0 6px", fontSize: 10, fontFamily: T.mono, color: T.textTertiary, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Apariencia
+          {t("dashboard:topChrome.account.appearanceSection")}
         </div>
         <div style={{
           display: "flex", gap: 2, padding: 2,
@@ -463,6 +485,7 @@ function MenuButton({
 }
 
 function SignOutButton({ onSignOut, initials }: { onSignOut: () => void; initials: string }) {
+  const { t } = useTranslation(["dashboard"]);
   const [hov, setHov] = useState(false);
   return (
     <button
@@ -478,7 +501,7 @@ function SignOutButton({ onSignOut, initials }: { onSignOut: () => void; initial
       }}
     >
       <LogOut size={14} color="#B91C1C"/>
-      <span style={{ flex: 1 }}>Cerrar sesión</span>
+      <span style={{ flex: 1 }}>{t("dashboard:topChrome.account.signOut")}</span>
       <span style={{ fontFamily: T.mono, fontSize: 10, color: "#B91C1C", opacity: 0.6 }}>{initials}</span>
     </button>
   );
@@ -503,7 +526,7 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
   const ref = useRef<HTMLDivElement>(null);
 
   const unread = notifs.filter((n) => n.unread).length;
-  const curStatus = STATUS_OPTIONS.find((s) => s.id === status) ?? STATUS_OPTIONS[0];
+  const curStatusDot = STATUS_DOTS[status];
 
   // Click-outside + Escape
   useEffect(() => {
@@ -581,7 +604,7 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
             <div style={{
               position: "absolute", bottom: -1, right: -1,
               width: 9, height: 9, borderRadius: 999,
-              background: curStatus.dot, border: `2px solid ${T.bg}`,
+              background: curStatusDot, border: `2px solid ${T.bg}`,
             }}/>
           </div>
           <ChevronDown size={12} color={T.textTertiary}/>
@@ -614,6 +637,7 @@ interface TopChromeProps {
 }
 
 export function TopChrome({ collapsed, onToggle, onViewChange }: TopChromeProps) {
+  const { t } = useTranslation(["dashboard"]);
   const { profile, signOut } = useAuth();
 
   const initials = profile?.name
@@ -676,7 +700,7 @@ export function TopChrome({ collapsed, onToggle, onViewChange }: TopChromeProps)
         background: T.surface, color: T.textTertiary, fontSize: 13,
       }}>
         <Search size={14}/>
-        <span style={{ flex: 1 }}>Search tickets, clients, KB…</span>
+        <span style={{ flex: 1 }}>{t("dashboard:topChrome.searchPlaceholder")}</span>
         <kbd style={{
           fontFamily: T.mono, fontSize: 11, padding: "1px 6px",
           background: T.bg, border: `1px solid ${T.border}`,

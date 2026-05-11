@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
+import { useTranslation, type TFunction } from "react-i18next";
 import {
   Check,
   AlertCircle,
@@ -35,20 +35,23 @@ type SettingsSection =
   | "security"
   | "api";
 
-const NAV_ITEMS: { id: SettingsSection; label: string; Icon: React.ElementType }[] = [
-  { id: "workspace", label: "Workspace", Icon: LayoutPanelLeft },
-  { id: "team", label: "Equipo", Icon: Users },
-  { id: "integrations", label: "Integraciones", Icon: Layers },
-  { id: "triage", label: "Triage Engine", Icon: Sparkles },
-  { id: "kb", label: "Base de Conocimiento", Icon: BookOpen },
-  { id: "billing", label: "Facturación", Icon: Tag },
-  { id: "security", label: "Seguridad", Icon: Lock },
-  { id: "api", label: "API & Webhooks", Icon: Code },
-];
+function buildNavItems(t: TFunction): { id: SettingsSection; label: string; Icon: React.ElementType }[] {
+  return [
+    { id: "workspace",    label: t("dashboard:settings.nav.workspace"),    Icon: LayoutPanelLeft },
+    { id: "team",         label: t("dashboard:settings.nav.team"),         Icon: Users },
+    { id: "integrations", label: t("dashboard:settings.nav.integrations"), Icon: Layers },
+    { id: "triage",       label: t("dashboard:settings.nav.triage"),       Icon: Sparkles },
+    { id: "kb",           label: t("dashboard:settings.nav.kb"),           Icon: BookOpen },
+    { id: "billing",      label: t("dashboard:settings.nav.billing"),      Icon: Tag },
+    { id: "security",     label: t("dashboard:settings.nav.security"),     Icon: Lock },
+    { id: "api",          label: t("dashboard:settings.nav.api"),          Icon: Code },
+  ];
+}
 
 // ── Workspace ────────────────────────────────────────────────────────────────
 
 function WorkspaceSection() {
+  const { t } = useTranslation(["dashboard"]);
   const { profile, refreshProfile } = useAuth();
   const [name, setName] = useState(profile?.company_name ?? "");
   const [saving, setSaving] = useState(false);
@@ -67,11 +70,11 @@ function WorkspaceSection() {
         .from("profiles")
         .update({ name: name.trim(), company_name: name.trim() })
         .eq("id", profile!.id);
-      if (error) { setMsg({ type: "error", text: "Error al guardar" }); return; }
+      if (error) { setMsg({ type: "error", text: t("dashboard:settings.savedError") }); return; }
       await refreshProfile();
-      setMsg({ type: "success", text: "Cambios guardados" });
+      setMsg({ type: "success", text: t("dashboard:settings.savedSuccess") });
     } catch {
-      setMsg({ type: "error", text: "Error al guardar" });
+      setMsg({ type: "error", text: t("dashboard:settings.savedError") });
     } finally {
       setSaving(false);
       setTimeout(() => setMsg(null), 3000);
@@ -80,7 +83,7 @@ function WorkspaceSection() {
 
   return (
     <div>
-      <h1 style={styles.pageTitle}>Workspace</h1>
+      <h1 style={styles.pageTitle}>{t("dashboard:settings.workspace.title")}</h1>
 
       <div style={{ ...styles.card, marginBottom: 12 }}>
         <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 20 }}>
@@ -88,23 +91,23 @@ function WorkspaceSection() {
             {(name || "W")[0].toUpperCase()}
           </div>
           <div style={{ flex: 1 }}>
-            <label style={styles.label}>Nombre del workspace</label>
+            <label style={styles.label}>{t("dashboard:settings.workspace.nameLabel")}</label>
             <input
               style={styles.input}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Mi empresa"
+              placeholder={t("dashboard:settings.companyPlaceholder")}
             />
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div>
-            <label style={styles.label}>URL</label>
-            <input style={{ ...styles.input, color: "var(--k-text-tertiary)" }} placeholder="kairo.app/mi-empresa" readOnly />
+            <label style={styles.label}>{t("dashboard:settings.workspace.urlLabel")}</label>
+            <input style={{ ...styles.input, color: "var(--k-text-tertiary)" }} placeholder={t("dashboard:settings.workspace.urlPlaceholder")} readOnly />
           </div>
           <div>
-            <label style={styles.label}>Zona horaria</label>
-            <input style={{ ...styles.input, color: "var(--k-text-tertiary)" }} placeholder="América/Bogotá (UTC-5)" readOnly />
+            <label style={styles.label}>{t("dashboard:settings.workspace.timezoneLabel")}</label>
+            <input style={{ ...styles.input, color: "var(--k-text-tertiary)" }} placeholder={t("dashboard:settings.workspace.timezonePlaceholder")} readOnly />
           </div>
         </div>
       </div>
@@ -112,13 +115,13 @@ function WorkspaceSection() {
       <div style={{ ...styles.card, display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
         <Globe size={16} style={{ color: "var(--k-text-tertiary)", flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>Idioma por defecto del workspace</div>
-          <div style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>Afecta clasificación, borradores y KB.</div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t("dashboard:settings.workspace.langTitle")}</div>
+          <div style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t("dashboard:settings.workspace.langDesc")}</div>
         </div>
         <select style={styles.select}>
-          <option>Español (LATAM)</option>
-          <option>Español (España)</option>
-          <option>English</option>
+          <option>{t("dashboard:settings.workspace.langLatam")}</option>
+          <option>{t("dashboard:settings.workspace.langSpain")}</option>
+          <option>{t("dashboard:settings.workspace.langEnglish")}</option>
         </select>
       </div>
 
@@ -130,10 +133,10 @@ function WorkspaceSection() {
       )}
 
       <div style={styles.formFooter}>
-        <button style={styles.btnGhost}>Descartar</button>
+        <button style={styles.btnGhost}>{t("dashboard:settings.discard")}</button>
         <button style={styles.btnPrimary} onClick={save} disabled={saving}>
           {saving && <Loader2 size={13} className="animate-spin" />}
-          {saving ? "Guardando…" : "Guardar cambios"}
+          {saving ? t("dashboard:settings.savingState") : t("dashboard:settings.saveChanges")}
         </button>
       </div>
     </div>
@@ -149,16 +152,17 @@ const TEAM_MEMBERS = [
 ];
 
 function TeamSection() {
+  const { t } = useTranslation(["dashboard"]);
   return (
     <div>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
-        <h1 style={{ ...styles.pageTitle, margin: 0 }}>Equipo</h1>
+        <h1 style={{ ...styles.pageTitle, margin: 0 }}>{t("dashboard:settings.team.title")}</h1>
         <button style={styles.btnPrimary}>
-          <Plus size={13} /> Invitar
+          <Plus size={13} /> {t("dashboard:settings.team.invite")}
         </button>
       </div>
       <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "8px 0 24px" }}>
-        3 / 5 asientos usados en el plan Pro.
+        {t("dashboard:settings.team.seats", { used: 3, total: 5, plan: "Pro" })}
       </p>
       <div style={{ border: "1px solid var(--k-border)", borderRadius: 12, overflow: "hidden" }}>
         {TEAM_MEMBERS.map((m, i) => (
@@ -187,7 +191,7 @@ function TeamSection() {
             </div>
             <span style={{ fontSize: 13, color: "var(--k-text-primary)" }}>{m.role}</span>
             <span style={{ fontSize: 12, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)" }}>
-              {m.status === "online" ? "activo" : "ausente"}
+              {m.status === "online" ? t("dashboard:settings.team.statusActive") : t("dashboard:settings.team.statusAway")}
             </span>
             <button style={{ color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer", padding: 4 }}>
               <MoreHorizontal size={14} />
@@ -211,11 +215,12 @@ const INTEGRATIONS = [
 ];
 
 function IntegrationsSection() {
+  const { t } = useTranslation(["dashboard"]);
   return (
     <div>
-      <h1 style={styles.pageTitle}>Integraciones</h1>
+      <h1 style={styles.pageTitle}>{t("dashboard:settings.integrations.title")}</h1>
       <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "-16px 0 24px" }}>
-        Conectá los canales por donde llega tu soporte.
+        {t("dashboard:settings.integrations.subtitle")}
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         {INTEGRATIONS.map((int) => (
@@ -239,16 +244,16 @@ function IntegrationsSection() {
               <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>{int.meta}</div>
             </div>
             {int.status === "connected" && (
-              <button style={{ fontSize: 12, color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer" }}>Configurar</button>
+              <button style={{ fontSize: 12, color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer" }}>{t("dashboard:settings.integrations.configure")}</button>
             )}
             {int.status === "available" && (
-              <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px" }}>Conectar</button>
+              <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px" }}>{t("dashboard:settings.integrations.connect")}</button>
             )}
             {int.status === "beta" && (
-              <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px" }}>Solicitar</button>
+              <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px" }}>{t("dashboard:settings.integrations.requestAccess")}</button>
             )}
             {int.status === "soon" && (
-              <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)", whiteSpace: "nowrap" }}>PRÓXIMAMENTE</span>
+              <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)", whiteSpace: "nowrap" }}>{t("dashboard:settings.integrations.comingSoon")}</span>
             )}
           </div>
         ))}
@@ -259,14 +264,10 @@ function IntegrationsSection() {
 
 // ── Triage Engine ─────────────────────────────────────────────────────────────
 
-const TIERS = [
-  { tier: 0, name: "Heurística — filtro de spam", desc: "Reglas simples + listas negras. ~40% del volumen.", color: "#71717A" },
-  { tier: 1, name: "Urgente — top 1", desc: "LLM completo en el ticket más urgente, < 5s.", color: "#EF4444" },
-  { tier: 2, name: "Resto — clasificador", desc: "Embeddings + clasificador en background.", color: "#F59E0B" },
-  { tier: 3, name: "Cola larga — agrupamiento", desc: "Clusters semánticos sin SLA.", color: "#10B981" },
-];
+const TIER_COLORS = ["#71717A", "#EF4444", "#F59E0B", "#10B981"];
 
-const DEFAULT_CATEGORIES = ["Facturación", "API · Bugs", "Configuración", "Ventas", "Producto", "Onboarding", "Cuenta"];
+// Default category keys — stored in i18n so they switch language automatically
+const DEFAULT_CATEGORY_KEYS = ["billing", "apiBugs", "configuration", "sales", "product", "onboarding", "account"] as const;
 
 function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
   return (
@@ -287,9 +288,12 @@ function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
 }
 
 function TriageSection() {
+  const { t } = useTranslation(["dashboard"]);
   const [confidence, setConfidence] = useState(0.85);
   const [tiers, setTiers] = useState([true, true, true, true]);
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [categories, setCategories] = useState(() =>
+    DEFAULT_CATEGORY_KEYS.map((k) => t(`dashboard:settings.triage.cat_${k}`))
+  );
   const [newCat, setNewCat] = useState("");
 
   const addCat = () => {
@@ -298,38 +302,48 @@ function TriageSection() {
     setNewCat("");
   };
 
+  const TIER_DATA = [
+    { tier: 0, nameKey: "tier0Name", descKey: "tier0Desc" },
+    { tier: 1, nameKey: "tier1Name", descKey: "tier1Desc" },
+    { tier: 2, nameKey: "tier2Name", descKey: "tier2Desc" },
+    { tier: 3, nameKey: "tier3Name", descKey: "tier3Desc" },
+  ] as const;
+
   return (
     <div>
-      <h1 style={styles.pageTitle}>Triage Engine</h1>
+      <h1 style={styles.pageTitle}>{t("dashboard:settings.triage.title")}</h1>
       <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "-16px 0 28px" }}>
-        Cómo Kairo decide qué entra a tu cockpit y qué se filtra.
+        {t("dashboard:settings.triage.subtitle")}
       </p>
 
       {/* Tier toggles */}
       <div style={{ marginBottom: 32 }}>
-        <div style={styles.sectionLabel}>Tiers activos</div>
-        {TIERS.map((t, i) => (
-          <div key={t.tier} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px", border: "1px solid var(--k-border)", borderRadius: 10, marginBottom: 8, background: "var(--k-bg)" }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: t.color + "20", color: t.color, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--k-font-mono)", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
-              T{t.tier}
+        <div style={styles.sectionLabel}>{t("dashboard:settings.triage.tiersLabel")}</div>
+        {TIER_DATA.map((tier, i) => {
+          const col = TIER_COLORS[tier.tier];
+          return (
+            <div key={tier.tier} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px", border: "1px solid var(--k-border)", borderRadius: 10, marginBottom: 8, background: "var(--k-bg)" }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: col + "20", color: col, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--k-font-mono)", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+                T{tier.tier}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t(`dashboard:settings.triage.${tier.nameKey}`)}</div>
+                <div style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t(`dashboard:settings.triage.${tier.descKey}`)}</div>
+              </div>
+              <Toggle on={tiers[i]} onChange={() => setTiers((p) => p.map((v, j) => j === i ? !v : v))} />
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t.name}</div>
-              <div style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t.desc}</div>
-            </div>
-            <Toggle on={tiers[i]} onChange={() => setTiers((p) => p.map((v, j) => j === i ? !v : v))} />
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Confidence slider */}
       <div style={{ marginBottom: 32, padding: 18, border: "1px solid var(--k-border)", borderRadius: 10, background: "var(--k-bg)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>Umbral de confianza para auto-resolución</div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t("dashboard:settings.triage.confidenceTitle")}</div>
           <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 16, color: "var(--k-accent)", fontWeight: 500 }}>{confidence.toFixed(2)}</span>
         </div>
         <p style={{ fontSize: 13, color: "var(--k-text-tertiary)", margin: "0 0 14px" }}>
-          Tickets con confianza ≥ {confidence.toFixed(2)} se resuelven automáticamente. Por debajo van al cockpit.
+          {t("dashboard:settings.triage.confidenceDesc", { threshold: confidence.toFixed(2) })}
         </p>
         <input
           type="range" min={0.5} max={1} step={0.01}
@@ -338,25 +352,25 @@ function TriageSection() {
           style={{ width: "100%", accentColor: "var(--k-accent)" }}
         />
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", marginTop: 6 }}>
-          <span>0.50 conservador</span>
-          <span>1.00 estricto</span>
+          <span>{t("dashboard:settings.triage.confidenceLow")}</span>
+          <span>{t("dashboard:settings.triage.confidenceHigh")}</span>
         </div>
       </div>
 
       {/* Custom categories */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={styles.sectionLabel}>Categorías personalizadas</div>
+          <div style={styles.sectionLabel}>{t("dashboard:settings.triage.categoriesLabel")}</div>
           <div style={{ display: "flex", gap: 6 }}>
             <input
               style={{ ...styles.input, width: 140, padding: "4px 10px", fontSize: 12 }}
-              placeholder="Nueva categoría"
+              placeholder={t("dashboard:settings.triage.categoryPlaceholder")}
               value={newCat}
               onChange={(e) => setNewCat(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addCat()}
             />
             <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px", display: "flex", alignItems: "center", gap: 4 }} onClick={addCat}>
-              <Plus size={12} /> Agregar
+              <Plus size={12} /> {t("dashboard:settings.triage.addCategory")}
             </button>
           </div>
         </div>
@@ -373,8 +387,8 @@ function TriageSection() {
       </div>
 
       <div style={styles.formFooter}>
-        <button style={styles.btnGhost}>Descartar</button>
-        <button style={styles.btnPrimary}>Guardar cambios</button>
+        <button style={styles.btnGhost}>{t("dashboard:settings.discard")}</button>
+        <button style={styles.btnPrimary}>{t("dashboard:settings.saveChanges")}</button>
       </div>
     </div>
   );
@@ -383,35 +397,40 @@ function TriageSection() {
 // ── Security ──────────────────────────────────────────────────────────────────
 
 function SecuritySection({ onViewChange }: { onViewChange: (view: AppView) => void }) {
+  const { t } = useTranslation(["dashboard"]);
   const { user } = useAuth();
   const hasPassword = user?.identities?.some((id) => id.provider === "email") ?? false;
 
   return (
     <div>
-      <h1 style={styles.pageTitle}>Seguridad</h1>
+      <h1 style={styles.pageTitle}>{t("dashboard:settings.security.title")}</h1>
 
       <div style={{ border: "1px solid var(--k-border)", borderRadius: 12, overflow: "hidden", background: "var(--k-bg)" }}>
         <div style={{ padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--k-border)" }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>Contraseña</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t("dashboard:settings.security.passwordLabel")}</div>
             <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>
-              {hasPassword ? "Contraseña activa en tu cuenta" : "Sin contraseña — acceso sólo por link mágico"}
+              {hasPassword
+                ? t("dashboard:settings.security.passwordActiveDesc")
+                : t("dashboard:settings.security.passwordNoneDesc")}
             </div>
           </div>
           <button
             onClick={() => onViewChange("change-password")}
             style={{ fontSize: 13, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer" }}
           >
-            {hasPassword ? "Cambiar contraseña" : "Establecer contraseña"}
+            {hasPassword
+              ? t("dashboard:settings.security.changePassword")
+              : t("dashboard:settings.security.setPassword")}
           </button>
         </div>
 
         <div style={{ padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>Autenticación de dos factores</div>
-            <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>Capa extra de seguridad con app TOTP.</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t("dashboard:settings.security.twoFaLabel")}</div>
+            <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>{t("dashboard:settings.security.twoFaDesc")}</div>
           </div>
-          <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)" }}>PRÓXIMAMENTE</span>
+          <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)" }}>{t("dashboard:settings.security.comingSoon")}</span>
         </div>
       </div>
     </div>
@@ -421,11 +440,12 @@ function SecuritySection({ onViewChange }: { onViewChange: (view: AppView) => vo
 // ── Coming soon stub ──────────────────────────────────────────────────────────
 
 function ComingSoonSection({ title }: { title: string }) {
+  const { t } = useTranslation(["dashboard"]);
   return (
     <div>
       <h1 style={styles.pageTitle}>{title}</h1>
       <div style={{ padding: 40, border: "1px dashed var(--k-border)", borderRadius: 12, color: "var(--k-text-tertiary)", fontSize: 14, textAlign: "center" }}>
-        Sección en construcción.
+        {t("dashboard:settings.comingSoon")}
       </div>
     </div>
   );
@@ -548,6 +568,7 @@ export function ProfileSettings({ onViewChange }: Props) {
   const { profile } = useAuth();
   const { t } = useTranslation(["dashboard"]);
   const [section, setSection] = useState<SettingsSection>("workspace");
+  const navItems = buildNavItems(t);
 
   if (!profile) {
     return (
@@ -562,9 +583,9 @@ export function ProfileSettings({ onViewChange }: Props) {
       {/* Left nav */}
       <div style={{ width: 220, borderRight: "1px solid var(--k-border)", padding: "24px 12px", flexShrink: 0, overflowY: "auto" }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", padding: "0 10px", marginBottom: 12 }}>
-          Configuración
+          {t("dashboard:settings.navHeading")}
         </div>
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const active = section === item.id;
           return (
             <button
@@ -601,9 +622,9 @@ export function ProfileSettings({ onViewChange }: Props) {
         {section === "integrations" && <IntegrationsSection />}
         {section === "triage" && <TriageSection />}
         {section === "security" && <SecuritySection onViewChange={onViewChange} />}
-        {section === "kb" && <ComingSoonSection title="Base de Conocimiento" />}
-        {section === "billing" && <ComingSoonSection title="Facturación" />}
-        {section === "api" && <ComingSoonSection title="API & Webhooks" />}
+        {section === "kb" && <ComingSoonSection title={t("dashboard:settings.nav.kb")} />}
+        {section === "billing" && <ComingSoonSection title={t("dashboard:settings.nav.billing")} />}
+        {section === "api" && <ComingSoonSection title={t("dashboard:settings.nav.api")} />}
       </div>
     </div>
   );
