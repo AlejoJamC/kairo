@@ -223,7 +223,7 @@ tickets.get("/:id/related-history", async (c) => {
     p_status_filter: "resolved",
   });
 
-  if (!rpcError) {
+  if (!rpcError && rpcData && rpcData.length > 0) {
     const results = (rpcData ?? []).map((r: Record<string, unknown>) => ({
       id: r.id,
       subject: r.subject,

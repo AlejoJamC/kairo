@@ -17,9 +17,9 @@ import { intelligence } from "./routes/v1/intelligence.js";
 import { supportSchedule } from "./routes/v1/support-schedule.js";
 import { kbArticles } from "./routes/v1/kb-articles.js";
 
-const app = new Hono();
+const app = new Hono({ strict: false });
 
-const v1 = new Hono();
+const v1 = new Hono({ strict: false });
 v1.route("/", health);
 v1.route("/tickets", tickets);
 v1.route("/ticket-groups", ticketGroups);
