@@ -8,8 +8,8 @@ interface GoogleButtonProps {
   href?: string;
 }
 
-const GoogleIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+export const GoogleIcon = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
     <path fill="#EA4335" d="M12 11v3.4h4.8a4.8 4.8 0 01-2 3.1v2.6h3.3c1.9-1.8 3-4.4 3-7.5 0-.7-.1-1.4-.2-2L12 11z" />
     <path fill="#34A853" d="M12 21c2.7 0 5-.9 6.6-2.4l-3.3-2.6c-.9.6-2 1-3.3 1-2.5 0-4.7-1.7-5.5-4H3.2v2.5A10 10 0 0012 21z" />
     <path fill="#FBBC05" d="M6.5 13c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V6.5H3.2A10 10 0 002 11c0 1.6.4 3.2 1.2 4.5L6.5 13z" />

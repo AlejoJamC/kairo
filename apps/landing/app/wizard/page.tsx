@@ -6,12 +6,7 @@ import { getApiUrl } from "@/lib/api-config";
 import { useTranslation } from "@/lib/i18n";
 import { WizardChrome } from "@/components/wizard-chrome";
 import { WizardStepper } from "@/components/wizard-stepper";
-
-const GoogleSvg = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
-    <path fill="#EA4335" d="M21.35 11.1h-9.17v2.74h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.28 5 16.25 5 12c0-4.1 3.2-7.28 7.2-7.28 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z" />
-  </svg>
-);
+import { GoogleIcon } from "@/components/google-button";
 
 const COMING_SOON = ["Slack", "WhatsApp", "Telegram", "Instagram"];
 
@@ -93,7 +88,7 @@ export default function WizardPage() {
             if (!connecting) e.currentTarget.style.background = "white";
           }}
         >
-          <GoogleSvg />
+          <GoogleIcon size={22} />
           <span>{t.wizard.googleButton}</span>
           <span
             style={{
