@@ -35,6 +35,9 @@ export const es: Translations = {
     errorInvalidCredentials:
       'Credenciales inválidas. Si te registraste con Google, usa "Continuar con Google" o establece una contraseña primero.',
     errorUnexpected: "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.",
+    forgotPassword: "¿Olvidaste?",
+    tagline: "Cockpit de soporte con IA · 14 días gratis",
+    switchLabel: "¿Sin cuenta? Crear una →",
   },
   wizard: {
     title: "Bienvenido a Kairo",

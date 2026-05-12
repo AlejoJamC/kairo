@@ -33,6 +33,9 @@ export const en = {
     errorInvalidCredentials:
       'Invalid credentials. If you signed up with Google, use "Continue with Google" or set a password first.',
     errorUnexpected: "An unexpected error occurred. Please try again.",
+    forgotPassword: "Forgot?",
+    tagline: "AI support cockpit · 14 days free",
+    switchLabel: "No account? Create one →",
   },
   wizard: {
     title: "Welcome to Kairo",

@@ -4,8 +4,11 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { getDashboardUrl } from '@/lib/api-config';
 import Link from 'next/link';
-import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
+import { AuthShell } from '@/components/auth-shell';
+import { AuthInput } from '@/components/auth-input';
+import { GoogleButton } from '@/components/google-button';
 
 export default function LoginPage() {
   const { t } = useTranslation();
@@ -54,95 +57,120 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-sm p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-neutral-900 mb-2">
-            {t.login.title}
-          </h1>
-          <p className="text-neutral-600">{t.login.subtitle}</p>
-        </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-neutral-900 mb-2">
-              {t.login.emailLabel}
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder={t.login.emailPlaceholder}
-                className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-neutral-900 mb-2">
-              {t.login.passwordLabel}
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-neutral-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-          >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {loading ? t.login.signingIn : t.login.signIn}
-          </button>
-        </form>
-
-        <div className="my-6 flex items-center gap-4">
-          <div className="flex-1 h-px bg-neutral-200" />
-          <span className="text-sm text-neutral-500">{t.login.or}</span>
-          <div className="flex-1 h-px bg-neutral-200" />
-        </div>
-
-        <Link
-          href="/wizard"
-          className="w-full px-6 py-3 border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors flex items-center justify-center gap-3"
+    <AuthShell
+      title={t.login.title}
+      subtitle={t.login.subtitle}
+      switchHref="/wizard"
+      switchLabel={t.login.switchLabel}
+    >
+      {/* Error banner */}
+      {error && (
+        <div
+          style={{
+            marginBottom: 20,
+            padding: '12px 14px',
+            background: '#FEF2F2',
+            border: '1px solid #FECACA',
+            borderRadius: 'var(--radius-input)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10,
+          }}
         >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4" />
-            <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853" />
-            <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
-            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
-          </svg>
-          {t.login.googleButton}
-        </Link>
+          <AlertCircle
+            style={{ width: 15, height: 15, color: 'var(--danger)', marginTop: 1, flexShrink: 0 }}
+          />
+          <p style={{ fontSize: 13, color: '#B91C1C', margin: 0 }}>{error}</p>
+        </div>
+      )}
 
-        <p className="mt-6 text-center text-sm text-neutral-600">
-          {t.login.noAccount}{' '}
-          <Link href="/wizard" className="text-blue-600 hover:underline">
-            {t.login.signUp}
-          </Link>
-        </p>
+      {/* Google button first (matches prototype order) */}
+      <GoogleButton label={t.login.googleButton} href="/wizard" />
+
+      {/* Divider */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          margin: '20px 0',
+          color: 'var(--text-tertiary)',
+          fontSize: 12,
+        }}
+      >
+        <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+        {t.login.or}
+        <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
       </div>
-    </div>
+
+      {/* Form */}
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <AuthInput
+          id="email"
+          label={t.login.emailLabel}
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          placeholder={t.login.emailPlaceholder}
+          autoComplete="email"
+        />
+
+        <AuthInput
+          id="password"
+          label={t.login.passwordLabel}
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          placeholder="••••••••"
+          autoComplete="current-password"
+          labelRight={
+            <Link
+              href="/set-password"
+              style={{
+                fontSize: 11,
+                color: 'var(--accent)',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {t.login.forgotPassword}
+            </Link>
+          }
+        />
+
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            width: '100%',
+            padding: '11px 13px',
+            marginTop: 4,
+            fontSize: 14,
+            fontWeight: 500,
+            background: loading ? 'var(--border)' : 'var(--accent)',
+            color: 'white',
+            border: 'none',
+            borderRadius: 'var(--radius-input)',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            transition: 'background 0.12s ease',
+            fontFamily: 'inherit',
+          }}
+          onMouseEnter={(e) => {
+            if (!loading) (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-hover)';
+          }}
+          onMouseLeave={(e) => {
+            if (!loading) (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent)';
+          }}
+        >
+          {loading && <Loader2 style={{ width: 14, height: 14 }} className="animate-spin" />}
+          {loading ? t.login.signingIn : t.login.signIn}
+        </button>
+      </form>
+    </AuthShell>
   );
 }
