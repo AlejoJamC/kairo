@@ -1,37 +1,114 @@
 "use client";
 
 import Link from "next/link";
-import { Zap } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { KairoLogo } from "@/components/kairo-logo";
+import { LangToggle } from "@/components/lang-toggle";
 
 export function Header() {
   const { t } = useTranslation();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-neutral-200 bg-white/80 backdrop-blur-sm">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 md:px-8">
-        <Link
-          href="/"
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-        >
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center">
-            <Zap className="w-5 h-5 text-white" strokeWidth={2.5} />
-          </div>
-          <span className="text-xl font-semibold text-neutral-900">Kairo</span>
-        </Link>
+    <header
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
+        height: 64,
+        borderBottom: "1px solid var(--border-subtle)",
+        background: "rgba(255,255,255,0.85)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1280,
+          margin: "0 auto",
+          height: "100%",
+          padding: "0 32px",
+          display: "flex",
+          alignItems: "center",
+          gap: 32,
+        }}
+      >
+        <KairoLogo size={26} href="/" />
 
-        <div className="flex items-center gap-3">
+        <nav
+          style={{
+            display: "flex",
+            gap: 24,
+            fontSize: 13,
+            color: "var(--text-secondary)",
+          }}
+        >
+          {[
+            { label: t.header.navProduct, href: "#product" },
+            { label: t.header.navPricing, href: "/pricing" },
+            { label: t.header.navDocs, href: "#" },
+            { label: t.header.navChangelog, href: "#" },
+          ].map(({ label, href }) => (
+            <Link
+              key={label}
+              href={href}
+              style={{
+                color: "var(--text-secondary)",
+                textDecoration: "none",
+                transition: "color 0.12s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "var(--text-primary)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "var(--text-secondary)";
+              }}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <LangToggle />
           <Link
             href="/login"
-            className="px-4 py-2 text-sm font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
+            style={{
+              fontSize: 13,
+              color: "var(--text-secondary)",
+              textDecoration: "none",
+            }}
           >
             {t.header.login}
           </Link>
           <Link
-            href="/wizard/"
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+            href="/wizard"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "6px 14px",
+              fontSize: 13,
+              fontWeight: 500,
+              background: "var(--accent)",
+              color: "white",
+              borderRadius: "var(--radius-input)",
+              textDecoration: "none",
+              transition: "background 0.12s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--accent-hover)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--accent)";
+            }}
           >
-            {t.header.signup}
+            {t.header.getStarted}
           </Link>
         </div>
       </div>
