@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Zap } from "lucide-react";
 
 interface KairoLogoProps {
   size?: number;
@@ -6,39 +7,28 @@ interface KairoLogoProps {
 }
 
 export function KairoLogo({ size = 28, href = "/" }: KairoLogoProps) {
+  const iconSize = Math.round(size * 0.55);
+
   const inner = (
-    <span
-      style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-    >
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
       <span
         style={{
           width: size,
           height: size,
           borderRadius: 6,
-          background: "var(--accent)",
+          background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
         }}
       >
-        <svg
-          width={size * 0.55}
-          height={size * 0.55}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
-        </svg>
+        <Zap size={iconSize} color="white" strokeWidth={2.5} />
       </span>
       <span
         style={{
           fontWeight: 600,
-          fontSize: 16,
+          fontSize: size * 0.6,
           letterSpacing: "-0.01em",
           color: "var(--text-primary)",
         }}

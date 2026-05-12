@@ -1,66 +1,80 @@
-import React from "react";
+"use client";
 
-interface AuthInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+import React, { useState } from "react";
+
+interface AuthInputProps {
   label: string;
-  labelRight?: React.ReactNode;
-  error?: string;
+  id: string;
+  type?: string;
+  placeholder: string;
+  icon: React.ReactNode;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  required?: boolean;
+  autoComplete?: string;
 }
 
 export function AuthInput({
   label,
-  labelRight,
-  error,
   id,
-  ...props
+  type = "text",
+  placeholder,
+  icon,
+  value,
+  onChange,
+  required,
+  autoComplete,
 }: AuthInputProps) {
+  const [focused, setFocused] = useState(false);
+
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <label
-          htmlFor={id}
-          style={{
-            fontSize: 12,
-            fontFamily: "var(--font-mono)",
-            color: "var(--text-tertiary)",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-          }}
-        >
-          {label}
-        </label>
-        {labelRight}
-      </div>
-      <input
-        id={id}
+    <label style={{ display: "block" }} htmlFor={id}>
+      <div
         style={{
-          display: "block",
-          width: "100%",
-          padding: "11px 13px",
-          fontSize: 14,
-          border: `1px solid ${error ? "var(--danger)" : "var(--border)"}`,
+          fontSize: 12,
+          color: "var(--text-secondary)",
+          marginBottom: 6,
+          fontWeight: 500,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "0 12px",
+          border: `1px solid ${focused ? "var(--accent)" : "var(--border)"}`,
           borderRadius: "var(--radius-input)",
-          outline: "none",
           background: "white",
-          color: "var(--text-primary)",
-          marginTop: 6,
-          boxSizing: "border-box",
-          fontFamily: "inherit",
+          height: 38,
+          boxShadow: focused ? "0 0 0 3px rgba(43,91,255,0.12)" : "none",
+          transition: "border-color 0.12s ease, box-shadow 0.12s ease",
         }}
-        onFocus={(e) => {
-          e.target.style.borderColor = "var(--accent)";
-          e.target.style.boxShadow = "0 0 0 3px rgba(43,91,255,0.12)";
-        }}
-        onBlur={(e) => {
-          e.target.style.borderColor = error ? "var(--danger)" : "var(--border)";
-          e.target.style.boxShadow = "none";
-        }}
-        {...props}
-      />
-      {error && (
-        <p style={{ fontSize: 12, color: "var(--danger)", marginTop: 4 }}>
-          {error}
-        </p>
-      )}
-    </div>
+      >
+        {icon}
+        <input
+          id={id}
+          type={type}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          required={required}
+          autoComplete={autoComplete}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          style={{
+            flex: 1,
+            border: "none",
+            outline: "none",
+            fontSize: 14,
+            background: "transparent",
+            color: "var(--text-primary)",
+            fontFamily: "inherit",
+          }}
+        />
+      </div>
+    </label>
   );
 }
