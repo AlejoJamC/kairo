@@ -33,6 +33,14 @@ export const en = {
     errorInvalidCredentials:
       'Invalid credentials. If you signed up with Google, use "Continue with Google" or set a password first.',
     errorUnexpected: "An unexpected error occurred. Please try again.",
+    forgotPassword: "Forgot?",
+    tagline: "AI support cockpit · 14 days free",
+    switchLabel: "No account? Create one →",
+    emailDivider: "OR WITH EMAIL",
+    testimonialQuote:
+      '"We went from 40 minutes per ticket to 8. The workbench is the first time an AI in support feels useful instead of in the way."',
+    testimonialName: "Valentina Castro",
+    testimonialRole: "Head of Support · n8n LATAM",
   },
   wizard: {
     title: "Welcome to Kairo",

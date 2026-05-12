@@ -4,8 +4,11 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { getDashboardUrl } from '@/lib/api-config';
 import Link from 'next/link';
-import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2, Mail, Lock } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
+import { KairoLogo } from '@/components/kairo-logo';
+import { AuthInput } from '@/components/auth-input';
+import { GoogleButton } from '@/components/google-button';
 
 export default function LoginPage() {
   const { t } = useTranslation();
@@ -54,94 +57,301 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-sm p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-neutral-900 mb-2">
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        background: 'white',
+      }}
+    >
+      {/* ── Left: form ───────────────────────────── */}
+      <div
+        style={{
+          padding: '32px 40px',
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'white',
+        }}
+      >
+        <KairoLogo size={26} href="/" />
+
+        {/* Centered content area */}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            width: '100%',
+            maxWidth: 380,
+            margin: '0 auto',
+          }}
+        >
+          <h1
+            style={{
+              fontSize: 32,
+              fontWeight: 600,
+              letterSpacing: '-0.02em',
+              margin: '12px 0 8px',
+              fontFamily: 'var(--font-display)',
+              color: 'var(--text-primary)',
+            }}
+          >
             {t.login.title}
           </h1>
-          <p className="text-neutral-600">{t.login.subtitle}</p>
-        </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-neutral-900 mb-2">
-              {t.login.emailLabel}
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder={t.login.emailPlaceholder}
-                className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-neutral-900 mb-2">
-              {t.login.passwordLabel}
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-neutral-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          <p
+            style={{
+              fontSize: 14,
+              color: 'var(--text-secondary)',
+              margin: '0 0 28px',
+              lineHeight: 1.5,
+            }}
           >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {loading ? t.login.signingIn : t.login.signIn}
-          </button>
-        </form>
+            {t.login.subtitle}
+          </p>
 
-        <div className="my-6 flex items-center gap-4">
-          <div className="flex-1 h-px bg-neutral-200" />
-          <span className="text-sm text-neutral-500">{t.login.or}</span>
-          <div className="flex-1 h-px bg-neutral-200" />
+          {/* Error banner */}
+          {error && (
+            <div
+              style={{
+                marginBottom: 20,
+                padding: '10px 12px',
+                background: '#FEF2F2',
+                border: '1px solid #FECACA',
+                borderRadius: 'var(--radius-input)',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+              }}
+            >
+              <AlertCircle
+                style={{ width: 14, height: 14, color: 'var(--danger)', marginTop: 1, flexShrink: 0 }}
+              />
+              <p style={{ fontSize: 13, color: '#B91C1C', margin: 0, lineHeight: 1.4 }}>{error}</p>
+            </div>
+          )}
+
+          {/* OAuth buttons */}
+          <GoogleButton label={t.login.googleButton} href="/wizard" />
+
+          {/* Divider */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              margin: '28px 0',
+              color: 'var(--text-tertiary)',
+              fontSize: 11,
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            {t.login.emailDivider}
+            <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          </div>
+
+          {/* Email + password fields */}
+          <form
+            onSubmit={handleSubmit}
+            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+          >
+            <AuthInput
+              id="email"
+              label={t.login.emailLabel}
+              type="email"
+              placeholder={t.login.emailPlaceholder}
+              icon={<Mail size={14} color="var(--text-tertiary)" strokeWidth={1.6} />}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+
+            <AuthInput
+              id="password"
+              label={t.login.passwordLabel}
+              type="password"
+              placeholder="••••••••"
+              icon={<Lock size={14} color="var(--text-tertiary)" strokeWidth={1.6} />}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+
+            {/* Forgot password link aligned right */}
+            <div style={{ textAlign: 'right', marginTop: -4 }}>
+              <Link
+                href="/set-password"
+                style={{
+                  fontSize: 11,
+                  color: 'var(--accent)',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                {t.login.forgotPassword}
+              </Link>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '12px',
+                marginTop: 8,
+                fontSize: 14,
+                fontWeight: 500,
+                background: loading ? 'var(--border)' : 'var(--accent)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius-input)',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                transition: 'background 0.12s ease',
+                fontFamily: 'inherit',
+              }}
+              onMouseEnter={(e) => {
+                if (!loading) e.currentTarget.style.background = 'var(--accent-hover)';
+              }}
+              onMouseLeave={(e) => {
+                if (!loading) e.currentTarget.style.background = 'var(--accent)';
+              }}
+            >
+              {loading && <Loader2 size={14} className="animate-spin" />}
+              {loading ? t.login.signingIn : t.login.signIn}
+            </button>
+          </form>
+
+          {/* Switch to sign up */}
+          <div
+            style={{
+              marginTop: 18,
+              fontSize: 13,
+              color: 'var(--text-tertiary)',
+              textAlign: 'center',
+            }}
+          >
+            {t.login.noAccount}{' '}
+            <Link
+              href="/wizard"
+              style={{ color: 'var(--accent)', cursor: 'pointer' }}
+            >
+              {t.login.signUp}
+            </Link>
+          </div>
         </div>
 
-        <Link
-          href="/wizard"
-          className="w-full px-6 py-3 border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors flex items-center justify-center gap-3"
+        {/* Bottom copyright */}
+        <div
+          style={{
+            fontSize: 11,
+            color: 'var(--text-tertiary)',
+            fontFamily: 'var(--font-mono)',
+          }}
         >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4" />
-            <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853" />
-            <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
-            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
-          </svg>
-          {t.login.googleButton}
-        </Link>
+          {t.footer.copyright}
+        </div>
+      </div>
 
-        <p className="mt-6 text-center text-sm text-neutral-600">
-          {t.login.noAccount}{' '}
-          <Link href="/wizard" className="text-blue-600 hover:underline">
-            {t.login.signUp}
-          </Link>
-        </p>
+      {/* ── Right: testimonial panel ──────────────── */}
+      <div
+        style={{
+          background: 'linear-gradient(160deg, #1E2A4A 0%, #0F1729 100%)',
+          color: 'white',
+          padding: '32px 40px',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Decorative dot grid */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+            pointerEvents: 'none',
+          }}
+        />
+
+        {/* Quote */}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            position: 'relative',
+            maxWidth: 460,
+          }}
+        >
+          <p
+            style={{
+              fontSize: 26,
+              lineHeight: 1.4,
+              fontWeight: 500,
+              letterSpacing: '-0.01em',
+              margin: '0 0 28px',
+              fontFamily: 'var(--font-display)',
+            }}
+          >
+            {t.login.testimonialQuote}
+          </p>
+
+          {/* Person */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 999,
+                background: 'linear-gradient(135deg,#FCA5A5,#F472B6)',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 600,
+                fontSize: 13,
+                flexShrink: 0,
+              }}
+            >
+              VC
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 500 }}>
+                {t.login.testimonialName}
+              </div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                {t.login.testimonialRole}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom strip */}
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            color: 'rgba(255,255,255,0.4)',
+            letterSpacing: '0.05em',
+          }}
+        >
+          <span>4.9 · G2 · 23 REVIEWS</span>
+          <span>SOC 2 (EN PROCESO)</span>
+        </div>
       </div>
     </div>
   );
