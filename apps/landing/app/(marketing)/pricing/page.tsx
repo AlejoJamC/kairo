@@ -90,43 +90,74 @@ function BillingToggle({
   );
 }
 
-function PrimaryButton({
-  onClick,
+function CTAButton({
+  kind,
   children,
 }: {
-  onClick?: () => void;
-  href?: string;
+  kind: "primary" | "secondary";
   children: React.ReactNode;
 }) {
-  const className =
-    "inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-[6px] cursor-pointer";
-  const inner = (
-    <span
-      className={className}
-      style={{
-        background: "var(--accent)",
-        color: "white",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "var(--accent-hover)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "var(--accent)";
-      }}
-    >
-      {children}
-    </span>
-  );
-
-  if (onClick) {
+  if (kind === "primary") {
     return (
-      <button onClick={onClick} style={{ width: "100%", margin: 0 }}>
-        {inner}
+      <button
+        style={{
+          width: "100%",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          padding: "12px 16px",
+          fontSize: 14,
+          fontWeight: 500,
+          background: "var(--accent)",
+          color: "white",
+          borderRadius: "var(--radius-input)",
+          border: "none",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          transition: "background 0.12s ease",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "var(--accent-hover)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "var(--accent)";
+        }}
+      >
+        {children}
       </button>
     );
   }
 
-  return <>{inner}</>;
+  return (
+    <button
+      style={{
+        width: "100%",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        padding: "12px 16px",
+        fontSize: 14,
+        fontWeight: 500,
+        background: "white",
+        color: "var(--text-primary)",
+        borderRadius: "var(--radius-input)",
+        border: "1px solid var(--border)",
+        cursor: "pointer",
+        fontFamily: "inherit",
+        transition: "background 0.12s ease",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "var(--surface-2)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "white";
+      }}
+    >
+      {children}
+    </button>
+  );
 }
 
 interface Plan {
@@ -141,11 +172,9 @@ interface Plan {
 function PricingCard({
   plan,
   annual,
-  index,
 }: {
   plan: Plan;
   annual: boolean;
-  index: number;
 }) {
   const { t } = useTranslation();
   const p = t.pricing;
@@ -184,18 +213,6 @@ function PricingCard({
           {p.plans.pro.popular}
         </span>
       )}
-
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          color: "var(--text-tertiary)",
-          letterSpacing: "0.05em",
-          marginBottom: 6,
-        }}
-      >
-        {`0${index + 1}`}
-      </div>
 
       <div
         style={{
@@ -275,7 +292,7 @@ function PricingCard({
       </div>
 
       <div style={{ marginBottom: 20 }}>
-        <PrimaryButton>{plan.cta}</PrimaryButton>
+        <CTAButton kind={plan.highlight ? "primary" : "secondary"}>{plan.cta}</CTAButton>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
@@ -434,8 +451,8 @@ export default function PricingPage() {
             gap: 16,
           }}
         >
-          {plans.map((plan, i) => (
-            <PricingCard key={plan.name} plan={plan} annual={annual} index={i} />
+          {plans.map((plan) => (
+            <PricingCard key={plan.name} plan={plan} annual={annual} />
           ))}
         </div>
       </section>
