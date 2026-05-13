@@ -185,6 +185,41 @@ $$;
 ALTER FUNCTION "public"."handle_updated_at"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."has_account_access"("p_account_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM "public"."account_members"
+        WHERE "account_id" = p_account_id
+        AND "user_id" = auth.uid()
+        AND "status" = 'active'
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."has_account_access"("p_account_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."is_account_admin"("p_account_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM "public"."account_members"
+        WHERE "account_id" = p_account_id
+        AND "user_id" = auth.uid()
+        AND "status" = 'active'
+        AND "role" IN ('owner', 'admin')
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."is_account_admin"("p_account_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."is_active_admin"() RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -260,6 +295,52 @@ ALTER FUNCTION "public"."recompute_category_confidence_thresholds"() OWNER TO "p
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."account_invitations" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "email" "text" NOT NULL,
+    "role" "text" NOT NULL,
+    "token" "uuid" DEFAULT "gen_random_uuid"(),
+    "expires_at" timestamp with time zone NOT NULL,
+    "invited_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "account_invitations_role_check" CHECK (("role" = ANY (ARRAY['admin'::"text", 'supervisor'::"text", 'agent'::"text"])))
+);
+
+
+ALTER TABLE "public"."account_invitations" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."account_members" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "role" "text" NOT NULL,
+    "status" "text" DEFAULT 'active'::"text" NOT NULL,
+    "invited_at" timestamp with time zone,
+    "joined_at" timestamp with time zone,
+    CONSTRAINT "account_members_role_check" CHECK (("role" = ANY (ARRAY['owner'::"text", 'admin'::"text", 'supervisor'::"text", 'agent'::"text"]))),
+    CONSTRAINT "account_members_status_check" CHECK (("status" = ANY (ARRAY['active'::"text", 'invited'::"text", 'suspended'::"text"])))
+);
+
+
+ALTER TABLE "public"."account_members" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."accounts" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "name" "text" NOT NULL,
+    "slug" "text" NOT NULL,
+    "plan_type" "text",
+    "seat_limit" integer DEFAULT 5 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "accounts_plan_type_check" CHECK (("plan_type" = ANY (ARRAY['Enterprise'::"text", 'Pro'::"text", 'Starter'::"text"])))
+);
+
+
+ALTER TABLE "public"."accounts" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."admin_audit_log" (
@@ -342,7 +423,8 @@ CREATE TABLE IF NOT EXISTS "public"."channel_integrations" (
     "is_active" boolean DEFAULT true NOT NULL,
     "last_synced_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "account_id" "uuid"
 );
 
 
@@ -389,6 +471,7 @@ CREATE TABLE IF NOT EXISTS "public"."clients" (
     "sla_level" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
+    "account_id" "uuid",
     CONSTRAINT "clients_plan_type_check" CHECK (("plan_type" = ANY (ARRAY['Enterprise'::"text", 'Pro'::"text", 'Starter'::"text"]))),
     CONSTRAINT "clients_sla_level_check" CHECK (("sla_level" = ANY (ARRAY['Critical'::"text", 'High'::"text", 'Standard'::"text"])))
 );
@@ -407,7 +490,8 @@ CREATE TABLE IF NOT EXISTS "public"."conversations" (
     "status" "text" DEFAULT 'active'::"text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "external_thread_id" "text"
+    "external_thread_id" "text",
+    "account_id" "uuid"
 );
 
 
@@ -470,7 +554,8 @@ CREATE TABLE IF NOT EXISTS "public"."gmail_accounts" (
     "refresh_token" "text",
     "expires_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "account_id" "uuid"
 );
 
 
@@ -490,7 +575,8 @@ CREATE TABLE IF NOT EXISTS "public"."kb_articles" (
     "tags" "text"[],
     "is_published" boolean DEFAULT true,
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "account_id" "uuid"
 );
 
 
@@ -544,6 +630,7 @@ CREATE TABLE IF NOT EXISTS "public"."messages" (
     "processing_tier" integer,
     "classified_at" timestamp with time zone,
     "processing_batch" "text",
+    "account_id" "uuid",
     CONSTRAINT "messages_classification_status_check" CHECK ((("classification_status" IS NULL) OR ("classification_status" = ANY (ARRAY['pending'::"text", 'classified'::"text", 'skipped'::"text", 'failed'::"text"]))))
 );
 
@@ -596,6 +683,7 @@ CREATE TABLE IF NOT EXISTS "public"."support_schedules" (
     "start_time" time without time zone NOT NULL,
     "end_time" time without time zone NOT NULL,
     "timezone" "text" DEFAULT 'America/Bogota'::"text" NOT NULL,
+    "account_id" "uuid",
     CONSTRAINT "support_schedules_day_of_week_check" CHECK ((("day_of_week" >= 0) AND ("day_of_week" <= 6)))
 );
 
@@ -611,6 +699,7 @@ CREATE TABLE IF NOT EXISTS "public"."tenant_priority_config" (
     "weight_emotion" numeric(3,2) DEFAULT 0.20 NOT NULL,
     "weight_age" numeric(3,2) DEFAULT 0.15 NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "account_id" "uuid",
     CONSTRAINT "chk_weights_sum" CHECK (("abs"((((("weight_type" + "weight_plan") + "weight_emotion") + "weight_age") - 1.00)) < 0.01))
 );
 
@@ -625,6 +714,7 @@ CREATE TABLE IF NOT EXISTS "public"."tenant_sla_rules" (
     "plan_tier" "text" NOT NULL,
     "response_hours" integer NOT NULL,
     "resolution_hours" integer,
+    "account_id" "uuid",
     CONSTRAINT "tenant_sla_rules_plan_tier_check" CHECK (("plan_tier" = ANY (ARRAY['enterprise'::"text", 'pro'::"text", 'starter'::"text", 'none'::"text"])))
 );
 
@@ -768,6 +858,7 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "archived_at" timestamp with time zone,
     "auto_replied_out_of_hours" boolean DEFAULT false NOT NULL,
     "auto_replied_at" timestamp with time zone,
+    "account_id" "uuid",
     CONSTRAINT "chk_category" CHECK ((("category" IS NULL) OR ("category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_emotion" CHECK ((("emotion" IS NULL) OR ("emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_priority" CHECK ((("priority" IS NULL) OR ("priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
@@ -802,6 +893,36 @@ CREATE TABLE IF NOT EXISTS "public"."user_roles" (
 
 
 ALTER TABLE "public"."user_roles" OWNER TO "postgres";
+
+
+ALTER TABLE ONLY "public"."account_invitations"
+    ADD CONSTRAINT "account_invitations_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."account_invitations"
+    ADD CONSTRAINT "account_invitations_token_key" UNIQUE ("token");
+
+
+
+ALTER TABLE ONLY "public"."account_members"
+    ADD CONSTRAINT "account_members_account_user_unique" UNIQUE ("account_id", "user_id");
+
+
+
+ALTER TABLE ONLY "public"."account_members"
+    ADD CONSTRAINT "account_members_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."accounts"
+    ADD CONSTRAINT "accounts_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."accounts"
+    ADD CONSTRAINT "accounts_slug_key" UNIQUE ("slug");
+
 
 
 ALTER TABLE ONLY "public"."admin_audit_log"
@@ -1046,6 +1167,10 @@ CREATE INDEX "idx_categorization_feedback_predicted_category" ON "public"."categ
 
 
 
+CREATE INDEX "idx_channel_integrations_account_id" ON "public"."channel_integrations" USING "btree" ("account_id");
+
+
+
 CREATE INDEX "idx_channel_integrations_provider" ON "public"."channel_integrations" USING "btree" ("provider");
 
 
@@ -1066,11 +1191,19 @@ CREATE INDEX "idx_classification_feedback_user_id" ON "public"."classification_f
 
 
 
+CREATE INDEX "idx_clients_account_id" ON "public"."clients" USING "btree" ("account_id");
+
+
+
 CREATE INDEX "idx_clients_name" ON "public"."clients" USING "btree" ("user_id", "name");
 
 
 
 CREATE INDEX "idx_clients_user_id" ON "public"."clients" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_conversations_account_id" ON "public"."conversations" USING "btree" ("account_id");
 
 
 
@@ -1090,7 +1223,15 @@ CREATE INDEX "idx_conversations_user_id" ON "public"."conversations" USING "btre
 
 
 
+CREATE INDEX "idx_gmail_accounts_account_id" ON "public"."gmail_accounts" USING "btree" ("account_id");
+
+
+
 CREATE INDEX "idx_gmail_accounts_user_id" ON "public"."gmail_accounts" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_kb_articles_account_id" ON "public"."kb_articles" USING "btree" ("account_id");
 
 
 
@@ -1119,6 +1260,10 @@ CREATE INDEX "idx_llm_calls_prompt_version" ON "public"."llm_calls" USING "btree
 
 
 CREATE INDEX "idx_llm_calls_ticket_id" ON "public"."llm_calls" USING "btree" ("ticket_id");
+
+
+
+CREATE INDEX "idx_messages_account_id" ON "public"."messages" USING "btree" ("account_id");
 
 
 
@@ -1162,6 +1307,18 @@ CREATE INDEX "idx_response_templates_user_id" ON "public"."response_templates" U
 
 
 
+CREATE INDEX "idx_support_schedules_account_id" ON "public"."support_schedules" USING "btree" ("account_id");
+
+
+
+CREATE INDEX "idx_tenant_priority_config_account_id" ON "public"."tenant_priority_config" USING "btree" ("account_id");
+
+
+
+CREATE INDEX "idx_tenant_sla_rules_account_id" ON "public"."tenant_sla_rules" USING "btree" ("account_id");
+
+
+
 CREATE INDEX "idx_ticket_events_author_id" ON "public"."ticket_events" USING "btree" ("author_id");
 
 
@@ -1195,6 +1352,10 @@ CREATE INDEX "idx_ticket_proposals_status" ON "public"."ticket_proposals" USING 
 
 
 CREATE INDEX "idx_ticket_tags_tag" ON "public"."ticket_tags" USING "btree" ("tag");
+
+
+
+CREATE INDEX "idx_tickets_account_id" ON "public"."tickets" USING "btree" ("account_id");
 
 
 
@@ -1282,6 +1443,26 @@ CREATE OR REPLACE TRIGGER "on_tickets_updated" BEFORE UPDATE ON "public"."ticket
 
 
 
+ALTER TABLE ONLY "public"."account_invitations"
+    ADD CONSTRAINT "account_invitations_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."account_invitations"
+    ADD CONSTRAINT "account_invitations_invited_by_fkey" FOREIGN KEY ("invited_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."account_members"
+    ADD CONSTRAINT "account_members_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."account_members"
+    ADD CONSTRAINT "account_members_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."admin_audit_log"
     ADD CONSTRAINT "admin_audit_log_admin_user_id_fkey" FOREIGN KEY ("admin_user_id") REFERENCES "public"."admin_users"("id");
 
@@ -1294,6 +1475,11 @@ ALTER TABLE ONLY "public"."categorization_feedback"
 
 ALTER TABLE ONLY "public"."categorization_feedback"
     ADD CONSTRAINT "categorization_feedback_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."channel_integrations"
+    ADD CONSTRAINT "channel_integrations_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
 
 
@@ -1313,7 +1499,17 @@ ALTER TABLE ONLY "public"."classification_feedback"
 
 
 ALTER TABLE ONLY "public"."clients"
+    ADD CONSTRAINT "clients_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."clients"
     ADD CONSTRAINT "clients_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."conversations"
+    ADD CONSTRAINT "conversations_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
 
 
@@ -1358,7 +1554,17 @@ ALTER TABLE ONLY "public"."escalations"
 
 
 ALTER TABLE ONLY "public"."gmail_accounts"
+    ADD CONSTRAINT "gmail_accounts_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."gmail_accounts"
     ADD CONSTRAINT "gmail_accounts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."kb_articles"
+    ADD CONSTRAINT "kb_articles_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
 
 
@@ -1374,6 +1580,11 @@ ALTER TABLE ONLY "public"."llm_calls"
 
 ALTER TABLE ONLY "public"."llm_calls"
     ADD CONSTRAINT "llm_calls_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."messages"
+    ADD CONSTRAINT "messages_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
 
 
@@ -1398,12 +1609,27 @@ ALTER TABLE ONLY "public"."response_templates"
 
 
 ALTER TABLE ONLY "public"."support_schedules"
+    ADD CONSTRAINT "support_schedules_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."support_schedules"
     ADD CONSTRAINT "support_schedules_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
 ALTER TABLE ONLY "public"."tenant_priority_config"
+    ADD CONSTRAINT "tenant_priority_config_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tenant_priority_config"
     ADD CONSTRAINT "tenant_priority_config_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tenant_sla_rules"
+    ADD CONSTRAINT "tenant_sla_rules_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
 
 
@@ -1468,6 +1694,11 @@ ALTER TABLE ONLY "public"."ticket_tags"
 
 
 ALTER TABLE ONLY "public"."tickets"
+    ADD CONSTRAINT "tickets_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tickets"
     ADD CONSTRAINT "tickets_assigned_to_fkey" FOREIGN KEY ("assigned_to") REFERENCES "auth"."users"("id");
 
 
@@ -1507,11 +1738,41 @@ ALTER TABLE ONLY "public"."user_roles"
 
 
 
+CREATE POLICY "Account admins can manage members" ON "public"."account_members" USING ("public"."is_account_admin"("account_id"));
+
+
+
+CREATE POLICY "Accounts are viewable by members" ON "public"."accounts" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."account_members"
+  WHERE (("account_members"."account_id" = "accounts"."id") AND ("account_members"."user_id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "Accounts can be managed by owners and admins" ON "public"."accounts" USING ((EXISTS ( SELECT 1
+   FROM "public"."account_members"
+  WHERE (("account_members"."account_id" = "accounts"."id") AND ("account_members"."user_id" = "auth"."uid"()) AND ("account_members"."role" = ANY (ARRAY['owner'::"text", 'admin'::"text"]))))));
+
+
+
 CREATE POLICY "Authenticated users can read categorization_feedback" ON "public"."categorization_feedback" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
 
 
 
 CREATE POLICY "Authenticated users can read category_confidence_thresholds" ON "public"."category_confidence_thresholds" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "Invitations can be managed by account admins" ON "public"."account_invitations" USING ("public"."is_account_admin"("account_id"));
+
+
+
+CREATE POLICY "Invitations can be viewed by the invited user" ON "public"."account_invitations" FOR SELECT USING (("email" = (( SELECT "users"."email"
+   FROM "auth"."users"
+  WHERE ("users"."id" = "auth"."uid"())))::"text"));
+
+
+
+CREATE POLICY "Members can view their own account memberships" ON "public"."account_members" FOR SELECT USING (("user_id" = "auth"."uid"()));
 
 
 
@@ -1527,23 +1788,7 @@ CREATE POLICY "Users CRUD own escalations" ON "public"."escalations" USING (("au
 
 
 
-CREATE POLICY "Users CRUD own kb_articles" ON "public"."kb_articles" USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users CRUD own support_schedules" ON "public"."support_schedules" USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can delete own channel integrations" ON "public"."channel_integrations" FOR DELETE USING (("auth"."uid"() = "user_id"));
-
-
-
 CREATE POLICY "Users can delete own follows" ON "public"."ticket_followers" FOR DELETE USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can delete own gmail accounts" ON "public"."gmail_accounts" FOR DELETE USING (("auth"."uid"() = "user_id"));
 
 
 
@@ -1557,33 +1802,11 @@ CREATE POLICY "Users can delete own ticket tags" ON "public"."ticket_tags" FOR D
 
 
 
-CREATE POLICY "Users can delete own tickets" ON "public"."tickets" FOR DELETE USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can insert own channel integrations" ON "public"."channel_integrations" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
-
-
-
 CREATE POLICY "Users can insert own classification feedback" ON "public"."classification_feedback" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
 
 
 
-CREATE POLICY "Users can insert own conversations" ON "public"."conversations" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
-
-
-
 CREATE POLICY "Users can insert own follows" ON "public"."ticket_followers" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can insert own gmail accounts" ON "public"."gmail_accounts" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can insert own messages" ON "public"."messages" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
-   FROM "public"."conversations" "c"
-  WHERE (("c"."id" = "messages"."conversation_id") AND ("c"."user_id" = "auth"."uid"())))));
 
 
 
@@ -1619,22 +1842,6 @@ CREATE POLICY "Users can insert own ticket_messages" ON "public"."ticket_message
 
 
 
-CREATE POLICY "Users can insert own tickets" ON "public"."tickets" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can update own channel integrations" ON "public"."channel_integrations" FOR UPDATE USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can update own conversations" ON "public"."conversations" FOR UPDATE USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can update own gmail accounts" ON "public"."gmail_accounts" FOR UPDATE USING (("auth"."uid"() = "user_id"));
-
-
-
 CREATE POLICY "Users can update own profile" ON "public"."profiles" FOR UPDATE USING (("auth"."uid"() = "id"));
 
 
@@ -1649,19 +1856,7 @@ CREATE POLICY "Users can update own ticket proposals" ON "public"."ticket_propos
 
 
 
-CREATE POLICY "Users can update own tickets" ON "public"."tickets" FOR UPDATE USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can view own channel integrations" ON "public"."channel_integrations" FOR SELECT USING (("auth"."uid"() = "user_id"));
-
-
-
 CREATE POLICY "Users can view own classification feedback" ON "public"."classification_feedback" FOR SELECT USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can view own conversations" ON "public"."conversations" FOR SELECT USING (("auth"."uid"() = "user_id"));
 
 
 
@@ -1669,17 +1864,7 @@ CREATE POLICY "Users can view own follows" ON "public"."ticket_followers" FOR SE
 
 
 
-CREATE POLICY "Users can view own gmail accounts" ON "public"."gmail_accounts" FOR SELECT USING (("auth"."uid"() = "user_id"));
-
-
-
 CREATE POLICY "Users can view own llm calls" ON "public"."llm_calls" FOR SELECT USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can view own messages" ON "public"."messages" FOR SELECT USING ((EXISTS ( SELECT 1
-   FROM "public"."conversations" "c"
-  WHERE (("c"."id" = "messages"."conversation_id") AND ("c"."user_id" = "auth"."uid"())))));
 
 
 
@@ -1715,8 +1900,13 @@ CREATE POLICY "Users can view own ticket_messages" ON "public"."ticket_messages"
 
 
 
-CREATE POLICY "Users can view own tickets" ON "public"."tickets" FOR SELECT USING (("auth"."uid"() = "user_id"));
+ALTER TABLE "public"."account_invitations" ENABLE ROW LEVEL SECURITY;
 
+
+ALTER TABLE "public"."account_members" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."accounts" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."admin_audit_log" ENABLE ROW LEVEL SECURITY;
@@ -1744,29 +1934,25 @@ ALTER TABLE "public"."category_confidence_thresholds" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."channel_integrations" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "channel_integrations_access_by_account" ON "public"."channel_integrations" USING ("public"."has_account_access"("account_id"));
+
+
+
 ALTER TABLE "public"."classification_feedback" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."clients" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "clients_delete_own" ON "public"."clients" FOR DELETE USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "clients_insert_own" ON "public"."clients" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "clients_select_own" ON "public"."clients" FOR SELECT USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "clients_update_own" ON "public"."clients" FOR UPDATE USING (("auth"."uid"() = "user_id"));
+CREATE POLICY "clients_access_by_account" ON "public"."clients" USING ("public"."has_account_access"("account_id"));
 
 
 
 ALTER TABLE "public"."conversations" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "conversations_access_by_account" ON "public"."conversations" USING ("public"."has_account_access"("account_id"));
+
 
 
 ALTER TABLE "public"."csat_events" ENABLE ROW LEVEL SECURITY;
@@ -1781,13 +1967,25 @@ ALTER TABLE "public"."escalations" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."gmail_accounts" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "gmail_accounts_access_by_account" ON "public"."gmail_accounts" USING ("public"."has_account_access"("account_id"));
+
+
+
 ALTER TABLE "public"."kb_articles" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "kb_articles_access_by_account" ON "public"."kb_articles" USING ("public"."has_account_access"("account_id"));
+
 
 
 ALTER TABLE "public"."llm_calls" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."messages" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "messages_access_by_account" ON "public"."messages" USING ("public"."has_account_access"("account_id"));
+
 
 
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
@@ -1809,6 +2007,10 @@ CREATE POLICY "superadmin_manage" ON "public"."admin_users" USING ("public"."is_
 ALTER TABLE "public"."support_schedules" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "support_schedules_access_by_account" ON "public"."support_schedules" USING ("public"."has_account_access"("account_id"));
+
+
+
 CREATE POLICY "tenant_owns_groups" ON "public"."ticket_groups" USING (("user_id" = "auth"."uid"())) WITH CHECK (("user_id" = "auth"."uid"()));
 
 
@@ -1816,14 +2018,14 @@ CREATE POLICY "tenant_owns_groups" ON "public"."ticket_groups" USING (("user_id"
 ALTER TABLE "public"."tenant_priority_config" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "tenant_priority_config_owner" ON "public"."tenant_priority_config" USING (("user_id" = "auth"."uid"()));
+CREATE POLICY "tenant_priority_config_access_by_account" ON "public"."tenant_priority_config" USING ("public"."has_account_access"("account_id"));
 
 
 
 ALTER TABLE "public"."tenant_sla_rules" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "tenant_sla_rules_owner" ON "public"."tenant_sla_rules" USING (("user_id" = "auth"."uid"()));
+CREATE POLICY "tenant_sla_rules_access_by_account" ON "public"."tenant_sla_rules" USING ("public"."has_account_access"("account_id"));
 
 
 
@@ -1846,6 +2048,10 @@ ALTER TABLE "public"."ticket_tags" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."tickets" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "tickets_access_by_account" ON "public"."tickets" USING ("public"."has_account_access"("account_id"));
+
 
 
 ALTER TABLE "public"."user_roles" ENABLE ROW LEVEL SECURITY;
@@ -1898,6 +2104,18 @@ GRANT ALL ON FUNCTION "public"."handle_updated_at"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."has_account_access"("p_account_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."has_account_access"("p_account_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."has_account_access"("p_account_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."is_account_admin"("p_account_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."is_account_admin"("p_account_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_account_admin"("p_account_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."is_active_admin"() TO "anon";
 GRANT ALL ON FUNCTION "public"."is_active_admin"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."is_active_admin"() TO "service_role";
@@ -1913,6 +2131,24 @@ GRANT ALL ON FUNCTION "public"."is_superadmin"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "anon";
 GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."account_invitations" TO "anon";
+GRANT ALL ON TABLE "public"."account_invitations" TO "authenticated";
+GRANT ALL ON TABLE "public"."account_invitations" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."account_members" TO "anon";
+GRANT ALL ON TABLE "public"."account_members" TO "authenticated";
+GRANT ALL ON TABLE "public"."account_members" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."accounts" TO "anon";
+GRANT ALL ON TABLE "public"."accounts" TO "authenticated";
+GRANT ALL ON TABLE "public"."accounts" TO "service_role";
 
 
 

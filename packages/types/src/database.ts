@@ -14,6 +14,112 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_invitations: {
+        Row: {
+          account_id: string
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string | null
+          role: string
+          token: string | null
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          email: string
+          expires_at: string
+          id?: string
+          invited_by?: string | null
+          role: string
+          token?: string | null
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          role?: string
+          token?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_invitations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      account_members: {
+        Row: {
+          account_id: string
+          id: string
+          invited_at: string | null
+          joined_at: string | null
+          role: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          id?: string
+          invited_at?: string | null
+          joined_at?: string | null
+          role: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          id?: string
+          invited_at?: string | null
+          joined_at?: string | null
+          role?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_members_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounts: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          plan_type: string | null
+          seat_limit: number
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          plan_type?: string | null
+          seat_limit?: number
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          plan_type?: string | null
+          seat_limit?: number
+          slug?: string
+        }
+        Relationships: []
+      }
       admin_audit_log: {
         Row: {
           action: string
@@ -198,6 +304,7 @@ export type Database = {
       }
       channel_integrations: {
         Row: {
+          account_id: string | null
           created_at: string
           credentials_encrypted: Json | null
           display_name: string | null
@@ -210,6 +317,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           created_at?: string
           credentials_encrypted?: Json | null
           display_name?: string | null
@@ -222,6 +330,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           created_at?: string
           credentials_encrypted?: Json | null
           display_name?: string | null
@@ -233,7 +342,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "channel_integrations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       classification_feedback: {
         Row: {
@@ -302,6 +419,7 @@ export type Database = {
       }
       clients: {
         Row: {
+          account_id: string | null
           authorized_emails: string[] | null
           contact_persons: Json | null
           created_at: string | null
@@ -316,6 +434,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           authorized_emails?: string[] | null
           contact_persons?: Json | null
           created_at?: string | null
@@ -330,6 +449,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           authorized_emails?: string[] | null
           contact_persons?: Json | null
           created_at?: string | null
@@ -343,10 +463,19 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clients_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       conversations: {
         Row: {
+          account_id: string | null
           channel_integration_id: string
           created_at: string
           customer_avatar_url: string | null
@@ -359,6 +488,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           channel_integration_id: string
           created_at?: string
           customer_avatar_url?: string | null
@@ -371,6 +501,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           channel_integration_id?: string
           created_at?: string
           customer_avatar_url?: string | null
@@ -383,6 +514,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "conversations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "conversations_channel_integration_id_fkey"
             columns: ["channel_integration_id"]
@@ -513,6 +651,7 @@ export type Database = {
       gmail_accounts: {
         Row: {
           access_token: string | null
+          account_id: string | null
           created_at: string | null
           email: string
           expires_at: string | null
@@ -523,6 +662,7 @@ export type Database = {
         }
         Insert: {
           access_token?: string | null
+          account_id?: string | null
           created_at?: string | null
           email: string
           expires_at?: string | null
@@ -533,6 +673,7 @@ export type Database = {
         }
         Update: {
           access_token?: string | null
+          account_id?: string | null
           created_at?: string | null
           email?: string
           expires_at?: string | null
@@ -541,10 +682,19 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gmail_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       kb_articles: {
         Row: {
+          account_id: string | null
           content: string
           created_at: string | null
           embedding: string | null
@@ -556,6 +706,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           content: string
           created_at?: string | null
           embedding?: string | null
@@ -567,6 +718,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           content?: string
           created_at?: string | null
           embedding?: string | null
@@ -577,7 +729,15 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "kb_articles_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       llm_calls: {
         Row: {
@@ -652,6 +812,7 @@ export type Database = {
       }
       messages: {
         Row: {
+          account_id: string | null
           body_html: string | null
           body_plain: string | null
           channel_integration_id: string
@@ -673,6 +834,7 @@ export type Database = {
           thread_external_id: string | null
         }
         Insert: {
+          account_id?: string | null
           body_html?: string | null
           body_plain?: string | null
           channel_integration_id: string
@@ -694,6 +856,7 @@ export type Database = {
           thread_external_id?: string | null
         }
         Update: {
+          account_id?: string | null
           body_html?: string | null
           body_plain?: string | null
           channel_integration_id?: string
@@ -715,6 +878,13 @@ export type Database = {
           thread_external_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_channel_integration_id_fkey"
             columns: ["channel_integration_id"]
@@ -799,6 +969,7 @@ export type Database = {
       }
       support_schedules: {
         Row: {
+          account_id: string | null
           day_of_week: number
           end_time: string
           id: string
@@ -807,6 +978,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           day_of_week: number
           end_time: string
           id?: string
@@ -815,6 +987,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           day_of_week?: number
           end_time?: string
           id?: string
@@ -822,10 +995,19 @@ export type Database = {
           timezone?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "support_schedules_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tenant_priority_config: {
         Row: {
+          account_id: string | null
           id: string
           updated_at: string
           user_id: string
@@ -835,6 +1017,7 @@ export type Database = {
           weight_type: number
         }
         Insert: {
+          account_id?: string | null
           id?: string
           updated_at?: string
           user_id: string
@@ -844,6 +1027,7 @@ export type Database = {
           weight_type?: number
         }
         Update: {
+          account_id?: string | null
           id?: string
           updated_at?: string
           user_id?: string
@@ -852,10 +1036,19 @@ export type Database = {
           weight_plan?: number
           weight_type?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tenant_priority_config_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tenant_sla_rules: {
         Row: {
+          account_id: string | null
           id: string
           plan_tier: string
           resolution_hours: number | null
@@ -864,6 +1057,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           id?: string
           plan_tier: string
           resolution_hours?: number | null
@@ -872,6 +1066,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           id?: string
           plan_tier?: string
           resolution_hours?: number | null
@@ -879,7 +1074,15 @@ export type Database = {
           ticket_type?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tenant_sla_rules_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ticket_events: {
         Row: {
@@ -1120,6 +1323,7 @@ export type Database = {
       }
       tickets: {
         Row: {
+          account_id: string | null
           ai_reasoning: string | null
           archived_at: string | null
           assigned_to: string | null
@@ -1169,6 +1373,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           ai_reasoning?: string | null
           archived_at?: string | null
           assigned_to?: string | null
@@ -1218,6 +1423,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           ai_reasoning?: string | null
           archived_at?: string | null
           assigned_to?: string | null
@@ -1267,6 +1473,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tickets_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tickets_client_id_fkey"
             columns: ["client_id"]
@@ -1366,6 +1579,8 @@ export type Database = {
           status: string
         }[]
       }
+      has_account_access: { Args: { p_account_id: string }; Returns: boolean }
+      is_account_admin: { Args: { p_account_id: string }; Returns: boolean }
       is_active_admin: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
       recompute_category_confidence_thresholds: {
