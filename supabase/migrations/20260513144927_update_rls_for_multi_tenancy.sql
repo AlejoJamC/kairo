@@ -6,6 +6,7 @@ BEGIN
         SELECT 1 FROM "public"."account_members"
         WHERE "account_id" = p_account_id
         AND "user_id" = auth.uid()
+        AND "status" = 'active'
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
