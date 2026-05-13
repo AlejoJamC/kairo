@@ -411,7 +411,7 @@ export default function PricingPage() {
           textAlign: "center",
         }}
       >
-        <div style={{ maxWidth: 540, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", maxWidth: "100%", margin: "0 auto" }}>
           <h1
             style={{
               fontSize: 56,
@@ -422,10 +422,13 @@ export default function PricingPage() {
               lineHeight: 1.05,
               color: "var(--text-primary)",
               whiteSpace: "nowrap",
+              display: "inline-block",
             }}
           >
             {p.heroTitle}
           </h1>
+        </div>
+        <div style={{ maxWidth: 540, margin: "0 auto" }}>
           <p
             style={{
               fontSize: 17,
