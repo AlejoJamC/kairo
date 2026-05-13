@@ -421,6 +421,7 @@ export default function PricingPage() {
               fontFamily: "var(--font-display)",
               lineHeight: 1.05,
               color: "var(--text-primary)",
+              whiteSpace: "nowrap",
             }}
           >
             {p.heroTitle}
