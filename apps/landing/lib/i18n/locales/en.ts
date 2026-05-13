@@ -88,7 +88,7 @@ export const en = {
     footerColResources: "Resources",
     footerColCompany: "Company",
     footerCopyright: "© 2026 KAIRO AI — ALL RIGHTS RESERVED",
-    footerVersion: "v0.1.2 · 2026-05-12",
+    footerVersion: "v0.1.3 · 2026-05-13",
   },
   footer: {
     tagline: "AI Support Cockpit",
