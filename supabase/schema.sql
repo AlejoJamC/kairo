@@ -23,6 +23,19 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 
+CREATE OR REPLACE FUNCTION "public"."current_account_id"() RETURNS "uuid"
+    LANGUAGE "sql" SECURITY DEFINER
+    AS $$
+  SELECT account_id FROM "public"."account_members"
+  WHERE "user_id" = auth.uid()
+    AND "status" = 'active'
+  LIMIT 1;
+$$;
+
+
+ALTER FUNCTION "public"."current_account_id"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer DEFAULT 3) RETURNS TABLE("article_id" "uuid", "title" "text", "similarity" double precision)
     LANGUAGE "sql" STABLE
     AS $$
@@ -1934,7 +1947,7 @@ ALTER TABLE "public"."category_confidence_thresholds" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."channel_integrations" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "channel_integrations_access_by_account" ON "public"."channel_integrations" USING ("public"."has_account_access"("account_id"));
+CREATE POLICY "channel_integrations_access_by_account" ON "public"."channel_integrations" USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -1944,14 +1957,14 @@ ALTER TABLE "public"."classification_feedback" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."clients" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "clients_access_by_account" ON "public"."clients" USING ("public"."has_account_access"("account_id"));
+CREATE POLICY "clients_access_by_account" ON "public"."clients" USING (("account_id" = "public"."current_account_id"()));
 
 
 
 ALTER TABLE "public"."conversations" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "conversations_access_by_account" ON "public"."conversations" USING ("public"."has_account_access"("account_id"));
+CREATE POLICY "conversations_access_by_account" ON "public"."conversations" USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -1967,14 +1980,14 @@ ALTER TABLE "public"."escalations" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."gmail_accounts" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "gmail_accounts_access_by_account" ON "public"."gmail_accounts" USING ("public"."has_account_access"("account_id"));
+CREATE POLICY "gmail_accounts_access_by_account" ON "public"."gmail_accounts" USING (("account_id" = "public"."current_account_id"()));
 
 
 
 ALTER TABLE "public"."kb_articles" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "kb_articles_access_by_account" ON "public"."kb_articles" USING ("public"."has_account_access"("account_id"));
+CREATE POLICY "kb_articles_access_by_account" ON "public"."kb_articles" USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -1984,7 +1997,7 @@ ALTER TABLE "public"."llm_calls" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."messages" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "messages_access_by_account" ON "public"."messages" USING ("public"."has_account_access"("account_id"));
+CREATE POLICY "messages_access_by_account" ON "public"."messages" USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -2007,7 +2020,7 @@ CREATE POLICY "superadmin_manage" ON "public"."admin_users" USING ("public"."is_
 ALTER TABLE "public"."support_schedules" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "support_schedules_access_by_account" ON "public"."support_schedules" USING ("public"."has_account_access"("account_id"));
+CREATE POLICY "support_schedules_access_by_account" ON "public"."support_schedules" USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -2018,14 +2031,14 @@ CREATE POLICY "tenant_owns_groups" ON "public"."ticket_groups" USING (("user_id"
 ALTER TABLE "public"."tenant_priority_config" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "tenant_priority_config_access_by_account" ON "public"."tenant_priority_config" USING ("public"."has_account_access"("account_id"));
+CREATE POLICY "tenant_priority_config_access_by_account" ON "public"."tenant_priority_config" USING (("account_id" = "public"."current_account_id"()));
 
 
 
 ALTER TABLE "public"."tenant_sla_rules" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "tenant_sla_rules_access_by_account" ON "public"."tenant_sla_rules" USING ("public"."has_account_access"("account_id"));
+CREATE POLICY "tenant_sla_rules_access_by_account" ON "public"."tenant_sla_rules" USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -2050,7 +2063,7 @@ ALTER TABLE "public"."ticket_tags" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."tickets" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "tickets_access_by_account" ON "public"."tickets" USING ("public"."has_account_access"("account_id"));
+CREATE POLICY "tickets_access_by_account" ON "public"."tickets" USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -2065,6 +2078,12 @@ GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."current_account_id"() TO "anon";
+GRANT ALL ON FUNCTION "public"."current_account_id"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."current_account_id"() TO "service_role";
 
 
 
