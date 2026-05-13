@@ -264,6 +264,77 @@ export const es: Translations = {
       websiteLabel: "Sitio web:",
     },
   },
+  pricing: {
+    headerTitle: "Precios",
+    heroTitle: "Precios honestos. Sin sorpresas.",
+    heroSubtitle:
+      "Empezá gratis. Pasás a Pro cuando tu equipo necesita más manos. Cancelás cuando quieras.",
+    billingAnnual: "Anual · -20%",
+    billingMonthly: "Mensual",
+    plans: {
+      free: { name: "Free", blurb: "Para probar Kairo en un inbox real.", cta: "Comenzar gratis" },
+      pro: { name: "Pro", blurb: "Para el equipo que quiere despachar la bandeja antes del mediodía.", cta: "Empezar prueba 14d", popular: "Popular" },
+      scale: { name: "Scale", blurb: "Para SaaS hispanohablantes en crecimiento.", cta: "Empezar prueba 14d" },
+      enterprise: { name: "Enterprise", blurb: "Para equipos que necesitan on-prem y SOC 2.", cta: "Contactar ventas" },
+    },
+    prices: { free: "$0", custom: "Personalizado" },
+    perMonth: "mes",
+    billedAnnually: "mes facturado anual",
+    features: {
+      free: [
+        "200 tickets / mes",
+        "Triage Tier 0–2",
+        "1 inbox · 1 agente",
+        "Borradores manuales",
+        "Soporte por email",
+      ],
+      pro: [
+        "2,000 tickets / mes",
+        "Triage completo + Tier 3",
+        "5 inboxes · 5 agentes",
+        "Borradores IA",
+        "Casos similares (pgvector)",
+        "KB + embeddings",
+        "Alertas Slack",
+      ],
+      scale: [
+        "20,000 tickets / mes",
+        "Auto-resolución Tier 0",
+        "Inboxes ilimitados",
+        "Routing por reglas",
+        "API + webhooks",
+        "SSO (Google, Microsoft)",
+        "Soporte prioritario",
+      ],
+      enterprise: [
+        "Volumen ilimitado",
+        "Self-host (Ollama)",
+        "SAML 2.0 · SCIM",
+        "DPA · BAA · SOC 2",
+        "CSM dedicado",
+        "SLA 99.95%",
+      ],
+    },
+    faqTitle: "Preguntas que nos hacen.",
+    faq: [
+      {
+        q: "¿Qué pasa si paso del límite de tickets?",
+        a: "Te avisamos al 80%. No bloqueamos triage; cobramos $0.02 por ticket extra hasta el siguiente ciclo.",
+      },
+      {
+        q: "¿Mis correos pasan por OpenAI?",
+        a: "No. Por defecto usamos Anthropic. Enterprise puede correr Ollama on-prem y nada sale del workspace.",
+      },
+      {
+        q: "¿Funciona bien en español?",
+        a: "Es nuestro caso primario. Modelos afinados en variantes rioplatense, mexicana y peninsular.",
+      },
+      {
+        q: "¿Puedo cancelar cuando quiera?",
+        a: "Sí. Sin contratos, sin llamadas con ventas, sin penalizaciones.",
+      },
+    ],
+  },
   terms: {
     title: "Términos de Servicio",
     updated: "Última actualización: 20 de febrero de 2026",

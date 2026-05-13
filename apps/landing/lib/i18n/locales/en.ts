@@ -262,6 +262,77 @@ export const en = {
       websiteLabel: "Website:",
     },
   },
+  pricing: {
+    headerTitle: "Pricing",
+    heroTitle: "Honest pricing. No surprises.",
+    heroSubtitle:
+      "Start free. Move to Pro when your team needs more hands. Cancel anytime.",
+    billingAnnual: "Annual · -20%",
+    billingMonthly: "Monthly",
+    plans: {
+      free: { name: "Free", blurb: "To try Kairo on a real inbox.", cta: "Start free" },
+      pro: { name: "Pro", blurb: "For the team that wants the inbox cleared by noon.", cta: "Start 14d trial", popular: "Popular" },
+      scale: { name: "Scale", blurb: "For growing Spanish-first SaaS.", cta: "Start 14d trial" },
+      enterprise: { name: "Enterprise", blurb: "For teams that need on-prem and SOC 2.", cta: "Contact sales" },
+    },
+    prices: { free: "$0", custom: "Custom" },
+    perMonth: "mo",
+    billedAnnually: "billed annually",
+    features: {
+      free: [
+        "200 tickets / month",
+        "Triage Tier 0–2",
+        "1 inbox · 1 agent",
+        "Manual drafts",
+        "Email support",
+      ],
+      pro: [
+        "2,000 tickets / month",
+        "Full triage + Tier 3",
+        "5 inboxes · 5 agents",
+        "AI drafts",
+        "Similar cases (pgvector)",
+        "KB + embeddings",
+        "Slack alerts",
+      ],
+      scale: [
+        "20,000 tickets / month",
+        "Tier 0 auto-resolve",
+        "Unlimited inboxes",
+        "Rule-based routing",
+        "API + webhooks",
+        "SSO (Google, Microsoft)",
+        "Priority support",
+      ],
+      enterprise: [
+        "Unlimited volume",
+        "Self-host (Ollama)",
+        "SAML 2.0 · SCIM",
+        "DPA · BAA · SOC 2",
+        "Dedicated CSM",
+        "SLA 99.95%",
+      ],
+    },
+    faqTitle: "Questions we get.",
+    faq: [
+      {
+        q: "What if I exceed the ticket limit?",
+        a: "We warn at 80%. We don't block triage; we charge $0.02/extra ticket until next cycle.",
+      },
+      {
+        q: "Do my emails go through OpenAI?",
+        a: "No. Default is Anthropic. Enterprise can run Ollama on-prem; nothing leaves the workspace.",
+      },
+      {
+        q: "Does it work well in Spanish?",
+        a: "It's our primary case. Models tuned for Rioplatense, Mexican and Peninsular variants.",
+      },
+      {
+        q: "Can I cancel anytime?",
+        a: "Yes. No contracts, no sales calls, no penalties.",
+      },
+    ],
+  },
   terms: {
     title: "Terms of Service",
     updated: "Last updated: February 20, 2026",
