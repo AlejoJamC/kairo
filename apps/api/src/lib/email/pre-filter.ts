@@ -1,7 +1,17 @@
+// Regex covering all "no reply" local-part variants:
+//   noreply@, no-reply@, no.reply@, no_reply@
+//   -noreply@, .noreply@, +noreply@, -no-reply@, etc.
+//   donotreply@, do-not-reply@, do_not_reply@
+// Applied to the extracted email address (not the display name).
+const NO_REPLY_REGEX = /(^|[-._+])(no[._-]?reply|donotreply|do[-_.]not[-_.]reply)@/i;
+
 export const BLOCKED_SENDER_PATTERNS: string[] = [
-  "noreply@",
   "marketing@",
   "newsletter@",
+  "mailer-daemon@",
+  "postmaster@",
+  "bounce@",
+  "bounces@",
   "@mailchimp.com",
   "@sendgrid.net",
   "@constantcontact.com",
@@ -43,6 +53,15 @@ export interface PreFilterResult {
 function extractDomain(email: string): string {
   const match = email.match(/@([^>\s]+)/);
   return match ? match[1].toLowerCase() : "";
+}
+
+function extractEmailAddress(from: string): string {
+  // Try angle-bracket format first: "Display Name <user@example.com>"
+  const angleMatch = from.match(/<([^>]+)>/);
+  if (angleMatch) return angleMatch[1].toLowerCase();
+  // Bare address
+  const bareMatch = from.match(/\S+@\S+/);
+  return bareMatch ? bareMatch[0].toLowerCase() : from.toLowerCase();
 }
 
 function normalizeHeaders(
@@ -89,7 +108,13 @@ export function preFilterEmail(metadata: EmailMetadata): PreFilterResult {
     return { status: "relevant", relevance_signals: signals };
   }
 
-  // Rule: Known newsletter / automated sender
+  // Rule: no-reply and equivalent automated sender variants (regex-based)
+  const emailAddr = extractEmailAddress(from);
+  if (NO_REPLY_REGEX.test(emailAddr)) {
+    return { status: "skip", skip_reason: "automated_sender" };
+  }
+
+  // Rule: Known newsletter / automated sender (substring patterns)
   if (BLOCKED_SENDER_PATTERNS.some((p) => fromLower.includes(p))) {
     return { status: "skip", skip_reason: "automated_sender" };
   }

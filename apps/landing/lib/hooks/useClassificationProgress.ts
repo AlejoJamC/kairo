@@ -18,6 +18,10 @@ export interface ClassificationProgress {
   };
   window: { since: string; until: string };
   last_classified_at: string | null;
+  // True once tickets_count >= FAST_PATH_CONTINUE_THRESHOLD on the server.
+  // Use this to enable the wizard "Continue" button without waiting for the
+  // full scan to complete.
+  threshold_reached: boolean;
 }
 
 interface UseClassificationProgressResult {

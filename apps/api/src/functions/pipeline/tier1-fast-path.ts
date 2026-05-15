@@ -9,6 +9,7 @@ import { resolveModelVersion } from "../../lib/model-version.js";
 import { buildEscalationContext } from "../../routes/v1/tickets.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
 import { maybeGenerateTicketEmbedding } from "../../lib/ticket-embedding.js";
+import { pipelineLog, pipelineLogRun } from "../../lib/pipeline-logger.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -122,9 +123,10 @@ export const tier1FastPath = inngest.createFunction(
   },
   async ({ event, step }) => {
     const { userId } = event.data;
+    pipelineLogRun(`tier1-fast-path userId=${userId}`);
 
     // -----------------------------------------------------------------------
-    // Step 1: Fetch Gmail profile + 30 most recent message headers in parallel
+    // Step 1: Fetch Gmail profile + most recent message headers in parallel
     // -----------------------------------------------------------------------
     const { messages, userEmail, gmailAccessToken } = await step.run("fetch-headers", async () => {
       const token = await getFreshGmailToken(userId);
@@ -132,16 +134,20 @@ export const tier1FastPath = inngest.createFunction(
         fetchGmailProfile(token),
         fetchGmailMessages(token, env.FAST_PATH_SCAN_SIZE),
       ]);
+      pipelineLog("tier1:fetch", `fetched ${msgs.length} messages for ${profile.emailAddress} (scan_size=${env.FAST_PATH_SCAN_SIZE})`);
       return { messages: msgs, userEmail: profile.emailAddress, gmailAccessToken: token };
     }) as { messages: GmailMessage[]; userEmail: string; gmailAccessToken: string };
 
     // -----------------------------------------------------------------------
     // Step 2: Pre-filter, classify in parallel, persist each result
+    //
+    // All messages in the scan window are classified — there is no early exit.
+    // FAST_PATH_CONTINUE_THRESHOLD only triggers a log event that the wizard
+    // UI polls to enable the "Continue" button; it does not stop classification.
     // -----------------------------------------------------------------------
     const result = await step.run("scan-and-dispatch", async () => {
       const classifiedIds: string[] = [];
       const skippedIds: string[] = [];
-      const remainderIds: string[] = [];
 
       // Resolve account_id — required for all DB inserts (NOT NULL constraint)
       const { data: memberRow } = await supabase
@@ -153,6 +159,7 @@ export const tier1FastPath = inngest.createFunction(
         .limit(1)
         .maybeSingle();
       const accountId: string | null = memberRow?.account_id ?? null;
+      pipelineLog("tier1:db", `account_id=${accountId ?? "NULL — tickets insert will FAIL"}`);
 
       // One-time lookup: Gmail channel_integration for this user (service role)
       const { data: channelRow } = await supabase
@@ -164,17 +171,12 @@ export const tier1FastPath = inngest.createFunction(
         .single();
 
       const channelIntegrationId: string | null = channelRow?.id ?? null;
+      pipelineLog("tier1:db", `channel_integration_id=${channelIntegrationId ?? "NULL — messages table will NOT be written"}`);
 
       const classificationPromises: Promise<void>[] = [];
       let relevantDispatched = 0;
 
       for (const message of messages) {
-        // Escape once we've dispatched enough relevant classifications
-        if (relevantDispatched >= env.FAST_PATH_ESCAPE_COUNT) {
-          remainderIds.push(message.id);
-          continue;
-        }
-
         const headers = message.payload?.headers ?? [];
         const from = headerValue(headers, "From");
         const subject = headerValue(headers, "Subject");
@@ -195,6 +197,7 @@ export const tier1FastPath = inngest.createFunction(
           userEmail,
         });
 
+        pipelineLog("tier1:filter", `id=${message.id} from="${from}" subject="${subject}" → ${filterResult.status}${filterResult.skip_reason ? ` (${filterResult.skip_reason})` : ""}`);
 
         if (filterResult.status === "skip") {
           skippedIds.push(message.id);
@@ -220,11 +223,19 @@ export const tier1FastPath = inngest.createFunction(
 
         // Relevant — capture loop-local values for the closure, then dispatch
         relevantDispatched++;
+
+        if (relevantDispatched === env.FAST_PATH_CONTINUE_THRESHOLD) {
+          pipelineLog("tier1:threshold", `continue threshold reached (${relevantDispatched}/${env.FAST_PATH_CONTINUE_THRESHOLD}) — wizard Continue button may now be enabled`);
+        }
+
         const messageId = message.id;
         const snippet = message.snippet ?? "";
 
+        pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
+
         const promise = classifyEmail({ subject, body: snippet, from })
           .then(async (classification) => {
+            pipelineLog("tier1:llm", `id=${messageId} → type=${classification.type} category=${classification.category} priority=${classification.priority} tone=${classification.tone} confidence=${classification.confidence}`);
             classifiedIds.push(messageId);
             const classified_at = new Date().toISOString();
 
@@ -258,6 +269,8 @@ export const tier1FastPath = inngest.createFunction(
               })
               .select("id")
               .single();
+            if (proposalErr) pipelineLog("tier1:db", `ticket_proposals FAILED for ${messageId}: ${proposalErr.message}`);
+            else pipelineLog("tier1:db", `ticket_proposals OK → proposal_id=${proposal?.id}`);
 
             const { data: ticket, error: ticketErr } = await supabase
               .from("tickets")
@@ -284,6 +297,8 @@ export const tier1FastPath = inngest.createFunction(
               })
               .select("id")
               .single();
+            if (ticketErr) pipelineLog("tier1:db", `tickets FAILED for ${messageId}: ${ticketErr.message}`);
+            else pipelineLog("tier1:db", `tickets OK → ticket_id=${ticket?.id}`);
 
             // Link proposal → ticket
             if (proposal?.id && ticket?.id) {
@@ -376,7 +391,8 @@ export const tier1FastPath = inngest.createFunction(
       // All parallel classification calls run to completion before step exits
       await Promise.all(classificationPromises);
 
-      return { classifiedIds, skippedIds, remainderIds };
+      pipelineLog("tier1:summary", `classified=${classifiedIds.length} skipped=${skippedIds.length} relevant_total=${relevantDispatched}`);
+      return { classifiedIds, skippedIds };
     });
 
     // -----------------------------------------------------------------------

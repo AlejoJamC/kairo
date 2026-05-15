@@ -246,6 +246,77 @@ describe("Edge cases", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Rule: automated_sender — no-reply variants (regression suite for KAI-206)
+// ---------------------------------------------------------------------------
+describe("Rule: automated_sender — no-reply regex variants", () => {
+  const cases = [
+    "no-reply@accounts.google.com",
+    "no.reply@vendor.com",
+    "no_reply@service.io",
+    "noreply@someservice.com",
+    "donotreply@example.com",
+    "do-not-reply@company.com",
+    "do_not_reply@platform.io",
+    "mailer-daemon@google.com",
+    "postmaster@mail.example.com",
+    "bounce@amazonses.com",
+    "bounces@email.example.com",
+  ];
+
+  for (const addr of cases) {
+    it(`skips "${addr}"`, () => {
+      const result = preFilterEmail({ ...BASE, from: addr });
+      expect(result.status).toBe("skip");
+      expect(result.skip_reason).toBe("automated_sender");
+    });
+  }
+
+  it("skips display-name format with no-reply address", () => {
+    const result = preFilterEmail({
+      ...BASE,
+      from: "Google <no-reply@accounts.google.com>",
+    });
+    expect(result.status).toBe("skip");
+    expect(result.skip_reason).toBe("automated_sender");
+  });
+
+  it("skips address with prefix before noreply (e.g. bounce-noreply@)", () => {
+    const result = preFilterEmail({
+      ...BASE,
+      from: "antigravity-noreply@google.com",
+    });
+    expect(result.status).toBe("skip");
+    expect(result.skip_reason).toBe("automated_sender");
+  });
+
+  it("does NOT skip a real sender whose name contains 'no' and 'reply' separately", () => {
+    // "knowreply" is not a no-reply address
+    const result = preFilterEmail({ ...BASE, from: "knowreply@partner.com" });
+    expect(result.status).toBe("relevant");
+  });
+
+  it("no-reply sender with In-Reply-To is still relevant (reply-chain override)", () => {
+    const result = preFilterEmail({
+      ...BASE,
+      from: "no-reply@accounts.google.com",
+      headers: { "In-Reply-To": "<thread-123@mail.example.com>" },
+    });
+    expect(result.status).toBe("relevant");
+    expect(result.relevance_signals).toContain("in_reply_to");
+  });
+
+  it("no-reply sender with urgency keyword in subject is still relevant (urgency override)", () => {
+    const result = preFilterEmail({
+      ...BASE,
+      from: "no-reply@alerts.myservice.com",
+      subject: "CRITICAL: production database is down",
+    });
+    expect(result.status).toBe("relevant");
+    expect(result.relevance_signals).toContain("urgency_keyword");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Pass-through signals
 // ---------------------------------------------------------------------------
 describe("Pass-through signals", () => {
