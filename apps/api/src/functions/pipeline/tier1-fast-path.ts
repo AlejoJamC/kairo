@@ -1,6 +1,7 @@
 import { classifyEmail, detectEscalationTriggers } from "@kairo/intelligence";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
+import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
@@ -120,18 +121,19 @@ export const tier1FastPath = inngest.createFunction(
     triggers: [{ event: "pipeline/tier1.triggered" }],
   },
   async ({ event, step }) => {
-    const { userId, gmailAccessToken } = event.data;
+    const { userId } = event.data;
 
     // -----------------------------------------------------------------------
     // Step 1: Fetch Gmail profile + 30 most recent message headers in parallel
     // -----------------------------------------------------------------------
-    const { messages, userEmail } = await step.run("fetch-headers", async () => {
+    const { messages, userEmail, gmailAccessToken } = await step.run("fetch-headers", async () => {
+      const token = await getFreshGmailToken(userId);
       const [profile, msgs] = await Promise.all([
-        fetchGmailProfile(gmailAccessToken),
-        fetchGmailMessages(gmailAccessToken, env.FAST_PATH_SCAN_SIZE),
+        fetchGmailProfile(token),
+        fetchGmailMessages(token, env.FAST_PATH_SCAN_SIZE),
       ]);
-      return { messages: msgs, userEmail: profile.emailAddress };
-    });
+      return { messages: msgs, userEmail: profile.emailAddress, gmailAccessToken: token };
+    }) as { messages: GmailMessage[]; userEmail: string; gmailAccessToken: string };
 
     // -----------------------------------------------------------------------
     // Step 2: Pre-filter, classify in parallel, persist each result

@@ -1,6 +1,7 @@
 import { classifyEmail } from "@kairo/intelligence";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
+import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
@@ -154,26 +155,21 @@ export const tier2Background = inngest.createFunction(
     const { messages, userEmail } = await step.run(
       "fetch-0-15d-headers",
       async () => {
-        const { data: gmailAccount } = await supabase
-          .from("gmail_accounts")
-          .select("access_token, email")
-          .eq("user_id", userId)
-          .limit(1)
-          .single();
+        const [freshToken, gmailAccount] = await Promise.all([
+          getFreshGmailToken(userId),
+          supabase.from("gmail_accounts").select("email").eq("user_id", userId).limit(1).single(),
+        ]);
 
-        if (!gmailAccount?.access_token) {
+        if (!gmailAccount.data?.email) {
           console.warn(`[tier2] No Gmail account found for user ${userId}`);
           return { messages: [] as GmailMessage[], userEmail: "" };
         }
 
-        const msgs = await fetchGmailWindow(
-          gmailAccount.access_token,
-          env.TIER_2_WINDOW_DAYS
-        );
+        const msgs = await fetchGmailWindow(freshToken, env.TIER_2_WINDOW_DAYS);
 
         return {
           messages: msgs,
-          userEmail: gmailAccount.email as string,
+          userEmail: gmailAccount.data.email as string,
         };
       }
     // Inngest's JsonifyObject loses interface field types across step boundaries; cast back

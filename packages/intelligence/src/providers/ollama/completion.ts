@@ -2,11 +2,12 @@ import type { z } from 'zod';
 import type { CompletionProvider, CompletionOptions } from '../base';
 
 export class OllamaCompletionProvider implements CompletionProvider {
-  public readonly model = 'llama3.2';
+  public readonly model: string;
   private baseUrl: string;
 
-  constructor(baseUrl: string = 'http://localhost:11434') {
+  constructor(baseUrl: string = 'http://localhost:11434', model: string = 'llama3.2') {
     this.baseUrl = baseUrl;
+    this.model = model;
   }
 
   async complete(prompt: string, options: CompletionOptions = {}): Promise<string> {

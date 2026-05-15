@@ -1,6 +1,7 @@
 import { classifyEmail } from "@kairo/intelligence";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
+import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
@@ -144,7 +145,7 @@ export const incrementalSync = inngest.createFunction(
     triggers: [{ event: "pipeline/incremental-sync.triggered" }],
   },
   async ({ event, step }) => {
-    const { userId, gmailAccessToken } = event.data;
+    const { userId } = event.data;
 
     // -----------------------------------------------------------------------
     // Step 1: Get cursor — MAX(received_at) from already-classified messages
@@ -169,7 +170,8 @@ export const incrementalSync = inngest.createFunction(
     // Step 2: Fetch Gmail headers since the cursor
     // -----------------------------------------------------------------------
     const headers = (await step.run("fetch-new-emails", async () => {
-      return fetchGmailSince(gmailAccessToken, cursor);
+      const token = await getFreshGmailToken(userId);
+      return fetchGmailSince(token, cursor);
     })) as GmailMessage[];
 
     if (headers.length === 0) return;
@@ -178,6 +180,8 @@ export const incrementalSync = inngest.createFunction(
     // Step 3: Classify new emails
     // -----------------------------------------------------------------------
     await step.run("classify-new-emails", async () => {
+      const gmailAccessToken = await getFreshGmailToken(userId);
+
       // Look up the channel integration id once
       const { data: channelRow } = await supabase
         .from("channel_integrations")
