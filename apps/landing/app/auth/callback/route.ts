@@ -1,41 +1,136 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { env } from "@/env";
 
+// ---------------------------------------------------------------------------
+// GET /auth/callback
+//
+// Handles all four post-OAuth scenarios (KAI-172):
+//
+//  1. Email exists + same provider (Google)
+//     → Supabase logs them in normally. User has account_members → dashboard.
+//
+//  2. Email exists with email/pass + Google OAuth attempted
+//     → Supabase creates a duplicate auth.user (no native UI toggle to prevent
+//        this). We detect it by checking if another profile with the same email
+//        already exists, then delete the duplicate and redirect to /auth/error.
+//
+//  3. Email has pending invitation + Google OAuth
+//     → User is created/logged in. We auto-accept the invitation, create
+//        account_members, delete the invitation, redirect to dashboard.
+//
+//  4. Brand-new user, no invitation
+//     → Redirect to /wizard/complete (Gmail connection + account setup).
+// ---------------------------------------------------------------------------
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
+  const appUrl = env.NEXT_PUBLIC_APP_URL;
+
+  // ── Handle any OAuth-level error params ──────────────────────────────────
+  const oauthError = requestUrl.searchParams.get("error");
+  const oauthErrorDesc = requestUrl.searchParams.get("error_description") ?? "";
+
+  if (oauthError) {
+    return NextResponse.redirect(
+      `${appUrl}/auth/error?type=oauth_error&description=${encodeURIComponent(oauthErrorDesc || oauthError)}`
+    );
+  }
+
   const code = requestUrl.searchParams.get("code");
+  if (!code) {
+    return NextResponse.redirect(`${appUrl}/wizard`);
+  }
 
-  if (code) {
-    const supabase = await createClient();
+  const supabase = await createClient();
+  const admin = createAdminClient();
 
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (!error && data.session) {
-      const providerToken = data.session.provider_token;
-      const providerRefreshToken = data.session.provider_refresh_token;
+  if (error || !data.session || !data.user) {
+    return NextResponse.redirect(
+      `${appUrl}/auth/error?type=session_error&description=${encodeURIComponent(error?.message ?? "Unknown error")}`
+    );
+  }
 
-      if (providerToken && data.user) {
-        const payload: any = {
-          user_id: data.user.id,
-          email: data.user.email!,
-          access_token: providerToken,
-          expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
-        };
+  const user = data.user;
+  const session = data.session;
 
-        if (providerRefreshToken) {
-          payload.refresh_token = providerRefreshToken;
-        }
+  // ── Scenario 2: duplicate detection ──────────────────────────────────────
+  // Supabase has no native "prevent duplicate emails across providers" toggle
+  // in the current dashboard. We detect duplicates post-creation:
+  // if another profile with the same email already exists (different user_id),
+  // then a second auth.user was just created erroneously — delete it and bail.
+  if (user.email) {
+    const { data: existingProfile } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("email", user.email)
+      .neq("id", user.id)
+      .maybeSingle();
 
-        await supabase.from("gmail_accounts").upsert(payload);
-
-        await supabase
-          .from("profiles")
-          .update({ gmail_connected: true })
-          .eq("id", data.user.id);
-      }
+    if (existingProfile) {
+      // Delete the duplicate auth.user (the one just created by this OAuth flow).
+      await admin.auth.admin.deleteUser(user.id);
+      return NextResponse.redirect(`${appUrl}/auth/error?type=duplicate_email`);
     }
   }
 
-  return NextResponse.redirect(`${env.NEXT_PUBLIC_APP_URL}/wizard/complete`);
+  // ── Save Gmail OAuth tokens if present (Gmail connection flow) ────────────
+  if (session.provider_token && user.email) {
+    await supabase.from("gmail_accounts").upsert({
+      user_id:       user.id,
+      email:         user.email,
+      access_token:  session.provider_token,
+      refresh_token: session.provider_refresh_token ?? null,
+      expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
+    });
+    await supabase.from("profiles").update({ gmail_connected: true }).eq("id", user.id);
+  }
+
+  // ── Scenarios 1 & returning users: check existing account membership ──────
+  const { data: membership } = await supabase
+    .from("account_members")
+    .select("account_id")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .order("joined_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (membership) {
+    return NextResponse.redirect(`${appUrl}/auth/handoff`);
+  }
+
+  // ── Scenario 3: auto-accept a pending invitation ──────────────────────────
+  if (user.email) {
+    const now = new Date().toISOString();
+
+    const { data: invitations } = await supabase
+      .from("account_invitations")
+      .select("id, account_id, role")
+      .eq("email", user.email)
+      .gt("expires_at", now)
+      .limit(1);
+
+    const invitation = invitations?.[0];
+
+    if (invitation) {
+      await supabase.from("account_members").insert({
+        account_id: invitation.account_id,
+        user_id:    user.id,
+        role:       invitation.role,
+        status:     "active",
+        invited_at: now,
+        joined_at:  now,
+      });
+
+      await supabase.from("account_invitations").delete().eq("id", invitation.id);
+
+      return NextResponse.redirect(`${appUrl}/auth/handoff`);
+    }
+  }
+
+  // ── Scenario 4: brand-new user, no invitation ─────────────────────────────
+  return NextResponse.redirect(`${appUrl}/wizard/complete`);
 }
