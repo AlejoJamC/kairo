@@ -28,6 +28,9 @@ export const env = createEnv({
         // KAI-202 kill-switch: disable onboarding pipeline dispatch from OAuth callback
         // without redeploying. Any value other than "true" leaves dispatch enabled.
         DISABLE_ONBOARDING_PIPELINE_DISPATCH: z.string().optional(),
+        // KAI-201 feature flag: enable detection UI in onboarding wizard (default: off).
+        // Set FEATURE_FLAG_ENABLE_DETECTION_UI=true to enable.
+        FEATURE_FLAG_ENABLE_DETECTION_UI: z.string().optional(),
     },
     clientPrefix: "VITE_",
     client: {

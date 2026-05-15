@@ -8,7 +8,12 @@
 //           ├── similarTab      (Pestaña 2 — Similares)
 //           ├── articlesTab     (Pestaña 3 — Artículos)
 //           └── escalateTab     (Pestaña 4 — Escalar)  ← OFF: not ready yet
+//
+// Runtime-overrideable flags (server-only, via FEATURE_FLAG_<UPPER_SNAKE> env vars):
+//   enable_detection_ui  — KAI-201: show real-time detection step in onboarding wizard
 // =============================================================================
+
+// ─── Static dashboard flags (build-time, no env override) ────────────────────
 
 export const FLAGS = {
   dashboard: {
@@ -22,3 +27,31 @@ export const FLAGS = {
 } as const;
 
 export type FeatureFlags = typeof FLAGS;
+
+// ─── Runtime flags with env override support ─────────────────────────────────
+
+const ENV_PREFIX = "FEATURE_FLAG_";
+
+const FLAG_DEFAULTS = {
+  enable_detection_ui: false,
+} as const;
+
+type RuntimeFlagName = keyof typeof FLAG_DEFAULTS;
+
+function readEnvFlag(envKey: string, defaultValue: boolean): boolean {
+  if (typeof process === "undefined") return defaultValue;
+  const val = process.env[envKey];
+  if (val === "true") return true;
+  if (val === "false") return false;
+  return defaultValue; // undefined, empty, or invalid → default
+}
+
+/**
+ * Returns the value of a runtime-overrideable flag.
+ * Env var: FEATURE_FLAG_<UPPER_SNAKE_NAME>  (e.g. FEATURE_FLAG_ENABLE_DETECTION_UI)
+ * Server-only — reads process.env at call time.
+ */
+export function getFlag(name: RuntimeFlagName): boolean {
+  const envKey = `${ENV_PREFIX}${name.toUpperCase()}`;
+  return readEnvFlag(envKey, FLAG_DEFAULTS[name]);
+}
