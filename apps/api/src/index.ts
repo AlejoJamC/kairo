@@ -18,6 +18,7 @@ import { supportSchedule } from "./routes/v1/support-schedule.js";
 import { kbArticles } from "./routes/v1/kb-articles.js";
 import { invitations } from "./routes/v1/invitations.js";
 import { channels } from "./routes/v1/channels.js";
+import { classificationProgress } from "./routes/v1/classification-progress.js";
 
 const app = new Hono({ strict: false });
 
@@ -34,6 +35,7 @@ v1.route("/support-schedule", supportSchedule);
 v1.route("/kb-articles", kbArticles);
 v1.route("/invitations", invitations);
 v1.route("/accounts", channels);
+v1.route("/classification", classificationProgress);
 
 app.route("/api/v1", v1);
 
