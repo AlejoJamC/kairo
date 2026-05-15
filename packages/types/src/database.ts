@@ -304,7 +304,7 @@ export type Database = {
       }
       channel_integrations: {
         Row: {
-          account_id: string | null
+          account_id: string
           created_at: string
           credentials_encrypted: Json | null
           display_name: string | null
@@ -317,7 +317,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           created_at?: string
           credentials_encrypted?: Json | null
           display_name?: string | null
@@ -330,7 +330,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           created_at?: string
           credentials_encrypted?: Json | null
           display_name?: string | null
@@ -354,7 +354,7 @@ export type Database = {
       }
       classification_feedback: {
         Row: {
-          account_id: string | null
+          account_id: string
           ai_category: string | null
           ai_confidence: number | null
           ai_model_version: string | null
@@ -373,7 +373,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           ai_category?: string | null
           ai_confidence?: number | null
           ai_model_version?: string | null
@@ -392,7 +392,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           ai_category?: string | null
           ai_confidence?: number | null
           ai_model_version?: string | null
@@ -429,7 +429,7 @@ export type Database = {
       }
       clients: {
         Row: {
-          account_id: string | null
+          account_id: string
           authorized_emails: string[] | null
           contact_persons: Json | null
           created_at: string | null
@@ -444,7 +444,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           authorized_emails?: string[] | null
           contact_persons?: Json | null
           created_at?: string | null
@@ -459,7 +459,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           authorized_emails?: string[] | null
           contact_persons?: Json | null
           created_at?: string | null
@@ -485,7 +485,7 @@ export type Database = {
       }
       conversations: {
         Row: {
-          account_id: string | null
+          account_id: string
           channel_integration_id: string
           created_at: string
           customer_avatar_url: string | null
@@ -498,7 +498,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           channel_integration_id: string
           created_at?: string
           customer_avatar_url?: string | null
@@ -511,7 +511,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           channel_integration_id?: string
           created_at?: string
           customer_avatar_url?: string | null
@@ -577,7 +577,7 @@ export type Database = {
       }
       escalation_contacts: {
         Row: {
-          account_id: string | null
+          account_id: string
           channel: string
           created_at: string | null
           escalation_level: number
@@ -588,7 +588,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           channel?: string
           created_at?: string | null
           escalation_level?: number
@@ -599,7 +599,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           channel?: string
           created_at?: string | null
           escalation_level?: number
@@ -672,7 +672,7 @@ export type Database = {
       gmail_accounts: {
         Row: {
           access_token: string | null
-          account_id: string | null
+          account_id: string
           created_at: string | null
           email: string
           expires_at: string | null
@@ -683,7 +683,7 @@ export type Database = {
         }
         Insert: {
           access_token?: string | null
-          account_id?: string | null
+          account_id: string
           created_at?: string | null
           email: string
           expires_at?: string | null
@@ -694,7 +694,7 @@ export type Database = {
         }
         Update: {
           access_token?: string | null
-          account_id?: string | null
+          account_id?: string
           created_at?: string | null
           email?: string
           expires_at?: string | null
@@ -715,7 +715,7 @@ export type Database = {
       }
       kb_articles: {
         Row: {
-          account_id: string | null
+          account_id: string
           content: string
           created_at: string | null
           embedding: string | null
@@ -727,7 +727,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           content: string
           created_at?: string | null
           embedding?: string | null
@@ -739,7 +739,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           content?: string
           created_at?: string | null
           embedding?: string | null
@@ -843,7 +843,7 @@ export type Database = {
       }
       messages: {
         Row: {
-          account_id: string | null
+          account_id: string
           body_html: string | null
           body_plain: string | null
           channel_integration_id: string
@@ -865,7 +865,7 @@ export type Database = {
           thread_external_id: string | null
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           body_html?: string | null
           body_plain?: string | null
           channel_integration_id: string
@@ -887,7 +887,7 @@ export type Database = {
           thread_external_id?: string | null
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           body_html?: string | null
           body_plain?: string | null
           channel_integration_id?: string
@@ -964,7 +964,7 @@ export type Database = {
       }
       response_templates: {
         Row: {
-          account_id: string | null
+          account_id: string
           category: string | null
           content: string
           created_at: string
@@ -976,7 +976,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           category?: string | null
           content: string
           created_at?: string
@@ -988,7 +988,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           category?: string | null
           content?: string
           created_at?: string
@@ -1011,7 +1011,7 @@ export type Database = {
       }
       support_schedules: {
         Row: {
-          account_id: string | null
+          account_id: string
           day_of_week: number
           end_time: string
           id: string
@@ -1020,7 +1020,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           day_of_week: number
           end_time: string
           id?: string
@@ -1029,7 +1029,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           day_of_week?: number
           end_time?: string
           id?: string
@@ -1049,7 +1049,7 @@ export type Database = {
       }
       tenant_priority_config: {
         Row: {
-          account_id: string | null
+          account_id: string
           id: string
           updated_at: string
           user_id: string
@@ -1059,7 +1059,7 @@ export type Database = {
           weight_type: number
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           id?: string
           updated_at?: string
           user_id: string
@@ -1069,7 +1069,7 @@ export type Database = {
           weight_type?: number
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           id?: string
           updated_at?: string
           user_id?: string
@@ -1090,7 +1090,7 @@ export type Database = {
       }
       tenant_sla_rules: {
         Row: {
-          account_id: string | null
+          account_id: string
           id: string
           plan_tier: string
           resolution_hours: number | null
@@ -1099,7 +1099,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           id?: string
           plan_tier: string
           resolution_hours?: number | null
@@ -1108,7 +1108,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           id?: string
           plan_tier?: string
           resolution_hours?: number | null
@@ -1195,21 +1195,21 @@ export type Database = {
       }
       ticket_groups: {
         Row: {
-          account_id: string | null
+          account_id: string
           created_at: string
           id: string
           name: string
           user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           created_at?: string
           id?: string
           name: string
           user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           created_at?: string
           id?: string
           name?: string
@@ -1376,7 +1376,7 @@ export type Database = {
       }
       tickets: {
         Row: {
-          account_id: string | null
+          account_id: string
           ai_reasoning: string | null
           archived_at: string | null
           assigned_to: string | null
@@ -1426,7 +1426,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           ai_reasoning?: string | null
           archived_at?: string | null
           assigned_to?: string | null
@@ -1476,7 +1476,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           ai_reasoning?: string | null
           archived_at?: string | null
           assigned_to?: string | null
