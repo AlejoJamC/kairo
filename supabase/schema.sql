@@ -185,6 +185,26 @@ $$;
 ALTER FUNCTION "public"."get_classification_accuracy"("p_user_id" "uuid", "p_window" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_invitation_by_token"("p_token" "uuid") RETURNS TABLE("id" "uuid", "account_id" "uuid", "account_name" "text", "email" "text", "role" "text", "expires_at" timestamp with time zone)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    AS $$
+    SELECT
+        ai.id,
+        ai.account_id,
+        acc.name AS account_name,
+        ai.email,
+        ai.role,
+        ai.expires_at
+    FROM "public"."account_invitations" ai
+    JOIN "public"."accounts" acc ON acc.id = ai.account_id
+    WHERE ai.token = p_token
+      AND ai.expires_at > now();
+$$;
+
+
+ALTER FUNCTION "public"."get_invitation_by_token"("p_token" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_sidebar_counts"("p_user_id" "uuid") RETURNS TABLE("status" "text", "count" bigint)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     AS $$
@@ -1844,11 +1864,25 @@ CREATE POLICY "Invitations can be viewed by the invited user" ON "public"."accou
 
 
 
+CREATE POLICY "Invited user can delete own invitation" ON "public"."account_invitations" FOR DELETE USING (("email" = (( SELECT "users"."email"
+   FROM "auth"."users"
+  WHERE ("users"."id" = "auth"."uid"())))::"text"));
+
+
+
 CREATE POLICY "Members can view teammates" ON "public"."account_members" FOR SELECT USING ("public"."has_account_access"("account_id"));
 
 
 
 CREATE POLICY "Members can view their own account memberships" ON "public"."account_members" FOR SELECT USING (("user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Users can accept own invitation" ON "public"."account_members" FOR INSERT WITH CHECK ((("user_id" = "auth"."uid"()) AND ("status" = 'active'::"text") AND (EXISTS ( SELECT 1
+   FROM "public"."account_invitations" "ai"
+  WHERE (("ai"."account_id" = "account_members"."account_id") AND ("ai"."email" = (( SELECT "users"."email"
+           FROM "auth"."users"
+          WHERE ("users"."id" = "auth"."uid"())))::"text") AND ("ai"."role" = "account_members"."role") AND ("ai"."expires_at" > "now"()))))));
 
 
 
@@ -2104,6 +2138,12 @@ GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_u
 GRANT ALL ON FUNCTION "public"."get_classification_accuracy"("p_user_id" "uuid", "p_window" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_classification_accuracy"("p_user_id" "uuid", "p_window" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_classification_accuracy"("p_user_id" "uuid", "p_window" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_invitation_by_token"("p_token" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_invitation_by_token"("p_token" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_invitation_by_token"("p_token" "uuid") TO "service_role";
 
 
 

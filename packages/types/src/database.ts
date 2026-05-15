@@ -1605,6 +1605,17 @@ export type Database = {
         Args: { p_user_id: string; p_window?: string }
         Returns: Json
       }
+      get_invitation_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          account_id: string
+          account_name: string
+          email: string
+          expires_at: string
+          id: string
+          role: string
+        }[]
+      }
       get_sidebar_counts: {
         Args: { p_user_id: string }
         Returns: {
