@@ -24,12 +24,48 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 CREATE OR REPLACE FUNCTION "public"."current_account_id"() RETURNS "uuid"
-    LANGUAGE "sql" SECURITY DEFINER
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     AS $$
-  SELECT account_id FROM "public"."account_members"
-  WHERE "user_id" = auth.uid()
-    AND "status" = 'active'
-  LIMIT 1;
+DECLARE
+    v_account_id uuid;
+BEGIN
+    -- Priority 1: explicit account_id claim in the JWT
+    -- Set this claim (in app_metadata) when the user logs in or switches accounts.
+    BEGIN
+        v_account_id := NULLIF(
+            current_setting('request.jwt.claims', true)::jsonb ->> 'account_id',
+            ''
+        )::uuid;
+    EXCEPTION WHEN OTHERS THEN
+        v_account_id := NULL;
+    END;
+
+    -- If a claim is present, validate the user is still an active member of that account.
+    -- This prevents a stale/forged claim from granting access.
+    IF v_account_id IS NOT NULL THEN
+        IF EXISTS (
+            SELECT 1 FROM "public"."account_members"
+            WHERE "account_id" = v_account_id
+              AND "user_id" = auth.uid()
+              AND "status" = 'active'
+        ) THEN
+            RETURN v_account_id;
+        END IF;
+        -- Claim present but user is not an active member → deny everything.
+        RETURN NULL;
+    END IF;
+
+    -- Fallback for single-account users (no claim set).
+    -- Deterministic because most users belong to exactly one account.
+    SELECT "account_id" INTO v_account_id
+    FROM "public"."account_members"
+    WHERE "user_id" = auth.uid()
+      AND "status" = 'active'
+    ORDER BY "joined_at"
+    LIMIT 1;
+
+    RETURN v_account_id;
+END;
 $$;
 
 
@@ -461,6 +497,7 @@ CREATE TABLE IF NOT EXISTS "public"."classification_feedback" (
     "correct_sentiment" "text",
     "notes" "text",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "account_id" "uuid",
     CONSTRAINT "chk_cf_category" CHECK ((("correct_category" IS NULL) OR ("correct_category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_cf_priority" CHECK ((("correct_priority" IS NULL) OR ("correct_priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
     CONSTRAINT "chk_cf_sentiment" CHECK ((("correct_sentiment" IS NULL) OR ("correct_sentiment" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
@@ -534,6 +571,7 @@ CREATE TABLE IF NOT EXISTS "public"."escalation_contacts" (
     "escalation_level" integer DEFAULT 2 NOT NULL,
     "is_active" boolean DEFAULT true,
     "created_at" timestamp with time zone DEFAULT "now"(),
+    "account_id" "uuid",
     CONSTRAINT "escalation_contacts_channel_check" CHECK (("channel" = ANY (ARRAY['sms'::"text", 'whatsapp'::"text"])))
 );
 
@@ -615,6 +653,7 @@ CREATE TABLE IF NOT EXISTS "public"."llm_calls" (
     "error_code" "text",
     "error_detail" "text",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "account_id" "uuid",
     CONSTRAINT "llm_calls_confidence_check" CHECK ((("confidence_score" IS NULL) OR (("confidence_score" >= (0)::numeric) AND ("confidence_score" <= (1)::numeric)))),
     CONSTRAINT "llm_calls_outcome_check" CHECK ((("outcome" IS NULL) OR ("outcome" = ANY (ARRAY['accepted'::"text", 'edited'::"text", 'rejected'::"text", 'ignored'::"text", 'auto_applied'::"text"]))))
 );
@@ -682,7 +721,8 @@ CREATE TABLE IF NOT EXISTS "public"."response_templates" (
     "locale" "text" DEFAULT 'es'::"text" NOT NULL,
     "is_active" boolean DEFAULT true NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "account_id" "uuid"
 );
 
 
@@ -765,7 +805,8 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_groups" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "user_id" "uuid" NOT NULL,
     "name" "text" NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "account_id" "uuid"
 );
 
 
@@ -894,18 +935,6 @@ ALTER TABLE "public"."tickets" ALTER COLUMN "ticket_number" ADD GENERATED ALWAYS
     CACHE 1
 );
 
-
-
-CREATE TABLE IF NOT EXISTS "public"."user_roles" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
-    "role" "text" NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "user_roles_role_check" CHECK (("role" = ANY (ARRAY['owner'::"text", 'admin'::"text", 'supervisor'::"text", 'agent'::"text"])))
-);
-
-
-ALTER TABLE "public"."user_roles" OWNER TO "postgres";
 
 
 ALTER TABLE ONLY "public"."account_invitations"
@@ -1138,16 +1167,6 @@ ALTER TABLE ONLY "public"."tickets"
 
 
 
-ALTER TABLE ONLY "public"."user_roles"
-    ADD CONSTRAINT "user_roles_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."user_roles"
-    ADD CONSTRAINT "user_roles_user_id_key" UNIQUE ("user_id");
-
-
-
 CREATE INDEX "idx_admin_audit_log_admin_user_id" ON "public"."admin_audit_log" USING "btree" ("admin_user_id");
 
 
@@ -1189,6 +1208,10 @@ CREATE INDEX "idx_channel_integrations_provider" ON "public"."channel_integratio
 
 
 CREATE INDEX "idx_channel_integrations_user_id" ON "public"."channel_integrations" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_classification_feedback_account_id" ON "public"."classification_feedback" USING "btree" ("account_id");
 
 
 
@@ -1236,6 +1259,10 @@ CREATE INDEX "idx_conversations_user_id" ON "public"."conversations" USING "btre
 
 
 
+CREATE INDEX "idx_escalation_contacts_account_id" ON "public"."escalation_contacts" USING "btree" ("account_id");
+
+
+
 CREATE INDEX "idx_gmail_accounts_account_id" ON "public"."gmail_accounts" USING "btree" ("account_id");
 
 
@@ -1249,6 +1276,10 @@ CREATE INDEX "idx_kb_articles_account_id" ON "public"."kb_articles" USING "btree
 
 
 CREATE INDEX "idx_kb_articles_embedding" ON "public"."kb_articles" USING "hnsw" ("embedding" "extensions"."vector_cosine_ops") WITH ("m"='16', "ef_construction"='64');
+
+
+
+CREATE INDEX "idx_llm_calls_account_id" ON "public"."llm_calls" USING "btree" ("account_id");
 
 
 
@@ -1312,6 +1343,10 @@ CREATE INDEX "idx_profiles_email" ON "public"."profiles" USING "btree" ("email")
 
 
 
+CREATE INDEX "idx_response_templates_account_id" ON "public"."response_templates" USING "btree" ("account_id");
+
+
+
 CREATE INDEX "idx_response_templates_locale" ON "public"."response_templates" USING "btree" ("user_id", "locale") WHERE ("is_active" = true);
 
 
@@ -1341,6 +1376,10 @@ CREATE INDEX "idx_ticket_events_event_type" ON "public"."ticket_events" USING "b
 
 
 CREATE INDEX "idx_ticket_events_ticket_id" ON "public"."ticket_events" USING "btree" ("ticket_id");
+
+
+
+CREATE INDEX "idx_ticket_groups_account_id" ON "public"."ticket_groups" USING "btree" ("account_id");
 
 
 
@@ -1502,6 +1541,11 @@ ALTER TABLE ONLY "public"."channel_integrations"
 
 
 ALTER TABLE ONLY "public"."classification_feedback"
+    ADD CONSTRAINT "classification_feedback_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."classification_feedback"
     ADD CONSTRAINT "classification_feedback_corrected_by_fkey" FOREIGN KEY ("corrected_by") REFERENCES "auth"."users"("id");
 
 
@@ -1547,6 +1591,11 @@ ALTER TABLE ONLY "public"."csat_events"
 
 
 ALTER TABLE ONLY "public"."escalation_contacts"
+    ADD CONSTRAINT "escalation_contacts_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."escalation_contacts"
     ADD CONSTRAINT "escalation_contacts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
@@ -1587,6 +1636,11 @@ ALTER TABLE ONLY "public"."kb_articles"
 
 
 ALTER TABLE ONLY "public"."llm_calls"
+    ADD CONSTRAINT "llm_calls_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."llm_calls"
     ADD CONSTRAINT "llm_calls_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE SET NULL;
 
 
@@ -1613,6 +1667,11 @@ ALTER TABLE ONLY "public"."messages"
 
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."response_templates"
+    ADD CONSTRAINT "response_templates_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
 
 
@@ -1668,6 +1727,11 @@ ALTER TABLE ONLY "public"."ticket_followers"
 
 ALTER TABLE ONLY "public"."ticket_followers"
     ADD CONSTRAINT "ticket_followers_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ticket_groups"
+    ADD CONSTRAINT "ticket_groups_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
 
 
@@ -1746,11 +1810,6 @@ ALTER TABLE ONLY "public"."tickets"
 
 
 
-ALTER TABLE ONLY "public"."user_roles"
-    ADD CONSTRAINT "user_roles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
 CREATE POLICY "Account admins can manage members" ON "public"."account_members" USING ("public"."is_account_admin"("account_id"));
 
 
@@ -1785,41 +1844,11 @@ CREATE POLICY "Invitations can be viewed by the invited user" ON "public"."accou
 
 
 
+CREATE POLICY "Members can view teammates" ON "public"."account_members" FOR SELECT USING ("public"."has_account_access"("account_id"));
+
+
+
 CREATE POLICY "Members can view their own account memberships" ON "public"."account_members" FOR SELECT USING (("user_id" = "auth"."uid"()));
-
-
-
-CREATE POLICY "Users CRUD own csat_events" ON "public"."csat_events" USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users CRUD own escalation_contacts" ON "public"."escalation_contacts" USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users CRUD own escalations" ON "public"."escalations" USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can delete own follows" ON "public"."ticket_followers" FOR DELETE USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can delete own templates" ON "public"."response_templates" FOR DELETE USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can delete own ticket tags" ON "public"."ticket_tags" FOR DELETE USING ((EXISTS ( SELECT 1
-   FROM "public"."tickets" "t"
-  WHERE (("t"."id" = "ticket_tags"."ticket_id") AND ("t"."user_id" = "auth"."uid"())))));
-
-
-
-CREATE POLICY "Users can insert own classification feedback" ON "public"."classification_feedback" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can insert own follows" ON "public"."ticket_followers" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
 
 
 
@@ -1827,89 +1856,11 @@ CREATE POLICY "Users can insert own profile" ON "public"."profiles" FOR INSERT W
 
 
 
-CREATE POLICY "Users can insert own templates" ON "public"."response_templates" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can insert own ticket events" ON "public"."ticket_events" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
-   FROM "public"."tickets" "t"
-  WHERE (("t"."id" = "ticket_events"."ticket_id") AND ("t"."user_id" = "auth"."uid"())))));
-
-
-
-CREATE POLICY "Users can insert own ticket proposals" ON "public"."ticket_proposals" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
-   FROM "public"."conversations" "c"
-  WHERE (("c"."id" = "ticket_proposals"."conversation_id") AND ("c"."user_id" = "auth"."uid"())))));
-
-
-
-CREATE POLICY "Users can insert own ticket tags" ON "public"."ticket_tags" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
-   FROM "public"."tickets" "t"
-  WHERE (("t"."id" = "ticket_tags"."ticket_id") AND ("t"."user_id" = "auth"."uid"())))));
-
-
-
-CREATE POLICY "Users can insert own ticket_messages" ON "public"."ticket_messages" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
-   FROM "public"."tickets" "t"
-  WHERE (("t"."id" = "ticket_messages"."ticket_id") AND ("t"."user_id" = "auth"."uid"())))));
-
-
-
 CREATE POLICY "Users can update own profile" ON "public"."profiles" FOR UPDATE USING (("auth"."uid"() = "id"));
 
 
 
-CREATE POLICY "Users can update own templates" ON "public"."response_templates" FOR UPDATE USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can update own ticket proposals" ON "public"."ticket_proposals" FOR UPDATE USING ((EXISTS ( SELECT 1
-   FROM "public"."conversations" "c"
-  WHERE (("c"."id" = "ticket_proposals"."conversation_id") AND ("c"."user_id" = "auth"."uid"())))));
-
-
-
-CREATE POLICY "Users can view own classification feedback" ON "public"."classification_feedback" FOR SELECT USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can view own follows" ON "public"."ticket_followers" FOR SELECT USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can view own llm calls" ON "public"."llm_calls" FOR SELECT USING (("auth"."uid"() = "user_id"));
-
-
-
 CREATE POLICY "Users can view own profile" ON "public"."profiles" FOR SELECT USING (("auth"."uid"() = "id"));
-
-
-
-CREATE POLICY "Users can view own templates" ON "public"."response_templates" FOR SELECT USING (("auth"."uid"() = "user_id"));
-
-
-
-CREATE POLICY "Users can view own ticket events" ON "public"."ticket_events" FOR SELECT USING ((EXISTS ( SELECT 1
-   FROM "public"."tickets" "t"
-  WHERE (("t"."id" = "ticket_events"."ticket_id") AND ("t"."user_id" = "auth"."uid"())))));
-
-
-
-CREATE POLICY "Users can view own ticket proposals" ON "public"."ticket_proposals" FOR SELECT USING ((EXISTS ( SELECT 1
-   FROM "public"."conversations" "c"
-  WHERE (("c"."id" = "ticket_proposals"."conversation_id") AND ("c"."user_id" = "auth"."uid"())))));
-
-
-
-CREATE POLICY "Users can view own ticket tags" ON "public"."ticket_tags" FOR SELECT USING ((EXISTS ( SELECT 1
-   FROM "public"."tickets" "t"
-  WHERE (("t"."id" = "ticket_tags"."ticket_id") AND ("t"."user_id" = "auth"."uid"())))));
-
-
-
-CREATE POLICY "Users can view own ticket_messages" ON "public"."ticket_messages" FOR SELECT USING ((EXISTS ( SELECT 1
-   FROM "public"."tickets" "t"
-  WHERE (("t"."id" = "ticket_messages"."ticket_id") AND ("t"."user_id" = "auth"."uid"())))));
 
 
 
@@ -1954,6 +1905,10 @@ CREATE POLICY "channel_integrations_access_by_account" ON "public"."channel_inte
 ALTER TABLE "public"."classification_feedback" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "classification_feedback_access_by_account" ON "public"."classification_feedback" USING (("account_id" = "public"."current_account_id"()));
+
+
+
 ALTER TABLE "public"."clients" ENABLE ROW LEVEL SECURITY;
 
 
@@ -1971,10 +1926,26 @@ CREATE POLICY "conversations_access_by_account" ON "public"."conversations" USIN
 ALTER TABLE "public"."csat_events" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "csat_events_access_by_account" ON "public"."csat_events" USING ((EXISTS ( SELECT 1
+   FROM "public"."tickets" "t"
+  WHERE (("t"."id" = "csat_events"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
+
+
+
 ALTER TABLE "public"."escalation_contacts" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "escalation_contacts_access_by_account" ON "public"."escalation_contacts" USING (("account_id" = "public"."current_account_id"()));
+
+
+
 ALTER TABLE "public"."escalations" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "escalations_access_by_account" ON "public"."escalations" USING ((EXISTS ( SELECT 1
+   FROM "public"."tickets" "t"
+  WHERE (("t"."id" = "escalations"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
+
 
 
 ALTER TABLE "public"."gmail_accounts" ENABLE ROW LEVEL SECURITY;
@@ -1994,6 +1965,10 @@ CREATE POLICY "kb_articles_access_by_account" ON "public"."kb_articles" USING ((
 ALTER TABLE "public"."llm_calls" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "llm_calls_access_by_account" ON "public"."llm_calls" USING (("account_id" = "public"."current_account_id"()));
+
+
+
 ALTER TABLE "public"."messages" ENABLE ROW LEVEL SECURITY;
 
 
@@ -2005,6 +1980,10 @@ ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."response_templates" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "response_templates_access_by_account" ON "public"."response_templates" USING (("account_id" = "public"."current_account_id"()));
+
 
 
 CREATE POLICY "superadmin_audit_log_manage" ON "public"."admin_audit_log" USING (("auth"."uid"() IN ( SELECT "admin_users"."auth_uid"
@@ -2021,10 +2000,6 @@ ALTER TABLE "public"."support_schedules" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "support_schedules_access_by_account" ON "public"."support_schedules" USING (("account_id" = "public"."current_account_id"()));
-
-
-
-CREATE POLICY "tenant_owns_groups" ON "public"."ticket_groups" USING (("user_id" = "auth"."uid"())) WITH CHECK (("user_id" = "auth"."uid"()));
 
 
 
@@ -2045,32 +2020,59 @@ CREATE POLICY "tenant_sla_rules_access_by_account" ON "public"."tenant_sla_rules
 ALTER TABLE "public"."ticket_events" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "ticket_events_access_by_account" ON "public"."ticket_events" USING ((EXISTS ( SELECT 1
+   FROM "public"."tickets" "t"
+  WHERE (("t"."id" = "ticket_events"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
+
+
+
 ALTER TABLE "public"."ticket_followers" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_followers_access_by_account" ON "public"."ticket_followers" USING ((EXISTS ( SELECT 1
+   FROM "public"."tickets" "t"
+  WHERE (("t"."id" = "ticket_followers"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
+
 
 
 ALTER TABLE "public"."ticket_groups" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "ticket_groups_access_by_account" ON "public"."ticket_groups" USING (("account_id" = "public"."current_account_id"()));
+
+
+
 ALTER TABLE "public"."ticket_messages" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_messages_access_by_account" ON "public"."ticket_messages" USING ((EXISTS ( SELECT 1
+   FROM "public"."tickets" "t"
+  WHERE (("t"."id" = "ticket_messages"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
+
 
 
 ALTER TABLE "public"."ticket_proposals" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "ticket_proposals_access_by_account" ON "public"."ticket_proposals" USING ((EXISTS ( SELECT 1
+   FROM "public"."tickets" "t"
+  WHERE (("t"."id" = "ticket_proposals"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
+
+
+
 ALTER TABLE "public"."ticket_tags" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_tags_access_by_account" ON "public"."ticket_tags" USING ((EXISTS ( SELECT 1
+   FROM "public"."tickets" "t"
+  WHERE (("t"."id" = "ticket_tags"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
+
 
 
 ALTER TABLE "public"."tickets" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "tickets_access_by_account" ON "public"."tickets" USING (("account_id" = "public"."current_account_id"()));
-
-
-
-ALTER TABLE "public"."user_roles" ENABLE ROW LEVEL SECURITY;
-
-
-CREATE POLICY "users can read own role" ON "public"."user_roles" FOR SELECT USING (("auth"."uid"() = "user_id"));
 
 
 
@@ -2336,12 +2338,6 @@ GRANT ALL ON TABLE "public"."tickets" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."user_roles" TO "anon";
-GRANT ALL ON TABLE "public"."user_roles" TO "authenticated";
-GRANT ALL ON TABLE "public"."user_roles" TO "service_role";
 
 
 
