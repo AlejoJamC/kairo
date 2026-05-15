@@ -8,7 +8,7 @@ export interface UserProfile {
   email: string;
   name: string;
   company_name?: string;
-  gmail_connected: boolean;
+  // gmail_connected removed in KAI-173 — use support_channels presence instead
 }
 
 export type DashboardRole = 'owner' | 'admin' | 'supervisor' | 'agent';
@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const [profileResult, memberResult] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, email, name, company_name, gmail_connected")
+          .select("id, email, name, company_name")
           .eq("id", userId)
           .single(),
         // Fetch active membership — first account by joined_at (matches current_account_id() fallback).

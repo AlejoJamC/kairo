@@ -22,7 +22,6 @@ export type Database = {
           email: string;
           name: string | null;
           company_name: string | null;
-          gmail_connected: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -31,7 +30,6 @@ export type Database = {
           email: string;
           name?: string | null;
           company_name?: string | null;
-          gmail_connected?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -39,7 +37,6 @@ export type Database = {
           email?: string;
           name?: string | null;
           company_name?: string | null;
-          gmail_connected?: boolean;
           updated_at?: string;
         };
         Relationships: [];
@@ -300,6 +297,42 @@ export type Database = {
           role?:      string;
           status?:    string;
           joined_at?: string | null;
+        };
+        Relationships: [];
+      };
+
+      support_channels: {
+        Row: {
+          id:            string;
+          account_id:    string;
+          channel_type:  string;
+          email_address: string;
+          display_name:  string | null;
+          is_primary:    boolean;
+          oauth_tokens:  Record<string, string | null> | null;
+          connected_by:  string | null;
+          connected_at:  string | null;
+          is_active:     boolean;
+          created_at:    string;
+        };
+        Insert: {
+          id?:            string;
+          account_id:     string;
+          channel_type:   string;
+          email_address:  string;
+          display_name?:  string | null;
+          is_primary?:    boolean;
+          oauth_tokens?:  Record<string, string | null> | null;
+          connected_by?:  string | null;
+          connected_at?:  string | null;
+          is_active?:     boolean;
+          created_at?:    string;
+        };
+        Update: {
+          display_name?:  string | null;
+          is_primary?:    boolean;
+          oauth_tokens?:  Record<string, string | null> | null;
+          is_active?:     boolean;
         };
         Relationships: [];
       };

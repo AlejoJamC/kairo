@@ -7,7 +7,6 @@ export type Database = {
           email: string;
           name: string | null;
           company_name: string | null;
-          gmail_connected: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -16,12 +15,10 @@ export type Database = {
           email: string;
           name?: string | null;
           company_name?: string | null;
-          gmail_connected?: boolean;
         };
         Update: {
           name?: string | null;
           company_name?: string | null;
-          gmail_connected?: boolean;
         };
         Relationships: [];
       };

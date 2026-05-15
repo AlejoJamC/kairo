@@ -7,6 +7,7 @@ import { ClientDirectory } from "@/components/client-directory";
 import { ProfileSettings } from "@/components/profile-settings";
 import { ChangePasswordSettings } from "@/components/change-password-settings";
 import { AwaitingCustomerView } from "@/components/awaiting-customer-view";
+import { ChannelsSettings } from "@/components/channels-settings";
 import type { AppView } from "@/types";
 
 const COMING_SOON_VIEWS: AppView[] = ["panel", "auto-resolved", "guided", "escalated"];
@@ -69,6 +70,7 @@ function AppContent() {
     if (activeView === "awaiting") return <AwaitingCustomerView onViewChange={setActiveView} />;
     if (activeView === "settings") return <ProfileSettings onViewChange={setActiveView} />;
     if (activeView === "change-password") return <ChangePasswordSettings onViewChange={setActiveView} />;
+    if (activeView === "channels") return <ChannelsSettings onViewChange={setActiveView} />;
     if (activeView === "clients") return <ClientDirectory />;
     if (COMING_SOON_VIEWS.includes(activeView)) return <ComingSoon view={activeView} />;
     return <Inbox />;

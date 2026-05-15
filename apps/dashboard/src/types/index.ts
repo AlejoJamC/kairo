@@ -70,7 +70,8 @@ export type AppView =
   | "escalated"
   | "clients"
   | "settings"
-  | "change-password";
+  | "change-password"
+  | "channels";
 
 export type PlanType = "Enterprise" | "Pro" | "Starter";
 export type SlaLevel = "Critical" | "High" | "Standard";
