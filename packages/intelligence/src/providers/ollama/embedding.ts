@@ -1,12 +1,14 @@
 import type { EmbeddingProvider } from '../base';
 
 export class OllamaEmbeddingProvider implements EmbeddingProvider {
-  public readonly model = 'nomic-embed-text';
-  public readonly dimensions = 384;
+  public readonly model: string;
+  public readonly dimensions: number;
   private baseUrl: string;
 
-  constructor(baseUrl: string = 'http://localhost:11434') {
+  constructor(baseUrl: string = 'http://localhost:11434', model: string = 'nomic-embed-text', dimensions: number = 384) {
     this.baseUrl = baseUrl;
+    this.model = model;
+    this.dimensions = dimensions;
   }
 
   async embed(text: string): Promise<number[]> {

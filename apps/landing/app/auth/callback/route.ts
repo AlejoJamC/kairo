@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { env } from "@/env";
+import { dispatchOnboardingClassification } from "@/lib/inngest";
 
 // ---------------------------------------------------------------------------
 // GET /auth/callback
@@ -113,6 +114,21 @@ export async function GET(request: Request) {
         is_primary:    true,
         is_active:     true,
       }, { onConflict: "account_id,email_address" });
+    }
+
+    // ── KAI-202: trigger AI classification pipeline ────────────────────────
+    // Fire-and-forget semantically — dispatch errors must not break OAuth.
+    // The helper itself swallows and logs errors; we still wrap in case the
+    // function reference itself somehow throws synchronously.
+    try {
+      await dispatchOnboardingClassification({
+        userId: user.id,
+        accountId: accountId ?? null,
+        gmailAccessToken: session.provider_token,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[KAI-202] dispatch wrapper threw: ${msg}`);
     }
   }
 

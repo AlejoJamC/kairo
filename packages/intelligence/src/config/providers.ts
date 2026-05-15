@@ -9,12 +9,15 @@ import { OLLAMA_DEFAULT_BASE_URL } from './constants';
 const CompletionConfigSchema = z.object({
   completionMode: z.enum(['ollama', 'anthropic']).default('ollama'),
   ollamaBaseUrl: z.string().url().optional(),
+  ollamaModel: z.string().optional(),
   anthropicApiKey: z.string().optional(),
 });
 
 const EmbeddingConfigSchema = z.object({
   embeddingMode: z.enum(['ollama', 'voyage']).default('ollama'),
   ollamaBaseUrl: z.string().url().optional(),
+  ollamaModel: z.string().optional(),
+  ollamaDimensions: z.coerce.number().optional(),
   voyageApiKey: z.string().optional(),
 });
 
@@ -22,6 +25,7 @@ export function createCompletionProvider(): CompletionProvider {
   const config = CompletionConfigSchema.parse({
     completionMode: process.env['INTELLIGENCE_PROVIDER'] ?? 'ollama',
     ollamaBaseUrl: process.env['OLLAMA_BASE_URL'],
+    ollamaModel: process.env['OLLAMA_MODEL'],
     anthropicApiKey: process.env['ANTHROPIC_API_KEY'],
   });
 
@@ -35,7 +39,8 @@ export function createCompletionProvider(): CompletionProvider {
     case 'ollama':
     default:
       return new OllamaCompletionProvider(
-        config.ollamaBaseUrl ?? OLLAMA_DEFAULT_BASE_URL
+        config.ollamaBaseUrl ?? OLLAMA_DEFAULT_BASE_URL,
+        config.ollamaModel ?? 'llama3.2'
       );
   }
 }
@@ -44,6 +49,8 @@ export function createEmbeddingProvider(): EmbeddingProvider {
   const config = EmbeddingConfigSchema.parse({
     embeddingMode: process.env['EMBEDDING_PROVIDER'] ?? 'ollama',
     ollamaBaseUrl: process.env['OLLAMA_BASE_URL'],
+    ollamaModel: process.env['OLLAMA_EMBEDDING_MODEL'],
+    ollamaDimensions: process.env['OLLAMA_EMBEDDING_DIMENSIONS'],
     voyageApiKey: process.env['VOYAGE_API_KEY'],
   });
 
@@ -57,7 +64,9 @@ export function createEmbeddingProvider(): EmbeddingProvider {
     case 'ollama':
     default:
       return new OllamaEmbeddingProvider(
-        config.ollamaBaseUrl ?? OLLAMA_DEFAULT_BASE_URL
+        config.ollamaBaseUrl ?? OLLAMA_DEFAULT_BASE_URL,
+        config.ollamaModel ?? 'nomic-embed-text',
+        config.ollamaDimensions ?? 384
       );
   }
 }
