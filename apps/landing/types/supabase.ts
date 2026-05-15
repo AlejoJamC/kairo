@@ -49,6 +49,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          account_id: string;
           email: string;
           access_token: string | null;
           refresh_token: string | null;
@@ -59,6 +60,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          account_id: string;
           email: string;
           access_token?: string | null;
           refresh_token?: string | null;
@@ -67,6 +69,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          account_id?: string;
           email?: string;
           access_token?: string | null;
           refresh_token?: string | null;

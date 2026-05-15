@@ -88,56 +88,40 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   // ── Save Gmail OAuth tokens (gmail_accounts + support_channels) ─────────
-  if (session.provider_token && user.email && membership?.account_id) {
-    const accountId = membership.account_id;
+  if (session.provider_token && user.email) {
+    const accountId = membership?.account_id ?? null;
 
-    // Upsert to gmail_accounts: if user+email already exists, update tokens
-    await supabase.from("gmail_accounts").upsert(
-      {
+    if (accountId) {
+      await supabase.from("gmail_accounts").upsert({
         user_id:       user.id,
-        email:         user.email,
         account_id:    accountId,
+        email:         user.email,
         access_token:  session.provider_token,
         refresh_token: session.provider_refresh_token ?? null,
         expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
-      } as any,
-      { onConflict: "user_id,email" }
-    );
+      }, { onConflict: "user_id,email" });
 
-    // KAI-173: also register the channel in support_channels
-    await supabase.from("support_channels").upsert({
-      account_id:    accountId,
-      channel_type:  "gmail",
-      email_address: user.email,
-      oauth_tokens:  {
-        access_token:  session.provider_token,
-        refresh_token: session.provider_refresh_token ?? null,
-        expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
-      },
-      connected_by:  user.id,
-      is_primary:    true,
-      is_active:     true,
-    }, { onConflict: "account_id,email_address" });
+      // KAI-173: also register the channel in support_channels
+      await supabase.from("support_channels").upsert({
+        account_id:    accountId,
+        channel_type:  "gmail",
+        email_address: user.email,
+        oauth_tokens:  {
+          access_token:  session.provider_token,
+          refresh_token: session.provider_refresh_token ?? null,
+          expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
+        },
+        connected_by:  user.id,
+        is_primary:    true,
+        is_active:     true,
+      }, { onConflict: "account_id,email_address" });
+    }
 
     // ── KAI-202: trigger AI classification pipeline ────────────────────────
     try {
       await dispatchOnboardingClassification({
         userId: user.id,
         accountId,
-        gmailAccessToken: session.provider_token,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[KAI-202] dispatch wrapper threw: ${msg}`);
-    }
-  }
-
-  // Still dispatch for new users (no account yet)
-  if (session.provider_token && user.email && !membership?.account_id) {
-    try {
-      await dispatchOnboardingClassification({
-        userId: user.id,
-        accountId: null,
         gmailAccessToken: session.provider_token,
       });
     } catch (err) {
