@@ -16,6 +16,7 @@ import { sidebar } from "./routes/v1/sidebar.js";
 import { intelligence } from "./routes/v1/intelligence.js";
 import { supportSchedule } from "./routes/v1/support-schedule.js";
 import { kbArticles } from "./routes/v1/kb-articles.js";
+import { invitations } from "./routes/v1/invitations.js";
 
 const app = new Hono({ strict: false });
 
@@ -30,6 +31,7 @@ v1.route("/sidebar", sidebar);
 v1.route("/intelligence", intelligence);
 v1.route("/support-schedule", supportSchedule);
 v1.route("/kb-articles", kbArticles);
+v1.route("/invitations", invitations);
 
 app.route("/api/v1", v1);
 

@@ -249,6 +249,89 @@ export type Database = {
       };
 
       // ------------------------------------------------------------------
+      // accounts + account_members + account_invitations (KAI-169)
+      // ------------------------------------------------------------------
+      accounts: {
+        Row: {
+          id:         string;
+          name:       string;
+          slug:       string;
+          plan_type:  string | null;
+          seat_limit: number;
+          created_at: string;
+        };
+        Insert: {
+          id?:        string;
+          name:       string;
+          slug:       string;
+          plan_type?: string | null;
+          seat_limit?: number;
+          created_at?: string;
+        };
+        Update: {
+          name?:       string;
+          slug?:       string;
+          plan_type?:  string | null;
+          seat_limit?: number;
+        };
+        Relationships: [];
+      };
+
+      account_members: {
+        Row: {
+          id:         string;
+          account_id: string;
+          user_id:    string;
+          role:       string;
+          status:     string;
+          invited_at: string | null;
+          joined_at:  string | null;
+        };
+        Insert: {
+          id?:         string;
+          account_id:  string;
+          user_id:     string;
+          role:        string;
+          status?:     string;
+          invited_at?: string | null;
+          joined_at?:  string | null;
+        };
+        Update: {
+          role?:      string;
+          status?:    string;
+          joined_at?: string | null;
+        };
+        Relationships: [];
+      };
+
+      account_invitations: {
+        Row: {
+          id:         string;
+          account_id: string;
+          email:      string;
+          role:       string;
+          token:      string;
+          expires_at: string;
+          invited_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?:         string;
+          account_id:  string;
+          email:       string;
+          role:        string;
+          token?:      string;
+          expires_at:  string;
+          invited_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          expires_at?: string;
+        };
+        Relationships: [];
+      };
+
+      // ------------------------------------------------------------------
       // channel_integrations (003_kairo_core_schema)
       // ------------------------------------------------------------------
       channel_integrations: {
@@ -601,7 +684,20 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      // KAI-171: public invitation lookup via SECURITY DEFINER function
+      get_invitation_by_token: {
+        Args: { p_token: string };
+        Returns: Array<{
+          id:           string;
+          account_id:   string;
+          account_name: string;
+          email:        string;
+          role:         string;
+          expires_at:   string;
+        }>;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
