@@ -74,11 +74,10 @@ export function useClassificationProgress(): UseClassificationProgressResult {
         setData(json);
         setError(null);
 
-        // Stop polling once the wizard has enough data to let the user continue.
-        // Background tiers (tier2/tier3) keep running on the server — we just
-        // don't need to keep polling once threshold_reached fires, otherwise
-        // the user waits for the full inngest pipeline to finish.
-        if (json.status === "complete" || json.status === "failed" || json.threshold_reached) {
+        // Stop polling only on terminal status. threshold_reached only enables
+        // the Continue button (handled by the consumer) — the scan view must
+        // keep updating until the pipeline truly finishes.
+        if (json.status === "complete" || json.status === "failed") {
           stoppedRef.current = true;
           clearTimeout(timeoutRef.current!);
           return;

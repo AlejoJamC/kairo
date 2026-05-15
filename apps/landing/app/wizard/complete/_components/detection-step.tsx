@@ -80,10 +80,12 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
   const dt = t.wizard.detect;
   const { data, error, retry } = useClassificationProgress();
 
-  // Once threshold_reached fires the wizard stops polling, so we treat that
-  // state as "scan done from the user's perspective" — the indicator hides and
-  // the Continue button becomes the only action. Background tiers keep running.
-  const isStillScanning = data?.status === "in_progress" && !data?.threshold_reached;
+  // Two independent signals:
+  //  - isStillScanning controls the live "scanning…" indicator + spinner. It
+  //    stays true until the pipeline truly finishes (status === "complete").
+  //  - canContinue controls whether the Continue button is enabled. It fires
+  //    as soon as threshold_reached is true, while the scan keeps running.
+  const isStillScanning = data?.status === "in_progress";
   const canContinue = data?.threshold_reached || data?.status === "complete" || !!error;
 
   const categoryLabels: Record<string, string> = {
