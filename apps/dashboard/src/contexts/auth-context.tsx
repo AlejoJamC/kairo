@@ -17,6 +17,7 @@ interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   userRole: DashboardRole | null;
+  accountId: string | null;   // active account — send as x-account-id header to API
   isAdmin: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -50,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [userRole, setUserRole] = useState<DashboardRole | null>(null);
+  const [accountId, setAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const isAdmin = userRole === 'owner' || userRole === 'admin' || userRole === 'supervisor';
@@ -128,23 +130,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchProfile = async (userId: string) => {
     try {
       const supabase = createClient();
-      const [profileResult, roleResult] = await Promise.all([
+      const [profileResult, memberResult] = await Promise.all([
         supabase
           .from("profiles")
           .select("id, email, name, company_name, gmail_connected")
           .eq("id", userId)
           .single(),
+        // Fetch active membership — first account by joined_at (matches current_account_id() fallback).
+        // When multi-account context switching is implemented, update this to respect
+        // the user's last-selected account (e.g. from localStorage or JWT claim).
         supabase
-          .from("user_roles")
-          .select("role")
+          .from("account_members")
+          .select("role, account_id")
           .eq("user_id", userId)
+          .eq("status", "active")
+          .order("joined_at", { ascending: true })
+          .limit(1)
           .maybeSingle(),
       ]);
 
       if (!profileResult.error && profileResult.data) {
         setProfile(profileResult.data as UserProfile);
       }
-      setUserRole((roleResult.data?.role as DashboardRole) ?? null);
+      setUserRole((memberResult.data?.role as DashboardRole) ?? null);
+      setAccountId(memberResult.data?.account_id ?? null);
     } finally {
       setLoading(false);
     }
@@ -161,12 +170,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+    setAccountId(null);
     window.location.href = getLandingUrl("/");
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, userRole, isAdmin, loading, signOut, refreshProfile }}
+      value={{ user, profile, userRole, accountId, isAdmin, loading, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
