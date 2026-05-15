@@ -179,3 +179,6 @@ kairo-internal/*
 
 # Tamagui generated cache (produced by vite-plugin and babel-plugin at build time)
 **/.tamagui/
+
+# Supabase CLI local branch state — auto-generated, never commit
+supabase/.branches

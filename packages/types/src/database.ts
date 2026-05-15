@@ -354,6 +354,7 @@ export type Database = {
       }
       classification_feedback: {
         Row: {
+          account_id: string | null
           ai_category: string | null
           ai_confidence: number | null
           ai_model_version: string | null
@@ -372,6 +373,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           ai_category?: string | null
           ai_confidence?: number | null
           ai_model_version?: string | null
@@ -390,6 +392,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           ai_category?: string | null
           ai_confidence?: number | null
           ai_model_version?: string | null
@@ -408,6 +411,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "classification_feedback_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "classification_feedback_ticket_id_fkey"
             columns: ["ticket_id"]
@@ -567,6 +577,7 @@ export type Database = {
       }
       escalation_contacts: {
         Row: {
+          account_id: string | null
           channel: string
           created_at: string | null
           escalation_level: number
@@ -577,6 +588,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           channel?: string
           created_at?: string | null
           escalation_level?: number
@@ -587,6 +599,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           channel?: string
           created_at?: string | null
           escalation_level?: number
@@ -596,7 +609,15 @@ export type Database = {
           phone_number?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "escalation_contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       escalations: {
         Row: {
@@ -741,6 +762,7 @@ export type Database = {
       }
       llm_calls: {
         Row: {
+          account_id: string | null
           completion_tokens: number | null
           confidence_score: number | null
           created_at: string
@@ -761,6 +783,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          account_id?: string | null
           completion_tokens?: number | null
           confidence_score?: number | null
           created_at?: string
@@ -781,6 +804,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          account_id?: string | null
           completion_tokens?: number | null
           confidence_score?: number | null
           created_at?: string
@@ -801,6 +825,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "llm_calls_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "llm_calls_ticket_id_fkey"
             columns: ["ticket_id"]
@@ -933,6 +964,7 @@ export type Database = {
       }
       response_templates: {
         Row: {
+          account_id: string | null
           category: string | null
           content: string
           created_at: string
@@ -944,6 +976,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           category?: string | null
           content: string
           created_at?: string
@@ -955,6 +988,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_id?: string | null
           category?: string | null
           content?: string
           created_at?: string
@@ -965,7 +999,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "response_templates_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_schedules: {
         Row: {
@@ -1153,24 +1195,35 @@ export type Database = {
       }
       ticket_groups: {
         Row: {
+          account_id: string | null
           created_at: string
           id: string
           name: string
           user_id: string
         }
         Insert: {
+          account_id?: string | null
           created_at?: string
           id?: string
           name: string
           user_id: string
         }
         Update: {
+          account_id?: string | null
           created_at?: string
           id?: string
           name?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ticket_groups_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ticket_messages: {
         Row: {
@@ -1517,32 +1570,12 @@ export type Database = {
           },
         ]
       }
-      user_roles: {
-        Row: {
-          created_at: string | null
-          id: string
-          role: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          role: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          role?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      current_account_id: { Args: never; Returns: string }
       find_relevant_kb: {
         Args: { p_limit?: number; p_query_embedding: string; p_user_id: string }
         Returns: {

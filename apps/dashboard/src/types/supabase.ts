@@ -50,21 +50,29 @@ export type Database = {
         };
         Relationships: [];
       };
-      user_roles: {
+      account_members: {
         Row: {
           id: string;
+          account_id: string;
           user_id: string;
           role: string;
-          created_at: string | null;
+          status: string;
+          invited_at: string | null;
+          joined_at: string | null;
         };
         Insert: {
           id?: string;
+          account_id: string;
           user_id: string;
           role: string;
-          created_at?: string | null;
+          status?: string;
+          invited_at?: string | null;
+          joined_at?: string | null;
         };
         Update: {
           role?: string;
+          status?: string;
+          joined_at?: string | null;
         };
         Relationships: [];
       };
