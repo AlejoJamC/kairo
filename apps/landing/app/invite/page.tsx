@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { getDashboardUrl } from '@/lib/api-config';
@@ -29,7 +29,8 @@ const ROLE_LABELS: Record<string, string> = {
   agent:      'Agent',
 };
 
-export default function InvitePage() {
+// useSearchParams() requires a Suspense boundary during static build (Next.js App Router).
+function InvitePageInner() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
 
@@ -244,5 +245,19 @@ export default function InvitePage() {
         Invitation expires {new Date(invitation.expires_at).toLocaleDateString()}.
       </p>
     </Wrapper>
+  );
+}
+
+export default function InvitePage() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb' }}>
+        <div style={{ width: '100%', maxWidth: 440, background: 'white', borderRadius: 12, padding: '40px 36px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <p style={{ color: '#6b7280', fontSize: 14 }}>Loading invitation…</p>
+        </div>
+      </div>
+    }>
+      <InvitePageInner />
+    </Suspense>
   );
 }
