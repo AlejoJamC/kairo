@@ -142,7 +142,7 @@ function VirtualTicketList({
   });
 
   return (
-    <div ref={parentRef} className="flex-1 overflow-y-auto">
+    <div ref={parentRef} className="flex-1 overflow-y-auto" style={{ minHeight: 0, paddingBottom: 8 }}>
       <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
           const ticket = tickets[virtualRow.index];
@@ -536,7 +536,7 @@ export function TicketList() {
 
       {/* Skeleton while scanning with no tickets */}
       {isScanning && tickets.length === 0 ? (
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: 8 }}>
           {Array.from({ length: 6 }).map((_, i) => (
             <TicketSkeleton key={i} />
           ))}
@@ -561,7 +561,7 @@ export function TicketList() {
           onSelect={selectTicket}
         />
       ) : (
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: 8 }}>
           {filtered.map((ticket) => (
             <TicketCard
               key={ticket.id}

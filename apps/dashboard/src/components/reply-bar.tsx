@@ -68,6 +68,8 @@ export function ReplyBar() {
   const [sendSuccess, setSendSuccess] = React.useState(false);
   const [showAiBanner, setShowAiBanner] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState<TicketAction | null>(null);
+  const [textareaHeight, setTextareaHeight] = React.useState(80);
+  const dragRef = React.useRef<{ startY: number; startHeight: number } | null>(null);
 
   React.useEffect(() => {
     if (!aiSuggestedReply?.trim()) return;
@@ -158,6 +160,23 @@ export function ReplyBar() {
     }
   }
 
+  function handleDragStart(e: React.MouseEvent) {
+    e.preventDefault();
+    dragRef.current = { startY: e.clientY, startHeight: textareaHeight };
+    function onMove(ev: MouseEvent) {
+      if (!dragRef.current) return;
+      const delta = dragRef.current.startY - ev.clientY;
+      setTextareaHeight(Math.min(300, Math.max(60, dragRef.current.startHeight + delta)));
+    }
+    function onUp() {
+      dragRef.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
   const canSend = !!draft.trim() && !!selectedTicketId && !sending;
 
   // Which action buttons to show based on current status
@@ -173,7 +192,7 @@ export function ReplyBar() {
         position: "relative",
         borderTop: "1px solid var(--k-border)",
         background: "white",
-        padding: "12px 16px 10px",
+        padding: "0 16px 10px",
         flexShrink: 0,
       }}
     >
@@ -188,6 +207,73 @@ export function ReplyBar() {
           background: "linear-gradient(180deg, var(--k-accent), #6E8BFF)",
         }}
       />
+
+      {/* Drag handle */}
+      <div
+        onMouseDown={handleDragStart}
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: "6px 0 4px",
+          cursor: "ns-resize",
+          userSelect: "none",
+        }}
+      >
+        <div
+          style={{
+            width: 32,
+            height: 4,
+            borderRadius: 999,
+            background: "var(--k-border)",
+            transition: "background 0.15s ease",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-text-tertiary)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--k-border)"; }}
+        />
+      </div>
+
+      {/* Tool buttons — above textarea */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+        <TemplatePicker onSelect={handleTemplateSelect}>
+          <button
+            type="button"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 11,
+              padding: "4px 9px",
+              border: "1px solid var(--k-border)",
+              borderRadius: 999,
+              color: "var(--k-text-secondary)",
+              background: "white",
+              cursor: "pointer",
+            }}
+          >
+            <Zap style={{ width: 11, height: 11 }} />
+            {t("ticketDetail.quickReply")}
+          </button>
+        </TemplatePicker>
+        <button
+          type="button"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            fontSize: 11,
+            padding: "4px 9px",
+            border: "1px solid var(--k-border)",
+            borderRadius: 999,
+            color: "var(--k-text-secondary)",
+            background: "white",
+            cursor: "pointer",
+          }}
+        >
+          <Paperclip style={{ width: 11, height: 11 }} />
+          {t("ticketDetail.attach")}
+        </button>
+      </div>
 
       {/* BORRADOR IA card */}
       {showAiBanner ? (
@@ -274,7 +360,6 @@ export function ReplyBar() {
 
           {/* Editable draft text */}
           <textarea
-            rows={4}
             value={draft}
             onChange={(e) => {
               setDraft(e.target.value);
@@ -284,7 +369,8 @@ export function ReplyBar() {
             onKeyDown={handleKeyDown}
             style={{
               width: "100%",
-              resize: "vertical",
+              height: textareaHeight,
+              resize: "none",
               border: "none",
               background: "transparent",
               padding: "10px 12px",
@@ -300,7 +386,6 @@ export function ReplyBar() {
       ) : (
         /* Standard composer textarea */
         <textarea
-          rows={3}
           placeholder={t("ticketDetail.replyPlaceholder")}
           value={draft}
           onChange={(e) => {
@@ -311,7 +396,8 @@ export function ReplyBar() {
           onKeyDown={handleKeyDown}
           style={{
             width: "100%",
-            resize: "vertical",
+            height: textareaHeight,
+            resize: "none",
             borderRadius: 8,
             border: "1px solid var(--k-border)",
             background: "var(--k-surface)",
@@ -366,57 +452,15 @@ export function ReplyBar() {
         </div>
       )}
 
-      {/* Bottom action row */}
+      {/* Send buttons row */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           gap: 8,
         }}
       >
-        {/* Secondary tools */}
-        <div style={{ display: "flex", gap: 4 }}>
-          <TemplatePicker onSelect={handleTemplateSelect}>
-            <button
-              type="button"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                fontSize: 11,
-                padding: "4px 9px",
-                border: "1px solid var(--k-border)",
-                borderRadius: 999,
-                color: "var(--k-text-secondary)",
-                background: "white",
-                cursor: "pointer",
-              }}
-            >
-              <Zap style={{ width: 11, height: 11 }} />
-              {t("ticketDetail.quickReply")}
-            </button>
-          </TemplatePicker>
-          <button
-            type="button"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              fontSize: 11,
-              padding: "4px 9px",
-              border: "1px solid var(--k-border)",
-              borderRadius: 999,
-              color: "var(--k-text-secondary)",
-              background: "white",
-              cursor: "pointer",
-            }}
-          >
-            <Paperclip style={{ width: 11, height: 11 }} />
-            {t("ticketDetail.attach")}
-          </button>
-        </div>
-
         {/* Send CTA */}
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {/* Plain send (when reply doesn't auto-resolve) */}
