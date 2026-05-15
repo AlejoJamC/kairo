@@ -473,7 +473,7 @@ CREATE TABLE IF NOT EXISTS "public"."channel_integrations" (
     "last_synced_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "account_id" "uuid"
+    "account_id" "uuid" NOT NULL
 );
 
 
@@ -497,7 +497,7 @@ CREATE TABLE IF NOT EXISTS "public"."classification_feedback" (
     "correct_sentiment" "text",
     "notes" "text",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "account_id" "uuid",
+    "account_id" "uuid" NOT NULL,
     CONSTRAINT "chk_cf_category" CHECK ((("correct_category" IS NULL) OR ("correct_category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_cf_priority" CHECK ((("correct_priority" IS NULL) OR ("correct_priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
     CONSTRAINT "chk_cf_sentiment" CHECK ((("correct_sentiment" IS NULL) OR ("correct_sentiment" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
@@ -521,7 +521,7 @@ CREATE TABLE IF NOT EXISTS "public"."clients" (
     "sla_level" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "account_id" "uuid",
+    "account_id" "uuid" NOT NULL,
     CONSTRAINT "clients_plan_type_check" CHECK (("plan_type" = ANY (ARRAY['Enterprise'::"text", 'Pro'::"text", 'Starter'::"text"]))),
     CONSTRAINT "clients_sla_level_check" CHECK (("sla_level" = ANY (ARRAY['Critical'::"text", 'High'::"text", 'Standard'::"text"])))
 );
@@ -541,7 +541,7 @@ CREATE TABLE IF NOT EXISTS "public"."conversations" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "external_thread_id" "text",
-    "account_id" "uuid"
+    "account_id" "uuid" NOT NULL
 );
 
 
@@ -571,7 +571,7 @@ CREATE TABLE IF NOT EXISTS "public"."escalation_contacts" (
     "escalation_level" integer DEFAULT 2 NOT NULL,
     "is_active" boolean DEFAULT true,
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "account_id" "uuid",
+    "account_id" "uuid" NOT NULL,
     CONSTRAINT "escalation_contacts_channel_check" CHECK (("channel" = ANY (ARRAY['sms'::"text", 'whatsapp'::"text"])))
 );
 
@@ -606,7 +606,7 @@ CREATE TABLE IF NOT EXISTS "public"."gmail_accounts" (
     "expires_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "account_id" "uuid"
+    "account_id" "uuid" NOT NULL
 );
 
 
@@ -627,7 +627,7 @@ CREATE TABLE IF NOT EXISTS "public"."kb_articles" (
     "is_published" boolean DEFAULT true,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "account_id" "uuid"
+    "account_id" "uuid" NOT NULL
 );
 
 
@@ -682,7 +682,7 @@ CREATE TABLE IF NOT EXISTS "public"."messages" (
     "processing_tier" integer,
     "classified_at" timestamp with time zone,
     "processing_batch" "text",
-    "account_id" "uuid",
+    "account_id" "uuid" NOT NULL,
     CONSTRAINT "messages_classification_status_check" CHECK ((("classification_status" IS NULL) OR ("classification_status" = ANY (ARRAY['pending'::"text", 'classified'::"text", 'skipped'::"text", 'failed'::"text"]))))
 );
 
@@ -722,7 +722,7 @@ CREATE TABLE IF NOT EXISTS "public"."response_templates" (
     "is_active" boolean DEFAULT true NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "account_id" "uuid"
+    "account_id" "uuid" NOT NULL
 );
 
 
@@ -736,7 +736,7 @@ CREATE TABLE IF NOT EXISTS "public"."support_schedules" (
     "start_time" time without time zone NOT NULL,
     "end_time" time without time zone NOT NULL,
     "timezone" "text" DEFAULT 'America/Bogota'::"text" NOT NULL,
-    "account_id" "uuid",
+    "account_id" "uuid" NOT NULL,
     CONSTRAINT "support_schedules_day_of_week_check" CHECK ((("day_of_week" >= 0) AND ("day_of_week" <= 6)))
 );
 
@@ -752,7 +752,7 @@ CREATE TABLE IF NOT EXISTS "public"."tenant_priority_config" (
     "weight_emotion" numeric(3,2) DEFAULT 0.20 NOT NULL,
     "weight_age" numeric(3,2) DEFAULT 0.15 NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "account_id" "uuid",
+    "account_id" "uuid" NOT NULL,
     CONSTRAINT "chk_weights_sum" CHECK (("abs"((((("weight_type" + "weight_plan") + "weight_emotion") + "weight_age") - 1.00)) < 0.01))
 );
 
@@ -767,7 +767,7 @@ CREATE TABLE IF NOT EXISTS "public"."tenant_sla_rules" (
     "plan_tier" "text" NOT NULL,
     "response_hours" integer NOT NULL,
     "resolution_hours" integer,
-    "account_id" "uuid",
+    "account_id" "uuid" NOT NULL,
     CONSTRAINT "tenant_sla_rules_plan_tier_check" CHECK (("plan_tier" = ANY (ARRAY['enterprise'::"text", 'pro'::"text", 'starter'::"text", 'none'::"text"])))
 );
 
@@ -806,7 +806,7 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_groups" (
     "user_id" "uuid" NOT NULL,
     "name" "text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "account_id" "uuid"
+    "account_id" "uuid" NOT NULL
 );
 
 
@@ -912,7 +912,7 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "archived_at" timestamp with time zone,
     "auto_replied_out_of_hours" boolean DEFAULT false NOT NULL,
     "auto_replied_at" timestamp with time zone,
-    "account_id" "uuid",
+    "account_id" "uuid" NOT NULL,
     CONSTRAINT "chk_category" CHECK ((("category" IS NULL) OR ("category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_emotion" CHECK ((("emotion" IS NULL) OR ("emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_priority" CHECK ((("priority" IS NULL) OR ("priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
