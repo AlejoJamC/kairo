@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { env } from "@/env";
 import { dispatchOnboardingClassification } from "@/lib/inngest";
+import { getFlag } from "@kairo/feature-flags";
 
 // ---------------------------------------------------------------------------
 // GET /auth/callback
@@ -131,6 +132,9 @@ export async function GET(request: Request) {
   }
 
   if (membership) {
+    if (getFlag("enable_detection_ui")) {
+      return NextResponse.redirect(`${appUrl}/wizard/detect`);
+    }
     return NextResponse.redirect(`${appUrl}/auth/handoff`);
   }
 
