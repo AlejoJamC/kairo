@@ -54,6 +54,20 @@ export async function createClientForRequest(request: Request) {
   return createClient();
 }
 
+/**
+ * Service-role admin client — bypasses RLS.
+ * Use ONLY in server-side route handlers where elevated privileges are required
+ * (e.g., deleting a duplicate auth.user in the OAuth callback).
+ * Never call this from a client component or expose the result to the client.
+ */
+export function createAdminClient() {
+  return createBaseClient<Database>(
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+}
+
 export async function createClient() {
   const cookieStore = await cookies();
 

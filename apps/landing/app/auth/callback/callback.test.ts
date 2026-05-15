@@ -43,9 +43,12 @@ function resolveCallbackDestination(opts: {
   return "/wizard/complete";
 }
 
-// ── OAuth error detection ──────────────────────────────────────────────────
+// ── Duplicate detection (application-level, post-creation) ───────────────
+// Supabase has no native duplicate-email prevention toggle in the current
+// dashboard UI. Duplicates are detected by checking if another profile with
+// the same email already exists after exchangeCodeForSession.
 
-describe("detectOauthError", () => {
+describe("detectOauthError — kept for future Supabase error-param handling", () => {
   it("identifies duplicate email — 'already registered'", () => {
     expect(detectOauthError("User already registered")).toBe("duplicate_email");
   });
