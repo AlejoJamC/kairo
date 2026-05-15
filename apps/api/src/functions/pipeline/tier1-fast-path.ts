@@ -28,6 +28,12 @@ interface GmailListResponse {
   messages?: { id: string; threadId: string }[];
 }
 
+interface GmailMessagePart {
+  mimeType?: string;
+  body?: { data?: string; size?: number };
+  parts?: GmailMessagePart[];
+}
+
 interface GmailMessage {
   id: string;
   threadId: string;
@@ -36,24 +42,20 @@ interface GmailMessage {
   payload?: {
     headers?: GmailHeader[];
     mimeType?: string;
+    body?: { data?: string; size?: number };
+    parts?: GmailMessagePart[];
   };
 }
+
+// Cap body sent to the classifier — headers + body all fit comfortably in the
+// prompt budget and we don't want a runaway 100KB email blowing up the LLM call.
+const CLASSIFIER_BODY_MAX_CHARS = 2000;
 
 // ---------------------------------------------------------------------------
 // Gmail helpers
 // ---------------------------------------------------------------------------
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1";
-
-const METADATA_HEADERS = [
-  "From",
-  "Subject",
-  "Date",
-  "List-Unsubscribe",
-  "X-Auto-Response-Suppress",
-  "Precedence",
-  "In-Reply-To",
-];
 
 async function gmailGet<T>(token: string, path: string, params?: Record<string, string>): Promise<T> {
   const url = new URL(`${GMAIL_BASE}/${path}`);
@@ -82,13 +84,12 @@ async function fetchGmailMessages(token: string, maxResults: number): Promise<Gm
   const ids = list.messages ?? [];
   if (ids.length === 0) return [];
 
-  const metaParams = new URLSearchParams({ format: "metadata" });
-  for (const h of METADATA_HEADERS) metaParams.append("metadataHeaders", h);
-  const paramStr = metaParams.toString();
-
+  // format=full returns headers + MIME tree (so we can extract body_plain and
+  // body_html in the same round-trip). Quota cost is identical to format=metadata
+  // (5 units/call); only the payload size differs.
   const settled = await Promise.allSettled(
     ids.map(({ id }) =>
-      fetch(`${GMAIL_BASE}/users/me/messages/${id}?${paramStr}`, {
+      fetch(`${GMAIL_BASE}/users/me/messages/${id}?format=full`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then((r) => (r.ok ? (r.json() as Promise<GmailMessage>) : null))
     )
@@ -109,6 +110,48 @@ function headersToRecord(headers: GmailHeader[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const { name, value } of headers) out[name] = value;
   return out;
+}
+
+// Parses `From` header into display name + email address.
+//   "Alice <alice@example.com>"  → { from_name: "Alice", from_email: "alice@example.com" }
+//   "bob@example.com"            → { from_name: null,    from_email: "bob@example.com" }
+function parseFromHeader(from: string): { from_name: string | null; from_email: string } {
+  const match = from.match(/^\s*(.+?)\s*<(.+?)>\s*$/);
+  if (match) return { from_name: match[1].trim() || null, from_email: match[2].trim() };
+  return { from_name: null, from_email: from.trim() };
+}
+
+// Walks the MIME tree extracting decoded text/plain and text/html parts.
+// Gmail returns part data base64url-encoded; Buffer's "base64" decoder
+// accepts URL-safe variants on both Node and Bun.
+function extractBody(payload: GmailMessage["payload"]): {
+  body_plain: string;
+  body_html: string;
+} {
+  let body_plain = "";
+  let body_html = "";
+
+  const walk = (parts: GmailMessagePart[]): void => {
+    for (const part of parts) {
+      if (part.mimeType === "text/plain" && part.body?.data) {
+        body_plain += Buffer.from(part.body.data, "base64").toString("utf-8");
+      } else if (part.mimeType === "text/html" && part.body?.data) {
+        body_html += Buffer.from(part.body.data, "base64").toString("utf-8");
+      } else if (part.parts) {
+        walk(part.parts);
+      }
+    }
+  };
+
+  if (payload?.parts) {
+    walk(payload.parts);
+  } else if (payload?.body?.data) {
+    const decoded = Buffer.from(payload.body.data, "base64").toString("utf-8");
+    if (payload.mimeType === "text/html") body_html = decoded;
+    else body_plain = decoded;
+  }
+
+  return { body_plain, body_html };
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +240,14 @@ export const tier1FastPath = inngest.createFunction(
           userEmail,
         });
 
+        // Extract full email body from MIME tree and parse address headers
+        // once per message — fields are reused by both the skip and relevant
+        // branches (message persistence + classifier + DB inserts).
+        const { body_plain, body_html } = extractBody(message.payload);
+        const { from_name, from_email } = parseFromHeader(from);
+        const to_email = headerValue(headers, "To") || null;
+        const snippet = message.snippet ?? "";
+
         pipelineLog("tier1:filter", `id=${message.id} from="${from}" subject="${subject}" → ${filterResult.status}${filterResult.skip_reason ? ` (${filterResult.skip_reason})` : ""}`);
 
         if (filterResult.status === "skip") {
@@ -210,7 +261,9 @@ export const tier1FastPath = inngest.createFunction(
                 direction: "inbound",
                 received_at: receivedAt,
                 sender_external_id: from,
-                snippet: message.snippet ?? null,
+                snippet: snippet || null,
+                body_plain: body_plain || null,
+                body_html: body_html || null,
                 classification_status: "skipped",
                 skip_reason: filterResult.skip_reason,
                 processing_tier: 1,
@@ -229,11 +282,13 @@ export const tier1FastPath = inngest.createFunction(
         }
 
         const messageId = message.id;
-        const snippet = message.snippet ?? "";
+        // Prefer the decoded plain-text body for classifier input; fall back to
+        // snippet when the email only carried HTML or no decodable text part.
+        const classifierBody = (body_plain || snippet).slice(0, CLASSIFIER_BODY_MAX_CHARS);
 
         pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
 
-        const promise = classifyEmail({ subject, body: snippet, from })
+        const promise = classifyEmail({ subject, body: classifierBody, from })
           .then(async (classification) => {
             pipelineLog("tier1:llm", `id=${messageId} → type=${classification.type} category=${classification.category} priority=${classification.priority} tone=${classification.tone} confidence=${classification.confidence}`);
             classifiedIds.push(messageId);
@@ -278,7 +333,12 @@ export const tier1FastPath = inngest.createFunction(
                 account_id: accountId,
                 user_id: userId,
                 subject,
-                from_email: from,
+                from_email,
+                from_name,
+                to_email,
+                body_plain: body_plain || null,
+                body_html: body_html || null,
+                snippet: snippet || null,
                 gmail_message_id: messageId,
                 gmail_thread_id: message.threadId,
                 received_at: receivedAt,
@@ -332,7 +392,10 @@ export const tier1FastPath = inngest.createFunction(
                   direction: "inbound",
                   received_at: receivedAt,
                   sender_external_id: from,
+                  sender_display_name: from_name,
                   snippet: snippet || null,
+                  body_plain: body_plain || null,
+                  body_html: body_html || null,
                   classification_status: "classified",
                   processing_tier: 1,
                   classified_at,
@@ -360,7 +423,7 @@ export const tier1FastPath = inngest.createFunction(
                 supabase,
                 ticketId: ticket.id,
                 subject,
-                bodyPreview: snippet,
+                bodyPreview: body_plain || snippet,
               }).catch((err: unknown) => {
                 console.error(`[tier1] Embedding generation failed for ticket ${ticket.id}:`, err);
               });
