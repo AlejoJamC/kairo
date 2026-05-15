@@ -35,7 +35,7 @@ export async function GET(request: Request) {
           user.user_metadata?.name ||
           "User",
         company_name: profile?.company_name,
-        gmailConnected: profile?.gmail_connected,
+        // gmailConnected removed — use support_channels presence (KAI-173)
       },
     });
   } catch {

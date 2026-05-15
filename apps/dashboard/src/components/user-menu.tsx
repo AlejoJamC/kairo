@@ -96,9 +96,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
         >
           {displayName}
         </p>
-        {profile.gmail_connected && (
-          <p style={{ fontSize: 10, color: "#10B981", margin: 0 }}>Gmail connected</p>
-        )}
+        {/* Gmail connected badge moved to Channels settings (KAI-173) */}
       </div>
 
       {/* Sign out */}

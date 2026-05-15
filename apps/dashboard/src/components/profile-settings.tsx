@@ -215,7 +215,7 @@ const INTEGRATIONS = [
   { name: "Zendesk", status: "available", meta: "Importar tickets históricos", color: "#03363D", letter: "Z" },
 ];
 
-function IntegrationsSection() {
+function IntegrationsSection({ onViewChange }: { onViewChange: (view: AppView) => void }) {
   const { t } = useTranslation(["dashboard"]);
   return (
     <div>
@@ -258,6 +258,25 @@ function IntegrationsSection() {
             )}
           </div>
         ))}
+      </div>
+
+      {/* Support Channels */}
+      <div style={{ marginTop: 28 }}>
+        <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--k-text-primary)", margin: "0 0 12px" }}>
+          Support Channels
+        </h2>
+        <div style={{ padding: 16, border: "1px solid var(--k-border)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--k-bg)" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>Email inboxes</div>
+            <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>Gmail and other email channels connected to this account</div>
+          </div>
+          <button
+            onClick={() => onViewChange("channels")}
+            style={{ fontSize: 12, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer" }}
+          >
+            Manage →
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -620,7 +639,7 @@ export function ProfileSettings({ onViewChange }: Props) {
       <div style={{ flex: 1, padding: "32px 40px 56px", maxWidth: 880, overflowY: "auto" }}>
         {section === "workspace" && <WorkspaceSection />}
         {section === "team" && <TeamSection />}
-        {section === "integrations" && <IntegrationsSection />}
+        {section === "integrations" && <IntegrationsSection onViewChange={onViewChange} />}
         {section === "triage" && <TriageSection />}
         {section === "security" && <SecuritySection onViewChange={onViewChange} />}
         {section === "kb" && <ComingSoonSection title={t("dashboard:settings.nav.kb")} />}

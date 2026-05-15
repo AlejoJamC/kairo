@@ -76,19 +76,7 @@ export async function GET(request: Request) {
     }
   }
 
-  // ── Save Gmail OAuth tokens if present (Gmail connection flow) ────────────
-  if (session.provider_token && user.email) {
-    await supabase.from("gmail_accounts").upsert({
-      user_id:       user.id,
-      email:         user.email,
-      access_token:  session.provider_token,
-      refresh_token: session.provider_refresh_token ?? null,
-      expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
-    });
-    await supabase.from("profiles").update({ gmail_connected: true }).eq("id", user.id);
-  }
-
-  // ── Scenarios 1 & returning users: check existing account membership ──────
+  // ── Resolve active account membership first (needed for channel creation) ──
   const { data: membership } = await supabase
     .from("account_members")
     .select("account_id")
@@ -97,6 +85,36 @@ export async function GET(request: Request) {
     .order("joined_at", { ascending: true })
     .limit(1)
     .maybeSingle();
+
+  // ── Save Gmail OAuth tokens (gmail_accounts + support_channels) ─────────
+  if (session.provider_token && user.email) {
+    const accountId = membership?.account_id;
+
+    await supabase.from("gmail_accounts").upsert({
+      user_id:       user.id,
+      email:         user.email,
+      access_token:  session.provider_token,
+      refresh_token: session.provider_refresh_token ?? null,
+      expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
+    });
+
+    // KAI-173: also register the channel in support_channels
+    if (accountId) {
+      await supabase.from("support_channels").upsert({
+        account_id:    accountId,
+        channel_type:  "gmail",
+        email_address: user.email,
+        oauth_tokens:  {
+          access_token:  session.provider_token,
+          refresh_token: session.provider_refresh_token ?? null,
+          expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
+        },
+        connected_by:  user.id,
+        is_primary:    true,
+        is_active:     true,
+      }, { onConflict: "account_id,email_address" });
+    }
+  }
 
   if (membership) {
     return NextResponse.redirect(`${appUrl}/auth/handoff`);

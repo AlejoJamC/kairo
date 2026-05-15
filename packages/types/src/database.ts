@@ -937,7 +937,6 @@ export type Database = {
           company_name: string | null
           created_at: string | null
           email: string
-          gmail_connected: boolean | null
           id: string
           name: string | null
           updated_at: string | null
@@ -946,7 +945,6 @@ export type Database = {
           company_name?: string | null
           created_at?: string | null
           email: string
-          gmail_connected?: boolean | null
           id: string
           name?: string | null
           updated_at?: string | null
@@ -955,7 +953,6 @@ export type Database = {
           company_name?: string | null
           created_at?: string | null
           email?: string
-          gmail_connected?: boolean | null
           id?: string
           name?: string | null
           updated_at?: string | null
@@ -1002,6 +999,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "response_templates_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_channels: {
+        Row: {
+          account_id: string
+          channel_type: string
+          connected_at: string | null
+          connected_by: string | null
+          created_at: string
+          display_name: string | null
+          email_address: string
+          id: string
+          is_active: boolean
+          is_primary: boolean
+          oauth_tokens: Json | null
+        }
+        Insert: {
+          account_id: string
+          channel_type: string
+          connected_at?: string | null
+          connected_by?: string | null
+          created_at?: string
+          display_name?: string | null
+          email_address: string
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          oauth_tokens?: Json | null
+        }
+        Update: {
+          account_id?: string
+          channel_type?: string
+          connected_at?: string | null
+          connected_by?: string | null
+          created_at?: string
+          display_name?: string | null
+          email_address?: string
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          oauth_tokens?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_channels_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"

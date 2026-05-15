@@ -719,7 +719,6 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "email" "text" NOT NULL,
     "name" "text",
     "company_name" "text",
-    "gmail_connected" boolean DEFAULT false,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"()
 );
@@ -747,6 +746,25 @@ CREATE TABLE IF NOT EXISTS "public"."response_templates" (
 
 
 ALTER TABLE "public"."response_templates" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."support_channels" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "channel_type" "text" NOT NULL,
+    "email_address" "text" NOT NULL,
+    "display_name" "text",
+    "is_primary" boolean DEFAULT false NOT NULL,
+    "oauth_tokens" "jsonb",
+    "connected_by" "uuid",
+    "connected_at" timestamp with time zone DEFAULT "now"(),
+    "is_active" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "support_channels_channel_type_check" CHECK (("channel_type" = ANY (ARRAY['gmail'::"text", 'outlook'::"text", 'imap'::"text", 'custom'::"text"])))
+);
+
+
+ALTER TABLE "public"."support_channels" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."support_schedules" (
@@ -1117,6 +1135,16 @@ ALTER TABLE ONLY "public"."response_templates"
 
 
 
+ALTER TABLE ONLY "public"."support_channels"
+    ADD CONSTRAINT "support_channels_account_email_unique" UNIQUE ("account_id", "email_address");
+
+
+
+ALTER TABLE ONLY "public"."support_channels"
+    ADD CONSTRAINT "support_channels_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."support_schedules"
     ADD CONSTRAINT "support_schedules_pkey" PRIMARY KEY ("id");
 
@@ -1372,6 +1400,14 @@ CREATE INDEX "idx_response_templates_locale" ON "public"."response_templates" US
 
 
 CREATE INDEX "idx_response_templates_user_id" ON "public"."response_templates" USING "btree" ("user_id") WHERE ("is_active" = true);
+
+
+
+CREATE INDEX "idx_support_channels_account_id" ON "public"."support_channels" USING "btree" ("account_id");
+
+
+
+CREATE INDEX "idx_support_channels_is_active" ON "public"."support_channels" USING "btree" ("account_id", "is_active");
 
 
 
@@ -1697,6 +1733,16 @@ ALTER TABLE ONLY "public"."response_templates"
 
 ALTER TABLE ONLY "public"."response_templates"
     ADD CONSTRAINT "response_templates_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."support_channels"
+    ADD CONSTRAINT "support_channels_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."support_channels"
+    ADD CONSTRAINT "support_channels_connected_by_fkey" FOREIGN KEY ("connected_by") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
 
 
@@ -2030,6 +2076,13 @@ CREATE POLICY "superadmin_manage" ON "public"."admin_users" USING ("public"."is_
 
 
 
+ALTER TABLE "public"."support_channels" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "support_channels_access_by_account" ON "public"."support_channels" USING (("account_id" = "public"."current_account_id"()));
+
+
+
 ALTER TABLE "public"."support_schedules" ENABLE ROW LEVEL SECURITY;
 
 
@@ -2312,6 +2365,12 @@ GRANT ALL ON TABLE "public"."profiles" TO "service_role";
 GRANT ALL ON TABLE "public"."response_templates" TO "anon";
 GRANT ALL ON TABLE "public"."response_templates" TO "authenticated";
 GRANT ALL ON TABLE "public"."response_templates" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."support_channels" TO "anon";
+GRANT ALL ON TABLE "public"."support_channels" TO "authenticated";
+GRANT ALL ON TABLE "public"."support_channels" TO "service_role";
 
 
 
