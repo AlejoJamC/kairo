@@ -93,11 +93,12 @@ export async function GET(request: Request) {
 
     await supabase.from("gmail_accounts").upsert({
       user_id:       user.id,
+      account_id:    accountId,
       email:         user.email,
       access_token:  session.provider_token,
       refresh_token: session.provider_refresh_token ?? null,
       expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
-    });
+    }, { onConflict: "user_id,email" });
 
     // KAI-173: also register the channel in support_channels
     if (accountId) {
@@ -117,9 +118,6 @@ export async function GET(request: Request) {
     }
 
     // ── KAI-202: trigger AI classification pipeline ────────────────────────
-    // Fire-and-forget semantically — dispatch errors must not break OAuth.
-    // The helper itself swallows and logs errors; we still wrap in case the
-    // function reference itself somehow throws synchronously.
     try {
       await dispatchOnboardingClassification({
         userId: user.id,
@@ -130,6 +128,8 @@ export async function GET(request: Request) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[KAI-202] dispatch wrapper threw: ${msg}`);
     }
+  } else {
+    console.warn("[callback] SKIPPED token save — provider_token:", session.provider_token, "email:", user.email);
   }
 
   if (membership) {

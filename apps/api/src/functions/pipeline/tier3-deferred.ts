@@ -1,6 +1,7 @@
 import { classifyEmail } from "@kairo/intelligence";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
+import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
@@ -342,30 +343,21 @@ export const tier3Deferred = inngest.createFunction(
     const { accessToken, userEmail, channelIntegrationId } = (await step.run(
       "fetch-credentials",
       async () => {
-        const { data: gmailAccount } = await supabase
-          .from("gmail_accounts")
-          .select("access_token, email")
-          .eq("user_id", userId)
-          .limit(1)
-          .single();
+        const [freshToken, gmailAccount, channelRow] = await Promise.all([
+          getFreshGmailToken(userId).catch(() => null),
+          supabase.from("gmail_accounts").select("email").eq("user_id", userId).limit(1).single(),
+          supabase.from("channel_integrations").select("id").eq("user_id", userId).eq("provider", "gmail").limit(1).single(),
+        ]);
 
-        if (!gmailAccount?.access_token) {
+        if (!freshToken) {
           console.warn(`[tier3] No Gmail account found for user ${userId}`);
           return { accessToken: null, userEmail: "", channelIntegrationId: null };
         }
 
-        const { data: channelRow } = await supabase
-          .from("channel_integrations")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("provider", "gmail")
-          .limit(1)
-          .single();
-
         return {
-          accessToken: gmailAccount.access_token as string,
-          userEmail: gmailAccount.email as string,
-          channelIntegrationId: channelRow?.id ?? null,
+          accessToken: freshToken,
+          userEmail: gmailAccount.data?.email as string ?? "",
+          channelIntegrationId: channelRow.data?.id ?? null,
         };
       }
     )) as { accessToken: string | null; userEmail: string; channelIntegrationId: string | null };
