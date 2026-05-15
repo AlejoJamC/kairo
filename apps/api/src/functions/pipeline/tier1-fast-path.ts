@@ -143,6 +143,17 @@ export const tier1FastPath = inngest.createFunction(
       const skippedIds: string[] = [];
       const remainderIds: string[] = [];
 
+      // Resolve account_id — required for all DB inserts (NOT NULL constraint)
+      const { data: memberRow } = await supabase
+        .from("account_members")
+        .select("account_id")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("joined_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const accountId: string | null = memberRow?.account_id ?? null;
+
       // One-time lookup: Gmail channel_integration for this user (service role)
       const { data: channelRow } = await supabase
         .from("channel_integrations")
@@ -183,6 +194,7 @@ export const tier1FastPath = inngest.createFunction(
           mimeType: message.payload?.mimeType,
           userEmail,
         });
+
 
         if (filterResult.status === "skip") {
           skippedIds.push(message.id);
@@ -228,7 +240,7 @@ export const tier1FastPath = inngest.createFunction(
             );
 
             // Stage classification as an auto-approved proposal before persisting the ticket
-            const { data: proposal } = await supabase
+            const { data: proposal, error: proposalErr } = await supabase
               .from("ticket_proposals")
               .insert({
                 conversation_id: null,
@@ -247,9 +259,10 @@ export const tier1FastPath = inngest.createFunction(
               .select("id")
               .single();
 
-            const { data: ticket } = await supabase
+            const { data: ticket, error: ticketErr } = await supabase
               .from("tickets")
               .insert({
+                account_id: accountId,
                 user_id: userId,
                 subject,
                 from_email: from,

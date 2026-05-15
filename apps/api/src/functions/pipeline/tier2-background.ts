@@ -192,6 +192,17 @@ export const tier2Background = inngest.createFunction(
     await step.run("classify-batch", async () => {
       if (unprocessed.length === 0) return;
 
+      // Resolve account_id — required for tickets insert (NOT NULL constraint)
+      const { data: memberRow } = await supabase
+        .from("account_members")
+        .select("account_id")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("joined_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const accountId: string | null = memberRow?.account_id ?? null;
+
       const { data: channelRow } = await supabase
         .from("channel_integrations")
         .select("id")
@@ -283,9 +294,10 @@ export const tier2Background = inngest.createFunction(
               .select("id")
               .single();
 
-            const { data: ticket } = await supabase
+            const { data: ticket, error: ticketErr } = await supabase
               .from("tickets")
               .insert({
+                account_id: accountId,
                 user_id: userId,
                 subject,
                 from_email: from,
@@ -305,6 +317,7 @@ export const tier2Background = inngest.createFunction(
               })
               .select("id")
               .single();
+
 
             if (proposal?.id && ticket?.id) {
               await supabase

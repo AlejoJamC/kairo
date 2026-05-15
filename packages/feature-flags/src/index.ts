@@ -1,2 +1,2 @@
-export { FLAGS } from "./flags.js";
-export type { FeatureFlags } from "./flags.js";
+export { FLAGS, getFlag } from "./flags";
+export type { FeatureFlags } from "./flags";
