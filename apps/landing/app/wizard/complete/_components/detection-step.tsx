@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { ArrowRight, Loader2, RefreshCw } from "lucide-react";
 import { useClassificationProgress, type ClassificationProgress } from "@/lib/hooks/useClassificationProgress";
 import { useTranslation } from "@/lib/i18n";
@@ -16,9 +15,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   general:        "var(--success)",
   not_applicable: "var(--text-tertiary)",
 };
-
-// Minimum time before allowing "Continue" — gives pipeline time to start
-const MIN_DISPLAY_MS = 5_000;
 
 function MetricCard({
   label, value, color, ariaLabel,
@@ -83,16 +79,14 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
   const { t } = useTranslation();
   const dt = t.wizard.detect;
   const { data, error, retry } = useClassificationProgress();
-  const [minElapsed, setMinElapsed] = useState(false);
 
-  // After MIN_DISPLAY_MS, allow user to continue regardless of pipeline state
-  useEffect(() => {
-    const timer = setTimeout(() => setMinElapsed(true), MIN_DISPLAY_MS);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const isLoading = !data || (data.status === "idle" && data.tickets_count === 0);
-  const canContinue = minElapsed || (data?.status === "complete") || !!error;
+  // Two independent signals:
+  //  - isStillScanning controls the live "scanning…" indicator + spinner. It
+  //    stays true until the pipeline truly finishes (status === "complete").
+  //  - canContinue controls whether the Continue button is enabled. It fires
+  //    as soon as threshold_reached is true, while the scan keeps running.
+  const isStillScanning = data?.status === "in_progress";
+  const canContinue = data?.threshold_reached || data?.status === "complete" || !!error;
 
   const categoryLabels: Record<string, string> = {
     technical:      dt.categoryTechnical,
@@ -146,8 +140,9 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
   }
 
   // ── Loading or data state ──────────────────────────────────────────────────
-  const title = isLoading ? t.wizard.detectScanningTitle : t.wizard.detectDoneTitle;
-  const description = isLoading ? dt.loadingDescription : t.wizard.detectDoneNote;
+  const isDone = data?.status === "complete";
+  const title = isDone ? t.wizard.detectDoneTitle : t.wizard.detectScanningTitle;
+  const description = isDone ? t.wizard.detectDoneNote : dt.loadingDescription;
 
   return (
     <>
@@ -209,6 +204,21 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
         <div style={{ height: 28, marginBottom: 28 }} aria-live="polite" aria-label={dt.loadingDescription} />
       )}
 
+      {/* Scanning indicator — visible while pipeline is still running, even after threshold */}
+      {isStillScanning && (
+        <div
+          aria-live="polite"
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            fontSize: 12, color: "var(--text-tertiary)",
+            fontFamily: "var(--font-mono)", marginBottom: 16,
+          }}
+        >
+          <Loader2 size={11} className="animate-spin" />
+          {dt.loadingDescription}
+        </div>
+      )}
+
       {/* Actions */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         {/* "Configurar triage" — visually present, disabled per spec */}
@@ -244,7 +254,7 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
           {canContinue ? (
             <>{dt.continue} <ArrowRight size={14} strokeWidth={2} /></>
           ) : (
-            <><Loader2 size={14} className="animate-spin" aria-live="polite" /> {t.wizard.detectScanningTitle}</>
+            <><Loader2 size={14} className="animate-spin" /> {t.wizard.detectScanningTitle}</>
           )}
         </button>
       </div>

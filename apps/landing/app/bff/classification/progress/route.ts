@@ -72,6 +72,11 @@ export async function GET() {
     status = "complete";
   }
 
+  // Wizard Continue button activates once enough tickets are classified.
+  // Mirrors FAST_PATH_CONTINUE_THRESHOLD in @kairo/env (default 3).
+  const CONTINUE_THRESHOLD = Number(process.env.FAST_PATH_CONTINUE_THRESHOLD ?? 3);
+  const threshold_reached = tickets_count >= CONTINUE_THRESHOLD;
+
   return NextResponse.json({
     status,
     tickets_count,
@@ -80,5 +85,6 @@ export async function GET() {
     categories,
     window: { since, until },
     last_classified_at,
+    threshold_reached,
   });
 }

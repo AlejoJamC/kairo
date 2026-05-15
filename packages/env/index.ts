@@ -10,9 +10,11 @@ export const env = createEnv({
         OLLAMA_BASE_URL: z.string().url().optional(),
         OLLAMA_MODEL: z.string().optional().default("granite4.1:3b"),
         OLLAMA_EMBEDDING_MODEL: z.string().optional().default("nomic-embed-text-v2-moe"),
-        OLLAMA_EMBEDDING_DIMENSIONS: z.coerce.number().optional().default(384),
+        OLLAMA_EMBEDDING_DIMENSIONS: z.coerce.number().optional().default(512),
         FAST_PATH_SCAN_SIZE: z.coerce.number().int().positive().default(30),
-        FAST_PATH_ESCAPE_COUNT: z.coerce.number().int().positive().default(3),
+        // Minimum relevant classifications before the wizard "Continue" button enables.
+        // Does NOT cap how many emails Tier 1 classifies — that's FAST_PATH_SCAN_SIZE.
+        FAST_PATH_CONTINUE_THRESHOLD: z.coerce.number().int().positive().default(3),
         FAST_PATH_CONCURRENCY: z.coerce.number().int().positive().default(3),
         BACKGROUND_CONCURRENCY: z.coerce.number().int().positive().default(3),
         TIER_2_WINDOW_DAYS: z.coerce.number().int().positive().default(15),

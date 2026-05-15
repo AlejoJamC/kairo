@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { requireRole } from "../../middleware/rbac.js";
 import { supabase } from "../../lib/supabase.js";
+import { env } from "../../env.js";
 
 export const classificationProgress = new Hono();
 
@@ -107,6 +108,8 @@ classificationProgress.get(
       categories,
       window: { since, until },
       last_classified_at,
+      // True once enough emails have been classified to enable the wizard Continue button.
+      threshold_reached: tickets_count >= env.FAST_PATH_CONTINUE_THRESHOLD,
     });
   }
 );

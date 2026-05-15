@@ -1,8 +1,10 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createServerClient } from "@supabase/auth-helpers-nextjs";
+import { createClient as createBaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { env } from "@/env";
 import { dispatchOnboardingClassification } from "@/lib/inngest";
 import { getFlag } from "@kairo/feature-flags";
+import type { Database } from "@/types/supabase";
 
 // ---------------------------------------------------------------------------
 // GET /auth/callback
@@ -23,7 +25,28 @@ import { getFlag } from "@kairo/feature-flags";
 //
 //  4. Brand-new user, no invitation
 //     → Redirect to /wizard/complete (Gmail connection + account setup).
+//
+// KAI-206: cookie-buffer pattern.
+// `@supabase/auth-helpers-nextjs` writes session cookies via `cookies()` from
+// `next/headers`, which is unreliable in Next.js 15 route handlers — failures
+// are silently swallowed and the session never reaches the browser. Instead we
+// collect cookie writes into a buffer and attach them directly to whatever
+// NextResponse we end up returning. Tracked for full migration to @supabase/ssr
+// in KAI-207.
 // ---------------------------------------------------------------------------
+
+interface BufferedCookie {
+  name: string;
+  value: string;
+  options: Parameters<typeof NextResponse.prototype.cookies.set>[2];
+}
+
+function attachCookies(response: NextResponse, jar: BufferedCookie[]): NextResponse {
+  for (const { name, value, options } of jar) {
+    response.cookies.set(name, value, options);
+  }
+  return response;
+}
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -44,8 +67,49 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${appUrl}/wizard`);
   }
 
-  const supabase = await createClient();
-  const admin = createAdminClient();
+  // ── Build a request-scoped supabase client with a cookie buffer ──────────
+  // All session cookies written by exchangeCodeForSession (and any follow-up
+  // auth state change) land in `cookieJar` and are attached to the final
+  // response before returning.
+  const requestCookies = new Map<string, string>();
+  for (const c of requestUrl.searchParams.has("__skip_cookies__") ? [] : []) {
+    // placeholder; cookies are read from the Request object below
+    void c;
+  }
+  // Read incoming cookies from the Request headers
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  for (const pair of cookieHeader.split(/;\s*/)) {
+    if (!pair) continue;
+    const eq = pair.indexOf("=");
+    if (eq === -1) continue;
+    requestCookies.set(pair.slice(0, eq), decodeURIComponent(pair.slice(eq + 1)));
+  }
+
+  const cookieJar: BufferedCookie[] = [];
+
+  const supabase = createServerClient<Database>(
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() {
+          return Array.from(requestCookies, ([name, value]) => ({ name, value }));
+        },
+        setAll(toSet) {
+          for (const c of toSet) {
+            requestCookies.set(c.name, c.value);
+            cookieJar.push({ name: c.name, value: c.value, options: c.options });
+          }
+        },
+      },
+    }
+  );
+
+  const admin = createBaseClient<Database>(
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
 
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
@@ -118,6 +182,21 @@ export async function GET(request: Request) {
       }, { onConflict: "account_id,email_address" });
     }
 
+    // ── KAI-206 (B1): re-verify the session is still valid before kicking off
+    // background processing. If verification fails the cookie write failed or
+    // the session was invalidated mid-callback; we must NOT dispatch Inngest
+    // because the user's UI won't be able to see anything we process.
+    const { data: verifyData, error: verifyError } = await supabase.auth.getUser();
+    if (verifyError || !verifyData.user) {
+      console.error(
+        `[KAI-206] session re-verification failed for user ${user.id}: ${verifyError?.message ?? "no user returned"}`
+      );
+      return attachCookies(
+        NextResponse.redirect(`${appUrl}/auth/error?type=session_error&description=verification_failed`),
+        cookieJar
+      );
+    }
+
     // ── KAI-202: trigger AI classification pipeline ────────────────────────
     try {
       await dispatchOnboardingClassification({
@@ -133,9 +212,9 @@ export async function GET(request: Request) {
 
   if (membership) {
     if (getFlag("enable_detection_ui")) {
-      return NextResponse.redirect(`${appUrl}/wizard/detect`);
+      return attachCookies(NextResponse.redirect(`${appUrl}/wizard/detect`), cookieJar);
     }
-    return NextResponse.redirect(`${appUrl}/auth/handoff`);
+    return attachCookies(NextResponse.redirect(`${appUrl}/auth/handoff`), cookieJar);
   }
 
   // ── Scenario 3: auto-accept a pending invitation ──────────────────────────
@@ -163,10 +242,10 @@ export async function GET(request: Request) {
 
       await supabase.from("account_invitations").delete().eq("id", invitation.id);
 
-      return NextResponse.redirect(`${appUrl}/auth/handoff`);
+      return attachCookies(NextResponse.redirect(`${appUrl}/auth/handoff`), cookieJar);
     }
   }
 
   // ── Scenario 4: brand-new user, no invitation ─────────────────────────────
-  return NextResponse.redirect(`${appUrl}/wizard/complete`);
+  return attachCookies(NextResponse.redirect(`${appUrl}/wizard/complete`), cookieJar);
 }

@@ -1,7 +1,17 @@
+// Regex covering all "no reply" local-part variants:
+//   noreply@, no-reply@, no.reply@, no_reply@
+//   -noreply@, .noreply@, +noreply@, -no-reply@, etc.
+//   donotreply@, do-not-reply@, do_not_reply@
+// Applied to the extracted email address (not the display name).
+const NO_REPLY_REGEX = /(^|[-._+])(no[._-]?reply|donotreply|do[-_.]not[-_.]reply)@/i;
+
 export const BLOCKED_SENDER_PATTERNS: string[] = [
-  "noreply@",
   "marketing@",
   "newsletter@",
+  "mailer-daemon@",
+  "postmaster@",
+  "bounce@",
+  "bounces@",
   "@mailchimp.com",
   "@sendgrid.net",
   "@constantcontact.com",
@@ -25,6 +35,27 @@ const SYSTEM_SUBJECT_PREFIXES = [
   "Read Receipt",
 ];
 
+// Public email providers — anyone can register an address here, so the
+// "same domain = outbound" heuristic does NOT apply. Used by the outbound
+// rule below to fall back to a full-address comparison.
+// Keep this list short and conservative; corporate domains should NOT be here.
+const PUBLIC_EMAIL_DOMAINS = new Set<string>([
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "yahoo.es",
+  "yahoo.co.uk",
+  "icloud.com",
+  "me.com",
+  "aol.com",
+  "proton.me",
+  "protonmail.com",
+]);
+
 export interface EmailMetadata {
   from: string;
   subject: string;
@@ -45,6 +76,15 @@ function extractDomain(email: string): string {
   return match ? match[1].toLowerCase() : "";
 }
 
+function extractEmailAddress(from: string): string {
+  // Try angle-bracket format first: "Display Name <user@example.com>"
+  const angleMatch = from.match(/<([^>]+)>/);
+  if (angleMatch) return angleMatch[1].toLowerCase();
+  // Bare address
+  const bareMatch = from.match(/\S+@\S+/);
+  return bareMatch ? bareMatch[0].toLowerCase() : from.toLowerCase();
+}
+
 function normalizeHeaders(
   headers: Record<string, string>
 ): Record<string, string> {
@@ -63,11 +103,35 @@ export function preFilterEmail(metadata: EmailMetadata): PreFilterResult {
   const subjectLower = subject.toLowerCase();
   const h = normalizeHeaders(headers);
 
-  // Rule: Outbound — highest priority skip, not overridable by any pass-through signal
+  // Rule: Outbound — highest priority skip, not overridable by any pass-through signal.
+  //
+  // Two modes:
+  //  1. Public-domain inbox (gmail.com / hotmail.com / outlook.com / etc.):
+  //     compare the FULL email address, because millions of unrelated people
+  //     share these domains. The original domain-only check produced massive
+  //     false positives during onboarding (every gmail.com → gmail.com email
+  //     was being skipped).
+  //  2. Corporate inbox (custom domain): keep the domain-level check — if
+  //     another @company.com address writes to support@company.com, it's most
+  //     likely an internal/outbound thread.
+  //
+  // TODO/tech-debt — this whole rule is wrong under multi-tenant + multi-user:
+  //  - KAI-172 introduced account_members; the connected inbox (support_channels)
+  //    is the real "outbound" reference, NOT a single userEmail.
+  //  - KAI-206 expanded the pre-filter (no-reply regex, body extraction) but
+  //    deliberately did not touch this rule to keep scope narrow.
+  //  - Real fix: compare against the connected channel address (support_channels
+  //    .email_address) and/or check whether userEmail appears in To/Cc. Track
+  //    under the multi-tenant cleanup work after KAI-207 (@supabase/ssr).
+  const senderEmail = extractEmailAddress(fromLower);
   const senderDomain = extractDomain(fromLower);
   const userDomain = extractDomain(userEmail.toLowerCase());
   if (senderDomain && userDomain && senderDomain === userDomain) {
-    return { status: "skip", skip_reason: "outbound" };
+    const isPublicDomain = PUBLIC_EMAIL_DOMAINS.has(senderDomain);
+    const isSameAddress = senderEmail === userEmail.toLowerCase();
+    if (!isPublicDomain || isSameAddress) {
+      return { status: "skip", skip_reason: "outbound" };
+    }
   }
 
   // Pass-through override signals — urgency keyword and In-Reply-To beat all
@@ -89,7 +153,13 @@ export function preFilterEmail(metadata: EmailMetadata): PreFilterResult {
     return { status: "relevant", relevance_signals: signals };
   }
 
-  // Rule: Known newsletter / automated sender
+  // Rule: no-reply and equivalent automated sender variants (regex-based)
+  const emailAddr = extractEmailAddress(from);
+  if (NO_REPLY_REGEX.test(emailAddr)) {
+    return { status: "skip", skip_reason: "automated_sender" };
+  }
+
+  // Rule: Known newsletter / automated sender (substring patterns)
   if (BLOCKED_SENDER_PATTERNS.some((p) => fromLower.includes(p))) {
     return { status: "skip", skip_reason: "automated_sender" };
   }

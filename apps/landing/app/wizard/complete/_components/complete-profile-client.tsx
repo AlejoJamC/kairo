@@ -49,6 +49,26 @@ async function redirectToDashboard() {
   }
 }
 
+// KAI-206 (C1): the OAuth callback can race with the browser's cookie
+// installation when redirecting through @supabase/auth-helpers-nextjs. A
+// transient 401 on the first /bff/auth/me call doesn't necessarily mean the
+// user is unauthenticated — it can mean cookies haven't propagated yet. We
+// retry with a short backoff before treating it as a real auth failure. Once
+// KAI-207 ships (@supabase/ssr migration) this retry should never trigger.
+async function fetchMeWithRetry(): Promise<Response> {
+  const BACKOFFS_MS = [0, 500, 1000];
+  let lastRes: Response | null = null;
+  for (let i = 0; i < BACKOFFS_MS.length; i++) {
+    if (BACKOFFS_MS[i] > 0) {
+      await new Promise((resolve) => setTimeout(resolve, BACKOFFS_MS[i]));
+    }
+    lastRes = await apiCall("/bff/auth/me");
+    if (lastRes.ok) return lastRes;
+    if (lastRes.status !== 401) return lastRes;
+  }
+  return lastRes!;
+}
+
 export function CompleteProfileClient({ showDetectionStep }: Props) {
   const router = useRouter();
   const { t } = useTranslation();
@@ -67,7 +87,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
 
   // Load user profile
   useEffect(() => {
-    apiCall("/bff/auth/me")
+    fetchMeWithRetry()
       .then((res) => {
         if (!res.ok) { router.push("/wizard/"); return null; }
         return res.json();
