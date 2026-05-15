@@ -106,6 +106,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@kairo/env": "workspace:*",
+        "@kairo/feature-flags": "workspace:*",
         "@supabase/auth-helpers-nextjs": "^0.15.0",
         "@supabase/supabase-js": "^2.105.3",
         "@t3-oss/env-nextjs": "^0.13.11",
