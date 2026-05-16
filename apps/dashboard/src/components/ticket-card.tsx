@@ -215,7 +215,7 @@ export function TicketCard({
           display: "flex",
           alignItems: "center",
           gap: 6,
-          marginBottom: 6,
+          marginBottom: 8,
           flexWrap: "wrap",
         }}
       >
@@ -278,7 +278,7 @@ export function TicketCard({
           fontSize: 13,
           fontWeight: 500,
           color: "var(--k-text-primary)",
-          marginBottom: 4,
+          marginBottom: 8,
           lineHeight: 1.35,
           overflow: "hidden",
           textOverflow: "ellipsis",
