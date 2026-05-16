@@ -22,7 +22,8 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`Ollama embeddings error: ${response.statusText}`);
+      const body = await response.text().catch(() => '');
+      throw new Error(`Ollama embeddings error: ${response.status} ${response.statusText} — ${body}`);
     }
 
     const data = await response.json() as { embedding: number[] };

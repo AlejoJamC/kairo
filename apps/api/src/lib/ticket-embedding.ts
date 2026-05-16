@@ -25,6 +25,11 @@ export type TicketEmbeddingOutcome =
   | { status: "skipped"; reason: "empty_text" }
   | { status: "failed"; reason: "embed_error" | "persist_error" };
 
+// Upper bound on chars sent to the embedding provider. nomic-embed-text-v2-moe
+// caps at 512 tokens; worst-case ratio (URLs, code, unicode) can hit ~3.5
+// chars/token, so 1000 chars stays well under in all realistic content.
+const EMBEDDING_TEXT_MAX_CHARS = 1000;
+
 /**
  * Build the canonical embedding text for a ticket: subject + body preview.
  * Returns null when both inputs collapse to empty whitespace.
@@ -33,7 +38,10 @@ export function buildEmbeddingText(subject: string, bodyPreview: string): string
   const subj = (subject ?? "").trim();
   const body = (bodyPreview ?? "").trim();
   const combined = [subj, body].filter(Boolean).join("\n\n");
-  return combined.length === 0 ? null : combined;
+  if (combined.length === 0) return null;
+  return combined.length > EMBEDDING_TEXT_MAX_CHARS
+    ? combined.slice(0, EMBEDDING_TEXT_MAX_CHARS)
+    : combined;
 }
 
 export async function maybeGenerateTicketEmbedding(
