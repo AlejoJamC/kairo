@@ -42,7 +42,7 @@ export function Inbox() {
 
   return (
     <>
-      <div className="flex h-screen w-[360px] flex-col border-r bg-white" style={{ flexShrink: 0, borderRight: "1px solid var(--k-border)" }}>
+      <div className="flex w-[360px] flex-col border-r bg-white" style={{ flexShrink: 0, borderRight: "1px solid var(--k-border)" }}>
         <TicketList />
       </div>
       <TicketDetail />
