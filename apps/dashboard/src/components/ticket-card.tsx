@@ -209,16 +209,29 @@ export function TicketCard({
         }}
       />
 
-      {/* Row 1: priority + type + corrected + time */}
+      {/* Row 1: ticket ID + priority + type + corrected + time */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: 6,
-          marginBottom: 6,
+          marginBottom: 8,
           flexWrap: "wrap",
         }}
       >
+        {ticket.ticket_number && (
+          <span
+            style={{
+              fontSize: 10,
+              fontFamily: "var(--k-font-mono)",
+              color: "var(--k-text-tertiary)",
+              fontWeight: 500,
+              letterSpacing: "0.02em",
+            }}
+          >
+            KAI-T-{ticket.ticket_number}
+          </span>
+        )}
         <PriorityBadge priority={ticket.priority} />
         {ticket.ticket_type && (
           <span
@@ -265,7 +278,7 @@ export function TicketCard({
           fontSize: 13,
           fontWeight: 500,
           color: "var(--k-text-primary)",
-          marginBottom: 4,
+          marginBottom: 8,
           lineHeight: 1.35,
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -336,7 +349,7 @@ export function TicketCard({
         </div>
       </div>
 
-      {/* Row 4: ticket number + SLA + grouped badge */}
+      {/* Row 4: SLA + grouped badge (ticket number moved to Row 1) */}
       <div
         style={{
           display: "flex",
@@ -345,17 +358,6 @@ export function TicketCard({
           marginTop: 6,
         }}
       >
-        {ticket.ticket_number && (
-          <span
-            style={{
-              fontSize: 10,
-              color: "var(--k-text-tertiary)",
-              fontFamily: "var(--k-font-mono)",
-            }}
-          >
-            #{ticket.ticket_number}
-          </span>
-        )}
         <SlaBadge slaDate={ticket.sla_due_at} />
         {ticket.group_id && groupCount > 1 && (
           <span
