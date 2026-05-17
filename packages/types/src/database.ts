@@ -1674,6 +1674,10 @@ export type Database = {
       is_account_admin: { Args: { p_account_id: string }; Returns: boolean }
       is_active_admin: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
+      provision_account_for_user: {
+        Args: { p_account_name?: string; p_user_id: string }
+        Returns: string
+      }
       recompute_category_confidence_thresholds: {
         Args: never
         Returns: undefined

@@ -72,6 +72,26 @@ $$;
 ALTER FUNCTION "public"."current_account_id"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."ensure_account_on_signup"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    BEGIN
+        PERFORM public.provision_account_for_user(NEW.id, NULL);
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING
+            '[KAI-217] ensure_account_on_signup: provisioning failed for user % (%): %',
+            NEW.id, NEW.email, SQLERRM;
+    END;
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."ensure_account_on_signup"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer DEFAULT 3) RETURNS TABLE("article_id" "uuid", "title" "text", "similarity" double precision)
     LANGUAGE "sql" STABLE
     AS $$
@@ -317,6 +337,96 @@ $$;
 
 
 ALTER FUNCTION "public"."is_superadmin"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text" DEFAULT NULL::"text") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_existing_id  uuid;
+    v_account_id   uuid;
+    v_name         text;
+    v_slug_base    text;
+    v_slug         text;
+    v_email        text;
+    v_display_name text;
+    v_company_name text;
+BEGIN
+    SELECT am.account_id INTO v_existing_id
+    FROM public.account_members am
+    WHERE am.user_id  = p_user_id
+      AND am.status   = 'active'
+    ORDER BY am.joined_at NULLS LAST, am.invited_at NULLS LAST
+    LIMIT 1;
+
+    IF v_existing_id IS NOT NULL THEN
+        RETURN v_existing_id;
+    END IF;
+
+    SELECT u.email,
+           COALESCE(p.name, ''),
+           COALESCE(p.company_name, '')
+      INTO v_email, v_display_name, v_company_name
+    FROM auth.users u
+    LEFT JOIN public.profiles p ON p.id = u.id
+    WHERE u.id = p_user_id;
+
+    IF v_email IS NULL THEN
+        RAISE EXCEPTION
+            'provision_account_for_user: user % not found in auth.users', p_user_id;
+    END IF;
+
+    v_name := COALESCE(
+        NULLIF(trim(p_account_name),  ''),
+        NULLIF(trim(v_company_name),  ''),
+        NULLIF(trim(v_display_name),  ''),
+        split_part(v_email, '@', 1)
+    );
+
+    IF v_name IS NULL OR trim(v_name) = '' THEN
+        v_name := 'account';
+    END IF;
+
+    v_slug_base := lower(regexp_replace(trim(v_name), '[^a-z0-9]+', '-', 'g'));
+    v_slug_base := trim(both '-' from v_slug_base);
+    IF v_slug_base = '' THEN
+        v_slug_base := 'account';
+    END IF;
+    v_slug := v_slug_base || '-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 6);
+
+    BEGIN
+        INSERT INTO public.accounts (name, slug, plan_type, seat_limit)
+        VALUES (v_name, v_slug, 'Starter', 5)
+        RETURNING id INTO v_account_id;
+
+        INSERT INTO public.account_members
+            (account_id, user_id, role, status, joined_at)
+        VALUES
+            (v_account_id, p_user_id, 'owner', 'active', now());
+
+    EXCEPTION
+        WHEN unique_violation THEN
+            SELECT am.account_id INTO v_account_id
+            FROM public.account_members am
+            WHERE am.user_id = p_user_id
+              AND am.status  = 'active'
+            ORDER BY am.joined_at NULLS LAST
+            LIMIT 1;
+
+            IF v_account_id IS NULL THEN
+                RAISE EXCEPTION
+                    'provision_account_for_user: unique_violation but no membership found for user %',
+                    p_user_id;
+            END IF;
+    END;
+
+    RETURN v_account_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."recompute_category_confidence_thresholds"() RETURNS "void"
@@ -1549,6 +1659,8 @@ CREATE OR REPLACE TRIGGER "on_response_templates_updated" BEFORE UPDATE ON "publ
 
 CREATE OR REPLACE TRIGGER "on_tickets_updated" BEFORE UPDATE ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
 
+CREATE TRIGGER "z_ensure_account_on_signup" AFTER INSERT ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION "public"."ensure_account_on_signup"();
+
 
 
 ALTER TABLE ONLY "public"."account_invitations"
@@ -2239,6 +2351,10 @@ GRANT ALL ON FUNCTION "public"."is_active_admin"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."is_superadmin"() TO "anon";
 GRANT ALL ON FUNCTION "public"."is_superadmin"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."is_superadmin"() TO "service_role";
+
+
+GRANT EXECUTE ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") TO "authenticated";
+GRANT EXECUTE ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") TO "service_role";
 
 
 
