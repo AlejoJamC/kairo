@@ -133,10 +133,27 @@ export async function POST(request: Request) {
       );
     }
 
+    const { data: membership } = await supabase
+      .from("account_members")
+      .select("account_id")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .order("joined_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (!membership?.account_id) {
+      return NextResponse.json(
+        { error: "No active account found for this user" },
+        { status: 403 }
+      );
+    }
+
     const { data: client, error } = await supabase
       .from("clients")
       .insert({
         user_id: user.id,
+        account_id: membership.account_id,
         internal_id: internal_id.trim(),
         name: name.trim(),
         legal_id: legal_id?.trim() || null,

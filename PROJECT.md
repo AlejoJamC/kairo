@@ -65,6 +65,9 @@ emails, and routes/responds based on learned behavior per client.
 
 ## What's Working Today
 - Auth & onboarding (Supabase Auth + Google OAuth + email/password)
+  - Multi-tenant auto-provisioning: `provision_account_for_user` RPC creates `accounts` + `account_members(owner)` atomically on first OAuth sign-up (KAI-216/IAM-7)
+  - 4 OAuth scenarios handled in `/auth/callback`: returning user, duplicate email, invited user, brand-new user
+  - Gmail inbox registered as `support_channels` entry on connect
 - Gmail sync (OAuth connected, emails being pulled)
 - Client CRUD (full module with database persistence)
 - Session management

@@ -31,7 +31,7 @@ export type DispatchOutcome =
 
 export interface OnboardingClassificationInput {
   userId: string;
-  accountId: string | null;
+  accountId: string;   // KAI-220: non-nullable — KAI-218 guarantees account exists before dispatch
   gmailAccessToken: string;
   /** Days of inbox history to consider on first classification. */
   sinceDays?: number;
@@ -56,6 +56,16 @@ function todayUtcDate(): string {
 export async function dispatchOnboardingClassification(
   input: OnboardingClassificationInput
 ): Promise<DispatchOutcome> {
+  // KAI-220: defence-in-depth guard — accountId must be set before dispatching.
+  // Post-KAI-218 this path should never be reached; if it is, the callback has
+  // a bug and we must NOT kick off a pipeline run that will silently fail.
+  if (!input.accountId) {
+    console.error(
+      `[KAI-220] dispatchOnboardingClassification called without accountId for user=${input.userId} — skipping dispatch`
+    );
+    return "missing-config";
+  }
+
   if (env.DISABLE_ONBOARDING_PIPELINE_DISPATCH === "true") {
     return "disabled";
   }
@@ -92,7 +102,7 @@ export async function dispatchOnboardingClassification(
     const msg = err instanceof Error ? err.message : String(err);
     // NEVER log the token. `input` is not included in the log.
     console.error(
-      `[KAI-202] onboarding dispatch failed for user=${input.userId} account=${input.accountId ?? "none"}: ${msg}`
+      `[KAI-202] onboarding dispatch failed for user=${input.userId} account=${input.accountId}: ${msg}`
     );
     return "send-failed";
   }

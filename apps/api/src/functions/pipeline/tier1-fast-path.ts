@@ -10,6 +10,7 @@ import { buildEscalationContext } from "../../routes/v1/tickets.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
 import { maybeGenerateTicketEmbedding } from "../../lib/ticket-embedding.js";
 import { pipelineLog, pipelineLogRun } from "../../lib/pipeline-logger.js";
+import { NonRetriableError } from "inngest";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -201,8 +202,19 @@ export const tier1FastPath = inngest.createFunction(
         .order("joined_at", { ascending: true })
         .limit(1)
         .maybeSingle();
-      const accountId: string | null = memberRow?.account_id ?? null;
-      pipelineLog("tier1:db", `account_id=${accountId ?? "NULL — tickets insert will FAIL"}`);
+      const accountId = memberRow?.account_id;
+      if (!accountId) {
+        // Post-KAI-218 this should never happen: the OAuth callback guarantees
+        // every user has an account before dispatching this event.
+        // A missing account_id here means provisioning failed or was skipped.
+        pipelineLog("tier1:abort", `account_id missing for user=${userId} — aborting`);
+        throw new NonRetriableError(
+          `tier1-fast-path: account_id missing for user ${userId}. ` +
+          "The OAuth provisioning step (KAI-218) failed or was skipped. " +
+          "Investigate /auth/callback for this user."
+        );
+      }
+      pipelineLog("tier1:db", `account_id=${accountId}`);
 
       // One-time lookup: Gmail channel_integration for this user (service role)
       const { data: channelRow } = await supabase
