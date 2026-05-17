@@ -1,6 +1,7 @@
 import { classifyEmail } from "@kairo/intelligence";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
+import { NonRetriableError } from "inngest";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
@@ -201,7 +202,15 @@ export const tier2Background = inngest.createFunction(
         .order("joined_at", { ascending: true })
         .limit(1)
         .maybeSingle();
-      const accountId: string | null = memberRow?.account_id ?? null;
+      const accountId = memberRow?.account_id;
+      if (!accountId) {
+        console.error(`[KAI-220] tier2-background: account_id missing for user ${userId} — aborting`);
+        throw new NonRetriableError(
+          `tier2-background: account_id missing for user ${userId}. ` +
+          "The OAuth provisioning step (KAI-218) failed or was skipped. " +
+          "Investigate /auth/callback for this user."
+        );
+      }
 
       const { data: channelRow } = await supabase
         .from("channel_integrations")
