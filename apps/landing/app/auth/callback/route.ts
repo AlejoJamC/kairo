@@ -9,7 +9,7 @@ import type { Database } from "@/types/supabase";
 // ---------------------------------------------------------------------------
 // GET /auth/callback
 //
-// Handles all four post-OAuth scenarios (KAI-172):
+// Handles all four post-OAuth scenarios (KAI-172, updated KAI-218):
 //
 //  1. Email exists + same provider (Google)
 //     → Supabase logs them in normally. User has account_members → dashboard.
@@ -24,7 +24,18 @@ import type { Database } from "@/types/supabase";
 //        account_members, delete the invitation, redirect to dashboard.
 //
 //  4. Brand-new user, no invitation
-//     → Redirect to /wizard/complete (Gmail connection + account setup).
+//     → KAI-218: call provision_account_for_user RPC to create accounts +
+//        account_members(owner). Then save Gmail channel and dispatch pipeline.
+//        Redirect to /wizard/complete so the owner can name their organisation.
+//
+// Execution order (KAI-218):
+//   exchangeCodeForSession → duplicate check → resolve existing membership
+//   → detect pending invitation → accept OR provision new account
+//   → save gmail_accounts + support_channels (account_id now guaranteed)
+//   → re-verify session (KAI-206) → dispatch Inngest → routing
+//
+// After the invitation/provision step, membership.account_id is guaranteed
+// for all four scenarios that reach the Gmail block.
 //
 // KAI-206: cookie-buffer pattern.
 // `@supabase/auth-helpers-nextjs` writes session cookies via `cookies()` from
@@ -68,15 +79,7 @@ export async function GET(request: Request) {
   }
 
   // ── Build a request-scoped supabase client with a cookie buffer ──────────
-  // All session cookies written by exchangeCodeForSession (and any follow-up
-  // auth state change) land in `cookieJar` and are attached to the final
-  // response before returning.
   const requestCookies = new Map<string, string>();
-  for (const c of requestUrl.searchParams.has("__skip_cookies__") ? [] : []) {
-    // placeholder; cookies are read from the Request object below
-    void c;
-  }
-  // Read incoming cookies from the Request headers
   const cookieHeader = request.headers.get("cookie") ?? "";
   for (const pair of cookieHeader.split(/;\s*/)) {
     if (!pair) continue;
@@ -123,10 +126,6 @@ export async function GET(request: Request) {
   const session = data.session;
 
   // ── Scenario 2: duplicate detection ──────────────────────────────────────
-  // Supabase has no native "prevent duplicate emails across providers" toggle
-  // in the current dashboard. We detect duplicates post-creation:
-  // if another profile with the same email already exists (different user_id),
-  // then a second auth.user was just created erroneously — delete it and bail.
   if (user.email) {
     const { data: existingProfile } = await admin
       .from("profiles")
@@ -136,14 +135,16 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     if (existingProfile) {
-      // Delete the duplicate auth.user (the one just created by this OAuth flow).
       await admin.auth.admin.deleteUser(user.id);
       return NextResponse.redirect(`${appUrl}/auth/error?type=duplicate_email`);
     }
   }
 
-  // ── Resolve active account membership first (needed for channel creation) ──
-  const { data: membership } = await supabase
+  // ── Resolve existing active membership ────────────────────────────────────
+  // Distinguishes Scenario 1 (returning user) from Scenarios 3 & 4.
+  // We capture whether membership was pre-existing to choose the right redirect
+  // at the end — Scenario 4 must go to /wizard/complete, not /auth/handoff.
+  const { data: existingMembership } = await supabase
     .from("account_members")
     .select("account_id")
     .eq("user_id", user.id)
@@ -152,40 +153,103 @@ export async function GET(request: Request) {
     .limit(1)
     .maybeSingle();
 
-  // ── Save Gmail OAuth tokens (gmail_accounts + support_channels) ─────────
-  if (session.provider_token && user.email) {
-    const accountId = membership?.account_id ?? null;
+  // Mutable reference: will be set by invitation acceptance (Scenario 3) or
+  // account provisioning (Scenario 4) if no pre-existing membership was found.
+  let resolvedAccountId: string | null = existingMembership?.account_id ?? null;
 
-    if (accountId) {
-      await supabase.from("gmail_accounts").upsert({
-        user_id:       user.id,
-        account_id:    accountId,
-        email:         user.email,
+  // ── Scenario 3: auto-accept a pending invitation ──────────────────────────
+  // Must run BEFORE provisioning so an invited user never gets a second account.
+  let acceptedInvitation = false;
+  if (!resolvedAccountId && user.email) {
+    const now = new Date().toISOString();
+
+    const { data: invitations } = await supabase
+      .from("account_invitations")
+      .select("id, account_id, role")
+      .eq("email", user.email)
+      .gt("expires_at", now)
+      .limit(1);
+
+    const invitation = invitations?.[0];
+
+    if (invitation) {
+      const { error: insertError } = await supabase.from("account_members").insert({
+        account_id: invitation.account_id,
+        user_id:    user.id,
+        role:       invitation.role,
+        status:     "active",
+        invited_at: now,
+        joined_at:  now,
+      });
+
+      if (!insertError) {
+        await supabase.from("account_invitations").delete().eq("id", invitation.id);
+        resolvedAccountId = invitation.account_id;
+        acceptedInvitation = true;
+      } else {
+        console.error(
+          `[KAI-218] failed to insert account_members for invitation ${invitation.id}: ${insertError.message}`
+        );
+      }
+    }
+  }
+
+  // ── Scenario 4: brand-new user, no invitation ─────────────────────────────
+  // KAI-218: call the RPC created in KAI-217 to provision accounts +
+  // account_members(owner, active) atomically. The RPC is idempotent — if the
+  // defensive trigger (z_ensure_account_on_signup) already ran it returns the
+  // existing account_id without creating duplicates.
+  if (!resolvedAccountId) {
+    console.info(`[KAI-218] provisioning new account for user=${user.id} email=${user.email ?? "unknown"}`);
+
+    const { data: newAccountId, error: rpcError } = await admin.rpc(
+      "provision_account_for_user",
+      { p_user_id: user.id }
+    );
+
+    if (rpcError || !newAccountId) {
+      console.error(
+        `[KAI-218] provisioning failed for user=${user.id}: ${rpcError?.message ?? "no account_id returned"}`
+      );
+      return attachCookies(
+        NextResponse.redirect(`${appUrl}/auth/error?type=provisioning_failed`),
+        cookieJar
+      );
+    }
+
+    resolvedAccountId = newAccountId as string;
+    console.info(`[KAI-218] provisioned account_id=${resolvedAccountId} for user=${user.id}`);
+  }
+
+  // ── Save Gmail OAuth tokens (gmail_accounts + support_channels) ─────────
+  // resolvedAccountId is guaranteed at this point for all scenarios.
+  // provider_token is only present when the user re-consented to Gmail scopes.
+  if (session.provider_token && user.email) {
+    await supabase.from("gmail_accounts").upsert({
+      user_id:       user.id,
+      account_id:    resolvedAccountId,
+      email:         user.email,
+      access_token:  session.provider_token,
+      refresh_token: session.provider_refresh_token ?? null,
+      expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
+    }, { onConflict: "user_id,email" });
+
+    // KAI-173: register the inbox as a support channel
+    await supabase.from("support_channels").upsert({
+      account_id:    resolvedAccountId,
+      channel_type:  "gmail",
+      email_address: user.email,
+      oauth_tokens:  {
         access_token:  session.provider_token,
         refresh_token: session.provider_refresh_token ?? null,
         expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
-      }, { onConflict: "user_id,email" });
+      },
+      connected_by:  user.id,
+      is_primary:    true,
+      is_active:     true,
+    }, { onConflict: "account_id,email_address" });
 
-      // KAI-173: also register the channel in support_channels
-      await supabase.from("support_channels").upsert({
-        account_id:    accountId,
-        channel_type:  "gmail",
-        email_address: user.email,
-        oauth_tokens:  {
-          access_token:  session.provider_token,
-          refresh_token: session.provider_refresh_token ?? null,
-          expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
-        },
-        connected_by:  user.id,
-        is_primary:    true,
-        is_active:     true,
-      }, { onConflict: "account_id,email_address" });
-    }
-
-    // ── KAI-206 (B1): re-verify the session is still valid before kicking off
-    // background processing. If verification fails the cookie write failed or
-    // the session was invalidated mid-callback; we must NOT dispatch Inngest
-    // because the user's UI won't be able to see anything we process.
+    // ── KAI-206 (B1): re-verify session before kicking off background work ──
     const { data: verifyData, error: verifyError } = await supabase.auth.getUser();
     if (verifyError || !verifyData.user) {
       console.error(
@@ -200,8 +264,8 @@ export async function GET(request: Request) {
     // ── KAI-202: trigger AI classification pipeline ────────────────────────
     try {
       await dispatchOnboardingClassification({
-        userId: user.id,
-        accountId,
+        userId:           user.id,
+        accountId:        resolvedAccountId,
         gmailAccessToken: session.provider_token,
       });
     } catch (err) {
@@ -210,42 +274,20 @@ export async function GET(request: Request) {
     }
   }
 
-  if (membership) {
+  // ── Routing ───────────────────────────────────────────────────────────────
+  // Scenario 1: returning user with pre-existing membership
+  if (existingMembership) {
     if (getFlag("enable_detection_ui")) {
       return attachCookies(NextResponse.redirect(`${appUrl}/wizard/detect`), cookieJar);
     }
     return attachCookies(NextResponse.redirect(`${appUrl}/auth/handoff`), cookieJar);
   }
 
-  // ── Scenario 3: auto-accept a pending invitation ──────────────────────────
-  if (user.email) {
-    const now = new Date().toISOString();
-
-    const { data: invitations } = await supabase
-      .from("account_invitations")
-      .select("id, account_id, role")
-      .eq("email", user.email)
-      .gt("expires_at", now)
-      .limit(1);
-
-    const invitation = invitations?.[0];
-
-    if (invitation) {
-      await supabase.from("account_members").insert({
-        account_id: invitation.account_id,
-        user_id:    user.id,
-        role:       invitation.role,
-        status:     "active",
-        invited_at: now,
-        joined_at:  now,
-      });
-
-      await supabase.from("account_invitations").delete().eq("id", invitation.id);
-
-      return attachCookies(NextResponse.redirect(`${appUrl}/auth/handoff`), cookieJar);
-    }
+  // Scenario 3: invitation just accepted — account already existed, skip wizard
+  if (acceptedInvitation) {
+    return attachCookies(NextResponse.redirect(`${appUrl}/auth/handoff`), cookieJar);
   }
 
-  // ── Scenario 4: brand-new user, no invitation ─────────────────────────────
+  // Scenario 4: account just provisioned — send to wizard to name the organisation
   return attachCookies(NextResponse.redirect(`${appUrl}/wizard/complete`), cookieJar);
 }
