@@ -24,10 +24,10 @@ export async function POST(request: Request) {
       data: { session },
     } = await supabase.auth.getSession();
 
-    // 3. Get stored Gmail tokens
+    // 3. Get stored Gmail tokens (account_id needed for tickets insert)
     const { data: gmailAccount, error: gmailError } = await supabase
       .from("gmail_accounts")
-      .select("access_token, refresh_token, expires_at, email")
+      .select("access_token, refresh_token, expires_at, email, account_id")
       .eq("user_id", user.id)
       .single();
 
@@ -209,6 +209,7 @@ export async function POST(request: Request) {
         // Insert ticket into database
         const { error: insertError } = await supabase.from("tickets").insert({
           user_id: user.id,
+          account_id: gmailAccount.account_id,
           gmail_message_id: message.id!,
           gmail_thread_id: msg.threadId || null,
           subject,
