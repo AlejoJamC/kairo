@@ -249,11 +249,17 @@ export async function GET(request: Request) {
       is_active:     true,
     }, { onConflict: "account_id,email_address" });
 
-    // ── KAI-206 (B1): re-verify session before kicking off background work ──
-    const { data: verifyData, error: verifyError } = await supabase.auth.getUser();
-    if (verifyError || !verifyData.user) {
+    // ── KAI-206 (B1): verify session is still valid before kicking off work ──
+    // Original approach called supabase.auth.getUser(), but that round-trip fails
+    // when the request carries stale/expired cookies: the auth-helpers client enters
+    // an unauthenticated state after failed refresh attempts, and getUser() returns
+    // "Auth session missing!" even though exchangeCodeForSession succeeded.
+    // Fix: use the session/user we already validated at line 114 directly.
+    // The cookie buffer (cookieJar) holds the new session and will reach the browser
+    // via attachCookies() — no second round-trip is needed to confirm that.
+    if (!session.access_token || session.user.id !== user.id) {
       console.error(
-        `[KAI-206] session re-verification failed for user ${user.id}: ${verifyError?.message ?? "no user returned"}`
+        `[KAI-206] session state inconsistent for user ${user.id} — access_token or user mismatch`
       );
       return attachCookies(
         NextResponse.redirect(`${appUrl}/auth/error?type=session_error&description=verification_failed`),
