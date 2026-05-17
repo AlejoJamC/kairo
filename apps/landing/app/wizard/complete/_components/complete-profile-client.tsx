@@ -85,20 +85,35 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
   const [detected, setDetected] = useState({ tickets: 0, threads: 0, customers: 0 });
   const rafRef = useRef<number>(0);
 
-  // Load user profile
+  // Load user profile + pre-fill organisation name from the provisioned account
   useEffect(() => {
     fetchMeWithRetry()
       .then((res) => {
         if (!res.ok) { router.push("/wizard/"); return null; }
         return res.json();
       })
-      .then((data) => {
+      .then(async (data) => {
         if (!data) return;
         setUser(data.user);
+
+        // If the user already completed the wizard (company_name set) skip it
         if (data.user.company_name) {
           redirectToDashboard();
           return;
         }
+
+        // Pre-fill with the account name that was provisioned during OAuth
+        // (derived from Google display name / email prefix). The user can edit it.
+        try {
+          const accRes = await apiCall("/bff/account/current");
+          if (accRes.ok) {
+            const acc = await accRes.json();
+            if (acc.name) setCompanyName(acc.name);
+          }
+        } catch {
+          // non-fatal: input stays empty, user types manually
+        }
+
         setProfileLoading(false);
       })
       .catch(() => {
@@ -136,11 +151,20 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const res = await apiCall("/bff/user/profile", {
+      // (A) Update accounts.name — the authoritative organisation name
+      const accRes = await apiCall("/bff/account/name", {
+        method: "PATCH",
+        body: JSON.stringify({ name: companyName }),
+      });
+      if (!accRes.ok) throw new Error("account_name_update_failed");
+
+      // (B) Sync profiles.company_name — used as the "wizard completed" signal
+      //     and as a personal data point for the user record
+      await apiCall("/bff/user/profile", {
         method: "PATCH",
         body: JSON.stringify({ company_name: companyName }),
       });
-      if (!res.ok) throw new Error();
+
       await redirectToDashboard();
     } catch {
       setError("Failed to save. Please try again.");

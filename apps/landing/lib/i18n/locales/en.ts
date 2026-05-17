@@ -178,7 +178,7 @@ export const en = {
     triageAutoResolveSpamDesc: "Tier 0 archives without going through LLM.",
     triagePriorityPro: "Prioritize Pro and Scale customers",
     triagePriorityProDesc: "Tickets from paid plans move up automatically.",
-    companyLabel: "Company name",
+    companyLabel: "Organisation name",
     companyPlaceholder: "Acme Inc.",
     openCockpit: "Open cockpit",
     skipConfig: "Skip and configure later",

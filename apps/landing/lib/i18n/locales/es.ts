@@ -180,7 +180,7 @@ export const es: Translations = {
     triageAutoResolveSpamDesc: "Tier 0 archiva sin pasar por LLM.",
     triagePriorityPro: "Priorizar clientes Pro y Scale",
     triagePriorityProDesc: "Tickets de planes pagos suben automáticamente.",
-    companyLabel: "Nombre de la empresa",
+    companyLabel: "Nombre de la organización",
     companyPlaceholder: "Acme Inc.",
     openCockpit: "Abrir cockpit",
     skipConfig: "Saltar y configurar después",
