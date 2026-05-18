@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { supabase } from "../../lib/supabase.js";
+import { resolveUserAndAccount } from "../../lib/auth.js";
 
 export const intelligence = new Hono();
 
@@ -7,12 +8,8 @@ const VALID_WINDOWS = new Set(["7d", "30d", "all"]);
 
 // GET /v1/intelligence/classification-accuracy?window=30d
 intelligence.get("/classification-accuracy", async (c) => {
-  const authHeader = c.req.header("Authorization") ?? "";
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (!token) return c.json({ error: "Unauthorized" }, 401);
-
-  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
-  if (authErr || !user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   const window = c.req.query("window") ?? "30d";
   if (!VALID_WINDOWS.has(window)) {
@@ -20,8 +17,8 @@ intelligence.get("/classification-accuracy", async (c) => {
   }
 
   const { data, error } = await supabase.rpc("get_classification_accuracy", {
-    p_user_id: user.id,
-    p_window:  window,
+    p_account_id: ctx.accountId,
+    p_window:     window,
   });
 
   if (error) return c.json({ error: error.message }, 500);

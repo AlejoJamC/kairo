@@ -5,7 +5,7 @@ import { useTriageStore } from "@/stores/triage-store";
 import type { Ticket } from "@kairo/types";
 
 export function useRealtimeTickets() {
-  const { user } = useAuth();
+  const { user, accountId } = useAuth();
   const { addTicket, updateClassification } = useTriageStore();
 
   useEffect(() => {
@@ -13,15 +13,16 @@ export function useRealtimeTickets() {
 
     const supabase = createClient();
 
-    const channel = supabase
-      .channel(`triage:tickets:${user.id}`)
-      .on(
+    const channelName = accountId ? `triage:tickets:${accountId}` : `triage:tickets:${user.id}`;
+    const rowFilter = accountId ? `account_id=eq.${accountId}` : undefined;
+
+    const channel = supabase.channel(channelName).on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "tickets",
-          filter: `user_id=eq.${user.id}`,
+          ...(rowFilter ? { filter: rowFilter } : {}),
         },
         (payload) => {
           addTicket(payload.new as Ticket);
@@ -33,7 +34,7 @@ export function useRealtimeTickets() {
           event: "UPDATE",
           schema: "public",
           table: "tickets",
-          filter: `user_id=eq.${user.id}`,
+          ...(rowFilter ? { filter: rowFilter } : {}),
         },
         (payload) => {
           const next = payload.new as Ticket;
@@ -49,5 +50,5 @@ export function useRealtimeTickets() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, accountId]);
 }

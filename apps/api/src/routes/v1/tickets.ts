@@ -765,7 +765,7 @@ tickets.post("/:id/escalate", async (c) => {
 // Resolves thread from conversations.external_thread_id (omnichannel design).
 // Fallback to tickets.gmail_thread_id for legacy tickets not yet linked to a
 // conversation (deprecated column per 003_kairo_core_schema).
-// Token source: gmail_accounts (Gmail-specific — see gmail-send.ts for the
+// Token source: oauth_credentials (see gmail-token.ts).
 // deferred multi-account / omnichannel token abstraction note).
 // ---------------------------------------------------------------------------
 
@@ -819,7 +819,7 @@ tickets.post("/:id/reply", async (c) => {
     return c.json({ error: "No Gmail thread found for this ticket", code: "NO_THREAD" }, 422);
   }
 
-  // 3. Resolve Gmail OAuth token — oauth_credentials (canonical) with fallback to gmail_accounts.
+  // 3. Resolve Gmail OAuth token from oauth_credentials (ADR-022 canonical).
   let gmailAccessToken: string | null = null;
   let gmailFromEmail: string | null = null;
 
@@ -837,20 +837,6 @@ tickets.post("/:id/reply", async (c) => {
       gmailAccessToken = cred.access_token_enc;
       gmailFromEmail   = cred.external_account_id;
     }
-  }
-
-  if (!gmailAccessToken) {
-    // Fallback: legacy gmail_accounts (ADR-022 Phase 2 transitional)
-    console.warn(`[tickets/reply] oauth_credentials missing for ticket=${id} — falling back to gmail_accounts`);
-    const { data: legacy } = await supabase
-      .from("gmail_accounts")
-      .select("access_token, email")
-      .eq("account_id", ctx.accountId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    gmailAccessToken = legacy?.access_token ?? null;
-    gmailFromEmail   = legacy?.email ?? null;
   }
 
   if (!gmailAccessToken) {

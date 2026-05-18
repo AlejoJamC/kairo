@@ -152,6 +152,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!profileResult.error && profileResult.data) {
         setProfile(profileResult.data as UserProfile);
       }
+      if (memberResult.error) {
+        console.error("[auth] account_members lookup failed:", memberResult.error.message);
+      }
       setUserRole((memberResult.data?.role as DashboardRole) ?? null);
       setAccountId(memberResult.data?.account_id ?? null);
     } finally {

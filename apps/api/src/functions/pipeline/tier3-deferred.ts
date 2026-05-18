@@ -342,7 +342,7 @@ export const tier3Deferred = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Fetch Gmail credentials + channel integration id once
     // -----------------------------------------------------------------------
-    const { accessToken, userEmail, channelIntegrationId } = (await step.run(
+    const { accessToken, userEmail, accountId, channelIntegrationId } = (await step.run(
       "fetch-credentials",
       async () => {
         // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
@@ -357,7 +357,7 @@ export const tier3Deferred = inngest.createFunction(
         const accountId = memberRow?.account_id;
         if (!accountId) {
           console.warn(`[tier3] account_id missing for user ${userId} — aborting`);
-          return { accessToken: null, userEmail: "", channelIntegrationId: null };
+          return { accessToken: null, userEmail: "", accountId: "", channelIntegrationId: null };
         }
 
         const [freshToken, email, channelRow] = await Promise.all([
@@ -368,7 +368,7 @@ export const tier3Deferred = inngest.createFunction(
 
         if (!freshToken) {
           console.warn(`[tier3] No Gmail credentials found for account ${accountId}`);
-          return { accessToken: null, userEmail: "", channelIntegrationId: null };
+          return { accessToken: null, userEmail: "", accountId, channelIntegrationId: null };
         }
 
         return {
@@ -380,7 +380,7 @@ export const tier3Deferred = inngest.createFunction(
       }
     )) as { accessToken: string | null; userEmail: string; accountId: string; channelIntegrationId: string | null };
 
-    if (!accessToken) return;
+    if (!accessToken || !accountId) return;
 
     // -----------------------------------------------------------------------
     // Batch A: 16–30 days

@@ -169,7 +169,7 @@ export const incrementalSync = inngest.createFunction(
       const { data } = await supabase
         .from("messages")
         .select("received_at")
-        .eq("user_id", userId)
+        .eq("account_id", accountId)
         .not("classification_status", "is", null)
         .order("received_at", { ascending: false })
         .limit(1)
