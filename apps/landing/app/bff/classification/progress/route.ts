@@ -48,7 +48,6 @@ export async function GET() {
 
   const accountId = memberRow?.account_id;
   if (!accountId) {
-    const CONTINUE_THRESHOLD = Number(process.env.FAST_PATH_CONTINUE_THRESHOLD ?? 3);
     return NextResponse.json({
       status: "idle" as const,
       tickets_count: 0,
