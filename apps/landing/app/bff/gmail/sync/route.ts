@@ -55,6 +55,8 @@ export async function POST(request: Request) {
     // Heal gmail_accounts with fresh session tokens so future syncs work even
     // without a session cookie (e.g. from a server-side cron).
     if (session?.provider_token) {
+      const healedAt = new Date(Date.now() + 3600 * 1000).toISOString();
+
       await supabase
         .from("gmail_accounts")
         .update({
@@ -62,9 +64,23 @@ export async function POST(request: Request) {
           ...(session.provider_refresh_token && {
             refresh_token: session.provider_refresh_token,
           }),
-          expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+          expires_at: healedAt,
         })
         .eq("user_id", user.id);
+
+      // KAI-234 dual-write: keep oauth_credentials in sync (ADR-022 Level 4).
+      await supabase
+        .from("oauth_credentials")
+        .update({
+          access_token_enc: session.provider_token,
+          ...(session.provider_refresh_token && {
+            refresh_token_enc: session.provider_refresh_token,
+          }),
+          expires_at: healedAt,
+        })
+        .eq("account_id", gmailAccount.account_id)
+        .eq("provider", "gmail")
+        .eq("external_account_id", gmailAccount.email);
     }
 
     // 4. Set up Gmail API client
@@ -86,15 +102,28 @@ export async function POST(request: Request) {
     // Persist refreshed tokens back to DB automatically
     oauth2Client.on("tokens", async (tokens) => {
       if (tokens.access_token) {
+        const newExpiresAt = tokens.expiry_date
+          ? new Date(tokens.expiry_date).toISOString()
+          : new Date(Date.now() + 3600 * 1000).toISOString();
+
         await supabase
           .from("gmail_accounts")
           .update({
             access_token: tokens.access_token,
-            expires_at: tokens.expiry_date
-              ? new Date(tokens.expiry_date).toISOString()
-              : new Date(Date.now() + 3600 * 1000).toISOString(),
+            expires_at: newExpiresAt,
           })
           .eq("user_id", user.id);
+
+        // KAI-234 dual-write: keep oauth_credentials in sync (ADR-022 Level 4).
+        await supabase
+          .from("oauth_credentials")
+          .update({
+            access_token_enc: tokens.access_token,
+            expires_at: newExpiresAt,
+          })
+          .eq("account_id", gmailAccount.account_id)
+          .eq("provider", "gmail")
+          .eq("external_account_id", gmailAccount.email);
       }
     });
 

@@ -234,6 +234,18 @@ export async function GET(request: Request) {
       expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
     }, { onConflict: "user_id,email" });
 
+    // KAI-234 dual-write: canonical OAuth credentials layer (ADR-022 Level 4).
+    // Kept in sync with gmail_accounts until Phase 5 drops the legacy table.
+    await supabase.from("oauth_credentials").upsert({
+      account_id:           resolvedAccountId,
+      provider:             "gmail",
+      granted_by_user_id:   user.id,
+      external_account_id:  user.email,
+      access_token_enc:     session.provider_token,
+      refresh_token_enc:    session.provider_refresh_token ?? null,
+      expires_at:           new Date(Date.now() + 3600 * 1000).toISOString(),
+    }, { onConflict: "account_id,provider,external_account_id" });
+
     // KAI-173: register the inbox as a support channel
     await supabase.from("support_channels").upsert({
       account_id:    resolvedAccountId,
