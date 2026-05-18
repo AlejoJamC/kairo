@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.1"
+  }
   public: {
     Tables: {
       account_invitations: {
@@ -299,7 +304,7 @@ export type Database = {
       }
       channel_integrations: {
         Row: {
-          account_id: string | null
+          account_id: string
           created_at: string
           credentials_encrypted: Json | null
           display_name: string | null
@@ -309,10 +314,9 @@ export type Database = {
           last_synced_at: string | null
           provider: string
           updated_at: string
-          user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           created_at?: string
           credentials_encrypted?: Json | null
           display_name?: string | null
@@ -322,10 +326,9 @@ export type Database = {
           last_synced_at?: string | null
           provider: string
           updated_at?: string
-          user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           created_at?: string
           credentials_encrypted?: Json | null
           display_name?: string | null
@@ -335,7 +338,6 @@ export type Database = {
           last_synced_at?: string | null
           provider?: string
           updated_at?: string
-          user_id?: string
         }
         Relationships: [
           {
@@ -349,6 +351,7 @@ export type Database = {
       }
       classification_feedback: {
         Row: {
+          account_id: string
           ai_category: string | null
           ai_confidence: number | null
           ai_model_version: string | null
@@ -363,10 +366,11 @@ export type Database = {
           created_at: string
           id: string
           notes: string | null
+          submitted_by_user_id: string | null
           ticket_id: string
-          user_id: string
         }
         Insert: {
+          account_id: string
           ai_category?: string | null
           ai_confidence?: number | null
           ai_model_version?: string | null
@@ -381,10 +385,11 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          submitted_by_user_id?: string | null
           ticket_id: string
-          user_id: string
         }
         Update: {
+          account_id?: string
           ai_category?: string | null
           ai_confidence?: number | null
           ai_model_version?: string | null
@@ -399,10 +404,17 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          submitted_by_user_id?: string | null
           ticket_id?: string
-          user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "classification_feedback_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "classification_feedback_ticket_id_fkey"
             columns: ["ticket_id"]
@@ -414,7 +426,7 @@ export type Database = {
       }
       clients: {
         Row: {
-          account_id: string | null
+          account_id: string
           authorized_emails: string[] | null
           contact_persons: Json | null
           created_at: string | null
@@ -426,10 +438,9 @@ export type Database = {
           sla_level: string | null
           telephone: string | null
           updated_at: string | null
-          user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           authorized_emails?: string[] | null
           contact_persons?: Json | null
           created_at?: string | null
@@ -441,10 +452,9 @@ export type Database = {
           sla_level?: string | null
           telephone?: string | null
           updated_at?: string | null
-          user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           authorized_emails?: string[] | null
           contact_persons?: Json | null
           created_at?: string | null
@@ -456,7 +466,6 @@ export type Database = {
           sla_level?: string | null
           telephone?: string | null
           updated_at?: string | null
-          user_id?: string
         }
         Relationships: [
           {
@@ -470,7 +479,7 @@ export type Database = {
       }
       conversations: {
         Row: {
-          account_id: string | null
+          account_id: string
           channel_integration_id: string
           created_at: string
           customer_avatar_url: string | null
@@ -480,10 +489,9 @@ export type Database = {
           id: string
           status: string
           updated_at: string
-          user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           channel_integration_id: string
           created_at?: string
           customer_avatar_url?: string | null
@@ -493,10 +501,9 @@ export type Database = {
           id?: string
           status?: string
           updated_at?: string
-          user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           channel_integration_id?: string
           created_at?: string
           customer_avatar_url?: string | null
@@ -506,7 +513,6 @@ export type Database = {
           id?: string
           status?: string
           updated_at?: string
-          user_id?: string
         }
         Relationships: [
           {
@@ -532,7 +538,6 @@ export type Database = {
           score: number | null
           submitted_at: string | null
           ticket_id: string
-          user_id: string
         }
         Insert: {
           comment?: string | null
@@ -540,7 +545,6 @@ export type Database = {
           score?: number | null
           submitted_at?: string | null
           ticket_id: string
-          user_id: string
         }
         Update: {
           comment?: string | null
@@ -548,7 +552,6 @@ export type Database = {
           score?: number | null
           submitted_at?: string | null
           ticket_id?: string
-          user_id?: string
         }
         Relationships: [
           {
@@ -562,6 +565,7 @@ export type Database = {
       }
       escalation_contacts: {
         Row: {
+          account_id: string
           channel: string
           created_at: string | null
           escalation_level: number
@@ -569,9 +573,9 @@ export type Database = {
           is_active: boolean | null
           name: string
           phone_number: string
-          user_id: string
         }
         Insert: {
+          account_id: string
           channel?: string
           created_at?: string | null
           escalation_level?: number
@@ -579,9 +583,9 @@ export type Database = {
           is_active?: boolean | null
           name: string
           phone_number: string
-          user_id: string
         }
         Update: {
+          account_id?: string
           channel?: string
           created_at?: string | null
           escalation_level?: number
@@ -589,9 +593,16 @@ export type Database = {
           is_active?: boolean | null
           name?: string
           phone_number?: string
-          user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "escalation_contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       escalations: {
         Row: {
@@ -605,7 +616,6 @@ export type Database = {
           notification_sent_at: string | null
           reason: string | null
           ticket_id: string
-          user_id: string
         }
         Insert: {
           context?: Json | null
@@ -618,7 +628,6 @@ export type Database = {
           notification_sent_at?: string | null
           reason?: string | null
           ticket_id: string
-          user_id: string
         }
         Update: {
           context?: Json | null
@@ -631,7 +640,6 @@ export type Database = {
           notification_sent_at?: string | null
           reason?: string | null
           ticket_id?: string
-          user_id?: string
         }
         Relationships: [
           {
@@ -643,53 +651,9 @@ export type Database = {
           },
         ]
       }
-      gmail_accounts: {
-        Row: {
-          access_token: string | null
-          account_id: string | null
-          created_at: string | null
-          email: string
-          expires_at: string | null
-          id: string
-          refresh_token: string | null
-          updated_at: string | null
-          user_id: string
-        }
-        Insert: {
-          access_token?: string | null
-          account_id?: string | null
-          created_at?: string | null
-          email: string
-          expires_at?: string | null
-          id?: string
-          refresh_token?: string | null
-          updated_at?: string | null
-          user_id: string
-        }
-        Update: {
-          access_token?: string | null
-          account_id?: string | null
-          created_at?: string | null
-          email?: string
-          expires_at?: string | null
-          id?: string
-          refresh_token?: string | null
-          updated_at?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gmail_accounts_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       kb_articles: {
         Row: {
-          account_id: string | null
+          account_id: string
           content: string
           created_at: string | null
           embedding: string | null
@@ -698,10 +662,9 @@ export type Database = {
           tags: string[] | null
           title: string
           updated_at: string | null
-          user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           content: string
           created_at?: string | null
           embedding?: string | null
@@ -710,10 +673,9 @@ export type Database = {
           tags?: string[] | null
           title: string
           updated_at?: string | null
-          user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           content?: string
           created_at?: string | null
           embedding?: string | null
@@ -722,7 +684,6 @@ export type Database = {
           tags?: string[] | null
           title?: string
           updated_at?: string | null
-          user_id?: string
         }
         Relationships: [
           {
@@ -736,6 +697,7 @@ export type Database = {
       }
       llm_calls: {
         Row: {
+          account_id: string | null
           completion_tokens: number | null
           confidence_score: number | null
           created_at: string
@@ -753,9 +715,10 @@ export type Database = {
           provider: string
           response_text: string | null
           ticket_id: string | null
-          user_id: string | null
+          triggered_by_user_id: string | null
         }
         Insert: {
+          account_id?: string | null
           completion_tokens?: number | null
           confidence_score?: number | null
           created_at?: string
@@ -773,9 +736,10 @@ export type Database = {
           provider: string
           response_text?: string | null
           ticket_id?: string | null
-          user_id?: string | null
+          triggered_by_user_id?: string | null
         }
         Update: {
+          account_id?: string | null
           completion_tokens?: number | null
           confidence_score?: number | null
           created_at?: string
@@ -793,9 +757,16 @@ export type Database = {
           provider?: string
           response_text?: string | null
           ticket_id?: string | null
-          user_id?: string | null
+          triggered_by_user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "llm_calls_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "llm_calls_ticket_id_fkey"
             columns: ["ticket_id"]
@@ -807,7 +778,7 @@ export type Database = {
       }
       messages: {
         Row: {
-          account_id: string | null
+          account_id: string
           body_html: string | null
           body_plain: string | null
           channel_integration_id: string
@@ -829,7 +800,7 @@ export type Database = {
           thread_external_id: string | null
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           body_html?: string | null
           body_plain?: string | null
           channel_integration_id: string
@@ -851,7 +822,7 @@ export type Database = {
           thread_external_id?: string | null
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           body_html?: string | null
           body_plain?: string | null
           channel_integration_id?: string
@@ -896,12 +867,64 @@ export type Database = {
           },
         ]
       }
+      oauth_credentials: {
+        Row: {
+          access_token_enc: string | null
+          account_id: string
+          created_at: string | null
+          expires_at: string | null
+          external_account_id: string
+          granted_by_user_id: string | null
+          id: string
+          metadata: Json | null
+          provider: string
+          refresh_token_enc: string | null
+          scope: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_token_enc?: string | null
+          account_id: string
+          created_at?: string | null
+          expires_at?: string | null
+          external_account_id: string
+          granted_by_user_id?: string | null
+          id?: string
+          metadata?: Json | null
+          provider: string
+          refresh_token_enc?: string | null
+          scope?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          access_token_enc?: string | null
+          account_id?: string
+          created_at?: string | null
+          expires_at?: string | null
+          external_account_id?: string
+          granted_by_user_id?: string | null
+          id?: string
+          metadata?: Json | null
+          provider?: string
+          refresh_token_enc?: string | null
+          scope?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oauth_credentials_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           company_name: string | null
           created_at: string | null
           email: string
-          gmail_connected: boolean | null
           id: string
           name: string | null
           updated_at: string | null
@@ -910,7 +933,6 @@ export type Database = {
           company_name?: string | null
           created_at?: string | null
           email: string
-          gmail_connected?: boolean | null
           id: string
           name?: string | null
           updated_at?: string | null
@@ -919,7 +941,6 @@ export type Database = {
           company_name?: string | null
           created_at?: string | null
           email?: string
-          gmail_connected?: boolean | null
           id?: string
           name?: string | null
           updated_at?: string | null
@@ -928,6 +949,7 @@ export type Database = {
       }
       response_templates: {
         Row: {
+          account_id: string
           category: string | null
           content: string
           created_at: string
@@ -936,9 +958,9 @@ export type Database = {
           locale: string
           title: string
           updated_at: string
-          user_id: string
         }
         Insert: {
+          account_id: string
           category?: string | null
           content: string
           created_at?: string
@@ -947,9 +969,9 @@ export type Database = {
           locale?: string
           title: string
           updated_at?: string
-          user_id: string
         }
         Update: {
+          account_id?: string
           category?: string | null
           content?: string
           created_at?: string
@@ -958,37 +980,101 @@ export type Database = {
           locale?: string
           title?: string
           updated_at?: string
-          user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "response_templates_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_channels: {
+        Row: {
+          account_id: string
+          channel_type: string
+          connected_at: string | null
+          connected_by_user_id: string | null
+          created_at: string
+          credential_id: string | null
+          display_name: string | null
+          email_address: string
+          id: string
+          is_active: boolean
+          is_primary: boolean
+          oauth_tokens: Json | null
+        }
+        Insert: {
+          account_id: string
+          channel_type: string
+          connected_at?: string | null
+          connected_by_user_id?: string | null
+          created_at?: string
+          credential_id?: string | null
+          display_name?: string | null
+          email_address: string
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          oauth_tokens?: Json | null
+        }
+        Update: {
+          account_id?: string
+          channel_type?: string
+          connected_at?: string | null
+          connected_by_user_id?: string | null
+          created_at?: string
+          credential_id?: string | null
+          display_name?: string | null
+          email_address?: string
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          oauth_tokens?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_channels_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_channels_credential_id_fkey"
+            columns: ["credential_id"]
+            isOneToOne: false
+            referencedRelation: "oauth_credentials"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_schedules: {
         Row: {
-          account_id: string | null
+          account_id: string
           day_of_week: number
           end_time: string
           id: string
           start_time: string
           timezone: string
-          user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           day_of_week: number
           end_time: string
           id?: string
           start_time: string
           timezone?: string
-          user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           day_of_week?: number
           end_time?: string
           id?: string
           start_time?: string
           timezone?: string
-          user_id?: string
         }
         Relationships: [
           {
@@ -1002,30 +1088,27 @@ export type Database = {
       }
       tenant_priority_config: {
         Row: {
-          account_id: string | null
+          account_id: string
           id: string
           updated_at: string
-          user_id: string
           weight_age: number
           weight_emotion: number
           weight_plan: number
           weight_type: number
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           id?: string
           updated_at?: string
-          user_id: string
           weight_age?: number
           weight_emotion?: number
           weight_plan?: number
           weight_type?: number
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           id?: string
           updated_at?: string
-          user_id?: string
           weight_age?: number
           weight_emotion?: number
           weight_plan?: number
@@ -1035,7 +1118,7 @@ export type Database = {
           {
             foreignKeyName: "tenant_priority_config_account_id_fkey"
             columns: ["account_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -1043,31 +1126,28 @@ export type Database = {
       }
       tenant_sla_rules: {
         Row: {
-          account_id: string | null
+          account_id: string
           id: string
           plan_tier: string
           resolution_hours: number | null
           response_hours: number
           ticket_type: string
-          user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           id?: string
           plan_tier: string
           resolution_hours?: number | null
           response_hours: number
           ticket_type: string
-          user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           id?: string
           plan_tier?: string
           resolution_hours?: number | null
           response_hours?: number
           ticket_type?: string
-          user_id?: string
         }
         Relationships: [
           {
@@ -1148,24 +1228,32 @@ export type Database = {
       }
       ticket_groups: {
         Row: {
+          account_id: string
           created_at: string
           id: string
           name: string
-          user_id: string
         }
         Insert: {
+          account_id: string
           created_at?: string
           id?: string
           name: string
-          user_id: string
         }
         Update: {
+          account_id?: string
           created_at?: string
           id?: string
           name?: string
-          user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ticket_groups_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ticket_messages: {
         Row: {
@@ -1318,7 +1406,7 @@ export type Database = {
       }
       tickets: {
         Row: {
-          account_id: string | null
+          account_id: string
           ai_reasoning: string | null
           archived_at: string | null
           assigned_to: string | null
@@ -1348,6 +1436,7 @@ export type Database = {
           id: string
           last_response_at: string | null
           merged_into_ticket_id: string | null
+          originating_user_id: string | null
           parent_ticket_id: string | null
           priority: string | null
           priority_score: number | null
@@ -1365,10 +1454,9 @@ export type Database = {
           ticket_type: string | null
           to_email: string | null
           updated_at: string | null
-          user_id: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           ai_reasoning?: string | null
           archived_at?: string | null
           assigned_to?: string | null
@@ -1398,6 +1486,7 @@ export type Database = {
           id?: string
           last_response_at?: string | null
           merged_into_ticket_id?: string | null
+          originating_user_id?: string | null
           parent_ticket_id?: string | null
           priority?: string | null
           priority_score?: number | null
@@ -1415,10 +1504,9 @@ export type Database = {
           ticket_type?: string | null
           to_email?: string | null
           updated_at?: string | null
-          user_id: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           ai_reasoning?: string | null
           archived_at?: string | null
           assigned_to?: string | null
@@ -1448,6 +1536,7 @@ export type Database = {
           id?: string
           last_response_at?: string | null
           merged_into_ticket_id?: string | null
+          originating_user_id?: string | null
           parent_ticket_id?: string | null
           priority?: string | null
           priority_score?: number | null
@@ -1465,7 +1554,6 @@ export type Database = {
           ticket_type?: string | null
           to_email?: string | null
           updated_at?: string | null
-          user_id?: string
         }
         Relationships: [
           {
@@ -1519,7 +1607,11 @@ export type Database = {
     Functions: {
       current_account_id: { Args: never; Returns: string }
       find_relevant_kb: {
-        Args: { p_limit?: number; p_query_embedding: string; p_user_id: string }
+        Args: {
+          p_account_id: string
+          p_limit?: number
+          p_query_embedding: string
+        }
         Returns: {
           article_id: string
           similarity: number
@@ -1528,11 +1620,11 @@ export type Database = {
       }
       find_similar_tickets: {
         Args: {
+          p_account_id: string
           p_limit?: number
           p_status_filter?: string
           p_threshold?: number
           p_ticket_id: string
-          p_user_id: string
         }
         Returns: {
           resolution_summary: string
@@ -1544,11 +1636,22 @@ export type Database = {
         }[]
       }
       get_classification_accuracy: {
-        Args: { p_user_id: string; p_window?: string }
+        Args: { p_account_id: string; p_window?: string }
         Returns: Json
       }
+      get_invitation_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          account_id: string
+          account_name: string
+          email: string
+          expires_at: string
+          id: string
+          role: string
+        }[]
+      }
       get_sidebar_counts: {
-        Args: { p_user_id: string }
+        Args: { p_account_id: string }
         Returns: {
           count: number
           status: string
@@ -1558,6 +1661,10 @@ export type Database = {
       is_account_admin: { Args: { p_account_id: string }; Returns: boolean }
       is_active_admin: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
+      provision_account_for_user: {
+        Args: { p_account_name?: string; p_user_id: string }
+        Returns: string
+      }
       recompute_category_confidence_thresholds: {
         Args: never
         Returns: undefined
@@ -1694,4 +1801,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
