@@ -272,6 +272,33 @@ export async function GET(request: Request) {
       );
     }
 
+    // ── Register technical pipeline integration (channel_integrations) ───
+    // channel_integrations is the operational connection used by the messages
+    // pipeline to record individual inbound/outbound messages and track their
+    // classification status.  It is referenced by messages.channel_integration_id
+    // (NOT NULL FK), so without this row the pipeline cannot write to messages.
+    //
+    // This write is NON-FATAL for dispatch: if it fails the pipeline still runs
+    // and creates tickets.  What won't work is the omnichannel messages layer
+    // (messages table stays empty, conversations have no message records).
+    // That is acceptable — tickets are the primary deliverable.
+    const { error: ciError } = await supabase.from("channel_integrations").upsert({
+      account_id:          resolvedAccountId,
+      provider:            "gmail",
+      external_account_id: user.email,
+      display_name:        user.email,
+      is_active:           true,
+    }, { onConflict: "account_id,provider,external_account_id" });
+
+    if (ciError) {
+      // Non-fatal: log and continue — pipeline and tickets are unaffected.
+      // If this happens consistently it indicates a schema or RLS issue that
+      // should be investigated but must not block the user's auth flow.
+      console.error(
+        `[KAI-202] channel_integrations upsert failed for user=${user.id}: ${ciError.message} — messages pipeline will be degraded`
+      );
+    }
+
     // ── KAI-206 (B1): verify session token is still coherent ─────────────
     if (!session.access_token || session.user.id !== user.id) {
       console.error(

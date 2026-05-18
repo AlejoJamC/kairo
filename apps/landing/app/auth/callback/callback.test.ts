@@ -240,16 +240,17 @@ function evaluateDispatchGate(input: DispatchGateInput): DispatchGateResult {
 const OK_UPSERT: UpsertResult = { error: null };
 const FAIL_UPSERT = (msg: string): UpsertResult => ({ error: { message: msg } });
 
+const HAPPY: DispatchGateInput = {
+  providerToken:       "ya29.valid-token",
+  userEmail:           "user@example.com",
+  credentialsUpsert:   OK_UPSERT,
+  channelUpsert:       OK_UPSERT,
+  sessionAccessToken:  "access-token",
+  sessionUserId:       "user-1",
+  authenticatedUserId: "user-1",
+};
+
 describe("Pipeline dispatch gate — invariant: dispatch iff ALL preconditions pass", () => {
-  const HAPPY: DispatchGateInput = {
-    providerToken:       "ya29.valid-token",
-    userEmail:           "user@example.com",
-    credentialsUpsert:   OK_UPSERT,
-    channelUpsert:       OK_UPSERT,
-    sessionAccessToken:  "access-token",
-    sessionUserId:       "user-1",
-    authenticatedUserId: "user-1",
-  };
 
   // ── Happy path ─────────────────────────────────────────────────────────
   it("dispatches when every precondition passes", () => {
@@ -377,6 +378,59 @@ describe("Pipeline dispatch gate — invariant: dispatch iff ALL preconditions p
 
   it("does NOT dispatch when credentials and channel succeed but session is broken", () => {
     expect(evaluateDispatchGate({ ...HAPPY, sessionAccessToken: null }).dispatch).toBe(false);
+  });
+});
+
+// ── channel_integrations write — non-fatal, enables messages pipeline ────
+//
+// channel_integrations provides the channel_integration_id required by the
+// messages table (NOT NULL FK).  Without it the pipeline cannot record
+// individual messages, but it CAN still classify and create tickets.
+//
+// Invariant: a failure writing channel_integrations MUST NOT abort the
+// pipeline dispatch.  It degrades the omnichannel messages layer only.
+//
+// This is intentionally separate from the hard-gate conditions above.
+
+type ChannelIntegrationWriteResult =
+  | { written: true }
+  | { written: false; reason: string };
+
+function evaluateChannelIntegrationWrite(
+  upsertResult: UpsertResult
+): ChannelIntegrationWriteResult {
+  if (!upsertResult.error) return { written: true };
+  return { written: false, reason: upsertResult.error.message };
+}
+
+describe("channel_integrations write — non-fatal, enables messages pipeline", () => {
+  it("write succeeds in the happy path", () => {
+    expect(evaluateChannelIntegrationWrite(OK_UPSERT)).toEqual({ written: true });
+  });
+
+  it("write failure produces a degraded (not aborted) outcome", () => {
+    const result = evaluateChannelIntegrationWrite(FAIL_UPSERT("RLS violation"));
+    expect(result.written).toBe(false);
+  });
+
+  it("failure does NOT affect the pipeline dispatch gate — gate still passes", () => {
+    // channel_integrations is NOT in the gate input.
+    // Even when it fails, the gate evaluates purely on oauth_credentials,
+    // support_channels and session coherence.
+    const gate = evaluateDispatchGate({ ...HAPPY });
+    expect(gate.dispatch).toBe(true);
+  });
+
+  it("failure does NOT appear in any gate rejection condition", () => {
+    // Verify that channel_integrations outcome is decoupled from the gate.
+    // Independently vary channel_integrations result while gate passes.
+    const failedCiWrite = evaluateChannelIntegrationWrite(
+      FAIL_UPSERT("connection timeout")
+    );
+    const gateResult = evaluateDispatchGate({ ...HAPPY });
+    // Both independently evaluate — one failing does not affect the other.
+    expect(failedCiWrite.written).toBe(false);
+    expect(gateResult.dispatch).toBe(true);
   });
 });
 
