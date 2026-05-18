@@ -1,20 +1,11 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { supabase } from "../../lib/supabase.js";
+import { resolveUserAndAccount } from "../../lib/auth.js";
 
 export const templates = new Hono();
 
-async function resolveUser(authHeader: string) {
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
-}
-
 // Detect locale from Accept-Language header — defaults to 'es'.
-// Tenant-level locale persistence is a separate concern (no locale field on
-// profiles yet). Accept-Language is the correct HTTP-standard approach for now.
 function resolveLocale(acceptLanguage: string | undefined): "es" | "en" {
   if (!acceptLanguage) return "es";
   return acceptLanguage.toLowerCase().startsWith("en") ? "en" : "es";
@@ -63,9 +54,9 @@ const DEFAULT_TEMPLATES: Record<"es" | "en", Array<{ title: string; content: str
   ],
 };
 
-async function seedDefaults(userId: string, locale: "es" | "en"): Promise<void> {
+async function seedDefaults(accountId: string, locale: "es" | "en"): Promise<void> {
   const rows = DEFAULT_TEMPLATES[locale].map((t) => ({
-    user_id: userId,
+    account_id: accountId,
     locale,
     ...t,
   }));
@@ -77,15 +68,15 @@ async function seedDefaults(userId: string, locale: "es" | "en"): Promise<void> 
 // ---------------------------------------------------------------------------
 
 templates.get("/", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   const locale = resolveLocale(c.req.header("Accept-Language"));
 
   const { data, error, count } = await supabase
     .from("response_templates")
     .select("*", { count: "exact" })
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .eq("locale", locale)
     .eq("is_active", true)
     .order("created_at", { ascending: true });
@@ -93,11 +84,11 @@ templates.get("/", async (c) => {
   if (error) return c.json({ error: error.message }, 500);
 
   if ((count ?? 0) === 0) {
-    await seedDefaults(user.id, locale);
+    await seedDefaults(ctx.accountId, locale);
     const { data: seeded } = await supabase
       .from("response_templates")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("account_id", ctx.accountId)
       .eq("locale", locale)
       .eq("is_active", true)
       .order("created_at", { ascending: true });
@@ -119,8 +110,8 @@ const CreateTemplateSchema = z.object({
 });
 
 templates.post("/", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   let body: unknown;
   try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON body" }, 400); }
@@ -131,11 +122,11 @@ templates.post("/", async (c) => {
   const { data, error } = await supabase
     .from("response_templates")
     .insert({
-      user_id: user.id,
-      title: parsed.data.title,
-      content: parsed.data.content,
-      category: parsed.data.category ?? null,
-      locale: parsed.data.locale,
+      account_id: ctx.accountId,
+      title:      parsed.data.title,
+      content:    parsed.data.content,
+      category:   parsed.data.category ?? null,
+      locale:     parsed.data.locale,
     })
     .select("*")
     .single();
@@ -157,8 +148,8 @@ const UpdateTemplateSchema = z.object({
 });
 
 templates.put("/:id", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   const id = c.req.param("id");
 
@@ -176,7 +167,7 @@ templates.put("/:id", async (c) => {
     .from("response_templates")
     .update(parsed.data)
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .select("*")
     .single();
 
@@ -190,8 +181,8 @@ templates.put("/:id", async (c) => {
 // ---------------------------------------------------------------------------
 
 templates.delete("/:id", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   const id = c.req.param("id");
 
@@ -199,7 +190,7 @@ templates.delete("/:id", async (c) => {
     .from("response_templates")
     .update({ is_active: false })
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .select("id")
     .single();
 

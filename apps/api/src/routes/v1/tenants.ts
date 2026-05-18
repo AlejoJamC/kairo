@@ -1,35 +1,24 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { supabase } from "../../lib/supabase.js";
+import { resolveUserAndAccount } from "../../lib/auth.js";
 import { DEFAULT_WEIGHTS, type TenantWeights } from "../../lib/scoring.js";
 
 export const tenants = new Hono();
-
-// ---------------------------------------------------------------------------
-// Auth helper
-// ---------------------------------------------------------------------------
-
-async function resolveUser(authHeader: string) {
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
-}
 
 // ---------------------------------------------------------------------------
 // GET /v1/tenants/priority-config
 // ---------------------------------------------------------------------------
 
 tenants.get("/priority-config", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   const { data } = await supabase
     .from("tenant_priority_config")
     .select("weight_type, weight_plan, weight_emotion, weight_age, updated_at")
-    .eq("user_id", user.id)
-    .single();
+    .eq("account_id", ctx.accountId)
+    .maybeSingle();
 
   if (!data) {
     return c.json({ ...DEFAULT_WEIGHTS, is_default: true });
@@ -60,8 +49,8 @@ const WeightsSchema = z.object({
 );
 
 tenants.put("/priority-config", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   let body: unknown;
   try {
@@ -81,14 +70,14 @@ tenants.put("/priority-config", async (c) => {
     .from("tenant_priority_config")
     .upsert(
       {
-        user_id: user.id,
-        weight_type: weights.weightType,
-        weight_plan: weights.weightPlan,
+        account_id:    ctx.accountId,
+        weight_type:   weights.weightType,
+        weight_plan:   weights.weightPlan,
         weight_emotion: weights.weightEmotion,
-        weight_age: weights.weightAge,
-        updated_at: new Date().toISOString(),
+        weight_age:    weights.weightAge,
+        updated_at:    new Date().toISOString(),
       },
-      { onConflict: "user_id" }
+      { onConflict: "account_id" }
     );
 
   if (error) {

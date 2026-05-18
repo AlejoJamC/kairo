@@ -221,21 +221,11 @@ export async function GET(request: Request) {
     console.info(`[KAI-218] provisioned account_id=${resolvedAccountId} for user=${user.id}`);
   }
 
-  // ── Save Gmail OAuth tokens (gmail_accounts + support_channels) ─────────
+  // ── Save Gmail OAuth tokens (oauth_credentials + support_channels) ──────
   // resolvedAccountId is guaranteed at this point for all scenarios.
   // provider_token is only present when the user re-consented to Gmail scopes.
+  // gmail_accounts dropped in ADR-022 Phase 5; oauth_credentials is now canonical.
   if (session.provider_token && user.email) {
-    await supabase.from("gmail_accounts").upsert({
-      user_id:       user.id,
-      account_id:    resolvedAccountId,
-      email:         user.email,
-      access_token:  session.provider_token,
-      refresh_token: session.provider_refresh_token ?? null,
-      expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
-    }, { onConflict: "user_id,email" });
-
-    // KAI-234 dual-write: canonical OAuth credentials layer (ADR-022 Level 4).
-    // Kept in sync with gmail_accounts until Phase 5 drops the legacy table.
     await supabase.from("oauth_credentials").upsert({
       account_id:           resolvedAccountId,
       provider:             "gmail",

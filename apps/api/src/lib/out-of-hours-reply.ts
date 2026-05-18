@@ -26,7 +26,7 @@ const FRESHNESS_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 export interface MaybeSendOutOfHoursReplyArgs {
   supabase: SupabaseClient;
-  userId: string;
+  accountId: string;
   ticketId: string;
   gmailAccessToken: string;
   gmailThreadId: string | null;
@@ -78,7 +78,7 @@ export async function maybeSendOutOfHoursReply(
   const { data: scheduleRows } = await args.supabase
     .from("support_schedules")
     .select("day_of_week, start_time, end_time, timezone")
-    .eq("user_id", args.userId);
+    .eq("account_id", args.accountId);
 
   const schedule: ReadonlyArray<SupportScheduleEntry> =
     (scheduleRows && scheduleRows.length > 0)
@@ -94,7 +94,7 @@ export async function maybeSendOutOfHoursReply(
   const { data: prior } = await args.supabase
     .from("tickets")
     .select("id")
-    .eq("user_id", args.userId)
+    .eq("account_id", args.accountId)
     .eq("gmail_thread_id", args.gmailThreadId)
     .eq("auto_replied_out_of_hours", true)
     .limit(1)

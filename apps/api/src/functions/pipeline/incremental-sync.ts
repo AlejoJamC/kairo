@@ -201,7 +201,7 @@ export const incrementalSync = inngest.createFunction(
         supabase
           .from("channel_integrations")
           .select("id")
-          .eq("user_id", userId)
+          .eq("account_id", accountId)
           .eq("provider", "gmail")
           .limit(1)
           .single(),
@@ -286,7 +286,8 @@ export const incrementalSync = inngest.createFunction(
               supabase
                 .from("tickets")
                 .insert({
-                  user_id: userId,
+                  account_id:          accountId,
+                  originating_user_id: userId,
                   subject,
                   from_email: from,
                   gmail_message_id: messageId,
@@ -320,7 +321,7 @@ export const incrementalSync = inngest.createFunction(
             if (ticketId) {
               maybeSendOutOfHoursReply({
                 supabase,
-                userId,
+                accountId,
                 ticketId,
                 gmailAccessToken,
                 gmailThreadId: threadId,

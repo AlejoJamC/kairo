@@ -220,7 +220,7 @@ export const tier1FastPath = inngest.createFunction(
       const { data: channelRow } = await supabase
         .from("channel_integrations")
         .select("id")
-        .eq("user_id", userId)
+        .eq("account_id", accountId)
         .eq("provider", "gmail")
         .limit(1)
         .single();
@@ -342,8 +342,8 @@ export const tier1FastPath = inngest.createFunction(
             const { data: ticket, error: ticketErr } = await supabase
               .from("tickets")
               .insert({
-                account_id: accountId,
-                user_id: userId,
+                account_id:           accountId,
+                originating_user_id:  userId,
                 subject,
                 from_email,
                 from_name,
@@ -380,7 +380,7 @@ export const tier1FastPath = inngest.createFunction(
                 .eq("id", proposal.id);
 
               // Detect escalation triggers post-classification (fire-and-forget)
-              buildEscalationContext(ticket.id, userId)
+              buildEscalationContext(ticket.id, accountId)
                 .then((ctx) => {
                   if (!ctx) return;
                   const result = detectEscalationTriggers(ctx);
@@ -419,7 +419,7 @@ export const tier1FastPath = inngest.createFunction(
             if (ticket?.id) {
               maybeSendOutOfHoursReply({
                 supabase,
-                userId,
+                accountId,
                 ticketId: ticket.id,
                 gmailAccessToken,
                 gmailThreadId: message.threadId,

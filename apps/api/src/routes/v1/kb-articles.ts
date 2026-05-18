@@ -1,29 +1,18 @@
-// KAI-42: KB articles CRUD.
+// KAI-42: KB articles CRUD (ADR-022: migrated from user_id to account_id).
 //
 //   GET    /v1/kb-articles            → list tenant's articles (no embedding column)
 //   GET    /v1/kb-articles/:id        → single article
 //   POST   /v1/kb-articles            → create + generate embedding (fire-and-forget)
 //   PUT    /v1/kb-articles/:id        → update; regenerate embedding if title or content changed
 //   DELETE /v1/kb-articles/:id        → remove
-//
-// Tenant isolation = user_id. Embedding generation is fire-and-forget so the
-// HTTP response is not blocked on a Voyage API call (matches KAI-42 AC: "Voyage
-// AI call does not block ticket classification" — same principle for KB writes).
 
 import { Hono } from "hono";
 import { z } from "zod";
 import { supabase } from "../../lib/supabase.js";
+import { resolveUserAndAccount } from "../../lib/auth.js";
 import { maybeGenerateKbEmbedding } from "../../lib/kb-embedding.js";
 
 export const kbArticles = new Hono();
-
-async function resolveUser(authHeader: string) {
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
-}
 
 const CreateArticleSchema = z.object({
   title:        z.string().min(1).max(500),
@@ -50,13 +39,13 @@ const SAFE_COLUMNS = "id, title, content, tags, is_published, created_at, update
 // ---------------------------------------------------------------------------
 
 kbArticles.get("/", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   const { data, error } = await supabase
     .from("kb_articles")
     .select(SAFE_COLUMNS)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .order("updated_at", { ascending: false });
 
   if (error) {
@@ -70,14 +59,14 @@ kbArticles.get("/", async (c) => {
 // ---------------------------------------------------------------------------
 
 kbArticles.get("/:id", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   const id = c.req.param("id");
   const { data, error } = await supabase
     .from("kb_articles")
     .select(SAFE_COLUMNS)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .eq("id", id)
     .maybeSingle();
 
@@ -93,8 +82,8 @@ kbArticles.get("/:id", async (c) => {
 // ---------------------------------------------------------------------------
 
 kbArticles.post("/", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   let body: unknown;
   try {
@@ -111,7 +100,7 @@ kbArticles.post("/", async (c) => {
   const { data, error } = await supabase
     .from("kb_articles")
     .insert({
-      user_id:      user.id,
+      account_id:   ctx.accountId,
       title:        parsed.data.title,
       content:      parsed.data.content,
       tags:         parsed.data.tags ?? null,
@@ -141,8 +130,8 @@ kbArticles.post("/", async (c) => {
 // ---------------------------------------------------------------------------
 
 kbArticles.put("/:id", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   const id = c.req.param("id");
 
@@ -167,7 +156,7 @@ kbArticles.put("/:id", async (c) => {
   const { data, error } = await supabase
     .from("kb_articles")
     .update(updates)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .eq("id", id)
     .select(SAFE_COLUMNS)
     .maybeSingle();
@@ -177,7 +166,6 @@ kbArticles.put("/:id", async (c) => {
   }
   if (!data) return c.json({ error: "Not found" }, 404);
 
-  // Regenerate embedding only when text content changed.
   const titleChanged   = parsed.data.title !== undefined;
   const contentChanged = parsed.data.content !== undefined;
   if (titleChanged || contentChanged) {
@@ -199,14 +187,14 @@ kbArticles.put("/:id", async (c) => {
 // ---------------------------------------------------------------------------
 
 kbArticles.delete("/:id", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   const id = c.req.param("id");
   const { error, count } = await supabase
     .from("kb_articles")
     .delete({ count: "exact" })
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .eq("id", id);
 
   if (error) {

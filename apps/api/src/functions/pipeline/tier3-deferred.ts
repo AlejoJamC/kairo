@@ -148,6 +148,7 @@ function headersToRecord(headers: GmailHeader[]): Record<string, string> {
 
 async function classifyWindow(
   userId: string,
+  accountId: string,
   accessToken: string,
   userEmail: string,
   channelIntegrationId: string | null,
@@ -253,7 +254,8 @@ async function classifyWindow(
         const { data: ticket } = await supabase
           .from("tickets")
           .insert({
-            user_id: userId,
+            account_id:          accountId,
+            originating_user_id: userId,
             subject,
             from_email: from,
             gmail_message_id: messageId,
@@ -361,7 +363,7 @@ export const tier3Deferred = inngest.createFunction(
         const [freshToken, email, channelRow] = await Promise.all([
           getFreshGmailToken(accountId).catch(() => null),
           getGmailEmailByAccount(accountId),
-          supabase.from("channel_integrations").select("id").eq("user_id", userId).eq("provider", "gmail").limit(1).single(),
+          supabase.from("channel_integrations").select("id").eq("account_id", accountId).eq("provider", "gmail").limit(1).single(),
         ]);
 
         if (!freshToken) {
@@ -372,10 +374,11 @@ export const tier3Deferred = inngest.createFunction(
         return {
           accessToken: freshToken,
           userEmail: email,
+          accountId,
           channelIntegrationId: channelRow.data?.id ?? null,
         };
       }
-    )) as { accessToken: string | null; userEmail: string; channelIntegrationId: string | null };
+    )) as { accessToken: string | null; userEmail: string; accountId: string; channelIntegrationId: string | null };
 
     if (!accessToken) return;
 
@@ -385,6 +388,7 @@ export const tier3Deferred = inngest.createFunction(
     await step.run("batch-a-16-30d", async () => {
       await classifyWindow(
         userId,
+        accountId,
         accessToken,
         userEmail,
         channelIntegrationId,
@@ -399,6 +403,7 @@ export const tier3Deferred = inngest.createFunction(
     await step.run("batch-b-31-60d", async () => {
       await classifyWindow(
         userId,
+        accountId,
         accessToken,
         userEmail,
         channelIntegrationId,
@@ -413,6 +418,7 @@ export const tier3Deferred = inngest.createFunction(
     await step.run("batch-c-61-maxd", async () => {
       await classifyWindow(
         userId,
+        accountId,
         accessToken,
         userEmail,
         channelIntegrationId,

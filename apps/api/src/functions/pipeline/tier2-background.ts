@@ -212,7 +212,7 @@ export const tier2Background = inngest.createFunction(
       const { data: channelRow } = await supabase
         .from("channel_integrations")
         .select("id")
-        .eq("user_id", userId)
+        .eq("account_id", accountId)
         .eq("provider", "gmail")
         .limit(1)
         .single();
@@ -303,8 +303,8 @@ export const tier2Background = inngest.createFunction(
             const { data: ticket, error: ticketErr } = await supabase
               .from("tickets")
               .insert({
-                account_id: accountId,
-                user_id: userId,
+                account_id:          accountId,
+                originating_user_id: userId,
                 subject,
                 from_email: from,
                 gmail_message_id: messageId,
