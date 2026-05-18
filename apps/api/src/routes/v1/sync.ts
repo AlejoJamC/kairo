@@ -37,24 +37,56 @@ sync.post("/trigger", async (c) => {
     return c.json({ status: "skipped", reason: "onboarding_not_complete" });
   }
 
-  // Fetch the access token for this user
-  const { data: gmailAccount } = await supabase
-    .from("gmail_accounts")
-    .select("access_token")
+  // Resolve accountId to verify Gmail is connected (ADR-022 Phase 2).
+  const { data: memberRow } = await supabase
+    .from("account_members")
+    .select("account_id")
     .eq("user_id", userId)
+    .eq("status", "active")
+    .order("joined_at", { ascending: true })
     .limit(1)
-    .single();
+    .maybeSingle();
+  const accountId = memberRow?.account_id;
 
-  if (!gmailAccount?.access_token) {
-    return c.json({ error: "No Gmail account connected" }, 400);
+  if (accountId) {
+    // Check oauth_credentials first (canonical), fallback to gmail_accounts (legacy).
+    const { data: cred } = await supabase
+      .from("oauth_credentials")
+      .select("id")
+      .eq("account_id", accountId)
+      .eq("provider", "gmail")
+      .limit(1)
+      .maybeSingle();
+
+    if (!cred) {
+      const { data: legacy } = await supabase
+        .from("gmail_accounts")
+        .select("id")
+        .eq("account_id", accountId)
+        .limit(1)
+        .maybeSingle();
+
+      if (!legacy) {
+        return c.json({ error: "No Gmail account connected" }, 400);
+      }
+      console.warn(`[sync] oauth_credentials missing for account=${accountId} — using gmail_accounts fallback`);
+    }
+  } else {
+    // accountId not resolved — fallback to user_id lookup on gmail_accounts
+    const { data: legacy } = await supabase
+      .from("gmail_accounts")
+      .select("id")
+      .eq("user_id", userId)
+      .limit(1)
+      .maybeSingle();
+    if (!legacy) {
+      return c.json({ error: "No Gmail account connected" }, 400);
+    }
   }
 
   await inngest.send({
     name: "pipeline/incremental-sync.triggered",
-    data: {
-      userId,
-      gmailAccessToken: gmailAccount.access_token as string,
-    },
+    data: { userId },
   });
 
   return c.json({ status: "triggered" });

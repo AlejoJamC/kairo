@@ -170,17 +170,36 @@ export const tier1FastPath = inngest.createFunction(
     pipelineLogRun(`tier1-fast-path userId=${userId}`);
 
     // -----------------------------------------------------------------------
-    // Step 1: Fetch Gmail profile + most recent message headers in parallel
+    // Step 1: Resolve account, fetch Gmail profile + most recent message headers
+    // ADR-022: getFreshGmailToken now takes accountId (Level 4 oauth_credentials).
     // -----------------------------------------------------------------------
-    const { messages, userEmail, gmailAccessToken } = await step.run("fetch-headers", async () => {
-      const token = await getFreshGmailToken(userId);
+    const { messages, userEmail, gmailAccessToken, accountId: resolvedAccountId } = await step.run("fetch-headers", async () => {
+      // Resolve accountId before token fetch (required by ADR-022 Phase 2).
+      const { data: memberRow } = await supabase
+        .from("account_members")
+        .select("account_id")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("joined_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const accountId = memberRow?.account_id;
+      if (!accountId) {
+        throw new NonRetriableError(
+          `tier1-fast-path: account_id missing for user ${userId}. ` +
+          "The OAuth provisioning step (KAI-218) failed or was skipped. " +
+          "Investigate /auth/callback for this user."
+        );
+      }
+
+      const token = await getFreshGmailToken(accountId);
       const [profile, msgs] = await Promise.all([
         fetchGmailProfile(token),
         fetchGmailMessages(token, env.FAST_PATH_SCAN_SIZE),
       ]);
       pipelineLog("tier1:fetch", `fetched ${msgs.length} messages for ${profile.emailAddress} (scan_size=${env.FAST_PATH_SCAN_SIZE})`);
-      return { messages: msgs, userEmail: profile.emailAddress, gmailAccessToken: token };
-    }) as { messages: GmailMessage[]; userEmail: string; gmailAccessToken: string };
+      return { messages: msgs, userEmail: profile.emailAddress, gmailAccessToken: token, accountId };
+    }) as { messages: GmailMessage[]; userEmail: string; gmailAccessToken: string; accountId: string };
 
     // -----------------------------------------------------------------------
     // Step 2: Pre-filter, classify in parallel, persist each result
@@ -193,27 +212,8 @@ export const tier1FastPath = inngest.createFunction(
       const classifiedIds: string[] = [];
       const skippedIds: string[] = [];
 
-      // Resolve account_id — required for all DB inserts (NOT NULL constraint)
-      const { data: memberRow } = await supabase
-        .from("account_members")
-        .select("account_id")
-        .eq("user_id", userId)
-        .eq("status", "active")
-        .order("joined_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      const accountId = memberRow?.account_id;
-      if (!accountId) {
-        // Post-KAI-218 this should never happen: the OAuth callback guarantees
-        // every user has an account before dispatching this event.
-        // A missing account_id here means provisioning failed or was skipped.
-        pipelineLog("tier1:abort", `account_id missing for user=${userId} — aborting`);
-        throw new NonRetriableError(
-          `tier1-fast-path: account_id missing for user ${userId}. ` +
-          "The OAuth provisioning step (KAI-218) failed or was skipped. " +
-          "Investigate /auth/callback for this user."
-        );
-      }
+      // accountId resolved in fetch-headers step (ADR-022 Phase 2).
+      const accountId = resolvedAccountId;
       pipelineLog("tier1:db", `account_id=${accountId}`);
 
       // One-time lookup: Gmail channel_integration for this user (service role)

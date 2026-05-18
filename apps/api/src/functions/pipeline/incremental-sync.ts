@@ -1,7 +1,7 @@
 import { classifyEmail } from "@kairo/intelligence";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
-import { getFreshGmailToken } from "../../lib/gmail-token.js";
+import { getFreshGmailToken, getGmailEmailByAccount } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
@@ -147,6 +147,21 @@ export const incrementalSync = inngest.createFunction(
   async ({ event, step }) => {
     const { userId } = event.data;
 
+    // ADR-022 Phase 2: resolve accountId once (outside steps — idempotent read).
+    const { data: memberRow } = await supabase
+      .from("account_members")
+      .select("account_id")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("joined_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const accountId = memberRow?.account_id;
+    if (!accountId) {
+      console.warn(`[incremental-sync] account_id missing for user ${userId} — aborting`);
+      return;
+    }
+
     // -----------------------------------------------------------------------
     // Step 1: Get cursor — MAX(received_at) from already-classified messages
     // -----------------------------------------------------------------------
@@ -170,7 +185,7 @@ export const incrementalSync = inngest.createFunction(
     // Step 2: Fetch Gmail headers since the cursor
     // -----------------------------------------------------------------------
     const headers = (await step.run("fetch-new-emails", async () => {
-      const token = await getFreshGmailToken(userId);
+      const token = await getFreshGmailToken(accountId);
       return fetchGmailSince(token, cursor);
     })) as GmailMessage[];
 
@@ -180,28 +195,19 @@ export const incrementalSync = inngest.createFunction(
     // Step 3: Classify new emails
     // -----------------------------------------------------------------------
     await step.run("classify-new-emails", async () => {
-      const gmailAccessToken = await getFreshGmailToken(userId);
+      const [gmailAccessToken, userEmail, channelRow] = await Promise.all([
+        getFreshGmailToken(accountId),
+        getGmailEmailByAccount(accountId),
+        supabase
+          .from("channel_integrations")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("provider", "gmail")
+          .limit(1)
+          .single(),
+      ]);
 
-      // Look up the channel integration id once
-      const { data: channelRow } = await supabase
-        .from("channel_integrations")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("provider", "gmail")
-        .limit(1)
-        .single();
-
-      const channelIntegrationId: string | null = channelRow?.id ?? null;
-
-      // Look up userEmail for outbound check
-      const { data: gmailAccount } = await supabase
-        .from("gmail_accounts")
-        .select("email")
-        .eq("user_id", userId)
-        .limit(1)
-        .single();
-
-      const userEmail = (gmailAccount?.email as string | undefined) ?? "";
+      const channelIntegrationId: string | null = channelRow.data?.id ?? null;
 
       // Collect existing gmail_message_ids for this user to skip duplicates
       const incomingIds = headers.map((m) => m.id);

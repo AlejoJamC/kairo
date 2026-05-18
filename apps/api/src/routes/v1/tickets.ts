@@ -794,7 +794,7 @@ tickets.post("/:id/reply", async (c) => {
   // 1. Fetch ticket + linked conversation
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
-    .select("id, subject, from_email, gmail_thread_id, conversation_id, status")
+    .select("id, subject, from_email, gmail_thread_id, conversation_id, status, account_id")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -822,16 +822,41 @@ tickets.post("/:id/reply", async (c) => {
     return c.json({ error: "No Gmail thread found for this ticket", code: "NO_THREAD" }, 422);
   }
 
-  // 3. Resolve Gmail OAuth token from gmail_accounts
-  const { data: gmailAccount } = await supabase
-    .from("gmail_accounts")
-    .select("access_token, email")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
+  // 3. Resolve Gmail OAuth token — oauth_credentials (canonical) with fallback to gmail_accounts.
+  let gmailAccessToken: string | null = null;
+  let gmailFromEmail: string | null = null;
 
-  if (!gmailAccount?.access_token) {
+  if (ticket.account_id) {
+    const { data: cred } = await supabase
+      .from("oauth_credentials")
+      .select("access_token_enc, external_account_id")
+      .eq("account_id", ticket.account_id)
+      .eq("provider", "gmail")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (cred?.access_token_enc) {
+      gmailAccessToken = cred.access_token_enc;
+      gmailFromEmail   = cred.external_account_id;
+    }
+  }
+
+  if (!gmailAccessToken) {
+    // Fallback: legacy gmail_accounts (ADR-022 Phase 2 transitional)
+    console.warn(`[tickets/reply] oauth_credentials missing for ticket=${id} — falling back to gmail_accounts`);
+    const { data: legacy } = await supabase
+      .from("gmail_accounts")
+      .select("access_token, email")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    gmailAccessToken = legacy?.access_token ?? null;
+    gmailFromEmail   = legacy?.email ?? null;
+  }
+
+  if (!gmailAccessToken) {
     return c.json({ error: "No Gmail integration found", code: "NO_GMAIL_INTEGRATION" }, 422);
   }
 
@@ -839,7 +864,7 @@ tickets.post("/:id/reply", async (c) => {
   let sendResult: { messageId: string; threadId: string };
   try {
     sendResult = await sendGmailReply({
-      accessToken: gmailAccount.access_token,
+      accessToken: gmailAccessToken,
       threadId,
       to: ticket.from_email ?? "",
       subject: ticket.subject?.startsWith("Re:") ? ticket.subject : `Re: ${ticket.subject}`,
@@ -861,8 +886,8 @@ tickets.post("/:id/reply", async (c) => {
       external_id: sendResult.messageId,
       thread_external_id: sendResult.threadId,
       direction: "outbound",
-      sender_external_id: gmailAccount.email,
-      sender_display_name: gmailAccount.email,
+      sender_external_id: gmailFromEmail,
+      sender_display_name: gmailFromEmail,
       body_plain: parsed.data.body,
       body_html: parsed.data.bodyMarkdown ?? null,
       snippet: parsed.data.body.slice(0, 200),

@@ -247,18 +247,19 @@ export async function GET(request: Request) {
     }, { onConflict: "account_id,provider,external_account_id" });
 
     // KAI-173: register the inbox as a support channel
+    // connected_by renamed to connected_by_user_id (ADR-022 Phase 2 migration)
     await supabase.from("support_channels").upsert({
-      account_id:    resolvedAccountId,
-      channel_type:  "gmail",
-      email_address: user.email,
-      oauth_tokens:  {
+      account_id:             resolvedAccountId,
+      channel_type:           "gmail",
+      email_address:          user.email,
+      oauth_tokens:           {
         access_token:  session.provider_token,
         refresh_token: session.provider_refresh_token ?? null,
         expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
       },
-      connected_by:  user.id,
-      is_primary:    true,
-      is_active:     true,
+      connected_by_user_id:   user.id,
+      is_primary:             true,
+      is_active:              true,
     }, { onConflict: "account_id,email_address" });
 
     // ── KAI-206 (B1): verify session is still valid before kicking off work ──

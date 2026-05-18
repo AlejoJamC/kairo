@@ -1,7 +1,7 @@
 import { classifyEmail } from "@kairo/intelligence";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
-import { getFreshGmailToken } from "../../lib/gmail-token.js";
+import { getFreshGmailToken, getGmailEmailByAccount } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
@@ -343,20 +343,35 @@ export const tier3Deferred = inngest.createFunction(
     const { accessToken, userEmail, channelIntegrationId } = (await step.run(
       "fetch-credentials",
       async () => {
-        const [freshToken, gmailAccount, channelRow] = await Promise.all([
-          getFreshGmailToken(userId).catch(() => null),
-          supabase.from("gmail_accounts").select("email").eq("user_id", userId).limit(1).single(),
+        // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
+        const { data: memberRow } = await supabase
+          .from("account_members")
+          .select("account_id")
+          .eq("user_id", userId)
+          .eq("status", "active")
+          .order("joined_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        const accountId = memberRow?.account_id;
+        if (!accountId) {
+          console.warn(`[tier3] account_id missing for user ${userId} — aborting`);
+          return { accessToken: null, userEmail: "", channelIntegrationId: null };
+        }
+
+        const [freshToken, email, channelRow] = await Promise.all([
+          getFreshGmailToken(accountId).catch(() => null),
+          getGmailEmailByAccount(accountId),
           supabase.from("channel_integrations").select("id").eq("user_id", userId).eq("provider", "gmail").limit(1).single(),
         ]);
 
         if (!freshToken) {
-          console.warn(`[tier3] No Gmail account found for user ${userId}`);
+          console.warn(`[tier3] No Gmail credentials found for account ${accountId}`);
           return { accessToken: null, userEmail: "", channelIntegrationId: null };
         }
 
         return {
           accessToken: freshToken,
-          userEmail: gmailAccount.data?.email as string ?? "",
+          userEmail: email,
           channelIntegrationId: channelRow.data?.id ?? null,
         };
       }
