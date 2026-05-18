@@ -221,45 +221,61 @@ export async function GET(request: Request) {
     console.info(`[KAI-218] provisioned account_id=${resolvedAccountId} for user=${user.id}`);
   }
 
-  // ── Save Gmail OAuth tokens (gmail_accounts + support_channels) ─────────
+  // ── Save Gmail OAuth tokens (oauth_credentials + support_channels) ──────
   // resolvedAccountId is guaranteed at this point for all scenarios.
   // provider_token is only present when the user re-consented to Gmail scopes.
+  // gmail_accounts dropped in ADR-022 Phase 5; oauth_credentials is now canonical.
   if (session.provider_token && user.email) {
-    await supabase.from("gmail_accounts").upsert({
-      user_id:       user.id,
-      account_id:    resolvedAccountId,
-      email:         user.email,
-      access_token:  session.provider_token,
-      refresh_token: session.provider_refresh_token ?? null,
-      expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
-    }, { onConflict: "user_id,email" });
+    // ── Persist OAuth credentials — pipeline MUST NOT dispatch if this fails ─
+    const { error: credError } = await supabase.from("oauth_credentials").upsert({
+      account_id:           resolvedAccountId,
+      provider:             "gmail",
+      granted_by_user_id:   user.id,
+      external_account_id:  user.email,
+      access_token_enc:     session.provider_token,
+      refresh_token_enc:    session.provider_refresh_token ?? null,
+      expires_at:           new Date(Date.now() + 3600 * 1000).toISOString(),
+    }, { onConflict: "account_id,provider,external_account_id" });
+
+    if (credError) {
+      console.error(
+        `[KAI-202] oauth_credentials upsert failed for user=${user.id}: ${credError.message} — aborting pipeline dispatch`
+      );
+      return attachCookies(
+        NextResponse.redirect(`${appUrl}/auth/error?type=credentials_error&description=${encodeURIComponent(credError.message)}`),
+        cookieJar
+      );
+    }
 
     // KAI-173: register the inbox as a support channel
-    await supabase.from("support_channels").upsert({
-      account_id:    resolvedAccountId,
-      channel_type:  "gmail",
-      email_address: user.email,
-      oauth_tokens:  {
+    const { error: channelError } = await supabase.from("support_channels").upsert({
+      account_id:             resolvedAccountId,
+      channel_type:           "gmail",
+      email_address:          user.email,
+      oauth_tokens:           {
         access_token:  session.provider_token,
         refresh_token: session.provider_refresh_token ?? null,
         expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
       },
-      connected_by:  user.id,
-      is_primary:    true,
-      is_active:     true,
+      connected_by_user_id:   user.id,
+      is_primary:             true,
+      is_active:              true,
     }, { onConflict: "account_id,email_address" });
 
-    // ── KAI-206 (B1): verify session is still valid before kicking off work ──
-    // Original approach called supabase.auth.getUser(), but that round-trip fails
-    // when the request carries stale/expired cookies: the auth-helpers client enters
-    // an unauthenticated state after failed refresh attempts, and getUser() returns
-    // "Auth session missing!" even though exchangeCodeForSession succeeded.
-    // Fix: use the session/user we already validated at line 114 directly.
-    // The cookie buffer (cookieJar) holds the new session and will reach the browser
-    // via attachCookies() — no second round-trip is needed to confirm that.
+    if (channelError) {
+      console.error(
+        `[KAI-173] support_channels upsert failed for user=${user.id}: ${channelError.message} — aborting pipeline dispatch`
+      );
+      return attachCookies(
+        NextResponse.redirect(`${appUrl}/auth/error?type=channel_error&description=${encodeURIComponent(channelError.message)}`),
+        cookieJar
+      );
+    }
+
+    // ── KAI-206 (B1): verify session token is still coherent ─────────────
     if (!session.access_token || session.user.id !== user.id) {
       console.error(
-        `[KAI-206] session state inconsistent for user ${user.id} — access_token or user mismatch`
+        `[KAI-206] session state inconsistent for user ${user.id} — aborting pipeline dispatch`
       );
       return attachCookies(
         NextResponse.redirect(`${appUrl}/auth/error?type=session_error&description=verification_failed`),
@@ -267,7 +283,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // ── KAI-202: trigger AI classification pipeline ────────────────────────
+    // ── KAI-202: all preconditions verified — safe to dispatch pipeline ────
     try {
       await dispatchOnboardingClassification({
         userId:           user.id,

@@ -1,17 +1,10 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { supabase } from "../../lib/supabase.js";
+import { resolveUserAndAccount } from "../../lib/auth.js";
 import { emitTicketEvent } from "../../lib/ticket-events.js";
 
 export const ticketGroups = new Hono();
-
-async function resolveUser(authHeader: string) {
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
-}
 
 // ---------------------------------------------------------------------------
 // POST /v1/ticket-groups — create a new group
@@ -22,8 +15,8 @@ const CreateGroupSchema = z.object({
 });
 
 ticketGroups.post("/", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   let body: unknown;
   try {
@@ -39,7 +32,7 @@ ticketGroups.post("/", async (c) => {
 
   const { data, error } = await supabase
     .from("ticket_groups")
-    .insert({ user_id: user.id, name: parsed.data.name })
+    .insert({ account_id: ctx.accountId, name: parsed.data.name })
     .select("id, name, created_at")
     .single();
 
@@ -57,17 +50,17 @@ const AddTicketsSchema = z.object({
 });
 
 ticketGroups.post("/:id/tickets", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
   const groupId = c.req.param("id");
 
-  // Verify group belongs to user
+  // Verify group belongs to this account (RLS also enforces, this is a belt-and-suspenders check)
   const { data: group, error: groupErr } = await supabase
     .from("ticket_groups")
     .select("id")
     .eq("id", groupId)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (groupErr || !group) return c.json({ error: "Group not found" }, 404);
@@ -88,7 +81,7 @@ ticketGroups.post("/:id/tickets", async (c) => {
     .from("tickets")
     .update({ group_id: groupId })
     .in("id", parsed.data.ticket_ids)
-    .eq("user_id", user.id);
+    .eq("account_id", ctx.accountId);
 
   if (error) return c.json({ error: "Failed to assign tickets", detail: error.message }, 500);
 
@@ -96,7 +89,7 @@ ticketGroups.post("/:id/tickets", async (c) => {
     parsed.data.ticket_ids.map((ticketId) =>
       emitTicketEvent({
         ticketId,
-        authorId: user.id,
+        authorId: ctx.userId,
         eventType: "grouped",
         metadata: { group_id: groupId },
       })
@@ -111,18 +104,18 @@ ticketGroups.post("/:id/tickets", async (c) => {
 // ---------------------------------------------------------------------------
 
 ticketGroups.delete("/:id/tickets/:ticketId", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
-  const groupId = c.req.param("id");
+  const groupId  = c.req.param("id");
   const ticketId = c.req.param("ticketId");
 
-  // Verify group belongs to user
+  // Verify group belongs to this account
   const { data: group, error: groupErr } = await supabase
     .from("ticket_groups")
     .select("id")
     .eq("id", groupId)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (groupErr || !group) return c.json({ error: "Group not found" }, 404);
@@ -132,7 +125,7 @@ ticketGroups.delete("/:id/tickets/:ticketId", async (c) => {
     .update({ group_id: null })
     .eq("id", ticketId)
     .eq("group_id", groupId)
-    .eq("user_id", user.id);
+    .eq("account_id", ctx.accountId);
 
   if (error) return c.json({ error: "Failed to remove ticket from group", detail: error.message }, 500);
 

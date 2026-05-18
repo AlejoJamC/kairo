@@ -2,7 +2,7 @@ import { classifyEmail } from "@kairo/intelligence";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { NonRetriableError } from "inngest";
-import { getFreshGmailToken } from "../../lib/gmail-token.js";
+import { getFreshGmailToken, getGmailEmailByAccount } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
@@ -153,28 +153,34 @@ export const tier2Background = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Step 1: Fetch Gmail credentials + full 0–N day window
     // -----------------------------------------------------------------------
-    const { messages, userEmail } = await step.run(
+    const { messages, userEmail, accountId: resolvedAccountId } = await step.run(
       "fetch-0-15d-headers",
       async () => {
-        const [freshToken, gmailAccount] = await Promise.all([
-          getFreshGmailToken(userId),
-          supabase.from("gmail_accounts").select("email").eq("user_id", userId).limit(1).single(),
-        ]);
-
-        if (!gmailAccount.data?.email) {
-          console.warn(`[tier2] No Gmail account found for user ${userId}`);
-          return { messages: [] as GmailMessage[], userEmail: "" };
+        // ADR-022 Phase 2: resolve accountId, then read tokens from oauth_credentials.
+        const { data: memberRow } = await supabase
+          .from("account_members")
+          .select("account_id")
+          .eq("user_id", userId)
+          .eq("status", "active")
+          .order("joined_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        const accountId = memberRow?.account_id;
+        if (!accountId) {
+          console.warn(`[tier2] account_id missing for user ${userId} — aborting`);
+          return { messages: [] as GmailMessage[], userEmail: "", accountId: "" };
         }
 
-        const msgs = await fetchGmailWindow(freshToken, env.TIER_2_WINDOW_DAYS);
+        const [freshToken, email] = await Promise.all([
+          getFreshGmailToken(accountId),
+          getGmailEmailByAccount(accountId),
+        ]);
 
-        return {
-          messages: msgs,
-          userEmail: gmailAccount.data.email as string,
-        };
+        const msgs = await fetchGmailWindow(freshToken, env.TIER_2_WINDOW_DAYS);
+        return { messages: msgs, userEmail: email, accountId };
       }
     // Inngest's JsonifyObject loses interface field types across step boundaries; cast back
-    ) as { messages: GmailMessage[]; userEmail: string };
+    ) as { messages: GmailMessage[]; userEmail: string; accountId: string };
 
     if (messages.length === 0) {
       console.warn(`[tier2] No messages in window for user ${userId}`);
@@ -193,18 +199,9 @@ export const tier2Background = inngest.createFunction(
     await step.run("classify-batch", async () => {
       if (unprocessed.length === 0) return;
 
-      // Resolve account_id — required for tickets insert (NOT NULL constraint)
-      const { data: memberRow } = await supabase
-        .from("account_members")
-        .select("account_id")
-        .eq("user_id", userId)
-        .eq("status", "active")
-        .order("joined_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      const accountId = memberRow?.account_id;
+      // accountId resolved in fetch-0-15d-headers step (ADR-022 Phase 2).
+      const accountId = resolvedAccountId;
       if (!accountId) {
-        console.error(`[KAI-220] tier2-background: account_id missing for user ${userId} — aborting`);
         throw new NonRetriableError(
           `tier2-background: account_id missing for user ${userId}. ` +
           "The OAuth provisioning step (KAI-218) failed or was skipped. " +
@@ -215,7 +212,7 @@ export const tier2Background = inngest.createFunction(
       const { data: channelRow } = await supabase
         .from("channel_integrations")
         .select("id")
-        .eq("user_id", userId)
+        .eq("account_id", accountId)
         .eq("provider", "gmail")
         .limit(1)
         .single();
@@ -306,8 +303,8 @@ export const tier2Background = inngest.createFunction(
             const { data: ticket, error: ticketErr } = await supabase
               .from("tickets")
               .insert({
-                account_id: accountId,
-                user_id: userId,
+                account_id:          accountId,
+                originating_user_id: userId,
                 subject,
                 from_email: from,
                 gmail_message_id: messageId,

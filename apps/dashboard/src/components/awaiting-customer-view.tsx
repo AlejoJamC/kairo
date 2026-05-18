@@ -56,7 +56,7 @@ interface AwaitingCustomerViewProps {
 
 export function AwaitingCustomerView({ onViewChange }: AwaitingCustomerViewProps) {
   const { t } = useTranslation("dashboard");
-  const { user } = useAuth();
+  const { user, accountId } = useAuth();
   const { addTicket, selectTicket } = useTriageStore();
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -68,17 +68,18 @@ export function AwaitingCustomerView({ onViewChange }: AwaitingCustomerViewProps
     (async () => {
       setLoading(true);
       const supabase = createClient();
-      const { data, error } = await supabase
+      let query = supabase
         .from("tickets")
         .select("*")
-        .eq("user_id", user.id)
-        .eq("status", "awaiting_customer")
+        .eq("status", "awaiting_customer");
+      if (accountId) query = query.eq("account_id", accountId);
+      const { data, error } = await query
         .order("sla_due_at", { ascending: true, nullsFirst: false });
 
       if (!error && data) setTickets(data as Ticket[]);
       setLoading(false);
     })();
-  }, [user]);
+  }, [user, accountId]);
 
   const relativeTime = (dateStr: string | null | undefined): string => {
     if (!dateStr) return "—";

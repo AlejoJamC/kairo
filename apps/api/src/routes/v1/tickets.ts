@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { classifyEmail, generateEmbedding } from "@kairo/intelligence";
 import { supabase } from "../../lib/supabase.js";
+import { resolveUserAndAccount } from "../../lib/auth.js";
 import { inngest } from "../../lib/inngest.js";
 import { env } from "../../env.js";
 import {
@@ -37,21 +38,16 @@ export const tickets = new Hono();
 // Auth helper (shared across endpoints)
 // ---------------------------------------------------------------------------
 
-async function resolveUser(authHeader: string) {
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
-}
+// Auth resolved via resolveUserAndAccount from lib/auth.ts (ADR-022).
 
 // ---------------------------------------------------------------------------
 // GET /v1/tickets — paginated list sorted by priority_score DESC NULLS LAST
 // ---------------------------------------------------------------------------
 
 tickets.get("/", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const limit = Math.min(Number(c.req.query("limit") ?? 20), 100);
   const cursor = c.req.query("cursor");
@@ -59,7 +55,7 @@ tickets.get("/", async (c) => {
   let query = supabase
     .from("tickets")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .order("priority_score", { ascending: false, nullsFirst: false })
     .order("id", { ascending: true })
     .limit(limit);
@@ -97,17 +93,18 @@ tickets.get("/", async (c) => {
 // ---------------------------------------------------------------------------
 
 tickets.post("/:id/recalculate-score", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
   // 1. Fetch ticket
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
-    .select("id, ticket_type, sentiment, received_at, created_at, from_email, client_id, emotion, user_id")
+    .select("id, ticket_type, sentiment, received_at, created_at, from_email, client_id, emotion, originating_user_id")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -129,7 +126,7 @@ tickets.post("/:id/recalculate-score", async (c) => {
   const { count: recentCount } = await supabase
     .from("tickets")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .eq("from_email", ticket.from_email ?? "")
     .gte("created_at", thirtyDaysAgo);
 
@@ -137,7 +134,7 @@ tickets.post("/:id/recalculate-score", async (c) => {
   const { data: configRow } = await supabase
     .from("tenant_priority_config")
     .select("weight_type, weight_plan, weight_emotion, weight_age")
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   const weights: TenantWeights = configRow
@@ -167,7 +164,7 @@ tickets.post("/:id/recalculate-score", async (c) => {
   const { data: slaRule } = await supabase
     .from("tenant_sla_rules")
     .select("response_hours")
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .eq("ticket_type", ticket.ticket_type ?? "")
     .eq("plan_tier", planTier)
     .single();
@@ -200,8 +197,9 @@ tickets.post("/:id/recalculate-score", async (c) => {
 // ---------------------------------------------------------------------------
 
 tickets.get("/:id/related-history", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
@@ -210,7 +208,7 @@ tickets.get("/:id/related-history", async (c) => {
     .from("tickets")
     .select("id, from_email, subject")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -218,7 +216,7 @@ tickets.get("/:id/related-history", async (c) => {
   // Primary: pgvector RPC
   const { data: rpcData, error: rpcError } = await supabase.rpc("find_similar_tickets", {
     p_ticket_id: id,
-    p_user_id: user.id,
+    p_account_id: ctx.accountId,
     p_limit: 3,
     p_status_filter: "resolved",
   });
@@ -244,7 +242,7 @@ tickets.get("/:id/related-history", async (c) => {
   let fallbackQuery = supabase
     .from("tickets")
     .select("id, subject, resolved_at, resolution_summary, ticket_number")
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .eq("status", "resolved")
     .neq("id", id)
     .limit(3);
@@ -275,8 +273,9 @@ tickets.get("/:id/related-history", async (c) => {
 // ---------------------------------------------------------------------------
 
 tickets.get("/:id/similar", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
   const limit = Math.min(Number(c.req.query("limit") ?? 5), 20);
@@ -286,7 +285,7 @@ tickets.get("/:id/similar", async (c) => {
     .from("tickets")
     .select("id")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -294,7 +293,7 @@ tickets.get("/:id/similar", async (c) => {
   // Call pgvector RPC — degrade gracefully if extension/function not yet deployed
   const { data, error } = await supabase.rpc("find_similar_tickets", {
     p_ticket_id: id,
-    p_user_id: user.id,
+    p_account_id: ctx.accountId,
     p_limit: limit,
   });
 
@@ -313,8 +312,9 @@ tickets.get("/:id/similar", async (c) => {
 // ---------------------------------------------------------------------------
 
 tickets.post("/:id/classify", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
   const source = c.req.query("source") === "human" ? "human" : "ai";
@@ -407,19 +407,11 @@ tickets.post("/classify-batch", async (c) => {
 
   const { ticket_ids, force_reclassify } = parsed.data;
 
-  // Resolve user_id from Authorization header (Bearer token → Supabase JWT sub)
-  const authHeader = c.req.header("Authorization") ?? "";
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (!token) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-  if (authError || !user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const userId = user.id;
+  // Resolve account context (ADR-022)
+  const batchCtx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!batchCtx) return c.json({ error: "Unauthorized" }, 401);
+  const userId    = batchCtx.userId;
+  const accountId = batchCtx.accountId;
 
   // -------------------------------------------------------------------------
   // Async path — dispatch to Inngest, return job_id immediately
@@ -468,7 +460,7 @@ tickets.post("/classify-batch", async (c) => {
     .from("tickets")
     .select("id, subject, body_plain, from_email, classified_at")
     .in("id", ticket_ids)
-    .eq("user_id", userId);
+    .eq("account_id", accountId);
 
   const tickets_found = dbTickets ?? [];
   const foundIds = new Set(tickets_found.map((t) => t.id));
@@ -573,8 +565,9 @@ tickets.post("/classify-batch", async (c) => {
 // ---------------------------------------------------------------------------
 
 tickets.get("/:id/activity", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
   const limit = Math.min(Number(c.req.query("limit") ?? 50), 100);
@@ -585,7 +578,7 @@ tickets.get("/:id/activity", async (c) => {
     .from("tickets")
     .select("id")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -637,8 +630,9 @@ const UpdateStatusSchema = z.object({
 });
 
 tickets.patch("/:id/status", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
@@ -652,7 +646,7 @@ tickets.patch("/:id/status", async (c) => {
     .from("tickets")
     .select("id, status")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -691,8 +685,9 @@ tickets.patch("/:id/status", async (c) => {
 // ---------------------------------------------------------------------------
 
 tickets.patch("/:id/assign", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
@@ -700,7 +695,7 @@ tickets.patch("/:id/assign", async (c) => {
     .from("tickets")
     .select("id, assigned_to")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -733,8 +728,9 @@ const EscalateSchema = z.object({
 });
 
 tickets.post("/:id/escalate", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
@@ -748,7 +744,7 @@ tickets.post("/:id/escalate", async (c) => {
     .from("tickets")
     .select("id")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -769,7 +765,7 @@ tickets.post("/:id/escalate", async (c) => {
 // Resolves thread from conversations.external_thread_id (omnichannel design).
 // Fallback to tickets.gmail_thread_id for legacy tickets not yet linked to a
 // conversation (deprecated column per 003_kairo_core_schema).
-// Token source: gmail_accounts (Gmail-specific — see gmail-send.ts for the
+// Token source: oauth_credentials (see gmail-token.ts).
 // deferred multi-account / omnichannel token abstraction note).
 // ---------------------------------------------------------------------------
 
@@ -780,8 +776,9 @@ const ReplySchema = z.object({
 });
 
 tickets.post("/:id/reply", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
@@ -794,9 +791,9 @@ tickets.post("/:id/reply", async (c) => {
   // 1. Fetch ticket + linked conversation
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
-    .select("id, subject, from_email, gmail_thread_id, conversation_id, status")
+    .select("id, subject, from_email, gmail_thread_id, conversation_id, status, account_id")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -822,16 +819,27 @@ tickets.post("/:id/reply", async (c) => {
     return c.json({ error: "No Gmail thread found for this ticket", code: "NO_THREAD" }, 422);
   }
 
-  // 3. Resolve Gmail OAuth token from gmail_accounts
-  const { data: gmailAccount } = await supabase
-    .from("gmail_accounts")
-    .select("access_token, email")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
+  // 3. Resolve Gmail OAuth token from oauth_credentials (ADR-022 canonical).
+  let gmailAccessToken: string | null = null;
+  let gmailFromEmail: string | null = null;
 
-  if (!gmailAccount?.access_token) {
+  if (ticket.account_id) {
+    const { data: cred } = await supabase
+      .from("oauth_credentials")
+      .select("access_token_enc, external_account_id")
+      .eq("account_id", ticket.account_id)
+      .eq("provider", "gmail")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (cred?.access_token_enc) {
+      gmailAccessToken = cred.access_token_enc;
+      gmailFromEmail   = cred.external_account_id;
+    }
+  }
+
+  if (!gmailAccessToken) {
     return c.json({ error: "No Gmail integration found", code: "NO_GMAIL_INTEGRATION" }, 422);
   }
 
@@ -839,7 +847,7 @@ tickets.post("/:id/reply", async (c) => {
   let sendResult: { messageId: string; threadId: string };
   try {
     sendResult = await sendGmailReply({
-      accessToken: gmailAccount.access_token,
+      accessToken: gmailAccessToken,
       threadId,
       to: ticket.from_email ?? "",
       subject: ticket.subject?.startsWith("Re:") ? ticket.subject : `Re: ${ticket.subject}`,
@@ -861,8 +869,8 @@ tickets.post("/:id/reply", async (c) => {
       external_id: sendResult.messageId,
       thread_external_id: sendResult.threadId,
       direction: "outbound",
-      sender_external_id: gmailAccount.email,
-      sender_display_name: gmailAccount.email,
+      sender_external_id: gmailFromEmail,
+      sender_display_name: gmailFromEmail,
       body_plain: parsed.data.body,
       body_html: parsed.data.bodyMarkdown ?? null,
       snippet: parsed.data.body.slice(0, 200),
@@ -915,8 +923,9 @@ const ClassifyApproveSchema = z.object({
 });
 
 tickets.post("/:id/classify-approve", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
@@ -930,7 +939,7 @@ tickets.post("/:id/classify-approve", async (c) => {
     .from("tickets")
     .select("id")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -995,8 +1004,9 @@ const SuggestReplyResponseSchema = z.object({
 });
 
 tickets.post("/:id/suggest-reply", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
@@ -1005,7 +1015,7 @@ tickets.post("/:id/suggest-reply", async (c) => {
     .from("tickets")
     .select("id, subject, ticket_type, priority, category, emotion, conversation_id, client_id, from_email")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -1046,7 +1056,7 @@ tickets.post("/:id/suggest-reply", async (c) => {
   let similarCase = "No hay casos similares resueltos disponibles.";
   const { data: similar } = await supabase.rpc("find_similar_tickets", {
     p_ticket_id: id,
-    p_user_id: user.id,
+    p_account_id: ctx.accountId,
     p_limit: 1,
     p_status_filter: "resolved",
   }).catch(() => ({ data: null }));
@@ -1136,8 +1146,9 @@ const profileCache = new Map<string, ClientProfileCache>();
 const PROFILE_CACHE_TTL_MS = 60_000;
 
 tickets.get("/:id/client-profile", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const ticketId = c.req.param("id");
 
@@ -1146,7 +1157,7 @@ tickets.get("/:id/client-profile", async (c) => {
     .from("tickets")
     .select("id, client_id, from_email")
     .eq("id", ticketId)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -1168,33 +1179,33 @@ tickets.get("/:id/client-profile", async (c) => {
       .from("clients")
       .select("id, name, telephone, authorized_emails, plan_type, sla_level, internal_id, created_at")
       .eq("id", ticket.client_id)
-      .eq("user_id", user.id)
+      .eq("account_id", ctx.accountId)
       .single(),
 
     supabase
       .from("tickets")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
+      .eq("account_id", ctx.accountId)
       .eq("client_id", ticket.client_id),
 
     supabase
       .from("tickets")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
+      .eq("account_id", ctx.accountId)
       .eq("client_id", ticket.client_id)
       .gte("created_at", now30),
 
     supabase
       .from("tickets")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
+      .eq("account_id", ctx.accountId)
       .eq("client_id", ticket.client_id)
       .gte("created_at", now90),
 
     supabase
       .from("tickets")
       .select("id, ticket_number, subject, status, created_at")
-      .eq("user_id", user.id)
+      .eq("account_id", ctx.accountId)
       .eq("client_id", ticket.client_id)
       .order("created_at", { ascending: false })
       .limit(5),
@@ -1242,7 +1253,7 @@ tickets.get("/:id/client-profile", async (c) => {
 
 export async function buildEscalationContext(
   ticketId: string,
-  userId: string,
+  accountId: string,
 ): Promise<EscalationContext | null> {
   const now7d  = new Date(Date.now() -  7 * 24 * 60 * 60 * 1000).toISOString();
   const now30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -1252,7 +1263,7 @@ export async function buildEscalationContext(
     .from("tickets")
     .select("id, emotion, sla_breached, sla_due_at, created_at, status, client_id, from_email")
     .eq("id", ticketId)
-    .eq("user_id", userId)
+    .eq("account_id", accountId)
     .single();
 
   if (ticketErr || !ticket) return null;
@@ -1264,7 +1275,7 @@ export async function buildEscalationContext(
       .from("clients")
       .select("plan_type")
       .eq("id", ticket.client_id)
-      .eq("user_id", userId)
+      .eq("account_id", accountId)
       .single();
     planScore = planScoreFromTier(client?.plan_type ?? null);
   }
@@ -1275,7 +1286,7 @@ export async function buildEscalationContext(
       ? supabase
           .from("tickets")
           .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
+          .eq("account_id", accountId)
           .eq("client_id", ticket.client_id)
           .gte("created_at", now30d)
       : Promise.resolve({ count: 0 }),
@@ -1284,7 +1295,7 @@ export async function buildEscalationContext(
       ? supabase
           .from("tickets")
           .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
+          .eq("account_id", accountId)
           .eq("client_id", ticket.client_id)
           .eq("category", "technical")
           .gte("created_at", now7d)
@@ -1293,7 +1304,7 @@ export async function buildEscalationContext(
     // past_l2_case: find similar tickets then cross with escalations table
     supabase.rpc("find_similar_tickets", {
       p_ticket_id: ticketId,
-      p_user_id:   userId,
+      p_account_id: accountId,
       p_limit:     5,
       p_threshold: 0.80,
     }),
@@ -1326,15 +1337,16 @@ export async function buildEscalationContext(
 }
 
 tickets.post("/:id/escalation-reasons", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const ticketId = c.req.param("id");
 
-  const ctx = await buildEscalationContext(ticketId, user.id);
-  if (!ctx) return c.json({ error: "Ticket not found" }, 404);
+  const escCtx = await buildEscalationContext(ticketId, ctx.accountId);
+  if (!escCtx) return c.json({ error: "Ticket not found" }, 404);
 
-  const result = detectEscalationTriggers(ctx);
+  const result = detectEscalationTriggers(escCtx);
 
   // Persist into the latest pending proposal for this ticket
   const { data: proposal } = await supabase
@@ -1360,8 +1372,9 @@ tickets.post("/:id/escalation-reasons", async (c) => {
 // ---------------------------------------------------------------------------
 
 tickets.post("/:id/correct-classification", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const ticketId = c.req.param("id");
 
@@ -1374,9 +1387,9 @@ tickets.post("/:id/correct-classification", async (c) => {
   // Load ticket — verify tenant ownership
   const { data: ticket, error: fetchErr } = await supabase
     .from("tickets")
-    .select("id, user_id, ticket_type, priority, category, sentiment, classification_confidence, classified_at")
+    .select("id, originating_user_id, ticket_type, priority, category, sentiment, classification_confidence, classified_at")
     .eq("id", ticketId)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -1395,7 +1408,7 @@ tickets.post("/:id/correct-classification", async (c) => {
     .from("classification_feedback")
     .insert({
       ticket_id:        ticketId,
-      user_id:          user.id,
+      submitted_by_user_id: user.id,
       corrected_by:     user.id,
       ai_ticket_type:   ticket.ticket_type,
       ai_priority:      ticket.priority,
@@ -1459,8 +1472,9 @@ const SIMILAR_CASES_LIMIT = 2;
 const BODY_PREVIEW_CHARS = 200;
 
 tickets.get("/:id/knowledge-context", async (c) => {
-  const user = await resolveUser(c.req.header("Authorization") ?? "");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
@@ -1468,19 +1482,17 @@ tickets.get("/:id/knowledge-context", async (c) => {
     .from("tickets")
     .select("id, subject, body_plain")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("account_id", ctx.accountId)
     .single();
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
-
-  const userId = user.id;
 
   // Helper: fetch published articles and optionally enrich with similarity
   async function fetchPublishedArticles(ids?: string[], similarities?: Map<string, number>) {
     const q = supabase
       .from("kb_articles")
       .select("id, title, content, tags")
-      .eq("user_id", userId)
+      .eq("account_id", ctx.accountId)
       .eq("is_published", true);
 
     if (ids && ids.length > 0) {
@@ -1522,12 +1534,12 @@ tickets.get("/:id/knowledge-context", async (c) => {
   const [kbResult, similarResult] = await Promise.allSettled([
     supabase.rpc("find_relevant_kb", {
       p_query_embedding: queryVector,
-      p_user_id: userId,
+      p_account_id: ctx.accountId,
       p_limit: KB_LIMIT,
     }),
     supabase.rpc("find_similar_tickets", {
       p_ticket_id: id,
-      p_user_id: userId,
+      p_account_id: ctx.accountId,
       p_limit: SIMILAR_CASES_LIMIT,
       p_threshold: KNOWLEDGE_CONTEXT_THRESHOLD,
       p_status_filter: "resolved",

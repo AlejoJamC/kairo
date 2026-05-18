@@ -180,7 +180,7 @@ const VIRTUALIZE_THRESHOLD = 50;
 
 export function TicketList() {
   const { t } = useTranslation("dashboard");
-  const { user } = useAuth();
+  const { user, accountId } = useAuth();
   const { tickets, selectedTicketId, isScanning, classifiedCount, selectTicket, updateClassification, correctedTicketIds, setTickets } =
     useTriageStore();
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
@@ -224,7 +224,7 @@ export function TicketList() {
   // -------------------------------------------------------------------------
 
   async function handleSyncGmail() {
-    if (syncing || !user) return;
+    if (syncing || !user || !accountId) return;
     setMenuOpen(false);
     setSyncing(true);
     setSyncResult(null);
@@ -246,7 +246,7 @@ export function TicketList() {
       const { data: fresh } = await supabase
         .from("tickets")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("account_id", accountId!)
         .neq("status", "awaiting_customer")
         .order("priority_score", { ascending: false, nullsFirst: false })
         .limit(200);

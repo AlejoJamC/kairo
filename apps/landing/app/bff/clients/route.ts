@@ -152,7 +152,6 @@ export async function POST(request: Request) {
     const { data: client, error } = await supabase
       .from("clients")
       .insert({
-        user_id: user.id,
         account_id: membership.account_id,
         internal_id: internal_id.trim(),
         name: name.trim(),

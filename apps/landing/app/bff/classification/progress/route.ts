@@ -37,11 +37,33 @@ export async function GET() {
   const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
   const until = new Date().toISOString();
 
-  // Tickets scoped to user_id (new users don't have account_id yet)
+  const { data: memberRow } = await supabase
+    .from("account_members")
+    .select("account_id")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .order("joined_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const accountId = memberRow?.account_id;
+  if (!accountId) {
+    return NextResponse.json({
+      status: "idle" as const,
+      tickets_count: 0,
+      threads_count: 0,
+      clients_count: 0,
+      categories: { ...EMPTY_CATEGORIES },
+      window: { since, until },
+      last_classified_at: null,
+      threshold_reached: false,
+    });
+  }
+
   const { data: ticketRows, error: ticketErr } = await supabase
     .from("tickets")
     .select("id, category, gmail_thread_id, client_id, classified_at")
-    .eq("user_id", user.id)
+    .eq("account_id", accountId)
     .not("classified_at", "is", null);
 
   if (ticketErr) return NextResponse.json({ error: ticketErr.message }, { status: 500 });

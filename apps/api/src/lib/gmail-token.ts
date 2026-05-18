@@ -1,10 +1,10 @@
 import { supabase } from "./supabase.js";
 
 // ---------------------------------------------------------------------------
-// Gmail token management — refresh when expired
+// Gmail token management — ADR-022 Phase 5
 //
-// Google access tokens last ~1 hour. The pipeline reads from gmail_accounts
-// and must always have a fresh token before calling Gmail API.
+// Single source of truth: oauth_credentials (account-centric, Level 4).
+// gmail_accounts has been dropped (Phase 5 migration).
 // ---------------------------------------------------------------------------
 
 interface RefreshResponse {
@@ -16,7 +16,7 @@ interface RefreshResponse {
 }
 
 async function refreshGmailToken(
-  userId: string,
+  accountId: string,
   refreshToken: string
 ): Promise<string> {
   const clientId = process.env["NEXT_PUBLIC_GOOGLE_CLIENT_ID"];
@@ -48,40 +48,59 @@ async function refreshGmailToken(
   const expiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();
 
   await supabase
-    .from("gmail_accounts")
-    .update({ access_token: newAccessToken, expires_at: expiresAt })
-    .eq("user_id", userId);
+    .from("oauth_credentials")
+    .update({ access_token_enc: newAccessToken, expires_at: expiresAt })
+    .eq("account_id", accountId)
+    .eq("provider", "gmail");
 
   return newAccessToken;
 }
 
 /**
- * Returns a valid Gmail access token for the given user.
+ * Returns a valid Gmail access token for the given account.
+ * Reads from oauth_credentials (canonical).
  * Refreshes automatically if the stored token is expired or about to expire.
  */
-export async function getFreshGmailToken(userId: string): Promise<string> {
-  const { data: account } = await supabase
-    .from("gmail_accounts")
-    .select("access_token, refresh_token, expires_at")
-    .eq("user_id", userId)
+export async function getFreshGmailToken(accountId: string): Promise<string> {
+  const { data: cred } = await supabase
+    .from("oauth_credentials")
+    .select("access_token_enc, refresh_token_enc, expires_at")
+    .eq("account_id", accountId)
+    .eq("provider", "gmail")
+    .order("created_at", { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
-  if (!account) {
-    throw new Error(`No Gmail account found for user ${userId}`);
+  if (!cred) {
+    throw new Error(`No Gmail credentials found for account ${accountId}`);
   }
 
-  // Refresh if expired or expiring within 5 minutes
-  const expiresAt = account.expires_at ? new Date(account.expires_at).getTime() : 0;
+  const expiresAt = cred.expires_at ? new Date(cred.expires_at).getTime() : 0;
   const isExpired = expiresAt < Date.now() + 5 * 60 * 1000;
 
-  if (!isExpired && account.access_token) {
-    return account.access_token;
+  if (!isExpired && cred.access_token_enc) {
+    return cred.access_token_enc;
   }
 
-  if (!account.refresh_token) {
-    throw new Error(`Gmail token expired and no refresh_token available for user ${userId}`);
+  if (!cred.refresh_token_enc) {
+    throw new Error(`Gmail token expired and no refresh_token available for account ${accountId}`);
   }
 
-  return refreshGmailToken(userId, account.refresh_token);
+  return refreshGmailToken(accountId, cred.refresh_token_enc);
+}
+
+/**
+ * Returns the Gmail email address associated with the given account.
+ */
+export async function getGmailEmailByAccount(accountId: string): Promise<string> {
+  const { data: cred } = await supabase
+    .from("oauth_credentials")
+    .select("external_account_id")
+    .eq("account_id", accountId)
+    .eq("provider", "gmail")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return (cred?.external_account_id as string | undefined) ?? "";
 }

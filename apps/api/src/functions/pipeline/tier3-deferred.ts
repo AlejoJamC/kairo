@@ -1,7 +1,7 @@
 import { classifyEmail } from "@kairo/intelligence";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
-import { getFreshGmailToken } from "../../lib/gmail-token.js";
+import { getFreshGmailToken, getGmailEmailByAccount } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
@@ -148,6 +148,7 @@ function headersToRecord(headers: GmailHeader[]): Record<string, string> {
 
 async function classifyWindow(
   userId: string,
+  accountId: string,
   accessToken: string,
   userEmail: string,
   channelIntegrationId: string | null,
@@ -158,15 +159,19 @@ async function classifyWindow(
 
   if (messages.length === 0) return;
 
-  // Resumability: fetch already-processed external_ids for this window
+  // Dedup: check tickets table directly by (account_id, gmail_message_id).
+  // Previously checked the messages table but that's only populated when
+  // channel_integrations exists — unreliable. Tickets table is the source of truth.
   const externalIds = messages.map((m) => m.id);
   const { data: existing } = await supabase
-    .from("messages")
-    .select("external_id")
-    .in("external_id", externalIds)
-    .not("classification_status", "is", null);
+    .from("tickets")
+    .select("gmail_message_id")
+    .eq("account_id", accountId)
+    .in("gmail_message_id", externalIds);
 
-  const processedIds = new Set((existing ?? []).map((r) => r.external_id));
+  const processedIds = new Set(
+    (existing ?? []).map((r) => r.gmail_message_id).filter(Boolean)
+  );
 
   const classificationPromises: Promise<void>[] = [];
 
@@ -253,7 +258,8 @@ async function classifyWindow(
         const { data: ticket } = await supabase
           .from("tickets")
           .insert({
-            user_id: userId,
+            account_id:          accountId,
+            originating_user_id: userId,
             subject,
             from_email: from,
             gmail_message_id: messageId,
@@ -340,29 +346,45 @@ export const tier3Deferred = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Fetch Gmail credentials + channel integration id once
     // -----------------------------------------------------------------------
-    const { accessToken, userEmail, channelIntegrationId } = (await step.run(
+    const { accessToken, userEmail, accountId, channelIntegrationId } = (await step.run(
       "fetch-credentials",
       async () => {
-        const [freshToken, gmailAccount, channelRow] = await Promise.all([
-          getFreshGmailToken(userId).catch(() => null),
-          supabase.from("gmail_accounts").select("email").eq("user_id", userId).limit(1).single(),
-          supabase.from("channel_integrations").select("id").eq("user_id", userId).eq("provider", "gmail").limit(1).single(),
+        // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
+        const { data: memberRow } = await supabase
+          .from("account_members")
+          .select("account_id")
+          .eq("user_id", userId)
+          .eq("status", "active")
+          .order("joined_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        const accountId = memberRow?.account_id;
+        if (!accountId) {
+          console.warn(`[tier3] account_id missing for user ${userId} — aborting`);
+          return { accessToken: null, userEmail: "", accountId: "", channelIntegrationId: null };
+        }
+
+        const [freshToken, email, channelRow] = await Promise.all([
+          getFreshGmailToken(accountId).catch(() => null),
+          getGmailEmailByAccount(accountId),
+          supabase.from("channel_integrations").select("id").eq("account_id", accountId).eq("provider", "gmail").limit(1).single(),
         ]);
 
         if (!freshToken) {
-          console.warn(`[tier3] No Gmail account found for user ${userId}`);
-          return { accessToken: null, userEmail: "", channelIntegrationId: null };
+          console.warn(`[tier3] No Gmail credentials found for account ${accountId}`);
+          return { accessToken: null, userEmail: "", accountId, channelIntegrationId: null };
         }
 
         return {
           accessToken: freshToken,
-          userEmail: gmailAccount.data?.email as string ?? "",
+          userEmail: email,
+          accountId,
           channelIntegrationId: channelRow.data?.id ?? null,
         };
       }
-    )) as { accessToken: string | null; userEmail: string; channelIntegrationId: string | null };
+    )) as { accessToken: string | null; userEmail: string; accountId: string; channelIntegrationId: string | null };
 
-    if (!accessToken) return;
+    if (!accessToken || !accountId) return;
 
     // -----------------------------------------------------------------------
     // Batch A: 16–30 days
@@ -370,6 +392,7 @@ export const tier3Deferred = inngest.createFunction(
     await step.run("batch-a-16-30d", async () => {
       await classifyWindow(
         userId,
+        accountId,
         accessToken,
         userEmail,
         channelIntegrationId,
@@ -384,6 +407,7 @@ export const tier3Deferred = inngest.createFunction(
     await step.run("batch-b-31-60d", async () => {
       await classifyWindow(
         userId,
+        accountId,
         accessToken,
         userEmail,
         channelIntegrationId,
@@ -398,6 +422,7 @@ export const tier3Deferred = inngest.createFunction(
     await step.run("batch-c-61-maxd", async () => {
       await classifyWindow(
         userId,
+        accountId,
         accessToken,
         userEmail,
         channelIntegrationId,

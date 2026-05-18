@@ -76,7 +76,8 @@ export type Database = {
       tickets: {
         Row: {
           id: string;
-          user_id: string;
+          account_id: string;
+          originating_user_id: string | null;
           gmail_message_id: string;
           gmail_thread_id: string | null;
           subject: string;
@@ -102,7 +103,8 @@ export type Database = {
           classification_confidence: number | null;
         };
         Insert: {
-          user_id: string;
+          account_id: string;
+          originating_user_id?: string | null;
           gmail_message_id: string;
           gmail_thread_id?: string | null;
           subject: string;

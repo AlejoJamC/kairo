@@ -9,14 +9,25 @@ export const batchClassify = inngest.createFunction(
     const { userId, ticketIds, forceReclassify, jobId } = event.data;
 
     // -----------------------------------------------------------------------
-    // Step 1: Fetch tickets scoped to user
+    // Step 1: Fetch tickets scoped to account (ADR-022: account_id, not user_id)
     // -----------------------------------------------------------------------
     const tickets = (await step.run("fetch-tickets", async () => {
+      const { data: memberRow } = await supabase
+        .from("account_members")
+        .select("account_id")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("joined_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const accountId = memberRow?.account_id;
+      if (!accountId) return [];
+
       const { data } = await supabase
         .from("tickets")
         .select("id, subject, body_plain, from_email, classified_at")
         .in("id", ticketIds)
-        .eq("user_id", userId);
+        .eq("account_id", accountId);
       return data ?? [];
     })) as Array<{
       id: string;
