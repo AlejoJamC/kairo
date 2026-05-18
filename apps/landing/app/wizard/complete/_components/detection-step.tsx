@@ -83,9 +83,12 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
   // Two independent signals:
   //  - isStillScanning controls the live "scanning…" indicator + spinner. It
   //    stays true until the pipeline truly finishes (status === "complete").
+  //    "idle" means the pipeline hasn't written any classified tickets yet (e.g.
+  //    user navigated back while Inngest is still booting) — treat it as scanning
+  //    so the UI never looks stuck with zeros and a disabled button.
   //  - canContinue controls whether the Continue button is enabled. It fires
   //    as soon as threshold_reached is true, while the scan keeps running.
-  const isStillScanning = data?.status === "in_progress";
+  const isStillScanning = !data || data.status === "in_progress" || data.status === "idle";
   const canContinue = data?.threshold_reached || data?.status === "complete" || !!error;
 
   const categoryLabels: Record<string, string> = {
