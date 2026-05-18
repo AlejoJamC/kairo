@@ -77,6 +77,9 @@ CREATE OR REPLACE FUNCTION "public"."ensure_account_on_signup"() RETURNS "trigge
     SET "search_path" TO 'public'
     AS $$
 BEGIN
+    -- Best-effort: a failure here must never block the signup.
+    -- The OAuth callback (KAI-218) also calls provision_account_for_user
+    -- explicitly, so this is a safety net, not the primary path.
     BEGIN
         PERFORM public.provision_account_for_user(NEW.id, NULL);
     EXCEPTION WHEN OTHERS THEN
@@ -84,6 +87,7 @@ BEGIN
             '[KAI-217] ensure_account_on_signup: provisioning failed for user % (%): %',
             NEW.id, NEW.email, SQLERRM;
     END;
+
     RETURN NEW;
 END;
 $$;
@@ -92,117 +96,86 @@ $$;
 ALTER FUNCTION "public"."ensure_account_on_signup"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer DEFAULT 3) RETURNS TABLE("article_id" "uuid", "title" "text", "similarity" double precision)
-    LANGUAGE "sql" STABLE
-    AS $$
-  SELECT
-    id AS article_id,
-    title,
-    1 - (embedding <=> p_query_embedding) AS similarity
-  FROM kb_articles
-  WHERE user_id = p_user_id
-    AND is_published = true
-    AND embedding IS NOT NULL
-  ORDER BY embedding <=> p_query_embedding
-  LIMIT p_limit;
-$$;
-
-
-ALTER FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer) OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer DEFAULT 5, "p_threshold" double precision DEFAULT 0.75, "p_status_filter" "text" DEFAULT NULL::"text") RETURNS TABLE("ticket_id" "uuid", "subject" "text", "resolved_at" timestamp with time zone, "resolution_summary" "text", "ticket_number" bigint, "similarity" double precision)
+CREATE OR REPLACE FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_account_id" "uuid", "p_limit" integer DEFAULT 3) RETURNS TABLE("article_id" "uuid", "title" "text", "similarity" double precision)
     LANGUAGE "sql" STABLE
     SET "search_path" TO 'public', 'extensions'
     AS $$
   SELECT
-    t.id                                              AS ticket_id,
-    t.subject                                         AS subject,
-    t.resolved_at                                     AS resolved_at,
-    t.resolution_summary                              AS resolution_summary,
-    t.ticket_number                                   AS ticket_number,
-    1 - (t.embedding <=> source.embedding)            AS similarity
-  FROM tickets t,
-    (SELECT embedding FROM tickets WHERE id = p_ticket_id) AS source
-  WHERE t.user_id = p_user_id
-    AND t.id != p_ticket_id
-    AND t.embedding IS NOT NULL
-    AND source.embedding IS NOT NULL
-    AND 1 - (t.embedding <=> source.embedding) > p_threshold
-    AND (p_status_filter IS NULL OR t.status = p_status_filter)
-  ORDER BY t.embedding <=> source.embedding
+    id         AS article_id,
+    title,
+    1 - (embedding <=> p_query_embedding) AS similarity
+  FROM public.kb_articles
+  WHERE account_id = p_account_id
+    AND is_published = true
+    AND embedding IS NOT NULL
+  ORDER BY similarity DESC
   LIMIT p_limit;
 $$;
 
 
-ALTER FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_account_id" "uuid", "p_limit" integer) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_classification_accuracy"("p_user_id" "uuid", "p_window" "text" DEFAULT '30d'::"text") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+CREATE OR REPLACE FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer DEFAULT 5, "p_threshold" double precision DEFAULT 0.75, "p_status_filter" "text" DEFAULT NULL::"text") RETURNS TABLE("ticket_id" "uuid", "subject" "text", "resolved_at" timestamp with time zone, "resolution_summary" "text", "ticket_number" bigint, "similarity" double precision)
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+  SELECT
+    t.id              AS ticket_id,
+    t.subject,
+    t.resolved_at,
+    t.resolution_summary,
+    t.ticket_number,
+    1 - (t.embedding <=> (SELECT embedding FROM public.tickets WHERE id = p_ticket_id)) AS similarity
+  FROM public.tickets t
+  WHERE t.account_id = p_account_id
+    AND t.id         <> p_ticket_id
+    AND t.embedding  IS NOT NULL
+    AND (p_status_filter IS NULL OR t.status = p_status_filter)
+    AND 1 - (t.embedding <=> (SELECT embedding FROM public.tickets WHERE id = p_ticket_id)) >= p_threshold
+  ORDER BY similarity DESC
+  LIMIT p_limit;
+$$;
+
+
+ALTER FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_classification_accuracy"("p_account_id" "uuid", "p_window" "text" DEFAULT '30d'::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE
     AS $$
 DECLARE
-  v_since            TIMESTAMPTZ;
-  v_total_classified BIGINT;
-  v_result           JSONB;
+  v_interval interval;
+  v_result   jsonb;
 BEGIN
-  -- Resolve time window (unknown values fall back to all-time)
-  v_since := CASE p_window
-    WHEN '7d'  THEN NOW() - INTERVAL '7 days'
-    WHEN '30d' THEN NOW() - INTERVAL '30 days'
-    ELSE        '-infinity'::TIMESTAMPTZ
+  v_interval := CASE p_window
+    WHEN '7d'  THEN '7 days'::interval
+    WHEN '30d' THEN '30 days'::interval
+    WHEN '90d' THEN '90 days'::interval
+    ELSE            '30 days'::interval
   END;
 
-  SELECT COUNT(*) INTO v_total_classified
-  FROM public.tickets
-  WHERE user_id      = p_user_id
-    AND classified_at IS NOT NULL
-    AND classified_at >= v_since;
-
-  -- No classified tickets yet — return zero-state
-  IF v_total_classified = 0 THEN
-    RETURN jsonb_build_object(
-      'total_classified', 0,
-      'window',           p_window,
-      'dimensions', jsonb_build_object(
-        'priority',    NULL,
-        'category',    NULL,
-        'ticket_type', NULL,
-        'sentiment',   NULL
-      )
-    );
-  END IF;
-
-  -- Aggregate corrections per dimension
-  WITH c AS (
-    SELECT
-      SUM(CASE WHEN correct_priority    IS NOT NULL AND correct_priority    <> ai_priority    THEN 1 ELSE 0 END) AS n_priority,
-      SUM(CASE WHEN correct_category    IS NOT NULL AND correct_category    <> ai_category    THEN 1 ELSE 0 END) AS n_category,
-      SUM(CASE WHEN correct_ticket_type IS NOT NULL AND correct_ticket_type <> ai_ticket_type THEN 1 ELSE 0 END) AS n_ticket_type,
-      SUM(CASE WHEN correct_sentiment   IS NOT NULL AND correct_sentiment   <> ai_sentiment   THEN 1 ELSE 0 END) AS n_sentiment
-    FROM public.classification_feedback
-    WHERE user_id    = p_user_id
-      AND created_at >= v_since
-  )
   SELECT jsonb_build_object(
-    'total_classified', v_total_classified,
-    'window',           p_window,
-    'dimensions', jsonb_build_object(
-      'priority',    jsonb_build_object('total_corrected', c.n_priority,    'accuracy', ROUND(1.0 - c.n_priority::NUMERIC    / v_total_classified, 4)),
-      'category',    jsonb_build_object('total_corrected', c.n_category,    'accuracy', ROUND(1.0 - c.n_category::NUMERIC    / v_total_classified, 4)),
-      'ticket_type', jsonb_build_object('total_corrected', c.n_ticket_type, 'accuracy', ROUND(1.0 - c.n_ticket_type::NUMERIC / v_total_classified, 4)),
-      'sentiment',   jsonb_build_object('total_corrected', c.n_sentiment,   'accuracy', ROUND(1.0 - c.n_sentiment::NUMERIC   / v_total_classified, 4))
+    'total_classified', COUNT(*),
+    'with_feedback',    COUNT(cf.id),
+    'corrections',      COUNT(cf.id) FILTER (WHERE cf.is_correction),
+    'accuracy_rate',    ROUND(
+      (COUNT(cf.id) - COUNT(cf.id) FILTER (WHERE cf.is_correction))::numeric
+      / NULLIF(COUNT(cf.id), 0) * 100, 2
     )
-  ) INTO v_result
-  FROM c;
+  )
+  INTO v_result
+  FROM public.tickets t
+  LEFT JOIN public.categorization_feedback cf ON cf.ticket_id = t.id
+  WHERE t.account_id   = p_account_id
+    AND t.classified_at >= now() - v_interval;
 
-  RETURN v_result;
+  RETURN COALESCE(v_result, '{}'::jsonb);
 END;
 $$;
 
 
-ALTER FUNCTION "public"."get_classification_accuracy"("p_user_id" "uuid", "p_window" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."get_classification_accuracy"("p_account_id" "uuid", "p_window" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_invitation_by_token"("p_token" "uuid") RETURNS TABLE("id" "uuid", "account_id" "uuid", "account_name" "text", "email" "text", "role" "text", "expires_at" timestamp with time zone)
@@ -225,18 +198,17 @@ $$;
 ALTER FUNCTION "public"."get_invitation_by_token"("p_token" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_sidebar_counts"("p_user_id" "uuid") RETURNS TABLE("status" "text", "count" bigint)
-    LANGUAGE "sql" STABLE SECURITY DEFINER
+CREATE OR REPLACE FUNCTION "public"."get_sidebar_counts"("p_account_id" "uuid") RETURNS TABLE("status" "text", "count" bigint)
+    LANGUAGE "sql" STABLE
     AS $$
   SELECT status, COUNT(*) AS count
-  FROM tickets
-  WHERE user_id = p_user_id
-    AND archived_at IS NULL
+  FROM public.tickets
+  WHERE account_id = p_account_id
   GROUP BY status;
 $$;
 
 
-ALTER FUNCTION "public"."get_sidebar_counts"("p_user_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."get_sidebar_counts"("p_account_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
@@ -353,6 +325,7 @@ DECLARE
     v_display_name text;
     v_company_name text;
 BEGIN
+    -- ── Guard: return existing account_id if user already has an active membership ──
     SELECT am.account_id INTO v_existing_id
     FROM public.account_members am
     WHERE am.user_id  = p_user_id
@@ -364,6 +337,10 @@ BEGIN
         RETURN v_existing_id;
     END IF;
 
+    -- ── Resolve user identity for name derivation ──────────────────────────
+    -- profiles is written by handle_new_user trigger before this function
+    -- runs (trigger order: on_auth_user_created < z_ensure_account_on_signup).
+    -- In the explicit-RPC path the profile is always committed first.
     SELECT u.email,
            COALESCE(p.name, ''),
            COALESCE(p.company_name, '')
@@ -377,6 +354,7 @@ BEGIN
             'provision_account_for_user: user % not found in auth.users', p_user_id;
     END IF;
 
+    -- ── Derive account name (priority: explicit arg > company_name > display_name > email prefix) ──
     v_name := COALESCE(
         NULLIF(trim(p_account_name),  ''),
         NULLIF(trim(v_company_name),  ''),
@@ -384,17 +362,24 @@ BEGIN
         split_part(v_email, '@', 1)
     );
 
+    -- Final fallback — should never be reached but defensively guard empty slug
     IF v_name IS NULL OR trim(v_name) = '' THEN
         v_name := 'account';
     END IF;
 
+    -- ── Derive URL-safe slug with random suffix (mirrors backfill logic) ───
     v_slug_base := lower(regexp_replace(trim(v_name), '[^a-z0-9]+', '-', 'g'));
     v_slug_base := trim(both '-' from v_slug_base);
     IF v_slug_base = '' THEN
         v_slug_base := 'account';
     END IF;
+    -- 6-char random hex suffix keeps slugs unique even for users with identical names
     v_slug := v_slug_base || '-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 6);
 
+    -- ── Atomic insert: accounts + account_members ──────────────────────────
+    -- The entire function body executes inside a single implicit PL/pgSQL
+    -- transaction when called from an outer transaction (e.g. trigger).
+    -- If any statement below fails, the whole function rolls back.
     BEGIN
         INSERT INTO public.accounts (name, slug, plan_type, seat_limit)
         VALUES (v_name, v_slug, 'Starter', 5)
@@ -406,6 +391,9 @@ BEGIN
             (v_account_id, p_user_id, 'owner', 'active', now());
 
     EXCEPTION
+        -- Race condition: a concurrent call already inserted account_members
+        -- for this user between our guard SELECT and our INSERT.
+        -- Recover by looking up the winner's account_id.
         WHEN unique_violation THEN
             SELECT am.account_id INTO v_account_id
             FROM public.account_members am
@@ -594,7 +582,6 @@ ALTER TABLE "public"."category_confidence_thresholds" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."channel_integrations" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "provider" "text" NOT NULL,
     "external_account_id" "text" NOT NULL,
     "display_name" "text",
@@ -613,7 +600,7 @@ ALTER TABLE "public"."channel_integrations" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."classification_feedback" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "ticket_id" "uuid" NOT NULL,
-    "user_id" "uuid" NOT NULL,
+    "submitted_by_user_id" "uuid",
     "corrected_by" "uuid" NOT NULL,
     "ai_ticket_type" "text",
     "ai_priority" "text",
@@ -640,7 +627,6 @@ ALTER TABLE "public"."classification_feedback" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."clients" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "internal_id" "text" NOT NULL,
     "legal_id" "text",
     "name" "text" NOT NULL,
@@ -662,7 +648,6 @@ ALTER TABLE "public"."clients" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."conversations" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "channel_integration_id" "uuid" NOT NULL,
     "customer_external_id" "text" NOT NULL,
     "customer_display_name" "text",
@@ -681,7 +666,6 @@ ALTER TABLE "public"."conversations" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."csat_events" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "ticket_id" "uuid" NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "score" integer,
     "comment" "text",
     "submitted_at" timestamp with time zone DEFAULT "now"(),
@@ -694,7 +678,6 @@ ALTER TABLE "public"."csat_events" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."escalation_contacts" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "name" "text" NOT NULL,
     "phone_number" "text" NOT NULL,
     "channel" "text" DEFAULT 'sms'::"text" NOT NULL,
@@ -712,7 +695,6 @@ ALTER TABLE "public"."escalation_contacts" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."escalations" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "ticket_id" "uuid" NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "escalated_to_level" integer NOT NULL,
     "escalated_by" "uuid" NOT NULL,
     "reason" "text",
@@ -727,29 +709,8 @@ CREATE TABLE IF NOT EXISTS "public"."escalations" (
 ALTER TABLE "public"."escalations" OWNER TO "postgres";
 
 
-CREATE TABLE IF NOT EXISTS "public"."gmail_accounts" (
-    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
-    "email" "text" NOT NULL,
-    "access_token" "text",
-    "refresh_token" "text",
-    "expires_at" timestamp with time zone,
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    "account_id" "uuid" NOT NULL
-);
-
-
-ALTER TABLE "public"."gmail_accounts" OWNER TO "postgres";
-
-
-COMMENT ON TABLE "public"."gmail_accounts" IS 'Gmail OAuth tokens for connected accounts';
-
-
-
 CREATE TABLE IF NOT EXISTS "public"."kb_articles" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "title" "text" NOT NULL,
     "content" "text" NOT NULL,
     "embedding" "extensions"."vector"(768),
@@ -766,7 +727,7 @@ ALTER TABLE "public"."kb_articles" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."llm_calls" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid",
+    "triggered_by_user_id" "uuid",
     "ticket_id" "uuid",
     "feature" "text" NOT NULL,
     "provider" "text" NOT NULL,
@@ -824,6 +785,26 @@ COMMENT ON COLUMN "public"."messages"."processing_batch" IS 'onboarding = initia
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."oauth_credentials" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "provider" "text" NOT NULL,
+    "granted_by_user_id" "uuid",
+    "external_account_id" "text" NOT NULL,
+    "access_token_enc" "text",
+    "refresh_token_enc" "text",
+    "expires_at" timestamp with time zone,
+    "scope" "text",
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "oauth_credentials_provider_check" CHECK (("provider" = ANY (ARRAY['gmail'::"text", 'instagram'::"text", 'slack'::"text", 'whatsapp'::"text"])))
+);
+
+
+ALTER TABLE "public"."oauth_credentials" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "id" "uuid" NOT NULL,
     "email" "text" NOT NULL,
@@ -843,7 +824,6 @@ COMMENT ON TABLE "public"."profiles" IS 'Extended user profile data for Kairo us
 
 CREATE TABLE IF NOT EXISTS "public"."response_templates" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "title" "text" NOT NULL,
     "content" "text" NOT NULL,
     "category" "text",
@@ -866,10 +846,11 @@ CREATE TABLE IF NOT EXISTS "public"."support_channels" (
     "display_name" "text",
     "is_primary" boolean DEFAULT false NOT NULL,
     "oauth_tokens" "jsonb",
-    "connected_by" "uuid",
+    "connected_by_user_id" "uuid",
     "connected_at" timestamp with time zone DEFAULT "now"(),
     "is_active" boolean DEFAULT true NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "credential_id" "uuid",
     CONSTRAINT "support_channels_channel_type_check" CHECK (("channel_type" = ANY (ARRAY['gmail'::"text", 'outlook'::"text", 'imap'::"text", 'custom'::"text"])))
 );
 
@@ -879,7 +860,6 @@ ALTER TABLE "public"."support_channels" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."support_schedules" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "day_of_week" integer NOT NULL,
     "start_time" time without time zone NOT NULL,
     "end_time" time without time zone NOT NULL,
@@ -894,7 +874,6 @@ ALTER TABLE "public"."support_schedules" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."tenant_priority_config" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "weight_type" numeric(3,2) DEFAULT 0.30 NOT NULL,
     "weight_plan" numeric(3,2) DEFAULT 0.35 NOT NULL,
     "weight_emotion" numeric(3,2) DEFAULT 0.20 NOT NULL,
@@ -910,7 +889,6 @@ ALTER TABLE "public"."tenant_priority_config" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."tenant_sla_rules" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "ticket_type" "text" NOT NULL,
     "plan_tier" "text" NOT NULL,
     "response_hours" integer NOT NULL,
@@ -951,7 +929,6 @@ ALTER TABLE "public"."ticket_followers" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."ticket_groups" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
     "name" "text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "account_id" "uuid" NOT NULL
@@ -1014,7 +991,7 @@ ALTER TABLE "public"."ticket_tags" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
+    "originating_user_id" "uuid",
     "gmail_message_id" "text",
     "gmail_thread_id" "text",
     "subject" "text" NOT NULL,
@@ -1151,12 +1128,12 @@ ALTER TABLE ONLY "public"."category_confidence_thresholds"
 
 
 ALTER TABLE ONLY "public"."channel_integrations"
-    ADD CONSTRAINT "channel_integrations_pkey" PRIMARY KEY ("id");
+    ADD CONSTRAINT "channel_integrations_account_provider_external_key" UNIQUE ("account_id", "provider", "external_account_id");
 
 
 
 ALTER TABLE ONLY "public"."channel_integrations"
-    ADD CONSTRAINT "channel_integrations_user_provider_account_key" UNIQUE ("user_id", "provider", "external_account_id");
+    ADD CONSTRAINT "channel_integrations_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1166,12 +1143,12 @@ ALTER TABLE ONLY "public"."classification_feedback"
 
 
 ALTER TABLE ONLY "public"."clients"
-    ADD CONSTRAINT "clients_pkey" PRIMARY KEY ("id");
+    ADD CONSTRAINT "clients_account_id_internal_id_key" UNIQUE ("account_id", "internal_id");
 
 
 
 ALTER TABLE ONLY "public"."clients"
-    ADD CONSTRAINT "clients_user_id_internal_id_key" UNIQUE ("user_id", "internal_id");
+    ADD CONSTRAINT "clients_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1200,16 +1177,6 @@ ALTER TABLE ONLY "public"."escalations"
 
 
 
-ALTER TABLE ONLY "public"."gmail_accounts"
-    ADD CONSTRAINT "gmail_accounts_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."gmail_accounts"
-    ADD CONSTRAINT "gmail_accounts_user_id_email_key" UNIQUE ("user_id", "email");
-
-
-
 ALTER TABLE ONLY "public"."kb_articles"
     ADD CONSTRAINT "kb_articles_pkey" PRIMARY KEY ("id");
 
@@ -1227,6 +1194,16 @@ ALTER TABLE ONLY "public"."messages"
 
 ALTER TABLE ONLY "public"."messages"
     ADD CONSTRAINT "messages_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."oauth_credentials"
+    ADD CONSTRAINT "oauth_credentials_account_id_provider_external_account_id_key" UNIQUE ("account_id", "provider", "external_account_id");
+
+
+
+ALTER TABLE ONLY "public"."oauth_credentials"
+    ADD CONSTRAINT "oauth_credentials_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1256,12 +1233,17 @@ ALTER TABLE ONLY "public"."support_channels"
 
 
 ALTER TABLE ONLY "public"."support_schedules"
-    ADD CONSTRAINT "support_schedules_pkey" PRIMARY KEY ("id");
+    ADD CONSTRAINT "support_schedules_account_id_day_of_week_key" UNIQUE ("account_id", "day_of_week");
 
 
 
 ALTER TABLE ONLY "public"."support_schedules"
-    ADD CONSTRAINT "support_schedules_user_id_day_of_week_key" UNIQUE ("user_id", "day_of_week");
+    ADD CONSTRAINT "support_schedules_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."tenant_priority_config"
+    ADD CONSTRAINT "tenant_priority_config_account_id_key" UNIQUE ("account_id");
 
 
 
@@ -1270,18 +1252,13 @@ ALTER TABLE ONLY "public"."tenant_priority_config"
 
 
 
-ALTER TABLE ONLY "public"."tenant_priority_config"
-    ADD CONSTRAINT "tenant_priority_config_user_id_key" UNIQUE ("user_id");
+ALTER TABLE ONLY "public"."tenant_sla_rules"
+    ADD CONSTRAINT "tenant_sla_rules_account_id_ticket_type_plan_tier_key" UNIQUE ("account_id", "ticket_type", "plan_tier");
 
 
 
 ALTER TABLE ONLY "public"."tenant_sla_rules"
     ADD CONSTRAINT "tenant_sla_rules_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."tenant_sla_rules"
-    ADD CONSTRAINT "tenant_sla_rules_user_id_ticket_type_plan_tier_key" UNIQUE ("user_id", "ticket_type", "plan_tier");
 
 
 
@@ -1365,10 +1342,6 @@ CREATE INDEX "idx_channel_integrations_provider" ON "public"."channel_integratio
 
 
 
-CREATE INDEX "idx_channel_integrations_user_id" ON "public"."channel_integrations" USING "btree" ("user_id");
-
-
-
 CREATE INDEX "idx_classification_feedback_account_id" ON "public"."classification_feedback" USING "btree" ("account_id");
 
 
@@ -1377,11 +1350,11 @@ CREATE INDEX "idx_classification_feedback_created_at" ON "public"."classificatio
 
 
 
+CREATE INDEX "idx_classification_feedback_submitted_by" ON "public"."classification_feedback" USING "btree" ("submitted_by_user_id");
+
+
+
 CREATE INDEX "idx_classification_feedback_ticket_id" ON "public"."classification_feedback" USING "btree" ("ticket_id");
-
-
-
-CREATE INDEX "idx_classification_feedback_user_id" ON "public"."classification_feedback" USING "btree" ("user_id");
 
 
 
@@ -1389,11 +1362,7 @@ CREATE INDEX "idx_clients_account_id" ON "public"."clients" USING "btree" ("acco
 
 
 
-CREATE INDEX "idx_clients_name" ON "public"."clients" USING "btree" ("user_id", "name");
-
-
-
-CREATE INDEX "idx_clients_user_id" ON "public"."clients" USING "btree" ("user_id");
+CREATE INDEX "idx_clients_name" ON "public"."clients" USING "btree" ("account_id", "name");
 
 
 
@@ -1413,19 +1382,7 @@ CREATE INDEX "idx_conversations_external_thread_id" ON "public"."conversations" 
 
 
 
-CREATE INDEX "idx_conversations_user_id" ON "public"."conversations" USING "btree" ("user_id");
-
-
-
 CREATE INDEX "idx_escalation_contacts_account_id" ON "public"."escalation_contacts" USING "btree" ("account_id");
-
-
-
-CREATE INDEX "idx_gmail_accounts_account_id" ON "public"."gmail_accounts" USING "btree" ("account_id");
-
-
-
-CREATE INDEX "idx_gmail_accounts_user_id" ON "public"."gmail_accounts" USING "btree" ("user_id");
 
 
 
@@ -1497,23 +1454,35 @@ CREATE INDEX "idx_messages_thread_external_id" ON "public"."messages" USING "btr
 
 
 
+CREATE INDEX "idx_oauth_credentials_account_provider" ON "public"."oauth_credentials" USING "btree" ("account_id", "provider");
+
+
+
+CREATE INDEX "idx_oauth_credentials_expires_at" ON "public"."oauth_credentials" USING "btree" ("expires_at");
+
+
+
+CREATE INDEX "idx_oauth_credentials_granted_by" ON "public"."oauth_credentials" USING "btree" ("granted_by_user_id");
+
+
+
 CREATE INDEX "idx_profiles_email" ON "public"."profiles" USING "btree" ("email");
 
 
 
-CREATE INDEX "idx_response_templates_account_id" ON "public"."response_templates" USING "btree" ("account_id");
+CREATE INDEX "idx_response_templates_account_id" ON "public"."response_templates" USING "btree" ("account_id") WHERE ("is_active" = true);
 
 
 
-CREATE INDEX "idx_response_templates_locale" ON "public"."response_templates" USING "btree" ("user_id", "locale") WHERE ("is_active" = true);
-
-
-
-CREATE INDEX "idx_response_templates_user_id" ON "public"."response_templates" USING "btree" ("user_id") WHERE ("is_active" = true);
+CREATE INDEX "idx_response_templates_locale" ON "public"."response_templates" USING "btree" ("account_id", "locale") WHERE ("is_active" = true);
 
 
 
 CREATE INDEX "idx_support_channels_account_id" ON "public"."support_channels" USING "btree" ("account_id");
+
+
+
+CREATE INDEX "idx_support_channels_credential_id" ON "public"."support_channels" USING "btree" ("credential_id");
 
 
 
@@ -1577,11 +1546,15 @@ CREATE INDEX "idx_tickets_account_id" ON "public"."tickets" USING "btree" ("acco
 
 
 
+CREATE INDEX "idx_tickets_account_priority_score" ON "public"."tickets" USING "btree" ("account_id", "priority_score" DESC NULLS LAST);
+
+
+
 CREATE INDEX "idx_tickets_assigned_to" ON "public"."tickets" USING "btree" ("assigned_to");
 
 
 
-CREATE INDEX "idx_tickets_auto_replied_thread" ON "public"."tickets" USING "btree" ("user_id", "gmail_thread_id") WHERE ("auto_replied_out_of_hours" = true);
+CREATE INDEX "idx_tickets_auto_replied_thread" ON "public"."tickets" USING "btree" ("account_id", "gmail_thread_id") WHERE ("auto_replied_out_of_hours" = true);
 
 
 
@@ -1601,10 +1574,6 @@ CREATE INDEX "idx_tickets_gmail_message_id" ON "public"."tickets" USING "btree" 
 
 
 
-CREATE INDEX "idx_tickets_priority_score" ON "public"."tickets" USING "btree" ("user_id", "priority_score" DESC NULLS LAST);
-
-
-
 CREATE INDEX "idx_tickets_received_at" ON "public"."tickets" USING "btree" ("received_at" DESC);
 
 
@@ -1618,10 +1587,6 @@ CREATE INDEX "idx_tickets_status" ON "public"."tickets" USING "btree" ("status")
 
 
 CREATE INDEX "idx_tickets_ticket_number" ON "public"."tickets" USING "btree" ("ticket_number");
-
-
-
-CREATE INDEX "idx_tickets_user_id" ON "public"."tickets" USING "btree" ("user_id");
 
 
 
@@ -1645,7 +1610,7 @@ CREATE OR REPLACE TRIGGER "on_conversations_updated" BEFORE UPDATE ON "public"."
 
 
 
-CREATE OR REPLACE TRIGGER "on_gmail_accounts_updated" BEFORE UPDATE ON "public"."gmail_accounts" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+CREATE OR REPLACE TRIGGER "on_oauth_credentials_updated" BEFORE UPDATE ON "public"."oauth_credentials" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
 
 
 
@@ -1658,8 +1623,6 @@ CREATE OR REPLACE TRIGGER "on_response_templates_updated" BEFORE UPDATE ON "publ
 
 
 CREATE OR REPLACE TRIGGER "on_tickets_updated" BEFORE UPDATE ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
-
-CREATE TRIGGER "z_ensure_account_on_signup" AFTER INSERT ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION "public"."ensure_account_on_signup"();
 
 
 
@@ -1703,11 +1666,6 @@ ALTER TABLE ONLY "public"."channel_integrations"
 
 
 
-ALTER TABLE ONLY "public"."channel_integrations"
-    ADD CONSTRAINT "channel_integrations_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
 ALTER TABLE ONLY "public"."classification_feedback"
     ADD CONSTRAINT "classification_feedback_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
@@ -1715,6 +1673,11 @@ ALTER TABLE ONLY "public"."classification_feedback"
 
 ALTER TABLE ONLY "public"."classification_feedback"
     ADD CONSTRAINT "classification_feedback_corrected_by_fkey" FOREIGN KEY ("corrected_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."classification_feedback"
+    ADD CONSTRAINT "classification_feedback_submitted_by_user_id_fkey" FOREIGN KEY ("submitted_by_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
 
 
@@ -1728,11 +1691,6 @@ ALTER TABLE ONLY "public"."clients"
 
 
 
-ALTER TABLE ONLY "public"."clients"
-    ADD CONSTRAINT "clients_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
 ALTER TABLE ONLY "public"."conversations"
     ADD CONSTRAINT "conversations_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
@@ -1743,28 +1701,13 @@ ALTER TABLE ONLY "public"."conversations"
 
 
 
-ALTER TABLE ONLY "public"."conversations"
-    ADD CONSTRAINT "conversations_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
 ALTER TABLE ONLY "public"."csat_events"
     ADD CONSTRAINT "csat_events_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id");
 
 
 
-ALTER TABLE ONLY "public"."csat_events"
-    ADD CONSTRAINT "csat_events_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
-
-
-
 ALTER TABLE ONLY "public"."escalation_contacts"
     ADD CONSTRAINT "escalation_contacts_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."escalation_contacts"
-    ADD CONSTRAINT "escalation_contacts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -1778,28 +1721,8 @@ ALTER TABLE ONLY "public"."escalations"
 
 
 
-ALTER TABLE ONLY "public"."escalations"
-    ADD CONSTRAINT "escalations_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
-
-
-
-ALTER TABLE ONLY "public"."gmail_accounts"
-    ADD CONSTRAINT "gmail_accounts_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."gmail_accounts"
-    ADD CONSTRAINT "gmail_accounts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
 ALTER TABLE ONLY "public"."kb_articles"
     ADD CONSTRAINT "kb_articles_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."kb_articles"
-    ADD CONSTRAINT "kb_articles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -1814,7 +1737,7 @@ ALTER TABLE ONLY "public"."llm_calls"
 
 
 ALTER TABLE ONLY "public"."llm_calls"
-    ADD CONSTRAINT "llm_calls_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "llm_calls_triggered_by_user_id_fkey" FOREIGN KEY ("triggered_by_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
 
 
@@ -1833,6 +1756,16 @@ ALTER TABLE ONLY "public"."messages"
 
 
 
+ALTER TABLE ONLY "public"."oauth_credentials"
+    ADD CONSTRAINT "oauth_credentials_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."oauth_credentials"
+    ADD CONSTRAINT "oauth_credentials_granted_by_user_id_fkey" FOREIGN KEY ("granted_by_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
@@ -1843,18 +1776,18 @@ ALTER TABLE ONLY "public"."response_templates"
 
 
 
-ALTER TABLE ONLY "public"."response_templates"
-    ADD CONSTRAINT "response_templates_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
 ALTER TABLE ONLY "public"."support_channels"
     ADD CONSTRAINT "support_channels_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
 
 
 ALTER TABLE ONLY "public"."support_channels"
-    ADD CONSTRAINT "support_channels_connected_by_fkey" FOREIGN KEY ("connected_by") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "support_channels_connected_by_fkey" FOREIGN KEY ("connected_by_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."support_channels"
+    ADD CONSTRAINT "support_channels_credential_id_fkey" FOREIGN KEY ("credential_id") REFERENCES "public"."oauth_credentials"("id") ON DELETE SET NULL;
 
 
 
@@ -1863,28 +1796,13 @@ ALTER TABLE ONLY "public"."support_schedules"
 
 
 
-ALTER TABLE ONLY "public"."support_schedules"
-    ADD CONSTRAINT "support_schedules_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
 ALTER TABLE ONLY "public"."tenant_priority_config"
     ADD CONSTRAINT "tenant_priority_config_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
 
 
-ALTER TABLE ONLY "public"."tenant_priority_config"
-    ADD CONSTRAINT "tenant_priority_config_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
 ALTER TABLE ONLY "public"."tenant_sla_rules"
     ADD CONSTRAINT "tenant_sla_rules_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."tenant_sla_rules"
-    ADD CONSTRAINT "tenant_sla_rules_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -1910,11 +1828,6 @@ ALTER TABLE ONLY "public"."ticket_followers"
 
 ALTER TABLE ONLY "public"."ticket_groups"
     ADD CONSTRAINT "ticket_groups_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."ticket_groups"
-    ADD CONSTRAINT "ticket_groups_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -1979,12 +1892,12 @@ ALTER TABLE ONLY "public"."tickets"
 
 
 ALTER TABLE ONLY "public"."tickets"
-    ADD CONSTRAINT "tickets_parent_ticket_id_fkey" FOREIGN KEY ("parent_ticket_id") REFERENCES "public"."tickets"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "tickets_originating_user_id_fkey" FOREIGN KEY ("originating_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
 
 
 ALTER TABLE ONLY "public"."tickets"
-    ADD CONSTRAINT "tickets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "tickets_parent_ticket_id_fkey" FOREIGN KEY ("parent_ticket_id") REFERENCES "public"."tickets"("id") ON DELETE SET NULL;
 
 
 
@@ -2140,13 +2053,6 @@ CREATE POLICY "escalations_access_by_account" ON "public"."escalations" USING ((
 
 
 
-ALTER TABLE "public"."gmail_accounts" ENABLE ROW LEVEL SECURITY;
-
-
-CREATE POLICY "gmail_accounts_access_by_account" ON "public"."gmail_accounts" USING (("account_id" = "public"."current_account_id"()));
-
-
-
 ALTER TABLE "public"."kb_articles" ENABLE ROW LEVEL SECURITY;
 
 
@@ -2165,6 +2071,13 @@ ALTER TABLE "public"."messages" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "messages_access_by_account" ON "public"."messages" USING (("account_id" = "public"."current_account_id"()));
+
+
+
+ALTER TABLE "public"."oauth_credentials" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "oauth_credentials_access_by_account" ON "public"."oauth_credentials" USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -2288,21 +2201,27 @@ GRANT ALL ON FUNCTION "public"."current_account_id"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer) TO "anon";
-GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_user_id" "uuid", "p_limit" integer) TO "service_role";
+GRANT ALL ON FUNCTION "public"."ensure_account_on_signup"() TO "anon";
+GRANT ALL ON FUNCTION "public"."ensure_account_on_signup"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."ensure_account_on_signup"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_user_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_account_id" "uuid", "p_limit" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_account_id" "uuid", "p_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_account_id" "uuid", "p_limit" integer) TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."get_classification_accuracy"("p_user_id" "uuid", "p_window" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_classification_accuracy"("p_user_id" "uuid", "p_window" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_classification_accuracy"("p_user_id" "uuid", "p_window" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_classification_accuracy"("p_account_id" "uuid", "p_window" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_classification_accuracy"("p_account_id" "uuid", "p_window" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_classification_accuracy"("p_account_id" "uuid", "p_window" "text") TO "service_role";
 
 
 
@@ -2312,9 +2231,9 @@ GRANT ALL ON FUNCTION "public"."get_invitation_by_token"("p_token" "uuid") TO "s
 
 
 
-GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_user_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_user_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_user_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_account_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_account_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_account_id" "uuid") TO "service_role";
 
 
 
@@ -2353,8 +2272,11 @@ GRANT ALL ON FUNCTION "public"."is_superadmin"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."is_superadmin"() TO "service_role";
 
 
-GRANT EXECUTE ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") TO "authenticated";
-GRANT EXECUTE ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") TO "service_role";
+
+REVOKE ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") TO "service_role";
 
 
 
@@ -2448,12 +2370,6 @@ GRANT ALL ON TABLE "public"."escalations" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."gmail_accounts" TO "anon";
-GRANT ALL ON TABLE "public"."gmail_accounts" TO "authenticated";
-GRANT ALL ON TABLE "public"."gmail_accounts" TO "service_role";
-
-
-
 GRANT ALL ON TABLE "public"."kb_articles" TO "anon";
 GRANT ALL ON TABLE "public"."kb_articles" TO "authenticated";
 GRANT ALL ON TABLE "public"."kb_articles" TO "service_role";
@@ -2469,6 +2385,12 @@ GRANT ALL ON TABLE "public"."llm_calls" TO "service_role";
 GRANT ALL ON TABLE "public"."messages" TO "anon";
 GRANT ALL ON TABLE "public"."messages" TO "authenticated";
 GRANT ALL ON TABLE "public"."messages" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."oauth_credentials" TO "anon";
+GRANT ALL ON TABLE "public"."oauth_credentials" TO "authenticated";
+GRANT ALL ON TABLE "public"."oauth_credentials" TO "service_role";
 
 
 

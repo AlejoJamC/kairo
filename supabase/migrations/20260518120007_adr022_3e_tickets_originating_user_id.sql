@@ -1,8 +1,4 @@
--- ADR-022 Sub-fase 3e: tickets — rename user_id to originating_user_id (nullable)
--- This is the highest-risk sub-phase. Executed last.
--- user_id → originating_user_id (nullable, ON DELETE SET NULL)
--- Recreate indexes using account_id.
--- Update stored procedures that filtered by user_id to use account_id.
+-- ADR-022 Sub-fase 3e: tickets — rename user_id to originating_user_id (idempotent)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 1. Drop old user_id indexes
@@ -10,19 +6,20 @@
 DROP INDEX IF EXISTS public.idx_tickets_user_id;
 DROP INDEX IF EXISTS public.idx_tickets_priority_score;
 DROP INDEX IF EXISTS public.idx_tickets_auto_replied_thread;
+DROP INDEX IF EXISTS public.idx_tickets_account_priority_score;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. Rename column + change constraint
 -- ─────────────────────────────────────────────────────────────────────────────
-ALTER TABLE public.tickets
-  RENAME COLUMN user_id TO originating_user_id;
+DO $$ BEGIN
+  ALTER TABLE public.tickets RENAME COLUMN user_id TO originating_user_id;
+EXCEPTION WHEN undefined_column THEN NULL;  -- already renamed
+END $$;
 
-ALTER TABLE public.tickets
-  ALTER COLUMN originating_user_id DROP NOT NULL;
+ALTER TABLE public.tickets ALTER COLUMN originating_user_id DROP NOT NULL;
 
-ALTER TABLE public.tickets
-  DROP CONSTRAINT IF EXISTS tickets_user_id_fkey;
-
+ALTER TABLE public.tickets DROP CONSTRAINT IF EXISTS tickets_user_id_fkey;
+ALTER TABLE public.tickets DROP CONSTRAINT IF EXISTS tickets_originating_user_id_fkey;
 ALTER TABLE public.tickets
   ADD CONSTRAINT tickets_originating_user_id_fkey
   FOREIGN KEY (originating_user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
@@ -30,16 +27,21 @@ ALTER TABLE public.tickets
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3. Recreate indexes on account_id
 -- ─────────────────────────────────────────────────────────────────────────────
-CREATE INDEX idx_tickets_account_priority_score
+CREATE INDEX IF NOT EXISTS idx_tickets_account_priority_score
   ON public.tickets (account_id, priority_score DESC NULLS LAST);
 
-CREATE INDEX idx_tickets_auto_replied_thread
+CREATE INDEX IF NOT EXISTS idx_tickets_auto_replied_thread
   ON public.tickets (account_id, gmail_thread_id)
   WHERE auto_replied_out_of_hours = true;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4. Update stored procedures to accept p_account_id instead of p_user_id
+-- PostgreSQL won't let CREATE OR REPLACE change parameter names, so we drop first.
 -- ─────────────────────────────────────────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.get_sidebar_counts(uuid);
+DROP FUNCTION IF EXISTS public.find_similar_tickets(uuid, uuid, integer, double precision, text);
+DROP FUNCTION IF EXISTS public.get_classification_accuracy(uuid, text);
+DROP FUNCTION IF EXISTS public.find_relevant_kb(extensions.vector, uuid, integer);
 
 CREATE OR REPLACE FUNCTION public.get_sidebar_counts(p_account_id uuid)
 RETURNS TABLE(status text, count bigint)
@@ -54,19 +56,20 @@ $$;
 CREATE OR REPLACE FUNCTION public.find_similar_tickets(
   p_ticket_id      uuid,
   p_account_id     uuid,
-  p_limit          integer         DEFAULT 5,
+  p_limit          integer          DEFAULT 5,
   p_threshold      double precision DEFAULT 0.75,
-  p_status_filter  text            DEFAULT NULL
+  p_status_filter  text             DEFAULT NULL
 )
 RETURNS TABLE(
-  ticket_id         uuid,
-  subject           text,
-  resolved_at       timestamptz,
+  ticket_id          uuid,
+  subject            text,
+  resolved_at        timestamptz,
   resolution_summary text,
-  ticket_number     bigint,
-  similarity        double precision
+  ticket_number      bigint,
+  similarity         double precision
 )
 LANGUAGE sql STABLE
+SET search_path = public, extensions
 AS $$
   SELECT
     t.id              AS ticket_id,
@@ -129,6 +132,7 @@ CREATE OR REPLACE FUNCTION public.find_relevant_kb(
 )
 RETURNS TABLE(article_id uuid, title text, similarity double precision)
 LANGUAGE sql STABLE
+SET search_path = public, extensions
 AS $$
   SELECT
     id         AS article_id,
