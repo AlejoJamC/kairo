@@ -159,15 +159,19 @@ async function classifyWindow(
 
   if (messages.length === 0) return;
 
-  // Resumability: fetch already-processed external_ids for this window
+  // Dedup: check tickets table directly by (account_id, gmail_message_id).
+  // Previously checked the messages table but that's only populated when
+  // channel_integrations exists — unreliable. Tickets table is the source of truth.
   const externalIds = messages.map((m) => m.id);
   const { data: existing } = await supabase
-    .from("messages")
-    .select("external_id")
-    .in("external_id", externalIds)
-    .not("classification_status", "is", null);
+    .from("tickets")
+    .select("gmail_message_id")
+    .eq("account_id", accountId)
+    .in("gmail_message_id", externalIds);
 
-  const processedIds = new Set((existing ?? []).map((r) => r.external_id));
+  const processedIds = new Set(
+    (existing ?? []).map((r) => r.gmail_message_id).filter(Boolean)
+  );
 
   const classificationPromises: Promise<void>[] = [];
 
