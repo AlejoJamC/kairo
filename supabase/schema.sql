@@ -23,6 +23,26 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 
+CREATE TYPE "public"."draft_contact_origin" AS ENUM (
+    'kairo_created',
+    'external_synced'
+);
+
+
+ALTER TYPE "public"."draft_contact_origin" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."draft_contact_status" AS ENUM (
+    'proposed',
+    'confirmed',
+    'rejected',
+    'merged_into'
+);
+
+
+ALTER TYPE "public"."draft_contact_status" OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."current_account_id"() RETURNS "uuid"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     AS $$
@@ -459,6 +479,19 @@ $$;
 
 ALTER FUNCTION "public"."recompute_category_confidence_thresholds"() OWNER TO "postgres";
 
+
+CREATE OR REPLACE FUNCTION "public"."update_updated_at_column"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_updated_at_column"() OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
@@ -585,7 +618,6 @@ CREATE TABLE IF NOT EXISTS "public"."channel_integrations" (
     "provider" "text" NOT NULL,
     "external_account_id" "text" NOT NULL,
     "display_name" "text",
-    "credentials_encrypted" "jsonb",
     "is_active" boolean DEFAULT true NOT NULL,
     "last_synced_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
@@ -674,6 +706,46 @@ CREATE TABLE IF NOT EXISTS "public"."csat_events" (
 
 
 ALTER TABLE "public"."csat_events" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."draft_contact" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "email" "public"."citext",
+    "phone" "text",
+    "display_name" "text",
+    "organization" "text",
+    "status" "public"."draft_contact_status" DEFAULT 'proposed'::"public"."draft_contact_status" NOT NULL,
+    "merged_into_id" "uuid",
+    "confidence" real DEFAULT 0.0 NOT NULL,
+    "evidence_count" integer DEFAULT 0 NOT NULL,
+    "origin" "public"."draft_contact_origin" DEFAULT 'kairo_created'::"public"."draft_contact_origin" NOT NULL,
+    "external_ref" "text",
+    "external_source" "text",
+    "source_tickets" "uuid"[] DEFAULT '{}'::"uuid"[] NOT NULL,
+    "first_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "last_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "confirmed_at" timestamp with time zone,
+    "confirmed_by" "uuid",
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "draft_contact_confidence_range" CHECK ((("confidence" >= (0.0)::double precision) AND ("confidence" <= (1.0)::double precision))),
+    CONSTRAINT "draft_contact_confirmation_consistency" CHECK (((("status" = 'confirmed'::"public"."draft_contact_status") AND ("confirmed_at" IS NOT NULL) AND ("confirmed_by" IS NOT NULL)) OR ("status" <> 'confirmed'::"public"."draft_contact_status"))),
+    CONSTRAINT "draft_contact_external_consistency" CHECK ((("origin" = 'kairo_created'::"public"."draft_contact_origin") OR (("external_source" IS NOT NULL) AND ("external_ref" IS NOT NULL)))),
+    CONSTRAINT "draft_contact_has_identity" CHECK ((("email" IS NOT NULL) OR ("phone" IS NOT NULL)))
+);
+
+
+ALTER TABLE "public"."draft_contact" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."draft_contact" IS 'Pipeline de identidades de contacto propuestas por el extractor. Confirmar no migra a otra tabla, solo cambia status. KAI-224.';
+
+
+
+COMMENT ON COLUMN "public"."draft_contact"."confirmed_by" IS 'auth.users.id del agente que confirmo. Patron del codebase: actor FKs apuntan a auth.users, no a account_members.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."escalation_contacts" (
@@ -845,7 +917,6 @@ CREATE TABLE IF NOT EXISTS "public"."support_channels" (
     "email_address" "text" NOT NULL,
     "display_name" "text",
     "is_primary" boolean DEFAULT false NOT NULL,
-    "oauth_tokens" "jsonb",
     "connected_by_user_id" "uuid",
     "connected_at" timestamp with time zone DEFAULT "now"(),
     "is_active" boolean DEFAULT true NOT NULL,
@@ -1167,6 +1238,11 @@ ALTER TABLE ONLY "public"."csat_events"
 
 
 
+ALTER TABLE ONLY "public"."draft_contact"
+    ADD CONSTRAINT "draft_contact_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."escalation_contacts"
     ADD CONSTRAINT "escalation_contacts_pkey" PRIMARY KEY ("id");
 
@@ -1379,6 +1455,30 @@ CREATE INDEX "idx_conversations_customer_external_id" ON "public"."conversations
 
 
 CREATE INDEX "idx_conversations_external_thread_id" ON "public"."conversations" USING "btree" ("external_thread_id") WHERE ("external_thread_id" IS NOT NULL);
+
+
+
+CREATE UNIQUE INDEX "idx_draft_contact_account_email" ON "public"."draft_contact" USING "btree" ("account_id", "email") WHERE ("email" IS NOT NULL);
+
+
+
+CREATE INDEX "idx_draft_contact_account_org" ON "public"."draft_contact" USING "btree" ("account_id", "organization") WHERE ("organization" IS NOT NULL);
+
+
+
+CREATE UNIQUE INDEX "idx_draft_contact_account_phone" ON "public"."draft_contact" USING "btree" ("account_id", "phone") WHERE ("phone" IS NOT NULL);
+
+
+
+CREATE INDEX "idx_draft_contact_account_status" ON "public"."draft_contact" USING "btree" ("account_id", "status");
+
+
+
+CREATE INDEX "idx_draft_contact_metadata_gin" ON "public"."draft_contact" USING "gin" ("metadata");
+
+
+
+CREATE INDEX "idx_draft_contact_source_tickets_gin" ON "public"."draft_contact" USING "gin" ("source_tickets");
 
 
 
@@ -1626,6 +1726,10 @@ CREATE OR REPLACE TRIGGER "on_tickets_updated" BEFORE UPDATE ON "public"."ticket
 
 
 
+CREATE OR REPLACE TRIGGER "trg_draft_contact_updated_at" BEFORE UPDATE ON "public"."draft_contact" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
 ALTER TABLE ONLY "public"."account_invitations"
     ADD CONSTRAINT "account_invitations_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
@@ -1703,6 +1807,21 @@ ALTER TABLE ONLY "public"."conversations"
 
 ALTER TABLE ONLY "public"."csat_events"
     ADD CONSTRAINT "csat_events_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id");
+
+
+
+ALTER TABLE ONLY "public"."draft_contact"
+    ADD CONSTRAINT "draft_contact_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."draft_contact"
+    ADD CONSTRAINT "draft_contact_confirmed_by_fkey" FOREIGN KEY ("confirmed_by") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."draft_contact"
+    ADD CONSTRAINT "draft_contact_merged_into_id_fkey" FOREIGN KEY ("merged_into_id") REFERENCES "public"."draft_contact"("id") ON DELETE SET NULL;
 
 
 
@@ -2037,6 +2156,21 @@ CREATE POLICY "csat_events_access_by_account" ON "public"."csat_events" USING ((
 
 
 
+ALTER TABLE "public"."draft_contact" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "draft_contact_insert" ON "public"."draft_contact" FOR INSERT WITH CHECK (("account_id" = "public"."current_account_id"()));
+
+
+
+CREATE POLICY "draft_contact_select" ON "public"."draft_contact" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
+
+
+
+CREATE POLICY "draft_contact_update" ON "public"."draft_contact" FOR UPDATE USING (("account_id" = "public"."current_account_id"())) WITH CHECK (("account_id" = "public"."current_account_id"()));
+
+
+
 ALTER TABLE "public"."escalation_contacts" ENABLE ROW LEVEL SECURITY;
 
 
@@ -2286,6 +2420,12 @@ GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "
 
 
 
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "anon";
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."account_invitations" TO "anon";
 GRANT ALL ON TABLE "public"."account_invitations" TO "authenticated";
 GRANT ALL ON TABLE "public"."account_invitations" TO "service_role";
@@ -2355,6 +2495,12 @@ GRANT ALL ON TABLE "public"."conversations" TO "service_role";
 GRANT ALL ON TABLE "public"."csat_events" TO "anon";
 GRANT ALL ON TABLE "public"."csat_events" TO "authenticated";
 GRANT ALL ON TABLE "public"."csat_events" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."draft_contact" TO "anon";
+GRANT ALL ON TABLE "public"."draft_contact" TO "authenticated";
+GRANT ALL ON TABLE "public"."draft_contact" TO "service_role";
 
 
 

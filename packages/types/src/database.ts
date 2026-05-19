@@ -560,6 +560,93 @@ export type Database = {
           },
         ]
       }
+      draft_contact: {
+        Row: {
+          account_id: string
+          confidence: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          evidence_count: number
+          external_ref: string | null
+          external_source: string | null
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          merged_into_id: string | null
+          metadata: Json
+          organization: string | null
+          origin: Database["public"]["Enums"]["draft_contact_origin"]
+          phone: string | null
+          source_tickets: string[]
+          status: Database["public"]["Enums"]["draft_contact_status"]
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          confidence?: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          evidence_count?: number
+          external_ref?: string | null
+          external_source?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          merged_into_id?: string | null
+          metadata?: Json
+          organization?: string | null
+          origin?: Database["public"]["Enums"]["draft_contact_origin"]
+          phone?: string | null
+          source_tickets?: string[]
+          status?: Database["public"]["Enums"]["draft_contact_status"]
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          confidence?: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          evidence_count?: number
+          external_ref?: string | null
+          external_source?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          merged_into_id?: string | null
+          metadata?: Json
+          organization?: string | null
+          origin?: Database["public"]["Enums"]["draft_contact_origin"]
+          phone?: string | null
+          source_tickets?: string[]
+          status?: Database["public"]["Enums"]["draft_contact_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draft_contact_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_contact_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "draft_contact"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       escalation_contacts: {
         Row: {
           account_id: string
@@ -1665,7 +1752,12 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      draft_contact_origin: "kairo_created" | "external_synced"
+      draft_contact_status:
+        | "proposed"
+        | "confirmed"
+        | "rejected"
+        | "merged_into"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1792,6 +1884,14 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      draft_contact_origin: ["kairo_created", "external_synced"],
+      draft_contact_status: [
+        "proposed",
+        "confirmed",
+        "rejected",
+        "merged_into",
+      ],
+    },
   },
 } as const
