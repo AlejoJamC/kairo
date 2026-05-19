@@ -258,6 +258,9 @@ export async function GET(request: Request) {
       account_id:             resolvedAccountId,
       channel_type:           "gmail",
       email_address:          user.email,
+      display_name:           (user.user_metadata?.full_name as string | undefined)
+                                ?? (user.user_metadata?.name as string | undefined)
+                                ?? user.email,
       credential_id:          credData.id,
       connected_by_user_id:   user.id,
       is_primary:             true,
