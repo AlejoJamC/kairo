@@ -202,6 +202,7 @@ async function classifyWindow(
       if (channelIntegrationId) {
         await supabase.from("messages").upsert(
           {
+            account_id:             accountId,
             channel_integration_id: channelIntegrationId,
             external_id: message.id,
             direction: "inbound",
@@ -289,6 +290,7 @@ async function classifyWindow(
         if (channelIntegrationId) {
           await supabase.from("messages").upsert(
             {
+              account_id:             accountId,
               channel_integration_id: channelIntegrationId,
               external_id: messageId,
               direction: "inbound",
@@ -312,6 +314,7 @@ async function classifyWindow(
         if (channelIntegrationId) {
           await supabase.from("messages").upsert(
             {
+              account_id:             accountId,
               channel_integration_id: channelIntegrationId,
               external_id: messageId,
               direction: "inbound",

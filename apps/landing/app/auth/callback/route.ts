@@ -227,36 +227,41 @@ export async function GET(request: Request) {
   // gmail_accounts dropped in ADR-022 Phase 5; oauth_credentials is now canonical.
   if (session.provider_token && user.email) {
     // ── Persist OAuth credentials — pipeline MUST NOT dispatch if this fails ─
-    const { error: credError } = await supabase.from("oauth_credentials").upsert({
-      account_id:           resolvedAccountId,
-      provider:             "gmail",
-      granted_by_user_id:   user.id,
-      external_account_id:  user.email,
-      access_token_enc:     session.provider_token,
-      refresh_token_enc:    session.provider_refresh_token ?? null,
-      expires_at:           new Date(Date.now() + 3600 * 1000).toISOString(),
-    }, { onConflict: "account_id,provider,external_account_id" });
+    const { data: credData, error: credError } = await supabase
+      .from("oauth_credentials")
+      .upsert({
+        account_id:           resolvedAccountId,
+        provider:             "gmail",
+        granted_by_user_id:   user.id,
+        external_account_id:  user.email,
+        access_token_enc:     session.provider_token,
+        refresh_token_enc:    session.provider_refresh_token ?? null,
+        expires_at:           new Date(Date.now() + 3600 * 1000).toISOString(),
+      }, { onConflict: "account_id,provider,external_account_id" })
+      .select("id")
+      .single();
 
-    if (credError) {
+    if (credError || !credData) {
       console.error(
-        `[KAI-202] oauth_credentials upsert failed for user=${user.id}: ${credError.message} — aborting pipeline dispatch`
+        `[KAI-202] oauth_credentials upsert failed for user=${user.id}: ${credError?.message} — aborting pipeline dispatch`
       );
       return attachCookies(
-        NextResponse.redirect(`${appUrl}/auth/error?type=credentials_error&description=${encodeURIComponent(credError.message)}`),
+        NextResponse.redirect(`${appUrl}/auth/error?type=credentials_error&description=${encodeURIComponent(credError?.message ?? "unknown")}`),
         cookieJar
       );
     }
 
-    // KAI-173: register the inbox as a support channel
+    // KAI-173: register the inbox as a support channel.
+    // credential_id links to the oauth_credentials row just upserted (ADR-022).
+    // oauth_tokens jsonb is no longer written — tokens live in oauth_credentials.
     const { error: channelError } = await supabase.from("support_channels").upsert({
       account_id:             resolvedAccountId,
       channel_type:           "gmail",
       email_address:          user.email,
-      oauth_tokens:           {
-        access_token:  session.provider_token,
-        refresh_token: session.provider_refresh_token ?? null,
-        expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
-      },
+      display_name:           (user.user_metadata?.full_name as string | undefined)
+                                ?? (user.user_metadata?.name as string | undefined)
+                                ?? user.email,
+      credential_id:          credData.id,
       connected_by_user_id:   user.id,
       is_primary:             true,
       is_active:              true,
@@ -269,6 +274,33 @@ export async function GET(request: Request) {
       return attachCookies(
         NextResponse.redirect(`${appUrl}/auth/error?type=channel_error&description=${encodeURIComponent(channelError.message)}`),
         cookieJar
+      );
+    }
+
+    // ── Register technical pipeline integration (channel_integrations) ───
+    // channel_integrations is the operational connection used by the messages
+    // pipeline to record individual inbound/outbound messages and track their
+    // classification status.  It is referenced by messages.channel_integration_id
+    // (NOT NULL FK), so without this row the pipeline cannot write to messages.
+    //
+    // This write is NON-FATAL for dispatch: if it fails the pipeline still runs
+    // and creates tickets.  What won't work is the omnichannel messages layer
+    // (messages table stays empty, conversations have no message records).
+    // That is acceptable — tickets are the primary deliverable.
+    const { error: ciError } = await supabase.from("channel_integrations").upsert({
+      account_id:          resolvedAccountId,
+      provider:            "gmail",
+      external_account_id: user.email,
+      display_name:        user.email,
+      is_active:           true,
+    }, { onConflict: "account_id,provider,external_account_id" });
+
+    if (ciError) {
+      // Non-fatal: log and continue — pipeline and tickets are unaffected.
+      // If this happens consistently it indicates a schema or RLS issue that
+      // should be investigated but must not block the user's auth flow.
+      console.error(
+        `[KAI-202] channel_integrations upsert failed for user=${user.id}: ${ciError.message} — messages pipeline will be degraded`
       );
     }
 

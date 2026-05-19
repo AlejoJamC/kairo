@@ -90,7 +90,7 @@ export const es: Translations = {
     footerColResources: "Recursos",
     footerColCompany: "Empresa",
     footerCopyright: "© 2026 KAIRO AI — TODOS LOS DERECHOS RESERVADOS",
-    footerVersion: "v0.1.3 · 2026-05-13",
+    footerVersion: "v0.1.4 · 2026-05-13",
   },
   footer: {
     tagline: "Cockpit de Soporte con IA",

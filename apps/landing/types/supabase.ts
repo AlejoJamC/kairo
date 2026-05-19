@@ -306,7 +306,6 @@ export type Database = {
         Row: {
           account_id: string
           created_at: string
-          credentials_encrypted: Json | null
           display_name: string | null
           external_account_id: string
           id: string
@@ -318,7 +317,6 @@ export type Database = {
         Insert: {
           account_id: string
           created_at?: string
-          credentials_encrypted?: Json | null
           display_name?: string | null
           external_account_id: string
           id?: string
@@ -330,7 +328,6 @@ export type Database = {
         Update: {
           account_id?: string
           created_at?: string
-          credentials_encrypted?: Json | null
           display_name?: string | null
           external_account_id?: string
           id?: string
@@ -1004,7 +1001,6 @@ export type Database = {
           id: string
           is_active: boolean
           is_primary: boolean
-          oauth_tokens: Json | null
         }
         Insert: {
           account_id: string
@@ -1018,7 +1014,6 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_primary?: boolean
-          oauth_tokens?: Json | null
         }
         Update: {
           account_id?: string
@@ -1032,7 +1027,6 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_primary?: boolean
-          oauth_tokens?: Json | null
         }
         Relationships: [
           {
