@@ -238,6 +238,7 @@ export const incrementalSync = inngest.createFunction(
         // Insert stub with 'pending' status immediately
         if (channelIntegrationId) {
           await supabase.from("messages").insert({
+            account_id:             accountId,
             channel_integration_id: channelIntegrationId,
             external_id: message.id,
             direction: "inbound",

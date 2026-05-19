@@ -268,6 +268,7 @@ export const tier1FastPath = inngest.createFunction(
           if (channelIntegrationId) {
             await supabase.from("messages").upsert(
               {
+                account_id:             accountId,
                 channel_integration_id: channelIntegrationId,
                 external_id: message.id,
                 direction: "inbound",
@@ -399,6 +400,7 @@ export const tier1FastPath = inngest.createFunction(
             if (channelIntegrationId) {
               await supabase.from("messages").upsert(
                 {
+                  account_id:             accountId,
                   channel_integration_id: channelIntegrationId,
                   external_id: messageId,
                   direction: "inbound",
@@ -448,6 +450,7 @@ export const tier1FastPath = inngest.createFunction(
             if (channelIntegrationId) {
               await supabase.from("messages").upsert(
                 {
+                  account_id:             accountId,
                   channel_integration_id: channelIntegrationId,
                   external_id: messageId,
                   direction: "inbound",
