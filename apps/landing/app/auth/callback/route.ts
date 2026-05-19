@@ -227,36 +227,38 @@ export async function GET(request: Request) {
   // gmail_accounts dropped in ADR-022 Phase 5; oauth_credentials is now canonical.
   if (session.provider_token && user.email) {
     // ── Persist OAuth credentials — pipeline MUST NOT dispatch if this fails ─
-    const { error: credError } = await supabase.from("oauth_credentials").upsert({
-      account_id:           resolvedAccountId,
-      provider:             "gmail",
-      granted_by_user_id:   user.id,
-      external_account_id:  user.email,
-      access_token_enc:     session.provider_token,
-      refresh_token_enc:    session.provider_refresh_token ?? null,
-      expires_at:           new Date(Date.now() + 3600 * 1000).toISOString(),
-    }, { onConflict: "account_id,provider,external_account_id" });
+    const { data: credData, error: credError } = await supabase
+      .from("oauth_credentials")
+      .upsert({
+        account_id:           resolvedAccountId,
+        provider:             "gmail",
+        granted_by_user_id:   user.id,
+        external_account_id:  user.email,
+        access_token_enc:     session.provider_token,
+        refresh_token_enc:    session.provider_refresh_token ?? null,
+        expires_at:           new Date(Date.now() + 3600 * 1000).toISOString(),
+      }, { onConflict: "account_id,provider,external_account_id" })
+      .select("id")
+      .single();
 
-    if (credError) {
+    if (credError || !credData) {
       console.error(
-        `[KAI-202] oauth_credentials upsert failed for user=${user.id}: ${credError.message} — aborting pipeline dispatch`
+        `[KAI-202] oauth_credentials upsert failed for user=${user.id}: ${credError?.message} — aborting pipeline dispatch`
       );
       return attachCookies(
-        NextResponse.redirect(`${appUrl}/auth/error?type=credentials_error&description=${encodeURIComponent(credError.message)}`),
+        NextResponse.redirect(`${appUrl}/auth/error?type=credentials_error&description=${encodeURIComponent(credError?.message ?? "unknown")}`),
         cookieJar
       );
     }
 
-    // KAI-173: register the inbox as a support channel
+    // KAI-173: register the inbox as a support channel.
+    // credential_id links to the oauth_credentials row just upserted (ADR-022).
+    // oauth_tokens jsonb is no longer written — tokens live in oauth_credentials.
     const { error: channelError } = await supabase.from("support_channels").upsert({
       account_id:             resolvedAccountId,
       channel_type:           "gmail",
       email_address:          user.email,
-      oauth_tokens:           {
-        access_token:  session.provider_token,
-        refresh_token: session.provider_refresh_token ?? null,
-        expires_at:    new Date(Date.now() + 3600 * 1000).toISOString(),
-      },
+      credential_id:          credData.id,
       connected_by_user_id:   user.id,
       is_primary:             true,
       is_active:              true,
