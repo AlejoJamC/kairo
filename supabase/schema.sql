@@ -23,6 +23,40 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 
+CREATE TYPE "public"."draft_contact_origin" AS ENUM (
+    'kairo_created',
+    'external_synced'
+);
+
+
+ALTER TYPE "public"."draft_contact_origin" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."draft_contact_status" AS ENUM (
+    'proposed',
+    'confirmed',
+    'rejected',
+    'merged_into'
+);
+
+
+ALTER TYPE "public"."draft_contact_status" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") RETURNS integer
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    SELECT COALESCE(a.seat_limit, p.seat_limit_default)
+    FROM public.accounts a
+    JOIN public.plans p ON p.id = a.plan_id
+    WHERE a.id = p_account_id;
+$$;
+
+
+ALTER FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."current_account_id"() RETURNS "uuid"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     AS $$
@@ -311,13 +345,14 @@ $$;
 ALTER FUNCTION "public"."is_superadmin"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text" DEFAULT NULL::"text") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text" DEFAULT NULL::"text", "p_plan_code" "text" DEFAULT 'starter'::"text", "p_seat_limit" integer DEFAULT NULL::integer) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
 DECLARE
     v_existing_id  uuid;
     v_account_id   uuid;
+    v_plan_id      uuid;
     v_name         text;
     v_slug_base    text;
     v_slug         text;
@@ -337,10 +372,17 @@ BEGIN
         RETURN v_existing_id;
     END IF;
 
+    -- ── Resolve plan_id from p_plan_code ──────────────────────────────────
+    SELECT id INTO v_plan_id
+    FROM public.plans
+    WHERE code = p_plan_code
+    LIMIT 1;
+
+    IF v_plan_id IS NULL THEN
+        RAISE EXCEPTION 'provision_account_for_user: invalid plan_code: %', p_plan_code;
+    END IF;
+
     -- ── Resolve user identity for name derivation ──────────────────────────
-    -- profiles is written by handle_new_user trigger before this function
-    -- runs (trigger order: on_auth_user_created < z_ensure_account_on_signup).
-    -- In the explicit-RPC path the profile is always committed first.
     SELECT u.email,
            COALESCE(p.name, ''),
            COALESCE(p.company_name, '')
@@ -362,27 +404,22 @@ BEGIN
         split_part(v_email, '@', 1)
     );
 
-    -- Final fallback — should never be reached but defensively guard empty slug
     IF v_name IS NULL OR trim(v_name) = '' THEN
         v_name := 'account';
     END IF;
 
-    -- ── Derive URL-safe slug with random suffix (mirrors backfill logic) ───
+    -- ── Derive URL-safe slug with random suffix ────────────────────────────
     v_slug_base := lower(regexp_replace(trim(v_name), '[^a-z0-9]+', '-', 'g'));
     v_slug_base := trim(both '-' from v_slug_base);
     IF v_slug_base = '' THEN
         v_slug_base := 'account';
     END IF;
-    -- 6-char random hex suffix keeps slugs unique even for users with identical names
     v_slug := v_slug_base || '-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 6);
 
     -- ── Atomic insert: accounts + account_members ──────────────────────────
-    -- The entire function body executes inside a single implicit PL/pgSQL
-    -- transaction when called from an outer transaction (e.g. trigger).
-    -- If any statement below fails, the whole function rolls back.
     BEGIN
-        INSERT INTO public.accounts (name, slug, plan_type, seat_limit)
-        VALUES (v_name, v_slug, 'Starter', 5)
+        INSERT INTO public.accounts (name, slug, plan_id, seat_limit)
+        VALUES (v_name, v_slug, v_plan_id, p_seat_limit)
         RETURNING id INTO v_account_id;
 
         INSERT INTO public.account_members
@@ -391,9 +428,6 @@ BEGIN
             (v_account_id, p_user_id, 'owner', 'active', now());
 
     EXCEPTION
-        -- Race condition: a concurrent call already inserted account_members
-        -- for this user between our guard SELECT and our INSERT.
-        -- Recover by looking up the winner's account_id.
         WHEN unique_violation THEN
             SELECT am.account_id INTO v_account_id
             FROM public.account_members am
@@ -414,7 +448,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."recompute_category_confidence_thresholds"() RETURNS "void"
@@ -459,6 +493,50 @@ $$;
 
 ALTER FUNCTION "public"."recompute_category_confidence_thresholds"() OWNER TO "postgres";
 
+
+CREATE OR REPLACE FUNCTION "public"."set_default_plan_id_on_accounts"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    IF NEW.plan_id IS NULL THEN
+        SELECT id INTO NEW.plan_id
+        FROM public.plans
+        WHERE code = 'starter'
+        LIMIT 1;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."set_default_plan_id_on_accounts"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."update_plans_updated_at"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_plans_updated_at"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."update_updated_at_column"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_updated_at_column"() OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
@@ -500,10 +578,9 @@ CREATE TABLE IF NOT EXISTS "public"."accounts" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "name" "text" NOT NULL,
     "slug" "text" NOT NULL,
-    "plan_type" "text",
-    "seat_limit" integer DEFAULT 5 NOT NULL,
+    "seat_limit" integer,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "accounts_plan_type_check" CHECK (("plan_type" = ANY (ARRAY['Enterprise'::"text", 'Pro'::"text", 'Starter'::"text"])))
+    "plan_id" "uuid" NOT NULL
 );
 
 
@@ -585,7 +662,6 @@ CREATE TABLE IF NOT EXISTS "public"."channel_integrations" (
     "provider" "text" NOT NULL,
     "external_account_id" "text" NOT NULL,
     "display_name" "text",
-    "credentials_encrypted" "jsonb",
     "is_active" boolean DEFAULT true NOT NULL,
     "last_synced_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
@@ -674,6 +750,46 @@ CREATE TABLE IF NOT EXISTS "public"."csat_events" (
 
 
 ALTER TABLE "public"."csat_events" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."draft_contact" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "email" "public"."citext",
+    "phone" "text",
+    "display_name" "text",
+    "organization" "text",
+    "status" "public"."draft_contact_status" DEFAULT 'proposed'::"public"."draft_contact_status" NOT NULL,
+    "merged_into_id" "uuid",
+    "confidence" real DEFAULT 0.0 NOT NULL,
+    "evidence_count" integer DEFAULT 0 NOT NULL,
+    "origin" "public"."draft_contact_origin" DEFAULT 'kairo_created'::"public"."draft_contact_origin" NOT NULL,
+    "external_ref" "text",
+    "external_source" "text",
+    "source_tickets" "uuid"[] DEFAULT '{}'::"uuid"[] NOT NULL,
+    "first_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "last_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "confirmed_at" timestamp with time zone,
+    "confirmed_by" "uuid",
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "draft_contact_confidence_range" CHECK ((("confidence" >= (0.0)::double precision) AND ("confidence" <= (1.0)::double precision))),
+    CONSTRAINT "draft_contact_confirmation_consistency" CHECK (((("status" = 'confirmed'::"public"."draft_contact_status") AND ("confirmed_at" IS NOT NULL) AND ("confirmed_by" IS NOT NULL)) OR ("status" <> 'confirmed'::"public"."draft_contact_status"))),
+    CONSTRAINT "draft_contact_external_consistency" CHECK ((("origin" = 'kairo_created'::"public"."draft_contact_origin") OR (("external_source" IS NOT NULL) AND ("external_ref" IS NOT NULL)))),
+    CONSTRAINT "draft_contact_has_identity" CHECK ((("email" IS NOT NULL) OR ("phone" IS NOT NULL)))
+);
+
+
+ALTER TABLE "public"."draft_contact" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."draft_contact" IS 'Pipeline de identidades de contacto propuestas por el extractor. Confirmar no migra a otra tabla, solo cambia status. KAI-224.';
+
+
+
+COMMENT ON COLUMN "public"."draft_contact"."confirmed_by" IS 'auth.users.id del agente que confirmo. Patron del codebase: actor FKs apuntan a auth.users, no a account_members.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."escalation_contacts" (
@@ -805,6 +921,22 @@ CREATE TABLE IF NOT EXISTS "public"."oauth_credentials" (
 ALTER TABLE "public"."oauth_credentials" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."plans" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "code" "text" NOT NULL,
+    "name" "text" NOT NULL,
+    "seat_limit_default" integer NOT NULL,
+    "is_public" boolean DEFAULT true NOT NULL,
+    "sort_order" integer DEFAULT 0 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "plans_seat_limit_default_check" CHECK (("seat_limit_default" > 0))
+);
+
+
+ALTER TABLE "public"."plans" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "id" "uuid" NOT NULL,
     "email" "text" NOT NULL,
@@ -845,7 +977,6 @@ CREATE TABLE IF NOT EXISTS "public"."support_channels" (
     "email_address" "text" NOT NULL,
     "display_name" "text",
     "is_primary" boolean DEFAULT false NOT NULL,
-    "oauth_tokens" "jsonb",
     "connected_by_user_id" "uuid",
     "connected_at" timestamp with time zone DEFAULT "now"(),
     "is_active" boolean DEFAULT true NOT NULL,
@@ -1167,6 +1298,11 @@ ALTER TABLE ONLY "public"."csat_events"
 
 
 
+ALTER TABLE ONLY "public"."draft_contact"
+    ADD CONSTRAINT "draft_contact_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."escalation_contacts"
     ADD CONSTRAINT "escalation_contacts_pkey" PRIMARY KEY ("id");
 
@@ -1204,6 +1340,16 @@ ALTER TABLE ONLY "public"."oauth_credentials"
 
 ALTER TABLE ONLY "public"."oauth_credentials"
     ADD CONSTRAINT "oauth_credentials_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."plans"
+    ADD CONSTRAINT "plans_code_key" UNIQUE ("code");
+
+
+
+ALTER TABLE ONLY "public"."plans"
+    ADD CONSTRAINT "plans_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1379,6 +1525,30 @@ CREATE INDEX "idx_conversations_customer_external_id" ON "public"."conversations
 
 
 CREATE INDEX "idx_conversations_external_thread_id" ON "public"."conversations" USING "btree" ("external_thread_id") WHERE ("external_thread_id" IS NOT NULL);
+
+
+
+CREATE UNIQUE INDEX "idx_draft_contact_account_email" ON "public"."draft_contact" USING "btree" ("account_id", "email") WHERE ("email" IS NOT NULL);
+
+
+
+CREATE INDEX "idx_draft_contact_account_org" ON "public"."draft_contact" USING "btree" ("account_id", "organization") WHERE ("organization" IS NOT NULL);
+
+
+
+CREATE UNIQUE INDEX "idx_draft_contact_account_phone" ON "public"."draft_contact" USING "btree" ("account_id", "phone") WHERE ("phone" IS NOT NULL);
+
+
+
+CREATE INDEX "idx_draft_contact_account_status" ON "public"."draft_contact" USING "btree" ("account_id", "status");
+
+
+
+CREATE INDEX "idx_draft_contact_metadata_gin" ON "public"."draft_contact" USING "gin" ("metadata");
+
+
+
+CREATE INDEX "idx_draft_contact_source_tickets_gin" ON "public"."draft_contact" USING "gin" ("source_tickets");
 
 
 
@@ -1626,6 +1796,18 @@ CREATE OR REPLACE TRIGGER "on_tickets_updated" BEFORE UPDATE ON "public"."ticket
 
 
 
+CREATE OR REPLACE TRIGGER "trg_accounts_default_plan_id" BEFORE INSERT ON "public"."accounts" FOR EACH ROW EXECUTE FUNCTION "public"."set_default_plan_id_on_accounts"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_draft_contact_updated_at" BEFORE UPDATE ON "public"."draft_contact" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_plans_updated_at" BEFORE UPDATE ON "public"."plans" FOR EACH ROW EXECUTE FUNCTION "public"."update_plans_updated_at"();
+
+
+
 ALTER TABLE ONLY "public"."account_invitations"
     ADD CONSTRAINT "account_invitations_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
@@ -1643,6 +1825,11 @@ ALTER TABLE ONLY "public"."account_members"
 
 ALTER TABLE ONLY "public"."account_members"
     ADD CONSTRAINT "account_members_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."accounts"
+    ADD CONSTRAINT "accounts_plan_id_fkey" FOREIGN KEY ("plan_id") REFERENCES "public"."plans"("id") ON DELETE RESTRICT;
 
 
 
@@ -1703,6 +1890,21 @@ ALTER TABLE ONLY "public"."conversations"
 
 ALTER TABLE ONLY "public"."csat_events"
     ADD CONSTRAINT "csat_events_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id");
+
+
+
+ALTER TABLE ONLY "public"."draft_contact"
+    ADD CONSTRAINT "draft_contact_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."draft_contact"
+    ADD CONSTRAINT "draft_contact_confirmed_by_fkey" FOREIGN KEY ("confirmed_by") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."draft_contact"
+    ADD CONSTRAINT "draft_contact_merged_into_id_fkey" FOREIGN KEY ("merged_into_id") REFERENCES "public"."draft_contact"("id") ON DELETE SET NULL;
 
 
 
@@ -1949,6 +2151,10 @@ CREATE POLICY "Members can view their own account memberships" ON "public"."acco
 
 
 
+CREATE POLICY "Plans are viewable by authenticated users" ON "public"."plans" FOR SELECT TO "authenticated" USING (true);
+
+
+
 CREATE POLICY "Users can accept own invitation" ON "public"."account_members" FOR INSERT WITH CHECK ((("user_id" = "auth"."uid"()) AND ("status" = 'active'::"text") AND (EXISTS ( SELECT 1
    FROM "public"."account_invitations" "ai"
   WHERE (("ai"."account_id" = "account_members"."account_id") AND ("ai"."email" = (( SELECT "users"."email"
@@ -2037,6 +2243,21 @@ CREATE POLICY "csat_events_access_by_account" ON "public"."csat_events" USING ((
 
 
 
+ALTER TABLE "public"."draft_contact" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "draft_contact_insert" ON "public"."draft_contact" FOR INSERT WITH CHECK (("account_id" = "public"."current_account_id"()));
+
+
+
+CREATE POLICY "draft_contact_select" ON "public"."draft_contact" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
+
+
+
+CREATE POLICY "draft_contact_update" ON "public"."draft_contact" FOR UPDATE USING (("account_id" = "public"."current_account_id"())) WITH CHECK (("account_id" = "public"."current_account_id"()));
+
+
+
 ALTER TABLE "public"."escalation_contacts" ENABLE ROW LEVEL SECURITY;
 
 
@@ -2079,6 +2300,9 @@ ALTER TABLE "public"."oauth_credentials" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "oauth_credentials_access_by_account" ON "public"."oauth_credentials" USING (("account_id" = "public"."current_account_id"()));
 
+
+
+ALTER TABLE "public"."plans" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
@@ -2195,6 +2419,13 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."current_account_id"() TO "anon";
 GRANT ALL ON FUNCTION "public"."current_account_id"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."current_account_id"() TO "service_role";
@@ -2273,16 +2504,34 @@ GRANT ALL ON FUNCTION "public"."is_superadmin"() TO "service_role";
 
 
 
-REVOKE ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text") TO "service_role";
+REVOKE ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) TO "service_role";
 
 
 
 GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "anon";
 GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."set_default_plan_id_on_accounts"() TO "anon";
+GRANT ALL ON FUNCTION "public"."set_default_plan_id_on_accounts"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_default_plan_id_on_accounts"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."update_plans_updated_at"() TO "anon";
+GRANT ALL ON FUNCTION "public"."update_plans_updated_at"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_plans_updated_at"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "anon";
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "service_role";
 
 
 
@@ -2358,6 +2607,12 @@ GRANT ALL ON TABLE "public"."csat_events" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."draft_contact" TO "anon";
+GRANT ALL ON TABLE "public"."draft_contact" TO "authenticated";
+GRANT ALL ON TABLE "public"."draft_contact" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."escalation_contacts" TO "anon";
 GRANT ALL ON TABLE "public"."escalation_contacts" TO "authenticated";
 GRANT ALL ON TABLE "public"."escalation_contacts" TO "service_role";
@@ -2391,6 +2646,12 @@ GRANT ALL ON TABLE "public"."messages" TO "service_role";
 GRANT ALL ON TABLE "public"."oauth_credentials" TO "anon";
 GRANT ALL ON TABLE "public"."oauth_credentials" TO "authenticated";
 GRANT ALL ON TABLE "public"."oauth_credentials" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."plans" TO "anon";
+GRANT ALL ON TABLE "public"."plans" TO "authenticated";
+GRANT ALL ON TABLE "public"."plans" TO "service_role";
 
 
 

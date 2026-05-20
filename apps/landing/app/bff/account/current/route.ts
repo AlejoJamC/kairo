@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
     const { data: member, error } = await supabase
       .from("account_members")
-      .select("role, account_id, accounts(id, name, slug, plan_type, seat_limit)")
+      .select("role, account_id, accounts(id, name, slug, seat_limit, plan_id, plans(code, name, seat_limit_default))")
       .eq("user_id", user.id)
       .eq("status", "active")
       .order("joined_at", { ascending: true })
@@ -31,13 +31,14 @@ export async function GET(request: Request) {
     }
 
     const account = Array.isArray(member.accounts) ? member.accounts[0] : member.accounts;
+    const plan = Array.isArray(account.plans) ? account.plans[0] : account.plans;
 
     return NextResponse.json({
       id:         account.id,
       name:       account.name,
       slug:       account.slug,
-      plan_type:  account.plan_type,
-      seat_limit: account.seat_limit,
+      plan:       plan ? { code: plan.code, name: plan.name } : null,
+      seat_limit: account.seat_limit ?? plan?.seat_limit_default ?? null,
       my_role:    member.role,
     });
   } catch {
