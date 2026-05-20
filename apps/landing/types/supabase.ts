@@ -98,27 +98,35 @@ export type Database = {
           created_at: string
           id: string
           name: string
-          plan_type: string | null
-          seat_limit: number
+          plan_id: string
+          seat_limit: number | null
           slug: string
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
-          plan_type?: string | null
-          seat_limit?: number
+          plan_id: string
+          seat_limit?: number | null
           slug: string
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
-          plan_type?: string | null
-          seat_limit?: number
+          plan_id?: string
+          seat_limit?: number | null
           slug?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "accounts_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_audit_log: {
         Row: {
@@ -560,6 +568,93 @@ export type Database = {
           },
         ]
       }
+      draft_contact: {
+        Row: {
+          account_id: string
+          confidence: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          evidence_count: number
+          external_ref: string | null
+          external_source: string | null
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          merged_into_id: string | null
+          metadata: Json
+          organization: string | null
+          origin: Database["public"]["Enums"]["draft_contact_origin"]
+          phone: string | null
+          source_tickets: string[]
+          status: Database["public"]["Enums"]["draft_contact_status"]
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          confidence?: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          evidence_count?: number
+          external_ref?: string | null
+          external_source?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          merged_into_id?: string | null
+          metadata?: Json
+          organization?: string | null
+          origin?: Database["public"]["Enums"]["draft_contact_origin"]
+          phone?: string | null
+          source_tickets?: string[]
+          status?: Database["public"]["Enums"]["draft_contact_status"]
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          confidence?: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          evidence_count?: number
+          external_ref?: string | null
+          external_source?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          merged_into_id?: string | null
+          metadata?: Json
+          organization?: string | null
+          origin?: Database["public"]["Enums"]["draft_contact_origin"]
+          phone?: string | null
+          source_tickets?: string[]
+          status?: Database["public"]["Enums"]["draft_contact_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draft_contact_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_contact_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "draft_contact"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       escalation_contacts: {
         Row: {
           account_id: string
@@ -916,6 +1011,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      plans: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_public: boolean
+          name: string
+          seat_limit_default: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          name: string
+          seat_limit_default: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          name?: string
+          seat_limit_default?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -1599,6 +1727,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_effective_seat_limit: {
+        Args: { p_account_id: string }
+        Returns: number
+      }
       current_account_id: { Args: never; Returns: string }
       find_relevant_kb: {
         Args: {
@@ -1656,7 +1788,12 @@ export type Database = {
       is_active_admin: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
       provision_account_for_user: {
-        Args: { p_account_name?: string; p_user_id: string }
+        Args: {
+          p_account_name?: string
+          p_plan_code?: string
+          p_seat_limit?: number
+          p_user_id: string
+        }
         Returns: string
       }
       recompute_category_confidence_thresholds: {
@@ -1665,7 +1802,12 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      draft_contact_origin: "kairo_created" | "external_synced"
+      draft_contact_status:
+        | "proposed"
+        | "confirmed"
+        | "rejected"
+        | "merged_into"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1792,6 +1934,14 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      draft_contact_origin: ["kairo_created", "external_synced"],
+      draft_contact_status: [
+        "proposed",
+        "confirmed",
+        "rejected",
+        "merged_into",
+      ],
+    },
   },
 } as const
