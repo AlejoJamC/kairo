@@ -30,18 +30,20 @@ interface UseClassificationProgressResult {
   retry: () => void;
 }
 
-const POLL_INTERVAL_MS  = 1500;
-const TIMEOUT_MS        = 120_000; // 2 minutes
+const POLL_INTERVAL_MS      = 1500;
+const TIMEOUT_MS            = 120_000; // 2 minutes
+const MAX_CONSECUTIVE_FAILS = 3;       // tolerate transient errors before showing error screen
 
 export function useClassificationProgress(): UseClassificationProgressResult {
   const [data, setData]         = useState<ClassificationProgress | null>(null);
   const [error, setError]       = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
-  const stoppedRef  = useRef(false);
-  const abortRef    = useRef<AbortController | null>(null);
-  const timerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const timeoutRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stoppedRef    = useRef(false);
+  const abortRef      = useRef<AbortController | null>(null);
+  const timerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failCountRef  = useRef(0);
 
   const retry = useCallback(() => {
     setError(null);
@@ -49,7 +51,8 @@ export function useClassificationProgress(): UseClassificationProgressResult {
   }, []);
 
   useEffect(() => {
-    stoppedRef.current = false;
+    stoppedRef.current  = false;
+    failCountRef.current = 0;
 
     // 2-minute hard stop → error state so users are never stuck
     timeoutRef.current = setTimeout(() => {
@@ -71,6 +74,7 @@ export function useClassificationProgress(): UseClassificationProgressResult {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json() as ClassificationProgress;
 
+        failCountRef.current = 0; // successful response resets the fail counter
         setData(json);
         setError(null);
 
@@ -84,6 +88,15 @@ export function useClassificationProgress(): UseClassificationProgressResult {
         }
       } catch (err: unknown) {
         if ((err as Error).name === "AbortError") return; // intentional cancel
+        failCountRef.current += 1;
+        if (failCountRef.current < MAX_CONSECUTIVE_FAILS) {
+          // Transient error — keep polling, don't surface to the user yet.
+          if (!stoppedRef.current) {
+            timerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
+          }
+          return;
+        }
+        // Exceeded consecutive fail threshold — give up and show error screen.
         stoppedRef.current = true;
         clearTimeout(timeoutRef.current!);
         setError(err instanceof Error ? err.message : "fetch_error");
