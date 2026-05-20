@@ -6,6 +6,7 @@ export type Ticket                = Tables<'tickets'>;
 export type TenantPriorityConfig  = Tables<'tenant_priority_config'>;
 export type TenantSlaRule         = Tables<'tenant_sla_rules'>;
 export type AccountMember         = Tables<'account_members'>;
+export type DraftContact          = Tables<'draft_contact'>;
 
 export type TicketStatus =
   | 'open'
