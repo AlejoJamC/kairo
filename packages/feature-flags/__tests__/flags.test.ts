@@ -2,9 +2,11 @@ import { describe, it, expect, afterEach } from "bun:test";
 import { FLAGS, getFlag } from "../src/flags.js";
 
 const ENV_KEY = "FEATURE_FLAG_ENABLE_DETECTION_UI";
+const ENV_KEY_CONTACT = "FEATURE_FLAG_ENABLE_CONTACT_EXTRACTION";
 
 afterEach(() => {
   delete process.env[ENV_KEY];
+  delete process.env[ENV_KEY_CONTACT];
 });
 
 describe("getFlag('enable_detection_ui')", () => {
@@ -26,6 +28,23 @@ describe("getFlag('enable_detection_ui')", () => {
   it("falls back to default (false) on invalid env value", () => {
     process.env[ENV_KEY] = "yes"; // not 'true' or 'false'
     expect(getFlag("enable_detection_ui")).toBe(false);
+  });
+});
+
+describe("getFlag('enable_contact_extraction')", () => {
+  it("returns false by default when env var is unset", () => {
+    delete process.env[ENV_KEY_CONTACT];
+    expect(getFlag("enable_contact_extraction")).toBe(false);
+  });
+
+  it("returns true when env var is 'true'", () => {
+    process.env[ENV_KEY_CONTACT] = "true";
+    expect(getFlag("enable_contact_extraction")).toBe(true);
+  });
+
+  it("returns false when env var is 'false'", () => {
+    process.env[ENV_KEY_CONTACT] = "false";
+    expect(getFlag("enable_contact_extraction")).toBe(false);
   });
 });
 

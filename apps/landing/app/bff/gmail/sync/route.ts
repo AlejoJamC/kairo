@@ -2,6 +2,8 @@ import { createClient, getUserFromRequest } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
 import { env } from "@/env";
+import { inngest } from "@/lib/inngest";
+import { getFlag } from "@kairo/feature-flags";
 
 export async function POST(request: Request) {
   try {
@@ -213,30 +215,44 @@ export async function POST(request: Request) {
         }
 
         // Insert ticket — account_id only, no user_id (ADR-022 Phase 5)
-        const { error: insertError } = await supabase.from("tickets").insert({
-          account_id:        accountId,
-          originating_user_id: user.id,
-          gmail_message_id:  message.id!,
-          gmail_thread_id:   msg.threadId || null,
-          subject,
-          from_email:  fromEmail,
-          from_name:   fromName,
-          to_email:    to || null,
-          received_at: receivedAt,
-          body_plain:  bodyPlain || null,
-          body_html:   bodyHtml || null,
-          snippet:     msg.snippet || null,
-          status:      "open",
-          ticket_type: null,
-          priority:    null,
-          category:    null,
-          sentiment:   null,
-        });
+        const { data: insertedTicket, error: insertError } = await supabase
+          .from("tickets")
+          .insert({
+            account_id:        accountId,
+            originating_user_id: user.id,
+            gmail_message_id:  message.id!,
+            gmail_thread_id:   msg.threadId || null,
+            subject,
+            from_email:  fromEmail,
+            from_name:   fromName,
+            to_email:    to || null,
+            received_at: receivedAt,
+            body_plain:  bodyPlain || null,
+            body_html:   bodyHtml || null,
+            snippet:     msg.snippet || null,
+            status:      "open",
+            ticket_type: null,
+            priority:    null,
+            category:    null,
+            sentiment:   null,
+          })
+          .select("id")
+          .single();
 
         if (insertError) {
           console.error("Insert error for message", message.id, insertError);
         } else {
           created++;
+          // KAI-225 — Emit contact-extraction trigger (fire-and-forget, non-blocking).
+          // Gated by FEATURE_FLAG_ENABLE_CONTACT_EXTRACTION.
+          if (insertedTicket?.id && getFlag("enable_contact_extraction")) {
+            inngest.send({
+              name: "tickets/ticket.created",
+              data: { ticketId: insertedTicket.id, accountId },
+            }).catch((err: unknown) => {
+              console.error(`[gmail-sync] tickets/ticket.created send failed for ticket ${insertedTicket.id}:`, err);
+            });
+          }
         }
 
         processed++;

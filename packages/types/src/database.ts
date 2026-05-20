@@ -1722,6 +1722,59 @@ export type Database = {
           },
         ]
       }
+      worker_runs: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          duration_ms: number | null
+          error: Json | null
+          finished_at: string | null
+          id: string
+          result: Json | null
+          started_at: string
+          status: string
+          trigger_event: string | null
+          trigger_payload: Json | null
+          worker: string
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error?: Json | null
+          finished_at?: string | null
+          id?: string
+          result?: Json | null
+          started_at?: string
+          status: string
+          trigger_event?: string | null
+          trigger_payload?: Json | null
+          worker: string
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error?: Json | null
+          finished_at?: string | null
+          id?: string
+          result?: Json | null
+          started_at?: string
+          status?: string
+          trigger_event?: string | null
+          trigger_payload?: Json | null
+          worker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "worker_runs_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

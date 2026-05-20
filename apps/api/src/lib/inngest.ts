@@ -32,6 +32,12 @@ export type KairoEvents = {
       gmailAccessToken: string;
     };
   };
+  "tickets/ticket.created": {
+    data: {
+      ticketId: string;
+      accountId: string;
+    };
+  };
 };
 
 // In inngest v4, EventSchemas was removed. Event types are enforced via
