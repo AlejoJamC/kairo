@@ -1,4 +1,5 @@
 import { classifyEmail, detectEscalationTriggers } from "@kairo/intelligence";
+import { getFlag } from "@kairo/feature-flags";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
@@ -419,6 +420,18 @@ export const tier1FastPath = inngest.createFunction(
             }
 
             if (ticket?.id) {
+              // KAI-225 — Emit contact-extraction trigger (fire-and-forget, non-blocking).
+              // Gated by FEATURE_FLAG_ENABLE_CONTACT_EXTRACTION so the classifier
+              // pipeline stays unaffected when the worker is disabled.
+              if (getFlag("enable_contact_extraction")) {
+                inngest.send({
+                  name: "tickets/ticket.created",
+                  data: { ticketId: ticket.id, accountId },
+                }).catch((err: unknown) => {
+                  console.error(`[tier1] tickets/ticket.created send failed for ticket ${ticket.id}:`, err);
+                });
+              }
+
               maybeSendOutOfHoursReply({
                 supabase,
                 accountId,

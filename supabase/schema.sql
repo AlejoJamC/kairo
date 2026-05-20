@@ -1193,6 +1193,31 @@ ALTER TABLE "public"."tickets" ALTER COLUMN "ticket_number" ADD GENERATED ALWAYS
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."worker_runs" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "worker" "text" NOT NULL,
+    "account_id" "uuid",
+    "trigger_event" "text",
+    "trigger_payload" "jsonb",
+    "status" "text" NOT NULL,
+    "started_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "finished_at" timestamp with time zone,
+    "duration_ms" integer,
+    "result" "jsonb",
+    "error" "jsonb",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "worker_runs_finished_consistency" CHECK (((("status" = 'running'::"text") AND ("finished_at" IS NULL)) OR (("status" <> 'running'::"text") AND ("finished_at" IS NOT NULL)))),
+    CONSTRAINT "worker_runs_status_check" CHECK (("status" = ANY (ARRAY['running'::"text", 'succeeded'::"text", 'failed'::"text"])))
+);
+
+
+ALTER TABLE "public"."worker_runs" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."worker_runs" IS 'Observabilidad genérica de runs de workers Inngest. Una fila por ejecución. Worker-agnóstica. KAI-225.';
+
+
+
 ALTER TABLE ONLY "public"."account_invitations"
     ADD CONSTRAINT "account_invitations_pkey" PRIMARY KEY ("id");
 
@@ -1445,6 +1470,11 @@ ALTER TABLE ONLY "public"."tickets"
 
 ALTER TABLE ONLY "public"."tickets"
     ADD CONSTRAINT "tickets_ticket_number_key" UNIQUE ("ticket_number");
+
+
+
+ALTER TABLE ONLY "public"."worker_runs"
+    ADD CONSTRAINT "worker_runs_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1757,6 +1787,14 @@ CREATE INDEX "idx_tickets_status" ON "public"."tickets" USING "btree" ("status")
 
 
 CREATE INDEX "idx_tickets_ticket_number" ON "public"."tickets" USING "btree" ("ticket_number");
+
+
+
+CREATE INDEX "idx_worker_runs_account_worker_started" ON "public"."worker_runs" USING "btree" ("account_id", "worker", "started_at" DESC);
+
+
+
+CREATE INDEX "idx_worker_runs_status_running" ON "public"."worker_runs" USING "btree" ("started_at") WHERE ("status" = 'running'::"text");
 
 
 
@@ -2103,6 +2141,11 @@ ALTER TABLE ONLY "public"."tickets"
 
 
 
+ALTER TABLE ONLY "public"."worker_runs"
+    ADD CONSTRAINT "worker_runs_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
 CREATE POLICY "Account admins can manage members" ON "public"."account_members" USING ("public"."is_account_admin"("account_id"));
 
 
@@ -2409,6 +2452,13 @@ ALTER TABLE "public"."tickets" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "tickets_access_by_account" ON "public"."tickets" USING (("account_id" = "public"."current_account_id"()));
+
+
+
+ALTER TABLE "public"."worker_runs" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "worker_runs_select" ON "public"."worker_runs" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -2736,6 +2786,12 @@ GRANT ALL ON TABLE "public"."tickets" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."worker_runs" TO "anon";
+GRANT ALL ON TABLE "public"."worker_runs" TO "authenticated";
+GRANT ALL ON TABLE "public"."worker_runs" TO "service_role";
 
 
 

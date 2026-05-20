@@ -10,7 +10,11 @@
 //           └── escalateTab     (Pestaña 4 — Escalar)  ← OFF: not ready yet
 //
 // Runtime-overrideable flags (server-only, via FEATURE_FLAG_<UPPER_SNAKE> env vars):
-//   enable_detection_ui  — KAI-201: show real-time detection step in onboarding wizard
+//   enable_detection_ui          — KAI-201: show real-time detection step in onboarding wizard
+//   enable_contact_extraction    — KAI-225: emit `tickets/ticket.created` to trigger the
+//                                  contact-extraction worker (creates draft_contact rows from
+//                                  classified tickets). OFF by default — the classifier
+//                                  pipeline is intentionally decoupled and the worker is opt-in.
 // =============================================================================
 
 // ─── Static dashboard flags (build-time, no env override) ────────────────────
@@ -34,6 +38,7 @@ const ENV_PREFIX = "FEATURE_FLAG_";
 
 const FLAG_DEFAULTS = {
   enable_detection_ui: false,
+  enable_contact_extraction: false,
 } as const;
 
 type RuntimeFlagName = keyof typeof FLAG_DEFAULTS;
