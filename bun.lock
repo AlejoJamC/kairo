@@ -34,6 +34,7 @@
       "dependencies": {
         "@kairo/env": "workspace:*",
         "@kairo/feature-flags": "workspace:*",
+        "@kairo/identity": "workspace:*",
         "@kairo/types": "workspace:*",
         "@kairo/ui": "workspace:*",
         "@supabase/supabase-js": "^2.105.3",

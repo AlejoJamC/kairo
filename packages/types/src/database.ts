@@ -655,6 +655,51 @@ export type Database = {
           },
         ]
       }
+      draft_contact_audit_log: {
+        Row: {
+          account_id: string
+          action: string
+          actor_user_id: string
+          created_at: string
+          diff: Json | null
+          draft_id: string
+          id: string
+        }
+        Insert: {
+          account_id: string
+          action: string
+          actor_user_id: string
+          created_at?: string
+          diff?: Json | null
+          draft_id: string
+          id?: string
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          actor_user_id?: string
+          created_at?: string
+          diff?: Json | null
+          draft_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draft_contact_audit_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_contact_audit_log_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "draft_contact"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       escalation_contacts: {
         Row: {
           account_id: string
@@ -1780,11 +1825,87 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _assert_draft_access: {
+        Args: { p_draft_id: string }
+        Returns: {
+          account_id: string
+          draft_origin: Database["public"]["Enums"]["draft_contact_origin"]
+          draft_status: Database["public"]["Enums"]["draft_contact_status"]
+        }[]
+      }
       account_effective_seat_limit: {
         Args: { p_account_id: string }
         Returns: number
       }
+      bulk_confirm_drafts_by_organization: {
+        Args: { p_organization: string }
+        Returns: number
+      }
+      confirm_draft_contact: {
+        Args: { p_draft_id: string }
+        Returns: {
+          account_id: string
+          confidence: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          evidence_count: number
+          external_ref: string | null
+          external_source: string | null
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          merged_into_id: string | null
+          metadata: Json
+          organization: string | null
+          origin: Database["public"]["Enums"]["draft_contact_origin"]
+          phone: string | null
+          source_tickets: string[]
+          status: Database["public"]["Enums"]["draft_contact_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "draft_contact"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       current_account_id: { Args: never; Returns: string }
+      edit_draft_contact: {
+        Args: { p_draft_id: string; p_patch: Json }
+        Returns: {
+          account_id: string
+          confidence: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          evidence_count: number
+          external_ref: string | null
+          external_source: string | null
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          merged_into_id: string | null
+          metadata: Json
+          organization: string | null
+          origin: Database["public"]["Enums"]["draft_contact_origin"]
+          phone: string | null
+          source_tickets: string[]
+          status: Database["public"]["Enums"]["draft_contact_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "draft_contact"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       find_relevant_kb: {
         Args: {
           p_account_id: string
@@ -1852,6 +1973,70 @@ export type Database = {
       recompute_category_confidence_thresholds: {
         Args: never
         Returns: undefined
+      }
+      reject_draft_contact: {
+        Args: { p_draft_id: string }
+        Returns: {
+          account_id: string
+          confidence: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          evidence_count: number
+          external_ref: string | null
+          external_source: string | null
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          merged_into_id: string | null
+          metadata: Json
+          organization: string | null
+          origin: Database["public"]["Enums"]["draft_contact_origin"]
+          phone: string | null
+          source_tickets: string[]
+          status: Database["public"]["Enums"]["draft_contact_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "draft_contact"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      unreject_draft_contact: {
+        Args: { p_draft_id: string }
+        Returns: {
+          account_id: string
+          confidence: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          evidence_count: number
+          external_ref: string | null
+          external_source: string | null
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          merged_into_id: string | null
+          metadata: Json
+          organization: string | null
+          origin: Database["public"]["Enums"]["draft_contact_origin"]
+          phone: string | null
+          source_tickets: string[]
+          status: Database["public"]["Enums"]["draft_contact_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "draft_contact"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
