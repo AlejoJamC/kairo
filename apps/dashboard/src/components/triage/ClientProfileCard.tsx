@@ -66,7 +66,9 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
     );
   }
 
-  const { name, phone, clientId } = clientProfile;
+  const { name, phone, clientId, email, organization } = clientProfile;
+  const isDraft = clientProfile.source === "draft";
+  const draftStatus = clientProfile.draftStatus;
 
   function handleCopyPhone() {
     if (!phone) return;
@@ -79,7 +81,7 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
-      {/* Avatar + name */}
+      {/* Avatar + name + draft badge */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{
           width: 36, height: 36, borderRadius: 999, flexShrink: 0,
@@ -89,17 +91,34 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
         }}>
           {initials(name)}
         </div>
-        <div style={{ minWidth: 0 }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: "var(--k-text-primary)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
-            {name ?? t("clientProfile.unknown")}
-          </p>
-          {clientId && (
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--k-text-primary)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+              {name ?? email ?? t("clientProfile.unknown")}
+            </p>
+            {/* KAI-227 — surface draft origin so the agent knows this profile came from
+                the contact-extraction worker (KAI-225) and not from the CRM. */}
+            {isDraft && draftStatus && <DraftStatusBadge status={draftStatus} />}
+          </div>
+          {organization && (
+            <p style={{ fontSize: 11, color: "var(--k-text-tertiary)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+              {organization}
+            </p>
+          )}
+          {!isDraft && clientId && (
             <p style={{ fontSize: 10, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
               {clientId}
             </p>
           )}
         </div>
       </div>
+
+      {/* Email row (only for drafts — for CRM clients, email lives in the KPI/details below) */}
+      {isDraft && email && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--k-text-secondary)", padding: "0 8px", fontFamily: "var(--k-font-mono)", wordBreak: "break-all" }}>
+          {email}
+        </div>
+      )}
 
       {/* Phone copy */}
       {phone && (
@@ -117,7 +136,48 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
         </button>
       )}
 
-
+      {/* KAI-228 placeholder — confirm / reject / edit actions for drafts go here.
+          Rendered only for drafts so the CRM card UI is untouched. */}
+      {isDraft && (
+        <div
+          data-kai228-action-slot
+          style={{
+            marginTop: 4, padding: "8px 10px", fontSize: 11,
+            color: "var(--k-text-tertiary)", background: "var(--k-surface-2)",
+            border: "1px dashed var(--k-border)", borderRadius: 6, lineHeight: 1.4,
+          }}
+        >
+          {t("clientProfile.draftActionsPending")}
+        </div>
+      )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Draft status badge — proposed / confirmed / rejected
+// ---------------------------------------------------------------------------
+
+const DRAFT_BADGE_STYLE: Record<"proposed" | "confirmed" | "rejected", { bg: string; color: string; border: string }> = {
+  proposed:  { bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE" },
+  confirmed: { bg: "#F0FDF4", color: "#16A34A", border: "#BBF7D0" },
+  rejected:  { bg: "#F4F4F5", color: "#71717A", border: "#E4E4E7" },
+};
+
+function DraftStatusBadge({ status }: { status: "proposed" | "confirmed" | "rejected" }) {
+  const { t } = useTranslation("dashboard");
+  const s = DRAFT_BADGE_STYLE[status];
+  const labelKey =
+    status === "proposed"  ? "clientProfile.badgeDraft" :
+    status === "confirmed" ? "clientProfile.badgeConfirmed" :
+                             "clientProfile.badgeRejected";
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 999,
+      background: s.bg, color: s.color, border: `1px solid ${s.border}`,
+      letterSpacing: "0.03em", flexShrink: 0,
+    }}>
+      {t(labelKey)}
+    </span>
   );
 }

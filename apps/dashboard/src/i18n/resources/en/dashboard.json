@@ -296,6 +296,10 @@
   "clientProfile": {
     "noData": "Customer data not available.",
     "unknown": "Unknown customer",
+    "badgeDraft":     "Draft",
+    "badgeConfirmed": "Confirmed",
+    "badgeRejected":  "Rejected",
+    "draftActionsPending": "Auto-detected draft. Confirm, reject and edit actions will be available shortly.",
     "newClient": "New customer",
     "recurrent": "Returning customer",
     "recurrentTooltip": "{{count}} tickets in the last 30 days",

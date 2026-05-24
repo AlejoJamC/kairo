@@ -1161,7 +1161,50 @@ tickets.get("/:id/client-profile", async (c) => {
     .single();
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
-  if (!ticket.client_id)    return c.json({ error: "No client linked to this ticket" }, 404);
+
+  // KAI-227 — Fallback to draft_contact when the ticket has no CRM client linked.
+  // The contact extraction worker (KAI-225) creates draft_contact rows from
+  // `from_email`. We surface that draft so the right-panel "Cliente" tab shows
+  // SOMETHING actionable instead of "no disponible".
+  if (!ticket.client_id) {
+    if (!ticket.from_email) {
+      return c.json({ error: "No client linked to this ticket" }, 404);
+    }
+    const { data: draft } = await supabase
+      .from("draft_contact")
+      .select("id, email, phone, display_name, organization, status, evidence_count, first_seen_at")
+      .eq("account_id", ctx.accountId)
+      .eq("email", ticket.from_email.toLowerCase())
+      .in("status", ["proposed", "confirmed"])
+      .maybeSingle();
+
+    if (!draft) return c.json({ error: "No client or draft contact for this ticket" }, 404);
+
+    const draftProfile = {
+      clientId:          `draft:${draft.id}`,
+      source:            "draft" as const,
+      draftId:           draft.id,
+      draftStatus:       draft.status as "proposed" | "confirmed" | "rejected",
+      name:              draft.display_name ?? null,
+      email:             draft.email ?? ticket.from_email ?? null,
+      phone:             draft.phone ?? null,
+      organization:      draft.organization ?? null,
+      clientType:        "unknown" as const,
+      activePlan:        null,
+      planScore:         0,
+      clientSince:       draft.first_seen_at ?? null,
+      isNewClient:       true,
+      isRecurrent:       false,
+      totalTickets:      draft.evidence_count ?? 0,
+      ticketsLast30Days: 0,
+      recentTickets:     [],
+    };
+
+    // Cache by draft id to avoid re-querying on tab switches.
+    const draftCacheKey = `${user.id}:draft:${draft.id}`;
+    profileCache.set(draftCacheKey, { data: draftProfile, expiresAt: Date.now() + PROFILE_CACHE_TTL_MS });
+    return c.json(draftProfile);
+  }
 
   // 2. Cache check
   const cacheKey = `${user.id}:${ticket.client_id}`;
@@ -1225,6 +1268,7 @@ tickets.get("/:id/client-profile", async (c) => {
 
   const profile = {
     clientId:        client.id,
+    source:          "client" as const,
     name:            client.name,
     email:           client.authorized_emails?.[0] ?? ticket.from_email ?? null,
     phone:           client.telephone ?? null,

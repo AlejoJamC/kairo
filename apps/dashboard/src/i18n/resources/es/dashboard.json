@@ -296,6 +296,10 @@
   "clientProfile": {
     "noData": "Datos de cliente no disponibles.",
     "unknown": "Cliente desconocido",
+    "badgeDraft":     "Borrador",
+    "badgeConfirmed": "Confirmado",
+    "badgeRejected":  "Rechazado",
+    "draftActionsPending": "Borrador detectado automáticamente. Las acciones para confirmar, rechazar o editar estarán disponibles próximamente.",
     "newClient": "Nuevo cliente",
     "recurrent": "Cliente recurrente",
     "recurrentTooltip": "{{count}} tickets en los últimos 30 días",
