@@ -101,6 +101,20 @@ export type Database = {
         Update: Record<string, never>;
         Relationships: [];
       };
+      draft_contact_audit_log: {
+        Row: {
+          id: string;
+          draft_id: string;
+          account_id: string;
+          actor_user_id: string;
+          action: "confirmed" | "rejected" | "edited" | "unrejected";
+          diff: Record<string, unknown> | null;
+          created_at: string;
+        };
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+        Relationships: [];
+      };
       tickets: {
         Row: {
           id: string;
@@ -171,7 +185,28 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      confirm_draft_contact: {
+        Args: { p_draft_id: string };
+        Returns: Database["public"]["Tables"]["draft_contact"]["Row"];
+      };
+      reject_draft_contact: {
+        Args: { p_draft_id: string };
+        Returns: Database["public"]["Tables"]["draft_contact"]["Row"];
+      };
+      unreject_draft_contact: {
+        Args: { p_draft_id: string };
+        Returns: Database["public"]["Tables"]["draft_contact"]["Row"];
+      };
+      edit_draft_contact: {
+        Args: { p_draft_id: string; p_patch: Record<string, unknown> };
+        Returns: Database["public"]["Tables"]["draft_contact"]["Row"];
+      };
+      bulk_confirm_drafts_by_organization: {
+        Args: { p_organization: string };
+        Returns: number;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

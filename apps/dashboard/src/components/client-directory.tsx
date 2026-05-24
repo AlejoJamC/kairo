@@ -14,12 +14,24 @@ import {
   Search,
   AlertCircle,
   RefreshCw,
+  Check,
+  XCircle,
+  RotateCcw,
+  Pencil,
 } from "lucide-react";
 import { ClientFormModal } from "@/components/client-form-modal";
 import { apiCall } from "@/lib/api-client";
 import { useAuth } from "@/contexts/auth-context";
 import { useDraftContacts } from "@/hooks/use-draft-contacts";
 import { mapClientToRow, type ContactRow, type ContactRowStatus } from "@/types/contact-row";
+import {
+  confirmDraft,
+  rejectDraft,
+  unrejectDraft,
+  editDraft,
+  bulkConfirmByOrganization,
+  type EditPatch,
+} from "@/lib/draft-actions";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -209,6 +221,7 @@ function ContactCard({
   onSelect,
   onEdit,
   onDelete,
+  onQuickConfirm,
   deleting,
 }: {
   row: ContactRow;
@@ -217,13 +230,16 @@ function ContactCard({
   onSelect: (row: ContactRow) => void;
   onEdit?: (e: React.MouseEvent) => void;
   onDelete?: (e: React.MouseEvent) => void;
+  onQuickConfirm?: (e: React.MouseEvent) => void;
   deleting?: boolean;
 }) {
+  const { t } = useTranslation("clients");
   const [hover, setHover] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const grad = avatarGradient(row.displayName);
   const ini  = initials(row.displayName);
   const isDraft = row.source === "draft";
+  const isProposedDraft = isDraft && row.status === "proposed";
 
   return (
     <div
@@ -297,8 +313,24 @@ function ContactCard({
         {relativeTime(row.lastSeenAt)}
       </span>
 
-      {/* ACTIONS — only for clients (draft actions are KAI-228) */}
+      {/* ACTIONS */}
       <div style={{ position: "relative" }}>
+        {isProposedDraft && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onQuickConfirm?.(e); }}
+            title={t("actions.confirm")}
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "3px 8px", borderRadius: 5,
+              background: "#F0FDF4", border: "1px solid #BBF7D0",
+              cursor: "pointer", color: "#16A34A", fontSize: 11, fontWeight: 600,
+              opacity: hover ? 1 : 0, transition: "opacity 0.1s",
+            }}
+          >
+            <Check style={{ width: 11, height: 11 }} />
+            {t("actions.confirm")}
+          </button>
+        )}
         {!isDraft && (
           <>
             <button
@@ -372,11 +404,18 @@ export function ClientDirectory() {
   // UI state
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("drafts");
   const [planFilter, setPlanFilter]     = useState<PlanFilter>("all");
+  const [orgFilter, setOrgFilter]       = useState<string>("all");
   const [search, setSearch]             = useState("");
   const [formOpen, setFormOpen]         = useState(false);
   const [editingClient, setEditing]     = useState<Client | null>(null);
   const [deleting, setDeleting]         = useState<string | null>(null);
   const [selectedRow, setSelectedRow]   = useState<ContactRow | null>(null);
+  // Optimistic removed draft ids (removed on quick confirm/reject, restored on polling error)
+  const [optimisticRemovedIds, setOptimisticRemovedIds] = useState<Set<string>>(() => new Set());
+  // Bulk confirm modal state
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkConfirming, setBulkConfirming] = useState(false);
+  const [bulkToast, setBulkToast]         = useState<string | null>(null);
 
   // Animate only rows whose id is new in the current poll.
   // The "seen" set is internal bookkeeping (no re-render needed) — keep it in a
@@ -451,8 +490,25 @@ export function ClientDirectory() {
     });
   }, [drafts, clients]);
 
+  // Org list for filter dropdown (drafts only, >= 2 distinct orgs to show)
+  const orgList = useMemo(() => {
+    const orgs = new Set<string>();
+    for (const row of allRows) {
+      if (row.organization) orgs.add(row.organization);
+    }
+    return Array.from(orgs).sort();
+  }, [allRows]);
+
+  // Proposed draft count for selected org (used in bulk confirm modal)
+  const proposedCountForOrg = useMemo(() => {
+    if (orgFilter === "all") return 0;
+    return allRows.filter(
+      (r) => r.source === "draft" && r.status === "proposed" && r.organization === orgFilter
+    ).length;
+  }, [allRows, orgFilter]);
+
   // -------------------------------------------------------------------------
-  // Filter pipeline: status → plan → search
+  // Filter pipeline: status → org → plan → search → optimistic removes
   // -------------------------------------------------------------------------
   const filteredRows = useMemo(() => {
     let rows = allRows;
@@ -467,7 +523,12 @@ export function ClientDirectory() {
     }
     // "all" → no filter
 
-    // 2. Plan filter (only applicable when viewing confirmed/all clients)
+    // 2. Org filter (applies when an org is selected)
+    if (orgFilter !== "all") {
+      rows = rows.filter((r) => r.organization === orgFilter);
+    }
+
+    // 3. Plan filter (only applicable when viewing confirmed/all clients)
     const planFiltersActive = statusFilter === "all" || statusFilter === "confirmed";
     if (planFiltersActive && planFilter !== "all") {
       if (planFilter === "churn-risk") {
@@ -477,7 +538,7 @@ export function ClientDirectory() {
       }
     }
 
-    // 3. Search (client-side, applies to the already status-filtered set)
+    // 4. Search (client-side, applies to the already status-filtered set)
     if (search.trim()) {
       const q = search.toLowerCase();
       rows = rows.filter(
@@ -489,8 +550,47 @@ export function ClientDirectory() {
       );
     }
 
+    // 5. Optimistic removes (confirmed/rejected rows removed from current view until next poll)
+    if (optimisticRemovedIds.size > 0) {
+      rows = rows.filter((r) => !optimisticRemovedIds.has(r.id));
+    }
+
     return rows;
-  }, [allRows, statusFilter, planFilter, search]);
+  }, [allRows, statusFilter, orgFilter, planFilter, search, optimisticRemovedIds]);
+
+  // -------------------------------------------------------------------------
+  // Draft quick action handlers
+  // -------------------------------------------------------------------------
+  const handleQuickConfirm = async (row: ContactRow) => {
+    const draftRawId = row.id.replace("draft:", "");
+    setOptimisticRemovedIds((prev) => new Set([...prev, row.id]));
+    try {
+      await confirmDraft(draftRawId, row.lastSeenAt);
+    } catch {
+      // Restore on failure
+      setOptimisticRemovedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(row.id);
+        return next;
+      });
+    }
+  };
+
+  const handleBulkConfirm = async () => {
+    if (orgFilter === "all") return;
+    setBulkConfirming(true);
+    try {
+      const count = await bulkConfirmByOrganization(orgFilter);
+      setBulkModalOpen(false);
+      setBulkToast(t("actions.bulkConfirmSuccess", { count }));
+      setTimeout(() => setBulkToast(null), 4000);
+    } catch {
+      setBulkToast(t("errors.genericAction"));
+      setTimeout(() => setBulkToast(null), 4000);
+    } finally {
+      setBulkConfirming(false);
+    }
+  };
 
   // -------------------------------------------------------------------------
   // Client CRUD handlers (unchanged)
@@ -626,6 +726,37 @@ export function ClientDirectory() {
           ))}
         </div>
 
+        {/* Org filter + bulk confirm button (shown when orgList has 2+ orgs) */}
+        {orgList.length >= 2 && (
+          <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={orgFilter}
+              onChange={(e) => setOrgFilter(e.target.value)}
+              style={{
+                padding: "5px 10px", borderRadius: 6, fontSize: 13,
+                border: "1px solid var(--k-border)", background: "white",
+                color: "var(--k-text-secondary)", cursor: "pointer",
+              }}
+            >
+              <option value="all">Todas las organizaciones</option>
+              {orgList.map((org) => (
+                <option key={org} value={org}>{org}</option>
+              ))}
+            </select>
+            {orgFilter !== "all" && statusFilter === "drafts" && proposedCountForOrg > 0 && (
+              <button
+                onClick={() => setBulkModalOpen(true)}
+                style={{
+                  padding: "5px 12px", borderRadius: 6, fontSize: 13, cursor: "pointer",
+                  background: "#16A34A", color: "white", border: "none", fontWeight: 500,
+                }}
+              >
+                {t("actions.bulkConfirmButton", { org: orgFilter })}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Plan pills + search + actions */}
         <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
           {/* Plan pills — only when viewing confirmed/all */}
@@ -737,6 +868,7 @@ export function ClientDirectory() {
                   onSelect={setSelectedRow}
                   onEdit={client ? (e) => { e.stopPropagation(); setEditing(client); setFormOpen(true); } : undefined}
                   onDelete={client ? (e) => handleDelete(client.id, client.name, e) : undefined}
+                  onQuickConfirm={row.source === "draft" && row.status === "proposed" ? () => handleQuickConfirm(row) : undefined}
                   deleting={clientId ? deleting === clientId : false}
                 />
               );
@@ -750,7 +882,75 @@ export function ClientDirectory() {
           row={selectedRow}
           client={selectedRow.source === "client" ? clients.find((c) => c.id === selectedRow.id.replace("client:", "")) ?? null : null}
           onClose={() => setSelectedRow(null)}
+          onOptimisticRemove={(id) => {
+            setOptimisticRemovedIds((prev) => new Set([...prev, id]));
+            setSelectedRow(null);
+          }}
+          onOptimisticRestore={(id) => {
+            setOptimisticRemovedIds((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+          }}
         />
+      )}
+
+      {/* Bulk confirm modal */}
+      {bulkModalOpen && orgFilter !== "all" && (
+        <>
+          <div
+            onClick={() => !bulkConfirming && setBulkModalOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.3)" }}
+          />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            zIndex: 60, background: "white", borderRadius: 12, padding: 24, width: 400,
+            boxShadow: "0 8px 32px rgba(9,9,11,0.16)",
+          }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600, color: "var(--k-text-primary)" }}>
+              {t("actions.bulkConfirmModalTitle", { org: orgFilter })}
+            </h3>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--k-text-secondary)", lineHeight: 1.5 }}>
+              {t("actions.bulkConfirmModalBody", { count: proposedCountForOrg })}
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setBulkModalOpen(false)}
+                disabled={bulkConfirming}
+                style={{
+                  padding: "7px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer",
+                  background: "white", border: "1px solid var(--k-border)", color: "var(--k-text-secondary)",
+                }}
+              >
+                {t("actions.cancel")}
+              </button>
+              <button
+                onClick={handleBulkConfirm}
+                disabled={bulkConfirming}
+                style={{
+                  padding: "7px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer",
+                  background: "#16A34A", color: "white", border: "none", fontWeight: 500,
+                  display: "flex", alignItems: "center", gap: 6,
+                }}
+              >
+                {bulkConfirming && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
+                {t("actions.confirm")}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Toast notification */}
+      {bulkToast && (
+        <div style={{
+          position: "fixed", bottom: 24, right: 24, zIndex: 70,
+          background: "#1E293B", color: "white", padding: "12px 16px",
+          borderRadius: 8, fontSize: 13, boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+        }}>
+          {bulkToast}
+        </div>
       )}
 
       <ClientFormModal
@@ -775,15 +975,110 @@ function ContactDetailDrawer({
   row,
   client,
   onClose,
+  onOptimisticRemove,
+  onOptimisticRestore,
 }: {
   row: ContactRow;
   client: Client | null;
   onClose: () => void;
+  onOptimisticRemove?: (id: string) => void;
+  onOptimisticRestore?: (id: string) => void;
 }) {
   const { t } = useTranslation("clients");
   const grad  = avatarGradient(row.displayName);
   const ini   = initials(row.displayName);
   const isDraft = row.source === "draft";
+  const draftRawId = row.id.replace("draft:", "");
+
+  // Edit mode state
+  const [editMode, setEditMode]     = useState(false);
+  const [editValues, setEditValues] = useState({
+    display_name: row.displayName ?? "",
+    email:        row.email ?? "",
+    phone:        row.phone ?? "",
+    organization: row.organization ?? "",
+  });
+  const [editError, setEditError]   = useState<string | null>(null);
+  const [saving, setSaving]         = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const isProposed  = isDraft && row.status === "proposed";
+  const isRejected  = isDraft && row.status === "rejected";
+  const isConfirmed = isDraft && row.status === "confirmed";
+  const isKairoCreated = (row as ContactRow & { origin?: string }).origin === "kairo_created" ||
+    // fallback: external source absent → assume kairo_created for proposed drafts without external badge
+    (!row.externalSource && isProposed);
+
+  const handleConfirm = async () => {
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      await confirmDraft(draftRawId, row.lastSeenAt);
+      onOptimisticRemove?.(row.id);
+    } catch {
+      setActionError(t("errors.genericAction"));
+      onOptimisticRestore?.(row.id);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleReject = async () => {
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      await rejectDraft(draftRawId);
+      onOptimisticRemove?.(row.id);
+    } catch {
+      setActionError(t("errors.genericAction"));
+      onOptimisticRestore?.(row.id);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleUnreject = async () => {
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      await unrejectDraft(draftRawId);
+      onOptimisticRemove?.(row.id);
+    } catch {
+      setActionError(t("errors.genericAction"));
+      onOptimisticRestore?.(row.id);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setEditError(null);
+    const patch: EditPatch = {
+      display_name: editValues.display_name || null,
+      email:        editValues.email || null,
+      phone:        editValues.phone || null,
+      organization: editValues.organization || null,
+    };
+    try {
+      await editDraft(draftRawId, patch);
+      setEditMode(false);
+    } catch (err) {
+      const error = err as Error & { code?: string };
+      if (error.message === "invalid_email_format") {
+        setEditError(t("errors.invalidEmail"));
+      } else if (error.message === "invalid_phone_format") {
+        setEditError(t("errors.invalidPhone"));
+      } else if (error.code === "merge_candidate") {
+        setEditError(t("errors.mergeCandidate"));
+      } else {
+        setEditError(t("errors.genericSave"));
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <>
@@ -914,14 +1209,174 @@ function ContactDetailDrawer({
             </div>
           )}
 
+          {/* ── Draft action panel ── */}
           {isDraft && (
-            <p style={{
-              marginTop: 24, padding: "10px 12px", fontSize: 12,
-              color: "var(--k-text-tertiary)", background: "var(--k-surface)",
-              borderRadius: 6, lineHeight: 1.5,
-            }}>
-              {t("detail.draftReadOnlyNote")}
-            </p>
+            <div style={{ marginTop: 20 }}>
+              {/* Action error */}
+              {actionError && (
+                <div style={{
+                  marginBottom: 10, padding: "8px 12px", borderRadius: 6, fontSize: 12,
+                  background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA",
+                }}>
+                  {actionError}
+                </div>
+              )}
+
+              {/* ── proposed + kairo_created: confirm / reject / edit ── */}
+              {isProposed && isKairoCreated && !editMode && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={handleConfirm}
+                      disabled={actionBusy}
+                      style={{
+                        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        padding: "9px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                        background: "#16A34A", color: "white", border: "none",
+                      }}
+                    >
+                      {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <Check style={{ width: 13, height: 13 }} />}
+                      {t("actions.confirm")}
+                    </button>
+                    <button
+                      onClick={handleReject}
+                      disabled={actionBusy}
+                      style={{
+                        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        padding: "9px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                        background: "white", color: "#DC2626", border: "1px solid #FECACA",
+                      }}
+                    >
+                      {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <XCircle style={{ width: 13, height: 13 }} />}
+                      {t("actions.reject")}
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setEditMode(true)}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      padding: "7px 14px", borderRadius: 7, fontSize: 13, cursor: "pointer",
+                      background: "none", border: "none", color: "var(--k-text-secondary)", textDecoration: "underline",
+                    }}
+                  >
+                    <Pencil style={{ width: 12, height: 12 }} />
+                    {t("actions.edit")}
+                  </button>
+                </div>
+              )}
+
+              {/* ── proposed + kairo_created: edit mode ── */}
+              {isProposed && isKairoCreated && editMode && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {(["display_name", "email", "phone", "organization"] as const).map((field) => (
+                    <div key={field}>
+                      <label style={{
+                        display: "block", fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)",
+                        textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4,
+                      }}>
+                        {field === "display_name" ? "Nombre" : field === "email" ? t("detail.email") : field === "phone" ? t("detail.phone") : t("detail.organization")}
+                      </label>
+                      <input
+                        value={editValues[field]}
+                        onChange={(e) => setEditValues((v) => ({ ...v, [field]: e.target.value }))}
+                        style={{
+                          width: "100%", padding: "7px 10px", fontSize: 13, borderRadius: 6,
+                          border: "1px solid var(--k-border)", outline: "none", boxSizing: "border-box",
+                          color: "var(--k-text-primary)", background: "white",
+                        }}
+                      />
+                    </div>
+                  ))}
+                  {editError && (
+                    <div style={{ fontSize: 12, color: "#DC2626", padding: "6px 10px", background: "#FEF2F2", borderRadius: 6, border: "1px solid #FECACA" }}>
+                      {editError}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={handleSave}
+                      disabled={saving}
+                      style={{
+                        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        padding: "8px 14px", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                        background: "#2B5BFF", color: "white", border: "none",
+                      }}
+                    >
+                      {saving && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
+                      {t("actions.save")}
+                    </button>
+                    <button
+                      onClick={() => { setEditMode(false); setEditError(null); }}
+                      disabled={saving}
+                      style={{
+                        flex: 1, padding: "8px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer",
+                        background: "white", border: "1px solid var(--k-border)", color: "var(--k-text-secondary)",
+                      }}
+                    >
+                      {t("actions.cancel")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── proposed + external_synced: confirm/reject only, no edit ── */}
+              {isProposed && !isKairoCreated && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{ fontSize: 11, color: "var(--k-text-tertiary)", margin: "0 0 4px", fontStyle: "italic" }}>
+                    {t("actions.externalReadOnly", { source: row.externalSource ?? "external" })}
+                  </p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={handleConfirm}
+                      disabled={actionBusy}
+                      style={{
+                        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        padding: "9px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                        background: "#16A34A", color: "white", border: "none",
+                      }}
+                    >
+                      {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <Check style={{ width: 13, height: 13 }} />}
+                      {t("actions.confirm")}
+                    </button>
+                    <button
+                      onClick={handleReject}
+                      disabled={actionBusy}
+                      style={{
+                        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        padding: "9px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                        background: "white", color: "#DC2626", border: "1px solid #FECACA",
+                      }}
+                    >
+                      {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <XCircle style={{ width: 13, height: 13 }} />}
+                      {t("actions.reject")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── rejected: re-activate ── */}
+              {isRejected && (
+                <button
+                  onClick={handleUnreject}
+                  disabled={actionBusy}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    padding: "9px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    background: "white", border: "1px solid var(--k-border)", color: "var(--k-text-secondary)",
+                  }}
+                >
+                  {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <RotateCcw style={{ width: 13, height: 13 }} />}
+                  {t("actions.reactivate")}
+                </button>
+              )}
+
+              {/* ── confirmed: read-only with date ── */}
+              {isConfirmed && (
+                <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", margin: 0 }}>
+                  {t("actions.confirmedOn", { date: row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleDateString() : "—" })}
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>

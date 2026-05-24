@@ -8,6 +8,7 @@ export type TenantSlaRule         = Tables<'tenant_sla_rules'>;
 export type AccountMember         = Tables<'account_members'>;
 export type DraftContact          = Tables<'draft_contact'>;
 export type WorkerRun             = Tables<'worker_runs'>;
+export type DraftContactAuditLog  = Tables<'draft_contact_audit_log'>;
 
 export type TicketStatus =
   | 'open'

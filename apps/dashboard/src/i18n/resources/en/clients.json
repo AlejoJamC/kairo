@@ -56,7 +56,18 @@
   "actions": {
     "edit": "Edit",
     "delete": "Delete Client",
-    "confirmDelete": "Delete \"{{name}}\"? This cannot be undone."
+    "confirmDelete": "Delete \"{{name}}\"? This cannot be undone.",
+    "confirm": "Confirm",
+    "reject": "Reject",
+    "save": "Save",
+    "cancel": "Cancel",
+    "reactivate": "Re-activate",
+    "confirmedOn": "Confirmed on {{date}}",
+    "bulkConfirmButton": "Confirm all from {{org}}",
+    "bulkConfirmModalTitle": "Confirm drafts from {{org}}",
+    "bulkConfirmModalBody": "{{count}} drafts will be confirmed. This action cannot be undone from the regular UI.",
+    "bulkConfirmSuccess": "{{count}} drafts confirmed",
+    "externalReadOnly": "Data synced from {{source}}. Editing not available."
   },
   "empty": {
     "noClients": "No clients found",
@@ -78,6 +89,14 @@
   },
   "evidenceCount_one": "{{count}} ticket",
   "evidenceCount_other": "{{count}} tickets",
+  "errors": {
+    "invalidEmail": "Email is not valid.",
+    "invalidPhone": "Phone is not valid.",
+    "noIdentity": "At least an email or phone must remain.",
+    "mergeCandidate": "Another draft already uses this email or phone. Merging will be available in a future update.",
+    "genericSave": "Could not save. Retry.",
+    "genericAction": "Action could not be completed."
+  },
   "search": {
     "placeholder": "Search by name, email, phone..."
   },

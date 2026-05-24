@@ -43,6 +43,41 @@ CREATE TYPE "public"."draft_contact_status" AS ENUM (
 ALTER TYPE "public"."draft_contact_status" OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."_assert_draft_access"("p_draft_id" "uuid") RETURNS TABLE("account_id" "uuid", "draft_status" "public"."draft_contact_status", "draft_origin" "public"."draft_contact_origin")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_account_id uuid;
+  v_status     public.draft_contact_status;
+  v_origin     public.draft_contact_origin;
+BEGIN
+  SELECT d.account_id, d.status, d.origin
+    INTO v_account_id, v_status, v_origin
+  FROM public.draft_contact d
+  WHERE d.id = p_draft_id;
+
+  IF v_account_id IS NULL THEN
+    RAISE EXCEPTION 'draft not found' USING ERRCODE = 'no_data_found';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.account_members am
+    WHERE am.account_id = v_account_id
+      AND am.user_id = auth.uid()
+      AND am.status = 'active'
+  ) THEN
+    RAISE EXCEPTION 'forbidden: not a member of draft account' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  RETURN QUERY SELECT v_account_id, v_status, v_origin;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."_assert_draft_access"("p_draft_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") RETURNS integer
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -55,6 +90,130 @@ $$;
 
 
 ALTER FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."bulk_confirm_drafts_by_organization"("p_organization" "text") RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_account_id uuid;
+  v_count      integer;
+BEGIN
+  v_account_id := public.current_account_id();
+  IF v_account_id IS NULL THEN
+    RAISE EXCEPTION 'forbidden: no active account' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- Update proposed drafts matching the org for this account
+  WITH updated AS (
+    UPDATE public.draft_contact
+       SET status       = 'confirmed',
+           confirmed_at = now(),
+           confirmed_by = auth.uid()
+     WHERE account_id   = v_account_id
+       AND organization = p_organization
+       AND status       = 'proposed'
+     RETURNING id
+  )
+  SELECT count(*) INTO v_count FROM updated;
+
+  -- Audit log rows in the same transaction
+  INSERT INTO public.draft_contact_audit_log (draft_id, account_id, actor_user_id, action, diff)
+  SELECT d.id, d.account_id, auth.uid(), 'confirmed', jsonb_build_object('bulk_by_organization', p_organization)
+  FROM public.draft_contact d
+  WHERE d.account_id   = v_account_id
+    AND d.organization = p_organization
+    AND d.confirmed_at >= now() - interval '5 seconds'
+    AND d.confirmed_by = auth.uid();
+
+  RETURN v_count;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."bulk_confirm_drafts_by_organization"("p_organization" "text") OWNER TO "postgres";
+
+SET default_tablespace = '';
+
+SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."draft_contact" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "email" "public"."citext",
+    "phone" "text",
+    "display_name" "text",
+    "organization" "text",
+    "status" "public"."draft_contact_status" DEFAULT 'proposed'::"public"."draft_contact_status" NOT NULL,
+    "merged_into_id" "uuid",
+    "confidence" real DEFAULT 0.0 NOT NULL,
+    "evidence_count" integer DEFAULT 0 NOT NULL,
+    "origin" "public"."draft_contact_origin" DEFAULT 'kairo_created'::"public"."draft_contact_origin" NOT NULL,
+    "external_ref" "text",
+    "external_source" "text",
+    "source_tickets" "uuid"[] DEFAULT '{}'::"uuid"[] NOT NULL,
+    "first_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "last_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "confirmed_at" timestamp with time zone,
+    "confirmed_by" "uuid",
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "draft_contact_confidence_range" CHECK ((("confidence" >= (0.0)::double precision) AND ("confidence" <= (1.0)::double precision))),
+    CONSTRAINT "draft_contact_confirmation_consistency" CHECK (((("status" = 'confirmed'::"public"."draft_contact_status") AND ("confirmed_at" IS NOT NULL) AND ("confirmed_by" IS NOT NULL)) OR ("status" <> 'confirmed'::"public"."draft_contact_status"))),
+    CONSTRAINT "draft_contact_external_consistency" CHECK ((("origin" = 'kairo_created'::"public"."draft_contact_origin") OR (("external_source" IS NOT NULL) AND ("external_ref" IS NOT NULL)))),
+    CONSTRAINT "draft_contact_has_identity" CHECK ((("email" IS NOT NULL) OR ("phone" IS NOT NULL)))
+);
+
+
+ALTER TABLE "public"."draft_contact" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."draft_contact" IS 'Pipeline de identidades de contacto propuestas por el extractor. Confirmar no migra a otra tabla, solo cambia status. KAI-224.';
+
+
+
+COMMENT ON COLUMN "public"."draft_contact"."confirmed_by" IS 'auth.users.id del agente que confirmo. Patron del codebase: actor FKs apuntan a auth.users, no a account_members.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."confirm_draft_contact"("p_draft_id" "uuid") RETURNS "public"."draft_contact"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_account_id   uuid;
+  v_status       public.draft_contact_status;
+  v_origin       public.draft_contact_origin;
+  v_updated_row  public.draft_contact;
+BEGIN
+  SELECT account_id, draft_status, draft_origin
+    INTO v_account_id, v_status, v_origin
+  FROM public._assert_draft_access(p_draft_id);
+
+  IF v_status <> 'proposed' THEN
+    RAISE EXCEPTION 'invalid_state: draft is not proposed (current: %)', v_status
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  UPDATE public.draft_contact
+     SET status       = 'confirmed',
+         confirmed_at = now(),
+         confirmed_by = auth.uid()
+   WHERE id = p_draft_id
+   RETURNING * INTO v_updated_row;
+
+  INSERT INTO public.draft_contact_audit_log (draft_id, account_id, actor_user_id, action)
+  VALUES (p_draft_id, v_account_id, auth.uid(), 'confirmed');
+
+  RETURN v_updated_row;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."confirm_draft_contact"("p_draft_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."current_account_id"() RETURNS "uuid"
@@ -104,6 +263,98 @@ $$;
 
 
 ALTER FUNCTION "public"."current_account_id"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."edit_draft_contact"("p_draft_id" "uuid", "p_patch" "jsonb") RETURNS "public"."draft_contact"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_account_id    uuid;
+  v_status        public.draft_contact_status;
+  v_origin        public.draft_contact_origin;
+  v_before        public.draft_contact;
+  v_after         public.draft_contact;
+  v_new_email     text;
+  v_new_phone     text;
+  v_new_name      text;
+  v_new_org       text;
+  v_changed_keys  text[] := ARRAY[]::text[];
+  v_diff          jsonb := '{}'::jsonb;
+BEGIN
+  SELECT account_id, draft_status, draft_origin
+    INTO v_account_id, v_status, v_origin
+  FROM public._assert_draft_access(p_draft_id);
+
+  IF v_status <> 'proposed' THEN
+    RAISE EXCEPTION 'invalid_state: only proposed drafts can be edited (current: %)', v_status
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  IF v_origin <> 'kairo_created' THEN
+    RAISE EXCEPTION 'invalid_state: external_synced drafts have read-only core fields'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_before FROM public.draft_contact WHERE id = p_draft_id;
+
+  v_new_email := COALESCE(NULLIF(p_patch->>'email', ''), v_before.email);
+  v_new_phone := COALESCE(NULLIF(p_patch->>'phone', ''), v_before.phone);
+  v_new_name  := COALESCE(NULLIF(p_patch->>'display_name', ''), v_before.display_name);
+  v_new_org   := COALESCE(NULLIF(p_patch->>'organization', ''), v_before.organization);
+
+  -- Explicit null support: caller can pass JSON null to clear a field
+  IF p_patch ? 'email'        AND (p_patch->>'email')        IS NULL THEN v_new_email := NULL; END IF;
+  IF p_patch ? 'phone'        AND (p_patch->>'phone')        IS NULL THEN v_new_phone := NULL; END IF;
+  IF p_patch ? 'display_name' AND (p_patch->>'display_name') IS NULL THEN v_new_name  := NULL; END IF;
+  IF p_patch ? 'organization' AND (p_patch->>'organization') IS NULL THEN v_new_org   := NULL; END IF;
+
+  IF v_new_email IS NULL AND v_new_phone IS NULL THEN
+    RAISE EXCEPTION 'invalid_input: draft must have at least an email or a phone'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  -- Build diff jsonb { field: { before, after } } only for changed keys
+  IF v_new_email IS DISTINCT FROM v_before.email THEN
+    v_diff := v_diff || jsonb_build_object('email', jsonb_build_object('before', v_before.email, 'after', v_new_email));
+    v_changed_keys := array_append(v_changed_keys, 'email');
+  END IF;
+  IF v_new_phone IS DISTINCT FROM v_before.phone THEN
+    v_diff := v_diff || jsonb_build_object('phone', jsonb_build_object('before', v_before.phone, 'after', v_new_phone));
+    v_changed_keys := array_append(v_changed_keys, 'phone');
+  END IF;
+  IF v_new_name IS DISTINCT FROM v_before.display_name THEN
+    v_diff := v_diff || jsonb_build_object('display_name', jsonb_build_object('before', v_before.display_name, 'after', v_new_name));
+    v_changed_keys := array_append(v_changed_keys, 'display_name');
+  END IF;
+  IF v_new_org IS DISTINCT FROM v_before.organization THEN
+    v_diff := v_diff || jsonb_build_object('organization', jsonb_build_object('before', v_before.organization, 'after', v_new_org));
+    v_changed_keys := array_append(v_changed_keys, 'organization');
+  END IF;
+
+  IF cardinality(v_changed_keys) = 0 THEN
+    RETURN v_before; -- no-op
+  END IF;
+
+  -- Apply update (unique constraints on (account_id,email) and (account_id,phone) will
+  -- raise 23505 if the new identity collides — caller should catch and prompt merge UI)
+  UPDATE public.draft_contact
+     SET email        = v_new_email,
+         phone        = v_new_phone,
+         display_name = v_new_name,
+         organization = v_new_org
+   WHERE id = p_draft_id
+   RETURNING * INTO v_after;
+
+  INSERT INTO public.draft_contact_audit_log (draft_id, account_id, actor_user_id, action, diff)
+  VALUES (p_draft_id, v_account_id, auth.uid(), 'edited', v_diff || jsonb_build_object('changed_fields', to_jsonb(v_changed_keys)));
+
+  RETURN v_after;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."edit_draft_contact"("p_draft_id" "uuid", "p_patch" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."ensure_account_on_signup"() RETURNS "trigger"
@@ -494,6 +745,41 @@ $$;
 ALTER FUNCTION "public"."recompute_category_confidence_thresholds"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") RETURNS "public"."draft_contact"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_account_id   uuid;
+  v_status       public.draft_contact_status;
+  v_origin       public.draft_contact_origin;
+  v_updated_row  public.draft_contact;
+BEGIN
+  SELECT account_id, draft_status, draft_origin
+    INTO v_account_id, v_status, v_origin
+  FROM public._assert_draft_access(p_draft_id);
+
+  IF v_status <> 'proposed' THEN
+    RAISE EXCEPTION 'invalid_state: draft is not proposed (current: %)', v_status
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  UPDATE public.draft_contact
+     SET status = 'rejected'
+   WHERE id = p_draft_id
+   RETURNING * INTO v_updated_row;
+
+  INSERT INTO public.draft_contact_audit_log (draft_id, account_id, actor_user_id, action)
+  VALUES (p_draft_id, v_account_id, auth.uid(), 'rejected');
+
+  RETURN v_updated_row;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."set_default_plan_id_on_accounts"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -510,6 +796,41 @@ $$;
 
 
 ALTER FUNCTION "public"."set_default_plan_id_on_accounts"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."unreject_draft_contact"("p_draft_id" "uuid") RETURNS "public"."draft_contact"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_account_id   uuid;
+  v_status       public.draft_contact_status;
+  v_origin       public.draft_contact_origin;
+  v_updated_row  public.draft_contact;
+BEGIN
+  SELECT account_id, draft_status, draft_origin
+    INTO v_account_id, v_status, v_origin
+  FROM public._assert_draft_access(p_draft_id);
+
+  IF v_status <> 'rejected' THEN
+    RAISE EXCEPTION 'invalid_state: draft is not rejected (current: %)', v_status
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  UPDATE public.draft_contact
+     SET status = 'proposed'
+   WHERE id = p_draft_id
+   RETURNING * INTO v_updated_row;
+
+  INSERT INTO public.draft_contact_audit_log (draft_id, account_id, actor_user_id, action)
+  VALUES (p_draft_id, v_account_id, auth.uid(), 'unrejected');
+
+  RETURN v_updated_row;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."unreject_draft_contact"("p_draft_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_plans_updated_at"() RETURNS "trigger"
@@ -536,10 +857,6 @@ $$;
 
 
 ALTER FUNCTION "public"."update_updated_at_column"() OWNER TO "postgres";
-
-SET default_tablespace = '';
-
-SET default_table_access_method = "heap";
 
 
 CREATE TABLE IF NOT EXISTS "public"."account_invitations" (
@@ -752,43 +1069,22 @@ CREATE TABLE IF NOT EXISTS "public"."csat_events" (
 ALTER TABLE "public"."csat_events" OWNER TO "postgres";
 
 
-CREATE TABLE IF NOT EXISTS "public"."draft_contact" (
+CREATE TABLE IF NOT EXISTS "public"."draft_contact_audit_log" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "draft_id" "uuid" NOT NULL,
     "account_id" "uuid" NOT NULL,
-    "email" "public"."citext",
-    "phone" "text",
-    "display_name" "text",
-    "organization" "text",
-    "status" "public"."draft_contact_status" DEFAULT 'proposed'::"public"."draft_contact_status" NOT NULL,
-    "merged_into_id" "uuid",
-    "confidence" real DEFAULT 0.0 NOT NULL,
-    "evidence_count" integer DEFAULT 0 NOT NULL,
-    "origin" "public"."draft_contact_origin" DEFAULT 'kairo_created'::"public"."draft_contact_origin" NOT NULL,
-    "external_ref" "text",
-    "external_source" "text",
-    "source_tickets" "uuid"[] DEFAULT '{}'::"uuid"[] NOT NULL,
-    "first_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "last_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "confirmed_at" timestamp with time zone,
-    "confirmed_by" "uuid",
-    "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "actor_user_id" "uuid" NOT NULL,
+    "action" "text" NOT NULL,
+    "diff" "jsonb",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "draft_contact_confidence_range" CHECK ((("confidence" >= (0.0)::double precision) AND ("confidence" <= (1.0)::double precision))),
-    CONSTRAINT "draft_contact_confirmation_consistency" CHECK (((("status" = 'confirmed'::"public"."draft_contact_status") AND ("confirmed_at" IS NOT NULL) AND ("confirmed_by" IS NOT NULL)) OR ("status" <> 'confirmed'::"public"."draft_contact_status"))),
-    CONSTRAINT "draft_contact_external_consistency" CHECK ((("origin" = 'kairo_created'::"public"."draft_contact_origin") OR (("external_source" IS NOT NULL) AND ("external_ref" IS NOT NULL)))),
-    CONSTRAINT "draft_contact_has_identity" CHECK ((("email" IS NOT NULL) OR ("phone" IS NOT NULL)))
+    CONSTRAINT "draft_contact_audit_action_check" CHECK (("action" = ANY (ARRAY['confirmed'::"text", 'rejected'::"text", 'edited'::"text", 'unrejected'::"text"])))
 );
 
 
-ALTER TABLE "public"."draft_contact" OWNER TO "postgres";
+ALTER TABLE "public"."draft_contact_audit_log" OWNER TO "postgres";
 
 
-COMMENT ON TABLE "public"."draft_contact" IS 'Pipeline de identidades de contacto propuestas por el extractor. Confirmar no migra a otra tabla, solo cambia status. KAI-224.';
-
-
-
-COMMENT ON COLUMN "public"."draft_contact"."confirmed_by" IS 'auth.users.id del agente que confirmo. Patron del codebase: actor FKs apuntan a auth.users, no a account_members.';
+COMMENT ON TABLE "public"."draft_contact_audit_log" IS 'Linear audit trail of agent actions on draft_contact rows. KAI-228.';
 
 
 
@@ -1323,6 +1619,11 @@ ALTER TABLE ONLY "public"."csat_events"
 
 
 
+ALTER TABLE ONLY "public"."draft_contact_audit_log"
+    ADD CONSTRAINT "draft_contact_audit_log_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."draft_contact"
     ADD CONSTRAINT "draft_contact_pkey" PRIMARY KEY ("id");
 
@@ -1571,6 +1872,14 @@ CREATE UNIQUE INDEX "idx_draft_contact_account_phone" ON "public"."draft_contact
 
 
 CREATE INDEX "idx_draft_contact_account_status" ON "public"."draft_contact" USING "btree" ("account_id", "status");
+
+
+
+CREATE INDEX "idx_draft_contact_audit_account_created" ON "public"."draft_contact_audit_log" USING "btree" ("account_id", "created_at" DESC);
+
+
+
+CREATE INDEX "idx_draft_contact_audit_draft_created" ON "public"."draft_contact_audit_log" USING "btree" ("draft_id", "created_at" DESC);
 
 
 
@@ -1936,6 +2245,21 @@ ALTER TABLE ONLY "public"."draft_contact"
 
 
 
+ALTER TABLE ONLY "public"."draft_contact_audit_log"
+    ADD CONSTRAINT "draft_contact_audit_log_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."draft_contact_audit_log"
+    ADD CONSTRAINT "draft_contact_audit_log_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."draft_contact_audit_log"
+    ADD CONSTRAINT "draft_contact_audit_log_draft_id_fkey" FOREIGN KEY ("draft_id") REFERENCES "public"."draft_contact"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."draft_contact"
     ADD CONSTRAINT "draft_contact_confirmed_by_fkey" FOREIGN KEY ("confirmed_by") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
@@ -2289,6 +2613,13 @@ CREATE POLICY "csat_events_access_by_account" ON "public"."csat_events" USING ((
 ALTER TABLE "public"."draft_contact" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."draft_contact_audit_log" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "draft_contact_audit_select" ON "public"."draft_contact_audit_log" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
+
+
+
 CREATE POLICY "draft_contact_insert" ON "public"."draft_contact" FOR INSERT WITH CHECK (("account_id" = "public"."current_account_id"()));
 
 
@@ -2469,6 +2800,13 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."_assert_draft_access"("p_draft_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."_assert_draft_access"("p_draft_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."_assert_draft_access"("p_draft_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."_assert_draft_access"("p_draft_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") TO "authenticated";
@@ -2476,9 +2814,33 @@ GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uu
 
 
 
+GRANT ALL ON FUNCTION "public"."bulk_confirm_drafts_by_organization"("p_organization" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."bulk_confirm_drafts_by_organization"("p_organization" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."bulk_confirm_drafts_by_organization"("p_organization" "text") TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."draft_contact" TO "anon";
+GRANT ALL ON TABLE "public"."draft_contact" TO "authenticated";
+GRANT ALL ON TABLE "public"."draft_contact" TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."confirm_draft_contact"("p_draft_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."confirm_draft_contact"("p_draft_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."confirm_draft_contact"("p_draft_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."current_account_id"() TO "anon";
 GRANT ALL ON FUNCTION "public"."current_account_id"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."current_account_id"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."edit_draft_contact"("p_draft_id" "uuid", "p_patch" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."edit_draft_contact"("p_draft_id" "uuid", "p_patch" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."edit_draft_contact"("p_draft_id" "uuid", "p_patch" "jsonb") TO "service_role";
 
 
 
@@ -2567,9 +2929,21 @@ GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "
 
 
 
+GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."set_default_plan_id_on_accounts"() TO "anon";
 GRANT ALL ON FUNCTION "public"."set_default_plan_id_on_accounts"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."set_default_plan_id_on_accounts"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."unreject_draft_contact"("p_draft_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."unreject_draft_contact"("p_draft_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."unreject_draft_contact"("p_draft_id" "uuid") TO "service_role";
 
 
 
@@ -2657,9 +3031,9 @@ GRANT ALL ON TABLE "public"."csat_events" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."draft_contact" TO "anon";
-GRANT ALL ON TABLE "public"."draft_contact" TO "authenticated";
-GRANT ALL ON TABLE "public"."draft_contact" TO "service_role";
+GRANT ALL ON TABLE "public"."draft_contact_audit_log" TO "anon";
+GRANT ALL ON TABLE "public"."draft_contact_audit_log" TO "authenticated";
+GRANT ALL ON TABLE "public"."draft_contact_audit_log" TO "service_role";
 
 
 

@@ -56,7 +56,18 @@
   "actions": {
     "edit": "Editar",
     "delete": "Eliminar Cliente",
-    "confirmDelete": "¿Eliminar \"{{name}}\"? Esta acción no se puede deshacer."
+    "confirmDelete": "¿Eliminar \"{{name}}\"? Esta acción no se puede deshacer.",
+    "confirm": "Confirmar",
+    "reject": "Rechazar",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "reactivate": "Re-activar",
+    "confirmedOn": "Confirmado el {{date}}",
+    "bulkConfirmButton": "Confirmar todos los de {{org}}",
+    "bulkConfirmModalTitle": "Confirmar borradores de {{org}}",
+    "bulkConfirmModalBody": "Se confirmarán {{count}} borradores. Esta acción no se puede deshacer desde la UI normal.",
+    "bulkConfirmSuccess": "Confirmados {{count}} borradores",
+    "externalReadOnly": "Datos sincronizados desde {{source}}. Edición no disponible."
   },
   "empty": {
     "noClients": "No se encontraron clientes",
@@ -78,6 +89,14 @@
   },
   "evidenceCount_one": "{{count}} ticket",
   "evidenceCount_other": "{{count}} tickets",
+  "errors": {
+    "invalidEmail": "El email no es válido.",
+    "invalidPhone": "El teléfono no es válido.",
+    "noIdentity": "Debe quedar al menos un email o un teléfono.",
+    "mergeCandidate": "Otro borrador ya usa este email o teléfono. La fusión llegará en una próxima actualización.",
+    "genericSave": "No se pudo guardar. Reintenta.",
+    "genericAction": "No se pudo completar la acción."
+  },
   "search": {
     "placeholder": "Buscar por nombre, email, teléfono..."
   },
