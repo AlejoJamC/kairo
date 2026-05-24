@@ -52,13 +52,17 @@ describe("ReplyBar", () => {
     useTriageStore.getState().selectTicket("ticket-1");
     useTriageStore.getState().setSuggestedReply("AI drafted message");
 
-    const textbox = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
-    await waitFor(() => expect(textbox).toHaveValue("AI drafted message"));
-    expect(screen.getByText("replyBar.aiSuggestionBanner")).toBeInTheDocument();
+    // When aiSuggestedReply lands, the component swaps the plain composer for
+    // the BORRADOR IA card. Query the textarea by its displayed value, which is
+    // independent of which branch (placeholder vs banner) is rendered.
+    const textbox = await screen.findByDisplayValue("AI drafted message");
+    expect(textbox).toBeInTheDocument();
+    // The badge identifies the AI card branch — replaces the old aiSuggestionBanner key.
+    expect(screen.getByText(/replyBar\.aiBadge/i)).toBeInTheDocument();
     expect(useTriageStore.getState().aiSuggestedReply).toBeNull();
   });
 
-  it("hides AI banner on manual edit and clears suggestion after successful send", async () => {
+  it("clears the AI banner and the draft after a successful send", async () => {
     apiCallMock.mockResolvedValue({
       ok: true,
       json: async () => ({}),
@@ -68,17 +72,23 @@ describe("ReplyBar", () => {
     useTriageStore.getState().selectTicket("ticket-1");
     useTriageStore.getState().setSuggestedReply("Initial AI text");
 
-    const textbox = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
-    await waitFor(() => expect(textbox).toHaveValue("Initial AI text"));
+    // Card branch renders; locate the editable textarea by its current value.
+    const textbox = await screen.findByDisplayValue("Initial AI text");
 
+    // Manual edits keep the banner open by design — only an explicit dismiss
+    // (X button) or a successful send clears it. Type and confirm the draft updates.
     await userEvent.type(textbox, " updated");
-    expect(screen.queryByText("replyBar.aiSuggestionBanner")).not.toBeInTheDocument();
+    await waitFor(() => expect(textbox).toHaveValue("Initial AI text updated"));
+    expect(screen.getByText(/replyBar\.aiBadge/i)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "ticketDetail.send" }));
 
     await waitFor(() => expect(apiCallMock).toHaveBeenCalledTimes(1));
     expect(useTriageStore.getState().aiSuggestedReply).toBeNull();
-    expect(textbox).toHaveValue("");
+    // After send the card branch goes away; the composer is the plain placeholder textarea, empty.
+    const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
+    expect(composer).toHaveValue("");
+    expect(screen.queryByText(/replyBar\.aiBadge/i)).not.toBeInTheDocument();
     expect(screen.getByText("replyBar.sendSuccess")).toBeInTheDocument();
   });
 });
