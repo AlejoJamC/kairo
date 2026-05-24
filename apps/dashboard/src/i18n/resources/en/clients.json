@@ -13,10 +13,17 @@
     "internalId": "Internal ID",
     "legalId": "Legal ID",
     "telephone": "Telephone",
+    "phone": "Phone",
+    "email": "Email",
+    "organization": "Organization",
     "authorizedEmails": "Authorized Emails",
     "contactPersons": "Contact Persons",
     "plan": "Plan",
-    "sla": "SLA Level"
+    "sla": "SLA Level",
+    "tickets": "Tickets",
+    "csat": "CSAT",
+    "lastSeen": "Last contact",
+    "draftReadOnlyNote": "This is an auto-detected draft. Confirm, reject and edit actions will be available shortly."
   },
   "form": {
     "createTitle": "New Client",
@@ -53,6 +60,27 @@
   },
   "empty": {
     "noClients": "No clients found",
-    "noResults": "No clients match your search"
-  }
+    "noResults": "No clients match your search",
+    "noConfirmed": "No confirmed contacts",
+    "noDrafts": "No customers detected yet. Kairo identifies them automatically when new tickets arrive.",
+    "noRejected": "No rejected contacts"
+  },
+  "filters": {
+    "statusAll": "All",
+    "statusDrafts": "Drafts",
+    "statusConfirmed": "Confirmed",
+    "statusRejected": "Rejected"
+  },
+  "badges": {
+    "draft": "Draft",
+    "confirmed": "Confirmed",
+    "rejected": "Rejected"
+  },
+  "evidenceCount_one": "{{count}} ticket",
+  "evidenceCount_other": "{{count}} tickets",
+  "search": {
+    "placeholder": "Search by name, email, phone..."
+  },
+  "errorMessage": "Failed to load drafts.",
+  "retry": "Retry"
 }

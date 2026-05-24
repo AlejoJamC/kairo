@@ -309,3 +309,14 @@
   border-radius: 50%;
   animation: kairo-spin 0.7s linear infinite;
 }
+/* KAI-227 — new draft row enters the directory: slide from the right + fade in */
+@keyframes kairo-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

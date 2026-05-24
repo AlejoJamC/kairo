@@ -13,10 +13,17 @@
     "internalId": "ID Interno",
     "legalId": "ID Legal",
     "telephone": "Teléfono",
+    "phone": "Teléfono",
+    "email": "Correo",
+    "organization": "Organización",
     "authorizedEmails": "Correos Autorizados",
     "contactPersons": "Personas de Contacto",
     "plan": "Plan",
-    "sla": "Nivel de SLA"
+    "sla": "Nivel de SLA",
+    "tickets": "Tickets",
+    "csat": "CSAT",
+    "lastSeen": "Último contacto",
+    "draftReadOnlyNote": "Este es un borrador detectado automáticamente. Las acciones de confirmar, rechazar o editar estarán disponibles próximamente."
   },
   "form": {
     "createTitle": "Nuevo Cliente",
@@ -53,6 +60,27 @@
   },
   "empty": {
     "noClients": "No se encontraron clientes",
-    "noResults": "Ningún cliente coincide con tu búsqueda"
-  }
+    "noResults": "Ningún cliente coincide con tu búsqueda",
+    "noConfirmed": "Sin confirmados",
+    "noDrafts": "Aún no hay clientes detectados. Kairo los identifica automáticamente cuando llegan tickets nuevos.",
+    "noRejected": "Sin rechazados"
+  },
+  "filters": {
+    "statusAll": "Todos",
+    "statusDrafts": "Borradores",
+    "statusConfirmed": "Confirmados",
+    "statusRejected": "Rechazados"
+  },
+  "badges": {
+    "draft": "Borrador",
+    "confirmed": "Confirmado",
+    "rejected": "Rechazado"
+  },
+  "evidenceCount_one": "{{count}} ticket",
+  "evidenceCount_other": "{{count}} tickets",
+  "search": {
+    "placeholder": "Buscar por nombre, email, teléfono..."
+  },
+  "errorMessage": "Error al cargar los borradores.",
+  "retry": "Reintentar"
 }

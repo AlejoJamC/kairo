@@ -73,6 +73,34 @@ export type Database = {
         };
         Relationships: [];
       };
+      draft_contact: {
+        Row: {
+          id: string;
+          account_id: string;
+          email: string | null;
+          phone: string | null;
+          display_name: string | null;
+          organization: string | null;
+          status: "proposed" | "confirmed" | "rejected" | "merged_into";
+          origin: "kairo_created" | "external_synced";
+          confidence: number;
+          evidence_count: number;
+          external_ref: string | null;
+          external_source: string | null;
+          source_tickets: string[];
+          merged_into_id: string | null;
+          first_seen_at: string;
+          last_seen_at: string;
+          confirmed_at: string | null;
+          confirmed_by: string | null;
+          metadata: Record<string, unknown>;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+        Relationships: [];
+      };
       tickets: {
         Row: {
           id: string;

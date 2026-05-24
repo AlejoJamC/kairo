@@ -43,6 +43,15 @@ export interface ClientProfile {
   totalTickets:     number;
   ticketsLast30Days: number;
   recentTickets:    RecentTicket[];
+
+  // KAI-227 — origin of this profile. When the ticket has no `client_id`,
+  // the API falls back to `draft_contact` matched by email and returns
+  // source='draft' with the draft id + status so the UI can render a
+  // badge and (in KAI-228) hook up confirm/reject/edit actions.
+  source?:          "client" | "draft";
+  draftId?:         string;
+  draftStatus?:     "proposed" | "confirmed" | "rejected";
+  organization?:    string | null;
 }
 
 interface TriageStore {

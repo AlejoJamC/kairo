@@ -1,8 +1,25 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Download, Plus, MoreHorizontal, Loader2, X, Edit2, Trash2, SmilePlus, Meh, Frown } from "lucide-react";
+import {
+  Download,
+  Plus,
+  MoreHorizontal,
+  Loader2,
+  X,
+  Edit2,
+  Trash2,
+  SmilePlus,
+  Meh,
+  Frown,
+  Search,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react";
 import { ClientFormModal } from "@/components/client-form-modal";
 import { apiCall } from "@/lib/api-client";
+import { useAuth } from "@/contexts/auth-context";
+import { useDraftContacts } from "@/hooks/use-draft-contacts";
+import { mapClientToRow, type ContactRow, type ContactRowStatus } from "@/types/contact-row";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -21,7 +38,6 @@ const PLAN_LABEL: Record<string, string> = {
   Starter:    "Starter",
 };
 
-// Derive a consistent gradient from the client name (same palette as the design)
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#FCA5A5,#F472B6)",
   "linear-gradient(135deg,#93C5FD,#60A5FA)",
@@ -78,7 +94,51 @@ function mapRow(row: Record<string, unknown>): Client {
 }
 
 // ---------------------------------------------------------------------------
-// KPI cards
+// Status badge
+// ---------------------------------------------------------------------------
+
+type BadgeVariant = "proposed" | "confirmed" | "rejected" | "external";
+
+const BADGE_STYLE: Record<BadgeVariant, { bg: string; color: string; border: string }> = {
+  proposed:  { bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE" },
+  confirmed: { bg: "#F0FDF4", color: "#16A34A", border: "#BBF7D0" },
+  rejected:  { bg: "#F4F4F5", color: "#71717A", border: "#E4E4E7" },
+  external:  { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" },
+};
+
+function StatusBadge({ status }: { status: ContactRowStatus }) {
+  const { t } = useTranslation("clients");
+  const s = BADGE_STYLE[status];
+  const labelKey =
+    status === "proposed"  ? "badges.draft" :
+    status === "confirmed" ? "badges.confirmed" :
+                             "badges.rejected";
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 999,
+      background: s.bg, color: s.color, border: `1px solid ${s.border}`,
+      letterSpacing: "0.03em", flexShrink: 0,
+    }}>
+      {t(labelKey)}
+    </span>
+  );
+}
+
+function ExternalSourceBadge({ source }: { source: string }) {
+  const s = BADGE_STYLE.external;
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 999,
+      background: s.bg, color: s.color, border: `1px solid ${s.border}`,
+      letterSpacing: "0.03em", flexShrink: 0,
+    }}>
+      {source}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// KPI cards (unchanged — still computed over clients only)
 // ---------------------------------------------------------------------------
 
 function KpiStrip({ clients }: { clients: Client[] }) {
@@ -88,10 +148,10 @@ function KpiStrip({ clients }: { clients: Client[] }) {
   const churnRisk = clients.filter((c) => c.slaLevel === "Critical").length;
 
   const items = [
-    { label: "MRR TOTAL",        value: "—",                    delta: null,         accent: undefined },
-    { label: "ACTIVOS",          value: `${active} / ${clients.length}`, delta: null, accent: undefined },
-    { label: "CSAT PROMEDIO",    value: csatAvg,                delta: null,         accent: undefined },
-    { label: "RIESGO DE CHURN",  value: String(churnRisk),      delta: churnRisk > 0 ? `↑${churnRisk}` : null, accent: churnRisk > 0 ? "#EF4444" : undefined },
+    { label: "MRR TOTAL",        value: "—",                          delta: null,         accent: undefined },
+    { label: "ACTIVOS",          value: `${active} / ${clients.length}`, delta: null,      accent: undefined },
+    { label: "CSAT PROMEDIO",    value: csatAvg,                      delta: null,         accent: undefined },
+    { label: "RIESGO DE CHURN",  value: String(churnRisk),            delta: churnRisk > 0 ? `↑${churnRisk}` : null, accent: churnRisk > 0 ? "#EF4444" : undefined },
   ];
 
   return (
@@ -139,35 +199,40 @@ function CsatCell({ value }: { value: number | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// Client row
+// Unified ContactRow card/row
 // ---------------------------------------------------------------------------
 
-function ClientRow({
-  client,
+function ContactCard({
+  row,
   isLast,
+  isNew = false,
   onSelect,
   onEdit,
   onDelete,
   deleting,
 }: {
-  client: Client;
+  row: ContactRow;
   isLast: boolean;
-  onSelect: () => void;
-  onEdit: (e: React.MouseEvent) => void;
-  onDelete: (e: React.MouseEvent) => void;
-  deleting: boolean;
+  isNew?: boolean;
+  onSelect: (row: ContactRow) => void;
+  onEdit?: (e: React.MouseEvent) => void;
+  onDelete?: (e: React.MouseEvent) => void;
+  deleting?: boolean;
 }) {
   const [hover, setHover] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const grad = avatarGradient(client.name);
-  const ini  = initials(client.name);
-  const primary = client.contactPersons[0];
+  const grad = avatarGradient(row.displayName);
+  const ini  = initials(row.displayName);
+  const isDraft = row.source === "draft";
 
   return (
     <div
-      onClick={onSelect}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => { setHover(false); setMenuOpen(false); }}
+      onClick={() => onSelect(row)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(row); } }}
       style={{
         display: "grid",
         gridTemplateColumns: "2.5fr 1fr 0.8fr 0.8fr 1fr 0.8fr 36px",
@@ -176,11 +241,12 @@ function ClientRow({
         alignItems: "center",
         fontSize: 13,
         cursor: "pointer",
-        background: hover ? "var(--k-surface)" : "transparent",
+        background: hover ? "var(--k-surface)" : isNew ? "rgba(43,91,255,0.04)" : "transparent",
         transition: "background 0.1s",
+        animation: isNew ? "kairo-row-in 0.5s ease-out" : undefined,
       }}
     >
-      {/* CLIENTE */}
+      {/* CLIENTE / BORRADOR */}
       <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
         <div style={{
           width: 32, height: 32, borderRadius: "50%", background: grad,
@@ -189,87 +255,92 @@ function ClientRow({
         }}>
           {ini}
         </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 500, color: "var(--k-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {client.name}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 500, color: "var(--k-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {row.displayName}
+            </span>
+            <StatusBadge status={row.status} />
+            {row.externalSource && <ExternalSourceBadge source={row.externalSource} />}
           </div>
-          <div style={{ fontSize: 11, color: "var(--k-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {primary
-              ? `${primary.name} · ${client.authorizedEmails[0] ?? ""}`
-              : (client.authorizedEmails[0] ?? client.internalId)}
+          <div style={{ fontSize: 11, color: "var(--k-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
+            {row.organization
+              ? `${row.organization} · ${row.email ?? row.phone ?? ""}`
+              : (row.email ?? row.phone ?? "—")}
           </div>
         </div>
-        {client.slaLevel === "Critical" && (
-          <span style={{
-            fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 999, flexShrink: 0,
-            background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA",
-          }}>RIESGO</span>
-        )}
       </div>
 
-      {/* PLAN */}
+      {/* PLAN — only for clients */}
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{
-          width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-          background: client.plan ? PLAN_DOT[client.plan] : "#A1A1AA",
-        }} />
-        <span>{client.plan ? PLAN_LABEL[client.plan] : "—"}</span>
+        {!isDraft && row.plan ? (
+          <>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: PLAN_DOT[row.plan] ?? "#A1A1AA" }} />
+            <span>{PLAN_LABEL[row.plan] ?? row.plan}</span>
+          </>
+        ) : (
+          <span style={{ color: "var(--k-text-tertiary)" }}>—</span>
+        )}
       </div>
 
       {/* MRR */}
       <span style={{ fontFamily: "var(--k-font-mono)", color: "var(--k-text-secondary)" }}>—</span>
 
       {/* TICKETS */}
-      <span style={{ fontFamily: "var(--k-font-mono)" }}>{client.ticketCount}</span>
+      <span style={{ fontFamily: "var(--k-font-mono)" }}>{row.ticketCount}</span>
 
       {/* CSAT */}
-      <CsatCell value={client.csatAvg} />
+      {!isDraft ? <CsatCell value={row.csatAvg} /> : <span style={{ color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)" }}>—</span>}
 
       {/* ÚLTIMO CONTACTO */}
       <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 12, color: "var(--k-text-tertiary)" }}>
-        {relativeTime(client.lastContactAt)}
+        {relativeTime(row.lastSeenAt)}
       </span>
 
-      {/* ACTIONS */}
+      {/* ACTIONS — only for clients (draft actions are KAI-228) */}
       <div style={{ position: "relative" }}>
-        <button
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-          style={{
-            padding: 4, borderRadius: 5, background: "none", border: "none",
-            cursor: "pointer", color: "var(--k-text-tertiary)",
-            opacity: hover ? 1 : 0, transition: "opacity 0.1s",
-          }}
-        >
-          <MoreHorizontal style={{ width: 14, height: 14 }} />
-        </button>
-        {menuOpen && (
-          <div style={{
-            position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 20,
-            background: "white", border: "1px solid var(--k-border)",
-            borderRadius: 8, boxShadow: "0 4px 12px rgba(9,9,11,0.1)",
-            minWidth: 140, overflow: "hidden",
-          }}>
+        {!isDraft && (
+          <>
             <button
-              onClick={(e) => { setMenuOpen(false); onEdit(e); }}
-              style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-primary)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--k-surface)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+              style={{
+                padding: 4, borderRadius: 5, background: "none", border: "none",
+                cursor: "pointer", color: "var(--k-text-tertiary)",
+                opacity: hover ? 1 : 0, transition: "opacity 0.1s",
+              }}
             >
-              <Edit2 style={{ width: 13, height: 13, color: "var(--k-text-tertiary)" }} /> Editar
+              <MoreHorizontal style={{ width: 14, height: 14 }} />
             </button>
-            <button
-              onClick={(e) => { setMenuOpen(false); onDelete(e); }}
-              disabled={deleting}
-              style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "#DC2626" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#FEF2F2")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-            >
-              {deleting
-                ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />
-                : <Trash2 style={{ width: 13, height: 13 }} />}
-              Eliminar
-            </button>
-          </div>
+            {menuOpen && (
+              <div style={{
+                position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 20,
+                background: "white", border: "1px solid var(--k-border)",
+                borderRadius: 8, boxShadow: "0 4px 12px rgba(9,9,11,0.1)",
+                minWidth: 140, overflow: "hidden",
+              }}>
+                <button
+                  onClick={(e) => { setMenuOpen(false); onEdit?.(e); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-primary)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--k-surface)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                >
+                  <Edit2 style={{ width: 13, height: 13, color: "var(--k-text-tertiary)" }} /> Editar
+                </button>
+                <button
+                  onClick={(e) => { setMenuOpen(false); onDelete?.(e); }}
+                  disabled={deleting}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "#DC2626" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#FEF2F2")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                >
+                  {deleting
+                    ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />
+                    : <Trash2 style={{ width: 13, height: 13 }} />}
+                  Eliminar
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -277,80 +348,230 @@ function ClientRow({
 }
 
 // ---------------------------------------------------------------------------
+// Filter types
+// ---------------------------------------------------------------------------
+
+type StatusFilter = "all" | "drafts" | "confirmed" | "rejected";
+type PlanFilter   = "all" | "Enterprise" | "Pro" | "Starter" | "churn-risk";
+
+// ---------------------------------------------------------------------------
 // ClientDirectory
 // ---------------------------------------------------------------------------
 
-type FilterKey = "all" | "Enterprise" | "Pro" | "Starter" | "churn-risk";
-
 export function ClientDirectory() {
   const { t } = useTranslation("clients");
-  const [clients, setClients]           = useState<Client[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [filter, setFilter]             = useState<FilterKey>("all");
-  const [selectedClient, setSelected]   = useState<Client | null>(null);
+  const { accountId } = useAuth();
+
+  // Clients (BFF)
+  const [clients, setClients]       = useState<Client[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(true);
+
+  // Drafts (Supabase direct, polling)
+  const { drafts, error: draftsError, loading: draftsLoading, retry: retryDrafts } = useDraftContacts(accountId);
+
+  // UI state
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("drafts");
+  const [planFilter, setPlanFilter]     = useState<PlanFilter>("all");
+  const [search, setSearch]             = useState("");
   const [formOpen, setFormOpen]         = useState(false);
   const [editingClient, setEditing]     = useState<Client | null>(null);
   const [deleting, setDeleting]         = useState<string | null>(null);
+  const [selectedRow, setSelectedRow]   = useState<ContactRow | null>(null);
 
-  useEffect(() => { fetchClients(); }, []);
+  // Animate only rows whose id is new in the current poll.
+  // The "seen" set is internal bookkeeping (no re-render needed) — keep it in a
+  // ref. Only `newIds` (which controls render) lives in state. This avoids the
+  // cascading-state warning while keeping the behavior correct.
+  const seenIdsRef    = useRef<Set<string>>(new Set());
+  const seenInitedRef = useRef(false);
+  const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
 
-  const fetchClients = async () => {
-    try {
-      const res  = await apiCall("/bff/clients");
-      const data = await res.json();
-      setClients((data.clients as Record<string, unknown>[]).map(mapRow));
-    } catch {
-      // leave empty on error
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (draftsLoading) return;
+    const currentIds = new Set(drafts.map((d) => d.id));
+
+    if (!seenInitedRef.current) {
+      // First successful load: prime the seen set, do NOT animate existing rows.
+      seenIdsRef.current   = currentIds;
+      seenInitedRef.current = true;
+      return;
     }
-  };
 
+    const fresh = new Set<string>();
+    for (const id of currentIds) {
+      if (!seenIdsRef.current.has(id)) fresh.add(id);
+    }
+
+    if (fresh.size === 0) return;
+
+    seenIdsRef.current = currentIds;
+    // Intentional sync setState in effect: this is a "diff vs last poll" signal.
+    // The cascading-render warning does not apply — there is no derived chain.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNewIds(fresh);
+    const handle = setTimeout(() => setNewIds(new Set()), 600);
+    return () => clearTimeout(handle);
+  }, [drafts, draftsLoading]);
+
+  // -------------------------------------------------------------------------
+  // Fetch clients on mount
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const res  = await apiCall("/bff/clients");
+        const data = await res.json();
+        setClients((data.clients as Record<string, unknown>[]).map(mapRow));
+      } catch {
+        // leave empty on error — clients are secondary for this view
+      } finally {
+        setClientsLoading(false);
+      }
+    };
+    fetchClients();
+  }, []);
+
+  // -------------------------------------------------------------------------
+  // Unified rows (clients + drafts)
+  // TODO KAI-230: dedupe by email/phone between draft rows and client rows
+  // -------------------------------------------------------------------------
+  const allRows: ContactRow[] = useMemo(() => {
+    const clientRows = clients.map(mapClientToRow);
+    // Order: proposed → confirmed → rejected
+    const statusOrder: Record<string, number> = { proposed: 0, confirmed: 1, rejected: 2 };
+    return [...drafts, ...clientRows].sort((a, b) => {
+      const sA = statusOrder[a.status] ?? 0;
+      const sB = statusOrder[b.status] ?? 0;
+      if (sA !== sB) return sA - sB;
+      // Within same status bucket: ticketCount DESC, then lastSeenAt DESC
+      if (b.ticketCount !== a.ticketCount) return b.ticketCount - a.ticketCount;
+      const tA = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
+      const tB = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
+      return tB - tA;
+    });
+  }, [drafts, clients]);
+
+  // -------------------------------------------------------------------------
+  // Filter pipeline: status → plan → search
+  // -------------------------------------------------------------------------
+  const filteredRows = useMemo(() => {
+    let rows = allRows;
+
+    // 1. Status filter
+    if (statusFilter === "drafts") {
+      rows = rows.filter((r) => r.source === "draft" && r.status === "proposed");
+    } else if (statusFilter === "confirmed") {
+      rows = rows.filter((r) => r.source === "client" || (r.source === "draft" && r.status === "confirmed"));
+    } else if (statusFilter === "rejected") {
+      rows = rows.filter((r) => r.source === "draft" && r.status === "rejected");
+    }
+    // "all" → no filter
+
+    // 2. Plan filter (only applicable when viewing confirmed/all clients)
+    const planFiltersActive = statusFilter === "all" || statusFilter === "confirmed";
+    if (planFiltersActive && planFilter !== "all") {
+      if (planFilter === "churn-risk") {
+        rows = rows.filter((r) => r.slaLevel === "Critical");
+      } else {
+        rows = rows.filter((r) => r.plan === planFilter);
+      }
+    }
+
+    // 3. Search (client-side, applies to the already status-filtered set)
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      rows = rows.filter(
+        (r) =>
+          r.displayName.toLowerCase().includes(q) ||
+          (r.email?.toLowerCase().includes(q) ?? false) ||
+          (r.phone?.toLowerCase().includes(q) ?? false) ||
+          (r.organization?.toLowerCase().includes(q) ?? false),
+      );
+    }
+
+    return rows;
+  }, [allRows, statusFilter, planFilter, search]);
+
+  // -------------------------------------------------------------------------
+  // Client CRUD handlers (unchanged)
+  // -------------------------------------------------------------------------
   const handleSaved = (saved: Client) => {
     setClients((prev) => {
       const idx = prev.findIndex((c) => c.id === saved.id);
       if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
       return [...prev, saved].sort((a, b) => a.name.localeCompare(b.name));
     });
-    if (selectedClient?.id === saved.id) setSelected(saved);
   };
 
-  const handleDelete = async (client: Client, e?: React.MouseEvent) => {
+  const handleDelete = async (clientId: string, name: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!window.confirm(t("actions.confirmDelete", { name: client.name }))) return;
-    setDeleting(client.id);
+    if (!window.confirm(t("actions.confirmDelete", { name }))) return;
+    setDeleting(clientId);
     try {
-      await apiCall(`/bff/clients/${client.id}`, { method: "DELETE" });
-      setClients((prev) => prev.filter((c) => c.id !== client.id));
-      if (selectedClient?.id === client.id) setSelected(null);
+      await apiCall(`/bff/clients/${clientId}`, { method: "DELETE" });
+      setClients((prev) => prev.filter((c) => c.id !== clientId));
     } catch { /* ignore */ }
     finally { setDeleting(null); }
   };
 
-  const filtered = useMemo(() => {
-    if (filter === "all")         return clients;
-    if (filter === "churn-risk")  return clients.filter((c) => c.slaLevel === "Critical");
-    return clients.filter((c) => c.plan === filter);
-  }, [clients, filter]);
-
-  if (loading) {
+  // -------------------------------------------------------------------------
+  // Loading state (first load only)
+  // -------------------------------------------------------------------------
+  const isFirstLoad = clientsLoading && draftsLoading;
+  if (isFirstLoad) {
     return (
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 13, color: "var(--k-text-tertiary)" }}>
-        <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" />
-        {t("loading")}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "white" }}>
+        <div style={{ padding: "24px 32px 0", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.02em", margin: 0, fontFamily: "var(--k-font-display)", color: "var(--k-text-primary)" }}>
+              Clientes
+            </h1>
+          </div>
+        </div>
+        {/* Skeleton */}
+        <div style={{ flex: 1, padding: "24px 32px" }}>
+          {[1, 2, 3].map((i) => (
+            <div key={i} style={{
+              height: 56, marginBottom: 1, borderRadius: i === 1 ? "12px 12px 0 0" : i === 3 ? "0 0 12px 12px" : 0,
+              background: "var(--k-surface)", animation: "pulse 1.5s ease-in-out infinite",
+            }} />
+          ))}
+        </div>
       </div>
     );
   }
 
-  const FILTERS: { key: FilterKey; label: string }[] = [
-    { key: "all",        label: "Todos" },
+  // -------------------------------------------------------------------------
+  // Status filter definitions
+  // -------------------------------------------------------------------------
+  const STATUS_FILTERS: { key: StatusFilter; labelKey: "filters.statusAll" | "filters.statusDrafts" | "filters.statusConfirmed" | "filters.statusRejected" }[] = [
+    { key: "all",       labelKey: "filters.statusAll" },
+    { key: "drafts",    labelKey: "filters.statusDrafts" },
+    { key: "confirmed", labelKey: "filters.statusConfirmed" },
+    { key: "rejected",  labelKey: "filters.statusRejected" },
+  ];
+
+  const PLAN_FILTERS: { key: PlanFilter; label: string }[] = [
     { key: "Enterprise", label: "Enterprise" },
     { key: "Pro",        label: "Pro" },
     { key: "Starter",    label: "Starter" },
     { key: "churn-risk", label: "Riesgo de churn" },
   ];
 
+  const showPlanFilters = statusFilter === "all" || statusFilter === "confirmed";
+
   const TABLE_HEADERS = ["CLIENTE", "PLAN", "MRR", "TICKETS", "CSAT", "ÚLTIMO CONTACTO", ""];
+
+  // -------------------------------------------------------------------------
+  // Empty state message
+  // -------------------------------------------------------------------------
+  function emptyMessage() {
+    if (search.trim()) return t("empty.noResults");
+    if (statusFilter === "drafts") return t("empty.noDrafts");
+    if (statusFilter === "confirmed") return t("empty.noConfirmed");
+    if (statusFilter === "rejected") return t("empty.noRejected");
+    return t("empty.noClients");
+  }
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "white" }}>
@@ -361,30 +582,95 @@ export function ClientDirectory() {
             Clientes
           </h1>
           <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 13, color: "var(--k-text-tertiary)" }}>
-            {clients.length}
+            {allRows.length}
           </span>
         </div>
 
-        {/* KPI strip */}
+        {/* KPI strip — always computed over clients */}
         <KpiStrip clients={clients} />
 
-        {/* Filters + actions */}
-        <div style={{ display: "flex", gap: 6, marginTop: 24, alignItems: "center" }}>
-          {FILTERS.map(({ key, label }) => (
+        {/* Draft polling error banner */}
+        {draftsError && (
+          <div style={{
+            marginTop: 12, padding: "10px 14px", borderRadius: 8, fontSize: 13,
+            background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA",
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <AlertCircle style={{ width: 14, height: 14, flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>{t("errorMessage")}</span>
+            <button
+              onClick={retryDrafts}
+              style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, background: "none", border: "none", cursor: "pointer", color: "#DC2626", fontWeight: 500 }}
+            >
+              <RefreshCw style={{ width: 12, height: 12 }} />
+              {t("retry")}
+            </button>
+          </div>
+        )}
+
+        {/* Status pills */}
+        <div style={{ display: "flex", gap: 6, marginTop: 20, flexWrap: "wrap", alignItems: "center" }}>
+          {STATUS_FILTERS.map(({ key, labelKey }) => (
             <button
               key={key}
-              onClick={() => setFilter(key)}
+              onClick={() => setStatusFilter(key)}
               style={{
                 padding: "5px 12px", borderRadius: 999, fontSize: 13, cursor: "pointer",
-                background: filter === key ? "var(--k-text-primary)" : "white",
-                color: filter === key ? "white" : "var(--k-text-secondary)",
-                border: `1px solid ${filter === key ? "var(--k-text-primary)" : "var(--k-border)"}`,
+                background: statusFilter === key ? "var(--k-text-primary)" : "white",
+                color: statusFilter === key ? "white" : "var(--k-text-secondary)",
+                border: `1px solid ${statusFilter === key ? "var(--k-text-primary)" : "var(--k-border)"}`,
+              }}
+            >
+              {t(labelKey)}
+            </button>
+          ))}
+        </div>
+
+        {/* Plan pills + search + actions */}
+        <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {/* Plan pills — only when viewing confirmed/all */}
+          {showPlanFilters && PLAN_FILTERS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setPlanFilter(planFilter === key ? "all" : key)}
+              style={{
+                padding: "5px 12px", borderRadius: 999, fontSize: 13, cursor: "pointer",
+                background: planFilter === key ? "#2B5BFF" : "white",
+                color: planFilter === key ? "white" : "var(--k-text-secondary)",
+                border: `1px solid ${planFilter === key ? "#2B5BFF" : "var(--k-border)"}`,
               }}
             >
               {label}
             </button>
           ))}
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+
+          {/* Search */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "5px 12px", borderRadius: 6,
+            border: "1px solid var(--k-border)", background: "white",
+            marginLeft: showPlanFilters ? "auto" : undefined,
+          }}>
+            <Search style={{ width: 13, height: 13, color: "var(--k-text-tertiary)" }} />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t("search.placeholder")}
+              style={{
+                border: "none", outline: "none", fontSize: 13,
+                color: "var(--k-text-primary)", background: "transparent",
+                width: 200,
+              }}
+            />
+            {search && (
+              <button onClick={() => setSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", padding: 0 }}>
+                <X style={{ width: 12, height: 12 }} />
+              </button>
+            )}
+          </div>
+
+          {/* Export + Add client */}
+          <div style={{ display: "flex", gap: 8, marginLeft: showPlanFilters ? undefined : "auto" }}>
             <button
               style={{
                 display: "flex", alignItems: "center", gap: 6,
@@ -410,9 +696,9 @@ export function ClientDirectory() {
 
       {/* Table */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 32px 32px" }}>
-        {filtered.length === 0 ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 160, fontSize: 13, color: "var(--k-text-tertiary)" }}>
-            {clients.length === 0 ? t("empty.noClients") : t("empty.noResults")}
+        {filteredRows.length === 0 ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 160, fontSize: 13, color: "var(--k-text-tertiary)", textAlign: "center", padding: "0 40px" }}>
+            {emptyMessage()}
           </div>
         ) : (
           <div style={{
@@ -437,115 +723,34 @@ export function ClientDirectory() {
             </div>
 
             {/* Rows */}
-            {filtered.map((client, idx) => (
-              <ClientRow
-                key={client.id}
-                client={client}
-                isLast={idx === filtered.length - 1}
-                onSelect={() => setSelected(client)}
-                onEdit={(e) => { e.stopPropagation(); setEditing(client); setFormOpen(true); }}
-                onDelete={(e) => handleDelete(client, e)}
-                deleting={deleting === client.id}
-              />
-            ))}
+            {filteredRows.map((row, idx) => {
+              // Resolve back to Client for edit/delete (only for source=client)
+              const clientId = row.source === "client" ? row.id.replace("client:", "") : null;
+              const client = clientId ? clients.find((c) => c.id === clientId) ?? null : null;
+
+              return (
+                <ContactCard
+                  key={row.id}
+                  row={row}
+                  isLast={idx === filteredRows.length - 1}
+                  isNew={newIds.has(row.id)}
+                  onSelect={setSelectedRow}
+                  onEdit={client ? (e) => { e.stopPropagation(); setEditing(client); setFormOpen(true); } : undefined}
+                  onDelete={client ? (e) => handleDelete(client.id, client.name, e) : undefined}
+                  deleting={clientId ? deleting === clientId : false}
+                />
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Detail panel */}
-      {selectedClient && (
-        <>
-          <div onClick={() => setSelected(null)} style={{ position: "fixed", inset: 0, zIndex: 30, background: "rgba(0,0,0,0.2)" }} />
-          <div style={{
-            position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 40,
-            width: 400, background: "white", boxShadow: "-4px 0 16px rgba(9,9,11,0.08)",
-            overflowY: "auto", display: "flex", flexDirection: "column",
-          }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "20px 24px 16px", borderBottom: "1px solid var(--k-border)", flexShrink: 0 }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: "50%",
-                  background: avatarGradient(selectedClient.name),
-                  color: "white", display: "flex", alignItems: "center", justifyContent: "center",
-                  fontWeight: 600, fontSize: 13, flexShrink: 0,
-                }}>
-                  {initials(selectedClient.name)}
-                </div>
-                <div>
-                  <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--k-text-primary)", fontFamily: "var(--k-font-display)", margin: 0 }}>
-                    {selectedClient.name}
-                  </h2>
-                  <span style={{ fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>
-                    {selectedClient.internalId}
-                  </span>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 4 }}>
-                <button onClick={() => { setEditing(selectedClient); setFormOpen(true); }} style={{ borderRadius: 6, padding: 6, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)" }}>
-                  <Edit2 style={{ width: 14, height: 14 }} />
-                </button>
-                <button onClick={() => setSelected(null)} style={{ borderRadius: 6, padding: 6, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", marginLeft: 4 }}>
-                  <X style={{ width: 14, height: 14 }} />
-                </button>
-              </div>
-            </div>
-
-            <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
-              {/* KPI mini grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, background: "var(--k-border-subtle)", border: "1px solid var(--k-border)", borderRadius: 8, overflow: "hidden", marginBottom: 20 }}>
-                {[
-                  { l: "Plan",     v: selectedClient.plan ?? "—" },
-                  { l: "MRR",      v: "—" },
-                  { l: "Tickets",  v: String(selectedClient.ticketCount) },
-                  { l: "CSAT",     v: selectedClient.csatAvg != null ? String(selectedClient.csatAvg) : "—" },
-                ].map((kpi) => (
-                  <div key={kpi.l} style={{ background: "white", padding: 10 }}>
-                    <div style={{ fontSize: 10, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{kpi.l}</div>
-                    <div style={{ fontSize: 14, fontWeight: 500, marginTop: 2, color: "var(--k-text-primary)" }}>{kpi.v}</div>
-                  </div>
-                ))}
-              </div>
-
-              {selectedClient.telephone && (
-                <DetailField label="Teléfono" value={selectedClient.telephone} />
-              )}
-              {selectedClient.legalId && (
-                <DetailField label={t("detail.legalId")} value={selectedClient.legalId} />
-              )}
-
-              {selectedClient.authorizedEmails.length > 0 && (
-                <div style={{ marginBottom: 16 }}>
-                  <p style={{ fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
-                    {t("detail.authorizedEmails")}
-                  </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {selectedClient.authorizedEmails.map((email) => (
-                      <span key={email} style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--k-border)", color: "var(--k-text-secondary)", fontFamily: "var(--k-font-mono)" }}>
-                        {email}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {selectedClient.contactPersons.length > 0 && (
-                <div>
-                  <p style={{ fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
-                    {t("detail.contactPersons")}
-                  </p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {selectedClient.contactPersons.map((cp) => (
-                      <div key={cp.name} style={{ borderRadius: 8, border: "1px solid var(--k-border)", padding: "8px 12px" }}>
-                        <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", margin: 0 }}>{cp.name}</p>
-                        <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", margin: 0 }}>{cp.role}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
+      {selectedRow && (
+        <ContactDetailDrawer
+          row={selectedRow}
+          client={selectedRow.source === "client" ? clients.find((c) => c.id === selectedRow.id.replace("client:", "")) ?? null : null}
+          onClose={() => setSelectedRow(null)}
+        />
       )}
 
       <ClientFormModal
@@ -558,17 +763,188 @@ export function ClientDirectory() {
   );
 }
 
+
+
 // ---------------------------------------------------------------------------
-// DetailField
+// ContactDetailDrawer — read-only slide-out for both source='client' and 'draft'.
+// Editing/confirming/rejecting actions for drafts are KAI-228.
+// CRM edit/delete for clients lives in the row menu, not in this drawer.
+// ---------------------------------------------------------------------------
+
+function ContactDetailDrawer({
+  row,
+  client,
+  onClose,
+}: {
+  row: ContactRow;
+  client: Client | null;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation("clients");
+  const grad  = avatarGradient(row.displayName);
+  const ini   = initials(row.displayName);
+  const isDraft = row.source === "draft";
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{ position: "fixed", inset: 0, zIndex: 30, background: "rgba(0,0,0,0.2)" }}
+      />
+      <div
+        role="dialog"
+        aria-label={row.displayName}
+        style={{
+          position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 40,
+          width: 400, background: "white", boxShadow: "-4px 0 16px rgba(9,9,11,0.08)",
+          overflowY: "auto", display: "flex", flexDirection: "column",
+        }}
+      >
+        <div style={{
+          display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+          padding: "20px 24px 16px", borderBottom: "1px solid var(--k-border)", flexShrink: 0,
+        }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%", background: grad,
+              color: "white", display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 600, fontSize: 13, flexShrink: 0,
+            }}>
+              {ini}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <h2 style={{
+                fontSize: 16, fontWeight: 600, color: "var(--k-text-primary)",
+                fontFamily: "var(--k-font-display)", margin: 0,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {row.displayName}
+              </h2>
+              <div style={{ display: "flex", gap: 6, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
+                <StatusBadge status={row.status} />
+                {row.externalSource && <ExternalSourceBadge source={row.externalSource} />}
+                {client && (
+                  <span style={{ fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>
+                    {client.internalId}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              borderRadius: 6, padding: 6, background: "none", border: "none",
+              cursor: "pointer", color: "var(--k-text-tertiary)", marginLeft: 8, flexShrink: 0,
+            }}
+          >
+            <X style={{ width: 14, height: 14 }} />
+          </button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+          {/* KPI mini grid */}
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1,
+            background: "var(--k-border-subtle)", border: "1px solid var(--k-border)",
+            borderRadius: 8, overflow: "hidden", marginBottom: 20,
+          }}>
+            {[
+              { l: t("detail.plan"),    v: client?.plan ?? "—" },
+              { l: t("detail.tickets"), v: String(row.ticketCount) },
+              { l: t("detail.csat"),    v: client?.csatAvg != null ? String(client.csatAvg) : "—" },
+              { l: t("detail.lastSeen"), v: relativeTime(row.lastSeenAt) },
+            ].map((kpi) => (
+              <div key={kpi.l} style={{ background: "white", padding: 10 }}>
+                <div style={{
+                  fontSize: 10, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)",
+                  textTransform: "uppercase", letterSpacing: "0.05em",
+                }}>{kpi.l}</div>
+                <div style={{ fontSize: 14, fontWeight: 500, marginTop: 2, color: "var(--k-text-primary)" }}>{kpi.v}</div>
+              </div>
+            ))}
+          </div>
+
+          {row.organization && <DetailField label={t("detail.organization")} value={row.organization} />}
+          {row.email && <DetailField label={t("detail.email")} value={row.email} />}
+          {row.phone && <DetailField label={t("detail.phone")} value={row.phone} />}
+
+          {/* CRM-only fields */}
+          {client?.legalId && <DetailField label={t("detail.legalId")} value={client.legalId} />}
+
+          {client && client.authorizedEmails.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <p style={{
+                fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)",
+                textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8,
+              }}>
+                {t("detail.authorizedEmails")}
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {client.authorizedEmails.map((email) => (
+                  <span key={email} style={{
+                    fontSize: 12, padding: "2px 8px", borderRadius: 999,
+                    border: "1px solid var(--k-border)", color: "var(--k-text-secondary)",
+                    fontFamily: "var(--k-font-mono)",
+                  }}>
+                    {email}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {client && client.contactPersons.length > 0 && (
+            <div>
+              <p style={{
+                fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)",
+                textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8,
+              }}>
+                {t("detail.contactPersons")}
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {client.contactPersons.map((cp) => (
+                  <div key={cp.name} style={{ borderRadius: 8, border: "1px solid var(--k-border)", padding: "8px 12px" }}>
+                    <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", margin: 0 }}>{cp.name}</p>
+                    <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", margin: 0 }}>{cp.role}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {isDraft && (
+            <p style={{
+              marginTop: 24, padding: "10px 12px", fontSize: 12,
+              color: "var(--k-text-tertiary)", background: "var(--k-surface)",
+              borderRadius: 6, lineHeight: 1.5,
+            }}>
+              {t("detail.draftReadOnlyNote")}
+            </p>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DetailField — small reusable label/value row inside the drawer
 // ---------------------------------------------------------------------------
 
 function DetailField({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <p style={{ fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>
+      <p style={{
+        fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)",
+        textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4,
+      }}>
         {label}
       </p>
-      <p style={{ fontSize: 13, color: "var(--k-text-primary)", margin: 0 }}>{value}</p>
+      <p style={{ fontSize: 13, color: "var(--k-text-primary)", margin: 0, wordBreak: "break-word" }}>
+        {value}
+      </p>
     </div>
   );
 }
