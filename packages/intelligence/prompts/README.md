@@ -36,9 +36,23 @@ SKIP_LLM_INTEGRATION=1 bun test src/classification/classify.test.ts
 ollama run llama3.2 "$(cat prompts/email-classification.md)"
 ```
 
+## Directory Structure
+
+Each prompt lives in its own subdirectory named after the prompt. Inside, one markdown file per supported language:
+
+```
+prompts/
+  email-classification/
+    en.md   ← English prompt body
+    es.md   ← Spanish prompt body
+  reply-suggestion/
+    en.md
+    es.md
+```
+
 ## File Format
 
-All prompts use markdown with YAML frontmatter:
+All prompt files use markdown with YAML frontmatter:
 
 ```markdown
 ---
@@ -66,12 +80,12 @@ Example:
 
 ## Current Prompts
 
-| File | Purpose | Version | Model |
-|------|---------|---------|-------|
-| email-classification.md | Classify support emails | 1.0.0 | claude-sonnet-4 |
+| Directory | Purpose | Languages |
+|-----------|---------|-----------|
+| `email-classification/` | Classify support emails by type, priority, category, tone, urgency | `en`, `es` |
+| `reply-suggestion/` | Suggest AI draft replies for tickets | `en`, `es` |
 
-## Future Prompts
+## Planned Prompts
 
-- `email-summarization.md` - Generate ticket summaries
-- `response-suggestion.md` - Suggest reply templates
-- `knowledge-search.md` - Semantic search queries
+- `email-summarization/` — Generate ticket summaries
+- `knowledge-search/` — Semantic search query reformulation

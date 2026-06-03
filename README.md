@@ -32,8 +32,11 @@ kairo/
 │   ├── types/          # shared TypeScript interfaces
 │   ├── i18n/           # shared translations (EN/ES)
 │   ├── ui/             # shared ShadCN components
+│   ├── feature-flags/  # static + runtime feature flags
+│   ├── identity/       # email/phone normalization, contact dedup
+│   ├── claude_design/  # Pencil design token package
 │   └── intelligence/   # modular LLM provider (Ollama / Anthropic)
-│       └── prompts/    # versioned LLM prompts (markdown + YAML frontmatter)
+│       └── prompts/    # versioned LLM prompts, per-language subdirs
 ├── supabase/
 │   └── migrations/     # shared DB migrations (Postgres via Supabase)
 └── kairo-internal/

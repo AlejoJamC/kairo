@@ -40,15 +40,15 @@ bun run eval:pipeline
 |--------|-------------|
 | `email_id` | Zero-padded filename prefix (`001`–`050`) |
 | `filename` | Original filename (`001.eml`) |
-| `predicted_ticket_type` | `support` / `lead` / `spam` |
+| `predicted_ticket_type` | `support` / `prospect` / `spam` / `internal` / `other` |
 | `predicted_priority` | `P1` / `P2` / `P3` |
-| `predicted_category` | `technical` / `billing` / `sales` / `other` |
-| `predicted_tone` | Raw `sentimiento` value from pipeline |
-| `predicted_urgency` | Empty — not returned by current pipeline |
+| `predicted_category` | `technical` / `billing` / `account` / `general` / `not_applicable` |
+| `predicted_tone` | `aggressive` / `frustrated` / `neutral` / `positive` |
+| `predicted_urgency` | `high` / `medium` / `low` |
 | `confidence` | `0.0`–`1.0` as returned by the pipeline |
 | `processing_tier` | `0` — current pipeline is single-tier |
 | `processing_time_ms` | Wall clock time for this email |
-| `raw_reasoning` | The `razonamiento` field from the pipeline |
+| `raw_reasoning` | The `reasoning` field from the pipeline |
 | `error` | Error message if classification failed, empty otherwise |
 
 ## Interpreting errors
