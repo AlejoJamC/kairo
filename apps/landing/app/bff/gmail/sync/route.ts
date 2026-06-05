@@ -4,6 +4,9 @@ import { google } from "googleapis";
 import { env } from "@/env";
 import { inngest } from "@/lib/inngest";
 import { getFlag } from "@kairo/feature-flags";
+import { upsertConversationByThread } from "@/lib/ingestion/conversations";
+import { findOrCreateTicketForThread } from "@/lib/ingestion/tickets-by-thread";
+import { linkMessageToTicket } from "@/lib/ingestion/ticket-messages";
 
 export async function POST(request: Request) {
   try {
@@ -120,7 +123,21 @@ export async function POST(request: Request) {
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-    // 6. Fetch list of message IDs (up to 100 most recent inbox emails)
+    // 6. Resolve channel_integration_id for this account (KAI-165: required for thread-aware ingestion).
+    const { data: channelRow } = await supabase
+      .from("channel_integrations")
+      .select("id")
+      .eq("account_id", accountId)
+      .eq("provider", "gmail")
+      .limit(1)
+      .maybeSingle();
+    const channelIntegrationId: string | null = channelRow?.id ?? null;
+
+    if (!channelIntegrationId) {
+      console.warn(`[gmail-sync] No channel_integration found for account ${accountId} — messages will not be linked to conversations`);
+    }
+
+    // 7. Fetch list of message IDs (up to 100 most recent inbox emails)
     const listResponse = await gmail.users.messages.list({
       userId: "me",
       maxResults: 100,
@@ -142,23 +159,38 @@ export async function POST(request: Request) {
       });
     }
 
-    // 7. Process each message
+    // 8. Process each message
     let processed = 0;
     let created = 0;
     let skipped = 0;
 
     for (const message of messages) {
       try {
-        // Check if message already imported (deduplication by account_id)
-        const { count } = await supabase
-          .from("tickets")
-          .select("id", { count: "exact", head: true })
-          .eq("account_id", accountId)
-          .eq("gmail_message_id", message.id!);
+        // Deduplication: check if message already imported by gmail_message_id
+        if (channelIntegrationId) {
+          const { count } = await supabase
+            .from("messages")
+            .select("id", { count: "exact", head: true })
+            .eq("account_id", accountId)
+            .eq("channel_integration_id", channelIntegrationId)
+            .eq("external_id", message.id!);
 
-        if (count && count > 0) {
-          skipped++;
-          continue;
+          if (count && count > 0) {
+            skipped++;
+            continue;
+          }
+        } else {
+          // Legacy dedup path (no channel_integration yet)
+          const { count } = await supabase
+            .from("tickets")
+            .select("id", { count: "exact", head: true })
+            .eq("account_id", accountId)
+            .eq("gmail_message_id", message.id!);
+
+          if (count && count > 0) {
+            skipped++;
+            continue;
+          }
         }
 
         // Fetch full message details
@@ -214,45 +246,144 @@ export async function POST(request: Request) {
           }
         }
 
-        // Insert ticket — account_id only, no user_id (ADR-022 Phase 5)
-        const { data: insertedTicket, error: insertError } = await supabase
-          .from("tickets")
-          .insert({
-            account_id:        accountId,
-            originating_user_id: user.id,
-            gmail_message_id:  message.id!,
-            gmail_thread_id:   msg.threadId || null,
-            subject,
-            from_email:  fromEmail,
-            from_name:   fromName,
-            to_email:    to || null,
-            received_at: receivedAt,
-            body_plain:  bodyPlain || null,
-            body_html:   bodyHtml || null,
-            snippet:     msg.snippet || null,
-            status:      "open",
-            ticket_type: null,
-            priority:    null,
-            category:    null,
-            sentiment:   null,
-          })
-          .select("id")
-          .single();
+        const threadId = msg.threadId || null;
+        let insertedTicketId: string | null = null;
 
-        if (insertError) {
-          console.error("Insert error for message", message.id, insertError);
-        } else {
-          created++;
-          // KAI-225 — Emit contact-extraction trigger (fire-and-forget, non-blocking).
-          // Gated by FEATURE_FLAG_ENABLE_CONTACT_EXTRACTION.
-          if (insertedTicket?.id && getFlag("enable_contact_extraction")) {
-            inngest.send({
-              name: "tickets/ticket.created",
-              data: { ticketId: insertedTicket.id, accountId },
-            }).catch((err: unknown) => {
-              console.error(`[gmail-sync] tickets/ticket.created send failed for ticket ${insertedTicket.id}:`, err);
+        if (channelIntegrationId && threadId) {
+          // KAI-165: Thread-aware path — upsert conversation, find-or-create ticket, link message.
+          try {
+            const { conversation_id } =
+              await upsertConversationByThread(supabase, {
+                accountId,
+                channelIntegrationId,
+                externalThreadId: threadId,
+                customerExternalId: fromEmail,
+                customerDisplayName: fromName,
+              });
+
+            const { ticket_id, was_created } = await findOrCreateTicketForThread(supabase, {
+              accountId,
+              conversationId: conversation_id,
+              originatingUserId: user.id,
+              originMessage: {
+                subject,
+                from_email: fromEmail,
+                from_name: fromName,
+                to_email: to || null,
+                body_plain: bodyPlain || null,
+                body_html: bodyHtml || null,
+                snippet: msg.snippet || null,
+                gmail_message_id: message.id!,
+                gmail_thread_id: threadId,
+                received_at: receivedAt,
+              },
             });
+
+            insertedTicketId = was_created ? ticket_id : null;
+            if (was_created) created++;
+
+            // Upsert message row
+            const { data: msgRow } = await supabase
+              .from("messages")
+              .upsert(
+                {
+                  account_id: accountId,
+                  conversation_id,
+                  channel_integration_id: channelIntegrationId,
+                  external_id: message.id!,
+                  thread_external_id: threadId,
+                  direction: "inbound",
+                  received_at: receivedAt,
+                  sender_external_id: fromEmail,
+                  sender_display_name: fromName,
+                  snippet: msg.snippet || null,
+                  body_plain: bodyPlain || null,
+                  body_html: bodyHtml || null,
+                  classification_status: "classified",
+                  processing_tier: 1,
+                },
+                { onConflict: "channel_integration_id,external_id" }
+              )
+              .select("id")
+              .single();
+
+            if (msgRow?.id) {
+              await linkMessageToTicket(supabase, {
+                ticket_id,
+                message_id: msgRow.id,
+                is_origin: was_created,
+              });
+            }
+          } catch (threadErr: unknown) {
+            console.error(`[gmail-sync] Thread-aware path failed for ${message.id}:`, threadErr);
+            // Fallback to legacy path
+            const { data: fallbackTicket, error: insertError } = await supabase
+              .from("tickets")
+              .insert({
+                account_id:          accountId,
+                originating_user_id: user.id,
+                gmail_message_id:    message.id!,
+                gmail_thread_id:     threadId,
+                subject,
+                from_email:  fromEmail,
+                from_name:   fromName,
+                to_email:    to || null,
+                received_at: receivedAt,
+                body_plain:  bodyPlain || null,
+                body_html:   bodyHtml || null,
+                snippet:     msg.snippet || null,
+                status:      "open",
+              })
+              .select("id")
+              .single();
+
+            if (!insertError && fallbackTicket) {
+              insertedTicketId = fallbackTicket.id;
+              created++;
+            }
           }
+        } else {
+          // Legacy path: no channel_integration_id or no threadId
+          const { data: insertedTicket, error: insertError } = await supabase
+            .from("tickets")
+            .insert({
+              account_id:          accountId,
+              originating_user_id: user.id,
+              gmail_message_id:    message.id!,
+              gmail_thread_id:     threadId,
+              subject,
+              from_email:  fromEmail,
+              from_name:   fromName,
+              to_email:    to || null,
+              received_at: receivedAt,
+              body_plain:  bodyPlain || null,
+              body_html:   bodyHtml || null,
+              snippet:     msg.snippet || null,
+              status:      "open",
+              ticket_type: null,
+              priority:    null,
+              category:    null,
+              sentiment:   null,
+            })
+            .select("id")
+            .single();
+
+          if (insertError) {
+            console.error("Insert error for message", message.id, insertError);
+          } else {
+            insertedTicketId = insertedTicket?.id ?? null;
+            created++;
+          }
+        }
+
+        // KAI-225 — Emit contact-extraction trigger (fire-and-forget, non-blocking).
+        if (insertedTicketId && getFlag("enable_contact_extraction")) {
+          inngest.send({
+            name: "tickets/ticket.created",
+            data: { ticketId: insertedTicketId, accountId },
+          }).catch((err: unknown) => {
+            console.error(`[gmail-sync] tickets/ticket.created send failed for ticket ${insertedTicketId}:`, err);
+          });
         }
 
         processed++;

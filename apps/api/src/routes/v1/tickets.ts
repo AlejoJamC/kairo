@@ -31,6 +31,8 @@ import {
   isTicketStatus,
   type TicketStatus,
 } from "../../lib/ticket-status-machine.js";
+import { upsertConversationByThread } from "../../lib/conversations.js";
+import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 
 export const tickets = new Hono();
 
@@ -819,6 +821,49 @@ tickets.post("/:id/reply", async (c) => {
     return c.json({ error: "No Gmail thread found for this ticket", code: "NO_THREAD" }, 422);
   }
 
+  // KAI-165: If ticket doesn't have conversation_id yet, upsert it now
+  if (!ticket.conversation_id && channelIntegrationId && threadId) {
+    try {
+      const { conversation_id } = await upsertConversationByThread(supabase, {
+        accountId: ticket.account_id,
+        channelIntegrationId,
+        externalThreadId: threadId,
+        customerExternalId: ticket.from_email ?? "",
+        customerDisplayName: null,
+      });
+      await supabase.from("tickets").update({ conversation_id }).eq("id", ticket.id);
+      ticket.conversation_id = conversation_id;
+    } catch (convErr) {
+      console.warn(`[reply] failed to upsert conversation for ticket ${ticket.id}:`, convErr);
+    }
+  } else if (!channelIntegrationId && threadId) {
+    // Try to resolve channelIntegrationId from account
+    const { data: ciRow } = await supabase
+      .from("channel_integrations")
+      .select("id")
+      .eq("account_id", ticket.account_id)
+      .eq("provider", "gmail")
+      .limit(1)
+      .maybeSingle();
+    channelIntegrationId = ciRow?.id ?? null;
+
+    if (channelIntegrationId && !ticket.conversation_id) {
+      try {
+        const { conversation_id } = await upsertConversationByThread(supabase, {
+          accountId: ticket.account_id,
+          channelIntegrationId,
+          externalThreadId: threadId,
+          customerExternalId: ticket.from_email ?? "",
+          customerDisplayName: null,
+        });
+        await supabase.from("tickets").update({ conversation_id }).eq("id", ticket.id);
+        ticket.conversation_id = conversation_id;
+      } catch (convErr) {
+        console.warn(`[reply] failed to upsert conversation (late resolve) for ticket ${ticket.id}:`, convErr);
+      }
+    }
+  }
+
   // 3. Resolve Gmail OAuth token from oauth_credentials (ADR-022 canonical).
   let gmailAccessToken: string | null = null;
   let gmailFromEmail: string | null = null;
@@ -861,9 +906,10 @@ tickets.post("/:id/reply", async (c) => {
     return c.json({ error: "GMAIL_API_ERROR", detail: String(err) }, 502);
   }
 
-  // 5. Record outbound message
+  // 5. Record outbound message + link to ticket (KAI-165)
   if (channelIntegrationId) {
-    await supabase.from("messages").insert({
+    const { data: outboundMsg } = await supabase.from("messages").insert({
+      account_id: ticket.account_id,
       conversation_id: ticket.conversation_id,
       channel_integration_id: channelIntegrationId,
       external_id: sendResult.messageId,
@@ -876,7 +922,15 @@ tickets.post("/:id/reply", async (c) => {
       snippet: parsed.data.body.slice(0, 200),
       raw_payload: { gmail_message_id: sendResult.messageId, thread_id: sendResult.threadId },
       received_at: new Date().toISOString(),
-    });
+    }).select("id").single();
+
+    if (outboundMsg?.id) {
+      await linkMessageToTicket(supabase, {
+        ticket_id: ticket.id,
+        message_id: outboundMsg.id,
+        is_origin: false,
+      });
+    }
   }
 
   // 6. Update ticket: last_response_at + auto-transition to awaiting_customer (KAI-50)
@@ -911,6 +965,51 @@ tickets.post("/:id/reply", async (c) => {
   }
 
   return c.json({ success: true, messageId: sendResult.messageId });
+});
+
+// ---------------------------------------------------------------------------
+// GET /v1/tickets/:id/messages — load thread messages (KAI-165)
+// ---------------------------------------------------------------------------
+
+tickets.get("/:id/messages", async (c) => {
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  // Verify ownership
+  const { data: ticket, error: ticketErr } = await supabase
+    .from("tickets")
+    .select("id")
+    .eq("id", id)
+    .eq("account_id", ctx.accountId)
+    .single();
+
+  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  // Load messages via ticket_messages join, ordered by received_at ascending
+  const { data, error } = await supabase
+    .from("ticket_messages")
+    .select(`
+      is_origin,
+      messages (
+        id, direction, sender_external_id, sender_display_name,
+        body_plain, body_html, snippet, received_at
+      )
+    `)
+    .eq("ticket_id", id)
+    .order("created_at", { ascending: true });
+
+  if (error) return c.json({ error: error.message }, 500);
+
+  const messages = (data ?? [])
+    .map((row) => ({
+      ...(row.messages as Record<string, unknown>),
+      is_origin: row.is_origin,
+    }))
+    .filter((m) => m.id); // skip orphans
+
+  return c.json({ messages, count: messages.length });
 });
 
 // ---------------------------------------------------------------------------

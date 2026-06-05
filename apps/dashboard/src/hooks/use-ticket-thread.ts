@@ -1,0 +1,67 @@
+import { useState, useEffect } from "react";
+import { apiCall } from "@/lib/api-client";
+
+export interface ThreadMessage {
+  id: string;
+  direction: "inbound" | "outbound";
+  sender_external_id: string | null;
+  sender_display_name: string | null;
+  body_plain: string | null;
+  body_html: string | null;
+  snippet: string | null;
+  received_at: string;
+  is_origin: boolean;
+}
+
+interface UseTicketThreadResult {
+  messages: ThreadMessage[];
+  loading: boolean;
+  error: string | null;
+}
+
+/**
+ * Fetches the message thread for a ticket via GET /api/v1/tickets/:id/messages.
+ * Refreshes whenever ticketId changes. No polling — no realtime needed per KAI-165.
+ */
+export function useTicketThread(ticketId: string | null): UseTicketThreadResult {
+  const [messages, setMessages] = useState<ThreadMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!ticketId) {
+      setMessages([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    apiCall(`/api/v1/tickets/${ticketId}/messages`)
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text().catch(() => res.statusText);
+          throw new Error(`${res.status}: ${text}`);
+        }
+        return res.json() as Promise<{ messages: ThreadMessage[]; count: number }>;
+      })
+      .then((data) => {
+        if (!cancelled) setMessages(data.messages ?? []);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ticketId]);
+
+  return { messages, loading, error };
+}
