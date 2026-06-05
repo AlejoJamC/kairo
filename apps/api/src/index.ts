@@ -7,6 +7,7 @@ import { tier3Deferred } from "./functions/pipeline/tier3-deferred.js";
 import { batchClassify } from "./functions/batch-classify.js";
 import { incrementalSync } from "./functions/pipeline/incremental-sync.js";
 import { contactExtraction } from "./functions/contact-extraction/extract.js";
+import { threadDedupeBackfill } from "./functions/backfill/thread-dedupe.js";
 import { health } from "./routes/v1/health.js";
 import { tickets } from "./routes/v1/tickets.js";
 import { ticketGroups } from "./routes/v1/ticket-groups.js";
@@ -20,6 +21,7 @@ import { kbArticles } from "./routes/v1/kb-articles.js";
 import { invitations } from "./routes/v1/invitations.js";
 import { channels } from "./routes/v1/channels.js";
 import { classificationProgress } from "./routes/v1/classification-progress.js";
+import { admin } from "./routes/v1/admin.js";
 
 const app = new Hono({ strict: false });
 
@@ -37,6 +39,7 @@ v1.route("/kb-articles", kbArticles);
 v1.route("/invitations", invitations);
 v1.route("/accounts", channels);
 v1.route("/classification", classificationProgress);
+v1.route("/admin", admin);
 
 app.route("/api/v1", v1);
 
@@ -44,7 +47,7 @@ app.use(
   "/api/inngest",
   serve({
     client: inngest,
-    functions: [tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction],
+    functions: [tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill],
   })
 );
 

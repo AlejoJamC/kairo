@@ -6,6 +6,10 @@ import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
 import { maybeGenerateTicketEmbedding } from "../../lib/ticket-embedding.js";
+import { upsertConversationByThread } from "../../lib/conversations.js";
+import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
+import { linkMessageToTicket } from "../../lib/ticket-messages.js";
+import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -283,11 +287,124 @@ export const incrementalSync = inngest.createFunction(
           .then(async (classification) => {
             const classified_at = new Date().toISOString();
 
-            const [insertResult] = await Promise.all([
-              supabase
+            let ticketId: string | null = null;
+            let was_created = true;
+            let prior_status: string | null = null;
+
+            if (channelIntegrationId) {
+              try {
+                const { conversation_id } = await upsertConversationByThread(supabase, {
+                  accountId,
+                  channelIntegrationId,
+                  externalThreadId: threadId,
+                  customerExternalId: from,
+                  customerDisplayName: null,
+                });
+
+                const result = await findOrCreateTicketForThread(supabase, {
+                  accountId,
+                  conversationId: conversation_id,
+                  originatingUserId: userId,
+                  classification: {
+                    type: classification.type,
+                    category: classification.category,
+                    priority: classification.priority,
+                    tone: classification.tone,
+                    confidence: classification.confidence,
+                    reasoning: classification.reasoning,
+                  },
+                  originMessage: {
+                    subject,
+                    from_email: from,
+                    from_name: null,
+                    to_email: null,
+                    body_plain: null,
+                    body_html: null,
+                    snippet,
+                    gmail_message_id: messageId,
+                    gmail_thread_id: threadId,
+                    received_at: receivedAt,
+                  },
+                  classifiedAt: classified_at,
+                  classificationTier: 0,
+                  priorityScore: null,
+                });
+                ticketId = result.ticket_id;
+                was_created = result.was_created;
+                prior_status = result.prior_status;
+
+                // Update message row with conversation + classified status
+                await supabase
+                  .from("messages")
+                  .update({
+                    conversation_id,
+                    classification_status: "classified",
+                    processing_tier: 0,
+                    classified_at,
+                  })
+                  .eq("external_id", messageId)
+                  .eq("channel_integration_id", channelIntegrationId);
+
+                // Fetch the message id to link it
+                const { data: msgRow } = await supabase
+                  .from("messages")
+                  .select("id")
+                  .eq("external_id", messageId)
+                  .eq("channel_integration_id", channelIntegrationId)
+                  .maybeSingle();
+
+                if (msgRow?.id) {
+                  await linkMessageToTicket(supabase, {
+                    ticket_id: ticketId,
+                    message_id: msgRow.id,
+                    is_origin: was_created,
+                  });
+                }
+
+                if (!was_created) {
+                  await applyCustomerReplyTransition(supabase, ticketId, prior_status);
+                }
+              } catch (helperErr: unknown) {
+                console.error(
+                  `[incremental-sync] thread helpers failed for ${messageId}:`,
+                  helperErr instanceof Error ? helperErr.message : String(helperErr)
+                );
+                // Fallback: insert ticket without conversation linkage
+                const { data: fallbackTicket } = await supabase
+                  .from("tickets")
+                  .insert({
+                    account_id: accountId,
+                    originating_user_id: userId,
+                    subject,
+                    from_email: from,
+                    gmail_message_id: messageId,
+                    gmail_thread_id: threadId,
+                    received_at: receivedAt,
+                    ticket_type: classification.type,
+                    priority: classification.priority,
+                    category: classification.category,
+                    sentiment: classification.tone,
+                    ai_reasoning: classification.reasoning,
+                    classification_confidence: classification.confidence,
+                    classified_at,
+                    classification_tier: 0,
+                  })
+                  .select("id")
+                  .single();
+                ticketId = fallbackTicket?.id ?? null;
+
+                await supabase
+                  .from("messages")
+                  .update({ classification_status: "classified", processing_tier: 0, classified_at })
+                  .eq("external_id", messageId)
+                  .eq("channel_integration_id", channelIntegrationId);
+              }
+            } else {
+              // No channelIntegrationId — insert ticket directly
+              const { data: bareTicket } = await supabase
                 .from("tickets")
                 .insert({
-                  account_id:          accountId,
+                  account_id: accountId,
                   originating_user_id: userId,
                   subject,
                   from_email: from,
@@ -304,22 +421,11 @@ export const incrementalSync = inngest.createFunction(
                   classification_tier: 0,
                 })
                 .select("id")
-                .single(),
-              channelIntegrationId
-                ? supabase
-                    .from("messages")
-                    .update({
-                      classification_status: "classified",
-                      processing_tier: 0,
-                      classified_at,
-                    })
-                    .eq("external_id", messageId)
-                    .eq("channel_integration_id", channelIntegrationId)
-                : Promise.resolve(),
-            ]);
+                .single();
+              ticketId = bareTicket?.id ?? null;
+            }
 
-            const ticketId = insertResult?.data?.id;
-            if (ticketId) {
+            if (ticketId && was_created) {
               maybeSendOutOfHoursReply({
                 supabase,
                 accountId,

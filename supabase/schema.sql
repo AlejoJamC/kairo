@@ -1337,7 +1337,7 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_events" (
     "is_internal" boolean DEFAULT false NOT NULL,
     "metadata" "jsonb",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "ticket_events_event_type_check" CHECK (("event_type" = ANY (ARRAY['reply_sent'::"text", 'internal_note'::"text", 'status_change'::"text", 'assignment'::"text", 'merge'::"text", 'ai_classified'::"text", 'human_classified'::"text", 'ai_proposal'::"text", 'ai_confirmed'::"text", 'ai_rejected'::"text", 'sla_breach'::"text", 'escalated'::"text", 'grouped'::"text", 'classification_corrected'::"text"])))
+    CONSTRAINT "ticket_events_event_type_check" CHECK (("event_type" = ANY (ARRAY['reply_sent'::"text", 'internal_note'::"text", 'status_change'::"text", 'assignment'::"text", 'merge'::"text", 'ai_classified'::"text", 'human_classified'::"text", 'ai_proposal'::"text", 'ai_confirmed'::"text", 'ai_rejected'::"text", 'sla_breach'::"text", 'escalated'::"text", 'grouped'::"text", 'classification_corrected'::"text", 'customer_replied'::"text", 'merged_into'::"text"])))
 );
 
 
@@ -1471,7 +1471,7 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     CONSTRAINT "chk_priority_score" CHECK ((("priority_score" IS NULL) OR (("priority_score" >= 0.000) AND ("priority_score" <= 1.000)))),
     CONSTRAINT "chk_sentiment" CHECK ((("sentiment" IS NULL) OR ("sentiment" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_ticket_type" CHECK ((("ticket_type" IS NULL) OR ("ticket_type" = ANY (ARRAY['support'::"text", 'prospect'::"text", 'spam'::"text", 'internal'::"text", 'other'::"text"])))),
-    CONSTRAINT "tickets_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'auto_resolved'::"text", 'guided'::"text", 'escalated'::"text"])))
+    CONSTRAINT "tickets_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'auto_resolved'::"text", 'guided'::"text", 'escalated'::"text", 'reopened'::"text"])))
 );
 
 
@@ -1601,11 +1601,6 @@ ALTER TABLE ONLY "public"."clients"
 
 ALTER TABLE ONLY "public"."clients"
     ADD CONSTRAINT "clients_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."conversations"
-    ADD CONSTRAINT "conversations_integration_customer_key" UNIQUE ("channel_integration_id", "customer_external_id");
 
 
 
@@ -1843,6 +1838,14 @@ CREATE INDEX "idx_clients_name" ON "public"."clients" USING "btree" ("account_id
 
 
 
+CREATE UNIQUE INDEX "idx_conversations_account_channel_thread" ON "public"."conversations" USING "btree" ("account_id", "channel_integration_id", "external_thread_id") WHERE ("external_thread_id" IS NOT NULL);
+
+
+
+COMMENT ON INDEX "public"."idx_conversations_account_channel_thread" IS 'KAI-165: 1 thread = 1 conversation, partial unique for thread-bearing rows.';
+
+
+
 CREATE INDEX "idx_conversations_account_id" ON "public"."conversations" USING "btree" ("account_id");
 
 
@@ -2048,6 +2051,14 @@ CREATE INDEX "idx_ticket_proposals_status" ON "public"."ticket_proposals" USING 
 
 
 CREATE INDEX "idx_ticket_tags_tag" ON "public"."ticket_tags" USING "btree" ("tag");
+
+
+
+CREATE UNIQUE INDEX "idx_tickets_account_conversation_active" ON "public"."tickets" USING "btree" ("account_id", "conversation_id") WHERE (("conversation_id" IS NOT NULL) AND ("merged_into_ticket_id" IS NULL));
+
+
+
+COMMENT ON INDEX "public"."idx_tickets_account_conversation_active" IS 'KAI-165: prevents concurrent ingestion from creating 2 tickets for the same conversation.';
 
 
 

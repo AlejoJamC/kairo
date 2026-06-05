@@ -14,7 +14,9 @@ export type TicketEventType =
   | "sla_breach"
   | "escalated"
   | "grouped"
-  | "classification_corrected";
+  | "classification_corrected"
+  | "customer_replied"   // KAI-165: customer sent a follow-up to the thread
+  | "merged_into";       // KAI-165: ticket merged into canonical during backfill
 
 export interface EmitTicketEventOptions {
   ticketId: string;

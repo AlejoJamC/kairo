@@ -38,6 +38,11 @@ export type KairoEvents = {
       accountId: string;
     };
   };
+  "admin/thread-dedupe.triggered": {
+    data: {
+      accountId: string | null; // null = all accounts (use with caution)
+    };
+  };
 };
 
 // In inngest v4, EventSchemas was removed. Event types are enforced via

@@ -12,6 +12,10 @@ import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
 import { maybeGenerateTicketEmbedding } from "../../lib/ticket-embedding.js";
 import { pipelineLog, pipelineLogRun } from "../../lib/pipeline-logger.js";
 import { NonRetriableError } from "inngest";
+import { upsertConversationByThread } from "../../lib/conversations.js";
+import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
+import { linkMessageToTicket } from "../../lib/ticket-messages.js";
+import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -341,38 +345,165 @@ export const tier1FastPath = inngest.createFunction(
             if (proposalErr) pipelineLog("tier1:db", `ticket_proposals FAILED for ${messageId}: ${proposalErr.message}`);
             else pipelineLog("tier1:db", `ticket_proposals OK → proposal_id=${proposal?.id}`);
 
-            const { data: ticket, error: ticketErr } = await supabase
-              .from("tickets")
-              .insert({
-                account_id:           accountId,
-                originating_user_id:  userId,
-                subject,
-                from_email,
-                from_name,
-                to_email,
-                body_plain: body_plain || null,
-                body_html: body_html || null,
-                snippet: snippet || null,
-                gmail_message_id: messageId,
-                gmail_thread_id: message.threadId,
-                received_at: receivedAt,
-                ticket_type: classification.type,
-                priority: classification.priority,
-                category: classification.category,
-                sentiment: classification.tone,
-                ai_reasoning: classification.reasoning,
-                classification_confidence: classification.confidence,
-                classified_at,
-                classification_tier: 1,
-                priority_score: priorityScore,
-                emotion: classification.tone,
-                emotion_confidence: classification.confidence,
-                score_computed_at: classified_at,
-              })
-              .select("id")
-              .single();
-            if (ticketErr) pipelineLog("tier1:db", `tickets FAILED for ${messageId}: ${ticketErr.message}`);
-            else pipelineLog("tier1:db", `tickets OK → ticket_id=${ticket?.id}`);
+            // KAI-165: upsert conversation by thread, then find-or-create ticket.
+            let ticket: { id: string } | null = null;
+            let was_created = true;
+            let prior_status: string | null = null;
+
+            if (channelIntegrationId) {
+              try {
+                const { conversation_id } = await upsertConversationByThread(supabase, {
+                  accountId,
+                  channelIntegrationId,
+                  externalThreadId: message.threadId,
+                  customerExternalId: from_email,
+                  customerDisplayName: from_name,
+                });
+
+                const result = await findOrCreateTicketForThread(supabase, {
+                  accountId,
+                  conversationId: conversation_id,
+                  originatingUserId: userId,
+                  classification: {
+                    type: classification.type,
+                    category: classification.category,
+                    priority: classification.priority,
+                    tone: classification.tone,
+                    confidence: classification.confidence,
+                    reasoning: classification.reasoning,
+                  },
+                  originMessage: {
+                    subject,
+                    from_email,
+                    from_name,
+                    to_email,
+                    body_plain: body_plain || null,
+                    body_html: body_html || null,
+                    snippet: snippet || null,
+                    gmail_message_id: messageId,
+                    gmail_thread_id: message.threadId,
+                    received_at: receivedAt,
+                  },
+                  classifiedAt: classified_at,
+                  classificationTier: 1,
+                  priorityScore,
+                });
+                ticket = { id: result.ticket_id };
+                was_created = result.was_created;
+                prior_status = result.prior_status;
+                pipelineLog("tier1:db", `tickets OK → ticket_id=${ticket.id} was_created=${was_created}`);
+
+                // Upsert the message row
+                const { data: messageRow } = await supabase.from("messages").upsert(
+                  {
+                    account_id: accountId,
+                    conversation_id,
+                    channel_integration_id: channelIntegrationId,
+                    external_id: messageId,
+                    thread_external_id: message.threadId,
+                    direction: "inbound",
+                    received_at: receivedAt,
+                    sender_external_id: from,
+                    sender_display_name: from_name,
+                    snippet: snippet || null,
+                    body_plain: body_plain || null,
+                    body_html: body_html || null,
+                    classification_status: "classified",
+                    processing_tier: 1,
+                    classified_at,
+                  },
+                  { onConflict: "channel_integration_id,external_id" }
+                ).select("id").single();
+
+                if (messageRow?.id) {
+                  await linkMessageToTicket(supabase, {
+                    ticket_id: ticket.id,
+                    message_id: messageRow.id,
+                    is_origin: was_created,
+                  });
+                }
+
+                // Apply status transition if this is a follow-up (not the first message)
+                if (!was_created) {
+                  await applyCustomerReplyTransition(supabase, ticket.id, prior_status);
+                }
+              } catch (helperErr: unknown) {
+                pipelineLog("tier1:db", `thread helpers FAILED for ${messageId}: ${helperErr instanceof Error ? helperErr.message : String(helperErr)}`);
+                // Fallback: insert ticket without conversation linkage
+                const { data: fallbackTicket, error: ticketErr } = await supabase
+                  .from("tickets")
+                  .insert({
+                    account_id: accountId,
+                    originating_user_id: userId,
+                    subject,
+                    from_email,
+                    from_name,
+                    to_email,
+                    body_plain: body_plain || null,
+                    body_html: body_html || null,
+                    snippet: snippet || null,
+                    gmail_message_id: messageId,
+                    gmail_thread_id: message.threadId,
+                    received_at: receivedAt,
+                    ticket_type: classification.type,
+                    priority: classification.priority,
+                    category: classification.category,
+                    sentiment: classification.tone,
+                    ai_reasoning: classification.reasoning,
+                    classification_confidence: classification.confidence,
+                    classified_at,
+                    classification_tier: 1,
+                    priority_score: priorityScore,
+                    emotion: classification.tone,
+                    emotion_confidence: classification.confidence,
+                    score_computed_at: classified_at,
+                  })
+                  .select("id")
+                  .single();
+                if (ticketErr) pipelineLog("tier1:db", `fallback tickets FAILED for ${messageId}: ${ticketErr.message}`);
+                else {
+                  ticket = fallbackTicket;
+                  pipelineLog("tier1:db", `fallback tickets OK → ticket_id=${ticket?.id}`);
+                }
+              }
+            } else {
+              // No channelIntegrationId — insert ticket without conversation linkage
+              const { data: bareTicket, error: ticketErr } = await supabase
+                .from("tickets")
+                .insert({
+                  account_id: accountId,
+                  originating_user_id: userId,
+                  subject,
+                  from_email,
+                  from_name,
+                  to_email,
+                  body_plain: body_plain || null,
+                  body_html: body_html || null,
+                  snippet: snippet || null,
+                  gmail_message_id: messageId,
+                  gmail_thread_id: message.threadId,
+                  received_at: receivedAt,
+                  ticket_type: classification.type,
+                  priority: classification.priority,
+                  category: classification.category,
+                  sentiment: classification.tone,
+                  ai_reasoning: classification.reasoning,
+                  classification_confidence: classification.confidence,
+                  classified_at,
+                  classification_tier: 1,
+                  priority_score: priorityScore,
+                  emotion: classification.tone,
+                  emotion_confidence: classification.confidence,
+                  score_computed_at: classified_at,
+                })
+                .select("id")
+                .single();
+              if (ticketErr) pipelineLog("tier1:db", `tickets FAILED for ${messageId}: ${ticketErr.message}`);
+              else {
+                ticket = bareTicket;
+                pipelineLog("tier1:db", `tickets OK (no channel) → ticket_id=${ticket?.id}`);
+              }
+            }
 
             // Link proposal → ticket
             if (proposal?.id && ticket?.id) {
@@ -382,53 +513,34 @@ export const tier1FastPath = inngest.createFunction(
                 .eq("id", proposal.id);
 
               // Detect escalation triggers post-classification (fire-and-forget)
-              buildEscalationContext(ticket.id, accountId)
-                .then((ctx) => {
-                  if (!ctx) return;
-                  const result = detectEscalationTriggers(ctx);
-                  if (result.reasons.length > 0) {
-                    return supabase
-                      .from("ticket_proposals")
-                      .update({ escalation_reasons: result.reasons })
-                      .eq("id", proposal.id);
-                  }
-                })
-                .catch((err: unknown) => {
-                  console.error(`[tier1] Escalation detection failed for ticket ${ticket.id}:`, err);
-                });
+              // Only on new tickets (no reclassification of follow-ups per KAI-165 decision #1)
+              if (was_created) {
+                buildEscalationContext(ticket.id, accountId)
+                  .then((ctx) => {
+                    if (!ctx) return;
+                    const result = detectEscalationTriggers(ctx);
+                    if (result.reasons.length > 0) {
+                      return supabase
+                        .from("ticket_proposals")
+                        .update({ escalation_reasons: result.reasons })
+                        .eq("id", proposal.id);
+                    }
+                  })
+                  .catch((err: unknown) => {
+                    console.error(`[tier1] Escalation detection failed for ticket ${ticket!.id}:`, err);
+                  });
+              }
             }
 
-            if (channelIntegrationId) {
-              await supabase.from("messages").upsert(
-                {
-                  account_id:             accountId,
-                  channel_integration_id: channelIntegrationId,
-                  external_id: messageId,
-                  direction: "inbound",
-                  received_at: receivedAt,
-                  sender_external_id: from,
-                  sender_display_name: from_name,
-                  snippet: snippet || null,
-                  body_plain: body_plain || null,
-                  body_html: body_html || null,
-                  classification_status: "classified",
-                  processing_tier: 1,
-                  classified_at,
-                },
-                { onConflict: "channel_integration_id,external_id" }
-              );
-            }
-
-            if (ticket?.id) {
+            if (ticket?.id && was_created) {
               // KAI-225 — Emit contact-extraction trigger (fire-and-forget, non-blocking).
-              // Gated by FEATURE_FLAG_ENABLE_CONTACT_EXTRACTION so the classifier
-              // pipeline stays unaffected when the worker is disabled.
+              // Only on ticket creation — not for follow-up messages.
               if (getFlag("enable_contact_extraction")) {
                 inngest.send({
                   name: "tickets/ticket.created",
                   data: { ticketId: ticket.id, accountId },
                 }).catch((err: unknown) => {
-                  console.error(`[tier1] tickets/ticket.created send failed for ticket ${ticket.id}:`, err);
+                  console.error(`[tier1] tickets/ticket.created send failed for ticket ${ticket!.id}:`, err);
                 });
               }
 
@@ -443,7 +555,7 @@ export const tier1FastPath = inngest.createFunction(
                 subject,
                 receivedAt,
               }).catch((err: unknown) => {
-                console.error(`[tier1] Out-of-hours reply failed for ticket ${ticket.id}:`, err);
+                console.error(`[tier1] Out-of-hours reply failed for ticket ${ticket!.id}:`, err);
               });
 
               maybeGenerateTicketEmbedding({
@@ -452,7 +564,7 @@ export const tier1FastPath = inngest.createFunction(
                 subject,
                 bodyPreview: body_plain || snippet,
               }).catch((err: unknown) => {
-                console.error(`[tier1] Embedding generation failed for ticket ${ticket.id}:`, err);
+                console.error(`[tier1] Embedding generation failed for ticket ${ticket!.id}:`, err);
               });
             }
           })

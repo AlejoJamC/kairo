@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
 import { TicketHeader } from "./ticket-header";
 import { useTriageStore } from "@/stores/triage-store";
+import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
 
 // ---------------------------------------------------------------------------
 // Sender avatar (initials circle)
@@ -36,6 +37,150 @@ function SenderAvatar({ name, email }: { name: string | null; email: string | nu
 }
 
 // ---------------------------------------------------------------------------
+// MessageCard — renders a single thread message
+// ---------------------------------------------------------------------------
+
+function MessageCard({ message }: { message: ThreadMessage }) {
+  const { t } = useTranslation("dashboard");
+  const isOutbound = message.direction === "outbound";
+
+  const senderLabel = isOutbound
+    ? (message.sender_display_name ?? message.sender_external_id ?? t("ticketDetail.agent", "Agent"))
+    : (message.sender_display_name ?? message.sender_external_id ?? t("ticketDetail.unknownSender", "Unknown sender"));
+
+  const senderEmail = !isOutbound && message.sender_display_name && message.sender_external_id
+    ? `<${message.sender_external_id}>`
+    : "";
+
+  const timestamp = message.received_at
+    ? new Date(message.received_at).toLocaleString()
+    : "";
+
+  const bodyText = message.body_plain ?? message.snippet ?? null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        marginLeft: isOutbound ? 48 : 0,
+        marginRight: isOutbound ? 0 : 48,
+      }}
+    >
+      {/* Message header row */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+        <SenderAvatar
+          name={message.sender_display_name}
+          email={message.sender_external_id}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <p
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--k-text-primary)",
+                margin: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {senderLabel}
+            </p>
+            {message.is_origin && (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "var(--k-accent)",
+                  background: "var(--k-accent-subtle)",
+                  border: "1px solid #C7D2FE",
+                  borderRadius: 4,
+                  padding: "1px 5px",
+                  flexShrink: 0,
+                }}
+              >
+                {t("ticketDetail.originMessage", "Initial message")}
+              </span>
+            )}
+            {isOutbound && (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "#6B7280",
+                  background: "#F3F4F6",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: 4,
+                  padding: "1px 5px",
+                  flexShrink: 0,
+                }}
+              >
+                {t("ticketDetail.outbound", "Reply sent")}
+              </span>
+            )}
+          </div>
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--k-text-tertiary)",
+              margin: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {senderEmail}
+            {timestamp ? (senderEmail ? ` · ${timestamp}` : timestamp) : ""}
+          </p>
+        </div>
+      </div>
+
+      {/* Message body */}
+      <div
+        style={{
+          background: isOutbound ? "var(--k-accent-subtle)" : "white",
+          border: `1px solid ${isOutbound ? "#C7D2FE" : "var(--k-border)"}`,
+          borderRadius: 10,
+          overflow: "hidden",
+          padding: "14px 16px",
+        }}
+      >
+        {bodyText ? (
+          <pre
+            style={{
+              fontFamily: "inherit",
+              fontSize: 13,
+              lineHeight: 1.65,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              overflowX: "hidden",
+              color: "var(--k-text-primary)",
+              margin: 0,
+            }}
+          >
+            {bodyText}
+          </pre>
+        ) : (
+          <p
+            style={{
+              margin: 0,
+              fontStyle: "italic",
+              color: "var(--k-text-tertiary)",
+              fontSize: 13,
+            }}
+          >
+            {t("ticketDetail.noBody", "No email body available.")}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // TicketDetail
 // ---------------------------------------------------------------------------
 
@@ -43,6 +188,8 @@ export function TicketDetail() {
   const { t } = useTranslation("dashboard");
   const { tickets, selectedTicketId } = useTriageStore();
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
+
+  const { messages, loading: threadLoading } = useTicketThread(ticket?.id ?? null);
 
   if (!ticket) {
     return (
@@ -109,45 +256,6 @@ export function TicketDetail() {
           {ticket.subject ?? t("ticketDetail.noSubject", "(Sin asunto)")}
         </h1>
 
-        {/* Sender row */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 10,
-          }}
-        >
-          <SenderAvatar name={ticket.from_name} email={ticket.from_email} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--k-text-primary)",
-                margin: "0 0 2px",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {ticket.from_name ?? ticket.from_email ?? t("ticketDetail.unknownSender", "Unknown sender")}
-            </p>
-            <p
-              style={{
-                fontSize: 12,
-                color: "var(--k-text-tertiary)",
-                margin: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {ticket.from_email && ticket.from_name ? `<${ticket.from_email}>` : ""}
-              {receivedDate ? ` · ${receivedDate}` : ""}
-            </p>
-          </div>
-        </div>
-
         {/* AI reasoning banner */}
         {ticket.ai_reasoning && (
           <div
@@ -173,53 +281,128 @@ export function TicketDetail() {
           </div>
         )}
 
-        {/* Email body card */}
-        <div
-          style={{
-            background: "white",
-            border: "1px solid var(--k-border)",
-            borderRadius: 12,
-            overflow: "hidden",
-          }}
-        >
+        {/* Thread: render message cards if available, fallback to legacy body_plain */}
+        {threadLoading ? (
+          /* Skeleton while loading */
           <div
             style={{
-              padding: "18px 20px 22px",
-              fontSize: 14,
-              color: "var(--k-text-primary)",
-              lineHeight: 1.65,
+              background: "white",
+              border: "1px solid var(--k-border)",
+              borderRadius: 12,
+              padding: "18px 20px",
+              opacity: 0.5,
             }}
           >
-            {ticket.body_plain ? (
-              <pre
-                style={{
-                  fontFamily: "inherit",
-                  fontSize: 14,
-                  lineHeight: 1.65,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  overflowX: "hidden",
-                  color: "var(--k-text-primary)",
-                  margin: 0,
-                }}
-              >
-                {ticket.body_plain}
-              </pre>
-            ) : ticket.snippet ? (
-              <p style={{ margin: 0, lineHeight: 1.65 }}>{ticket.snippet}</p>
-            ) : (
-              <p
-                style={{
-                  margin: 0,
-                  fontStyle: "italic",
-                  color: "var(--k-text-tertiary)",
-                }}
-              >
-                {t("ticketDetail.noBody", "No email body available.")}
-              </p>
-            )}
+            <div
+              style={{
+                height: 14,
+                background: "var(--k-border)",
+                borderRadius: 4,
+                marginBottom: 8,
+                width: "60%",
+              }}
+            />
+            <div
+              style={{
+                height: 14,
+                background: "var(--k-border)",
+                borderRadius: 4,
+                width: "90%",
+              }}
+            />
           </div>
-        </div>
+        ) : messages.length > 0 ? (
+          /* Thread view — N message cards in chronological order */
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {messages.map((msg) => (
+              <MessageCard key={msg.id} message={msg} />
+            ))}
+          </div>
+        ) : (
+          /* Fallback — pre-backfill safety net: render legacy body_plain */
+          <>
+            {/* Sender row (legacy) */}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <SenderAvatar name={ticket.from_name} email={ticket.from_email} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--k-text-primary)",
+                    margin: "0 0 2px",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {ticket.from_name ?? ticket.from_email ?? t("ticketDetail.unknownSender", "Unknown sender")}
+                </p>
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: "var(--k-text-tertiary)",
+                    margin: 0,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {ticket.from_email && ticket.from_name ? `<${ticket.from_email}>` : ""}
+                  {receivedDate ? ` · ${receivedDate}` : ""}
+                </p>
+              </div>
+            </div>
+
+            {/* Email body card (legacy) */}
+            <div
+              style={{
+                background: "white",
+                border: "1px solid var(--k-border)",
+                borderRadius: 12,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  padding: "18px 20px 22px",
+                  fontSize: 14,
+                  color: "var(--k-text-primary)",
+                  lineHeight: 1.65,
+                }}
+              >
+                {ticket.body_plain ? (
+                  <pre
+                    style={{
+                      fontFamily: "inherit",
+                      fontSize: 14,
+                      lineHeight: 1.65,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      overflowX: "hidden",
+                      color: "var(--k-text-primary)",
+                      margin: 0,
+                    }}
+                  >
+                    {ticket.body_plain}
+                  </pre>
+                ) : ticket.snippet ? (
+                  <p style={{ margin: 0, lineHeight: 1.65 }}>{ticket.snippet}</p>
+                ) : (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontStyle: "italic",
+                      color: "var(--k-text-tertiary)",
+                    }}
+                  >
+                    {t("ticketDetail.noBody", "No email body available.")}
+                  </p>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Fixed bottom reply bar */}
