@@ -258,7 +258,10 @@
     "selectPrompt": "Selecciona un ticket para ver los detalles",
     "unknownSender": "Remitente desconocido",
     "noSubject": "(Sin asunto)",
-    "noBody": "No hay cuerpo de correo disponible."
+    "noBody": "No hay cuerpo de correo disponible.",
+    "deliverySending": "Enviando…",
+    "deliveryFailed": "Error al enviar",
+    "reconnectGmail": "Reconecta Gmail para reintentar"
   },
   "ticketHeader": {
     "assignToMe": "Asignar a mí",

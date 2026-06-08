@@ -10,6 +10,7 @@ const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/
 export type GmailSendError =
   | { code: "GMAIL_TOKEN_EXPIRED" }
   | { code: "NO_GMAIL_INTEGRATION" }
+  | { code: "INSUFFICIENT_SCOPE" }
   | { code: "GMAIL_API_ERROR"; detail: string };
 
 export class GmailSendException extends Error {
@@ -74,6 +75,14 @@ export async function sendGmailReply(opts: {
 
   if (res.status === 401) {
     throw new GmailSendException({ code: "GMAIL_TOKEN_EXPIRED" });
+  }
+
+  if (res.status === 403) {
+    const detail = await res.text().catch(() => "");
+    if (/insufficient.*(scope|permission)/i.test(detail)) {
+      throw new GmailSendException({ code: "INSUFFICIENT_SCOPE" });
+    }
+    throw new GmailSendException({ code: "GMAIL_API_ERROR", detail });
   }
 
   if (!res.ok) {

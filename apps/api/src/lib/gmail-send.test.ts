@@ -78,6 +78,40 @@ describe("sendGmailReply — GMAIL_TOKEN_EXPIRED", () => {
   });
 });
 
+describe("sendGmailReply — INSUFFICIENT_SCOPE", () => {
+  it("throws GmailSendException with code INSUFFICIENT_SCOPE on 403 with insufficient-scope body", async () => {
+    mockFetch.mockImplementationOnce(async () => ({
+      ok: false,
+      status: 403,
+      text: async () => "Request had insufficient authentication scopes.",
+    }));
+
+    try {
+      await sendGmailReply(BASE_OPTS);
+      expect(true).toBe(false); // should not reach
+    } catch (err) {
+      expect(err).toBeInstanceOf(GmailSendException);
+      expect((err as GmailSendException).gmailError.code).toBe("INSUFFICIENT_SCOPE");
+    }
+  });
+
+  it("falls back to GMAIL_API_ERROR on 403 without an insufficient-scope signature", async () => {
+    mockFetch.mockImplementationOnce(async () => ({
+      ok: false,
+      status: 403,
+      text: async () => "Forbidden",
+    }));
+
+    try {
+      await sendGmailReply(BASE_OPTS);
+      expect(true).toBe(false); // should not reach
+    } catch (err) {
+      expect(err).toBeInstanceOf(GmailSendException);
+      expect((err as GmailSendException).gmailError.code).toBe("GMAIL_API_ERROR");
+    }
+  });
+});
+
 describe("sendGmailReply — GMAIL_API_ERROR", () => {
   it("throws GmailSendException with code GMAIL_API_ERROR on 5xx", async () => {
     mockFetch.mockImplementationOnce(async () => ({

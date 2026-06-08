@@ -1169,7 +1169,7 @@ CREATE TABLE IF NOT EXISTS "public"."messages" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "conversation_id" "uuid",
     "channel_integration_id" "uuid" NOT NULL,
-    "external_id" "text" NOT NULL,
+    "external_id" "text",
     "thread_external_id" "text",
     "direction" "text" NOT NULL,
     "sender_external_id" "text",
@@ -1186,7 +1186,11 @@ CREATE TABLE IF NOT EXISTS "public"."messages" (
     "classified_at" timestamp with time zone,
     "processing_batch" "text",
     "account_id" "uuid" NOT NULL,
-    CONSTRAINT "messages_classification_status_check" CHECK ((("classification_status" IS NULL) OR ("classification_status" = ANY (ARRAY['pending'::"text", 'classified'::"text", 'skipped'::"text", 'failed'::"text"]))))
+    "delivery_status" "text",
+    "send_error" "jsonb",
+    "send_attempts" integer DEFAULT 0 NOT NULL,
+    CONSTRAINT "messages_classification_status_check" CHECK ((("classification_status" IS NULL) OR ("classification_status" = ANY (ARRAY['pending'::"text", 'classified'::"text", 'skipped'::"text", 'failed'::"text"])))),
+    CONSTRAINT "messages_delivery_status_check" CHECK ((("delivery_status" IS NULL) OR ("delivery_status" = ANY (ARRAY['queued'::"text", 'sending'::"text", 'sent'::"text", 'failed'::"text"]))))
 );
 
 
@@ -1194,6 +1198,18 @@ ALTER TABLE "public"."messages" OWNER TO "postgres";
 
 
 COMMENT ON COLUMN "public"."messages"."processing_batch" IS 'onboarding = initial 90-day backfill, incremental = recurring sync';
+
+
+
+COMMENT ON COLUMN "public"."messages"."delivery_status" IS 'Outbox delivery state for outbound messages: queued -> sending -> sent | failed. NULL for inbound messages. KAI-114.';
+
+
+
+COMMENT ON COLUMN "public"."messages"."send_error" IS 'Last send error detail ({ code, message }) when delivery_status = failed. KAI-114.';
+
+
+
+COMMENT ON COLUMN "public"."messages"."send_attempts" IS 'Number of send attempts made by the outbound worker. KAI-114.';
 
 
 

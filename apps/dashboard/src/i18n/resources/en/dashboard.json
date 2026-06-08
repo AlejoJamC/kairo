@@ -258,7 +258,10 @@
     "selectPrompt": "Select a ticket to view details",
     "unknownSender": "Unknown sender",
     "noSubject": "(No subject)",
-    "noBody": "No email body available."
+    "noBody": "No email body available.",
+    "deliverySending": "Sending…",
+    "deliveryFailed": "Failed to send",
+    "reconnectGmail": "Reconnect Gmail to retry"
   },
   "ticketHeader": {
     "assignToMe": "Assign to me",

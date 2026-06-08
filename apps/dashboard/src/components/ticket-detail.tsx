@@ -4,6 +4,7 @@ import { ReplyBar } from "./reply-bar";
 import { TicketHeader } from "./ticket-header";
 import { useTriageStore } from "@/stores/triage-store";
 import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
+import { getLandingUrl } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Sender avatar (initials circle)
@@ -121,6 +122,45 @@ function MessageCard({ message }: { message: ThreadMessage }) {
                 {t("ticketDetail.outbound", "Reply sent")}
               </span>
             )}
+            {isOutbound && message.delivery_status && message.delivery_status !== "sent" && (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: message.delivery_status === "failed" ? "#B91C1C" : "#92400E",
+                  background: message.delivery_status === "failed" ? "#FEF2F2" : "#FFFBEB",
+                  border: `1px solid ${message.delivery_status === "failed" ? "#FECACA" : "#FDE68A"}`,
+                  borderRadius: 4,
+                  padding: "1px 5px",
+                  flexShrink: 0,
+                }}
+              >
+                {message.delivery_status === "failed"
+                  ? t("ticketDetail.deliveryFailed", "Failed to send")
+                  : t("ticketDetail.deliverySending", "Sending…")}
+              </span>
+            )}
+            {isOutbound
+              && message.delivery_status === "failed"
+              && message.send_error?.code === "INSUFFICIENT_SCOPE" && (
+              <button
+                type="button"
+                onClick={() => { window.location.href = getLandingUrl("/bff/auth/google"); }}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "var(--k-accent)",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                  flexShrink: 0,
+                }}
+              >
+                {t("ticketDetail.reconnectGmail", "Reconnect Gmail to retry")}
+              </button>
+            )}
           </div>
           <p
             style={{
@@ -189,7 +229,7 @@ export function TicketDetail() {
   const { tickets, selectedTicketId } = useTriageStore();
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
 
-  const { messages, loading: threadLoading } = useTicketThread(ticket?.id ?? null);
+  const { messages, loading: threadLoading, appendOptimisticMessage } = useTicketThread(ticket?.id ?? null);
 
   if (!ticket) {
     return (
@@ -406,7 +446,7 @@ export function TicketDetail() {
       </div>
 
       {/* Fixed bottom reply bar */}
-      <ReplyBar />
+      <ReplyBar onReplyQueued={appendOptimisticMessage} />
     </div>
   );
 }

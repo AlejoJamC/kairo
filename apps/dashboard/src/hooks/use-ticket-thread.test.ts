@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
-import { useTicketThread } from "./use-ticket-thread";
+import { renderHook, waitFor, act } from "@testing-library/react";
+import { useTicketThread, type ThreadMessage } from "./use-ticket-thread";
 
 // ---------------------------------------------------------------------------
 // KAI-165: useTicketThread hook tests
@@ -117,5 +117,34 @@ describe("useTicketThread", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.messages).toHaveLength(1);
     expect(apiCallMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("appendOptimisticMessage appends a queued message to the local thread (KAI-114 outbox)", async () => {
+    apiCallMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ messages: [MOCK_MESSAGES[0]], count: 1 }),
+    });
+
+    const { result } = renderHook(() => useTicketThread("ticket-1"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.messages).toHaveLength(1);
+
+    const optimistic: ThreadMessage = {
+      id: "msg-queued-1",
+      direction: "outbound",
+      sender_external_id: "agent@kairo.dev",
+      sender_display_name: "agent@kairo.dev",
+      body_plain: "On it, thanks for your patience!",
+      body_html: null,
+      snippet: "On it, thanks for your patience!",
+      received_at: "2026-06-07T12:00:00Z",
+      is_origin: false,
+      delivery_status: "queued",
+    };
+
+    act(() => result.current.appendOptimisticMessage(optimistic));
+
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages[1]).toEqual(optimistic);
   });
 });

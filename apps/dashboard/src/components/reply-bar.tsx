@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { TemplatePicker } from "./template-picker";
 import { useTriageStore } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
+import type { ThreadMessage } from "@/hooks/use-ticket-thread";
 
 // ---------------------------------------------------------------------------
 // Action button types
@@ -51,7 +52,12 @@ const ACTION_CONFIG: Record<
 // ReplyBar
 // ---------------------------------------------------------------------------
 
-export function ReplyBar() {
+interface ReplyBarProps {
+  /** Called with the optimistic message returned by POST /reply (202, KAI-114 outbox). */
+  onReplyQueued?: (message: ThreadMessage) => void;
+}
+
+export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const { t } = useTranslation("dashboard");
   const selectedTicketId = useTriageStore((s) => s.selectedTicketId);
   const tickets = useTriageStore((s) => s.tickets);
@@ -104,7 +110,7 @@ export function ReplyBar() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        const code = (body as { error?: string }).error ?? "";
+        const code = (body as { code?: string }).code ?? "";
         const msg =
           code === "GMAIL_TOKEN_EXPIRED"
             ? t("replyBar.errorTokenExpired")
@@ -114,6 +120,9 @@ export function ReplyBar() {
         setSendError(msg);
         return;
       }
+
+      const body = await res.json().catch(() => null) as { message?: ThreadMessage } | null;
+      if (body?.message) onReplyQueued?.(body.message);
 
       setDraft("");
       setSendSuccess(true);

@@ -17,7 +17,6 @@ import {
 } from "../../lib/scoring.js";
 import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
 import { emitTicketEvent } from "../../lib/ticket-events.js";
-import { sendGmailReply, GmailSendException } from "../../lib/gmail-send.js";
 import { createCompletionProvider, detectEscalationTriggers } from "@kairo/intelligence";
 import type { EscalationContext } from "@kairo/intelligence";
 import { resolveModelVersion } from "../../lib/model-version.js";
@@ -864,8 +863,9 @@ tickets.post("/:id/reply", async (c) => {
     }
   }
 
-  // 3. Resolve Gmail OAuth token from oauth_credentials (ADR-022 canonical).
-  let gmailAccessToken: string | null = null;
+  // 3. Resolve Gmail OAuth identity from oauth_credentials (ADR-022 canonical).
+  // The worker fetches a fresh token at send time — here we only need to know
+  // an integration exists and which mailbox the reply is "From".
   let gmailFromEmail: string | null = null;
 
   if (ticket.account_id) {
@@ -879,61 +879,67 @@ tickets.post("/:id/reply", async (c) => {
       .maybeSingle();
 
     if (cred?.access_token_enc) {
-      gmailAccessToken = cred.access_token_enc;
-      gmailFromEmail   = cred.external_account_id;
+      gmailFromEmail = cred.external_account_id;
     }
   }
 
-  if (!gmailAccessToken) {
+  if (!gmailFromEmail || !channelIntegrationId) {
     return c.json({ error: "No Gmail integration found", code: "NO_GMAIL_INTEGRATION" }, 422);
   }
 
-  // 4. Send via Gmail API
-  let sendResult: { messageId: string; threadId: string };
-  try {
-    sendResult = await sendGmailReply({
-      accessToken: gmailAccessToken,
-      threadId,
-      to: ticket.from_email ?? "",
-      subject: ticket.subject?.startsWith("Re:") ? ticket.subject : `Re: ${ticket.subject}`,
-      bodyPlain: parsed.data.body,
-    });
-  } catch (err) {
-    if (err instanceof GmailSendException) {
-      const status = err.gmailError.code === "GMAIL_TOKEN_EXPIRED" ? 401 : 502;
-      return c.json({ error: err.gmailError.code, ...err.gmailError }, status);
-    }
-    return c.json({ error: "GMAIL_API_ERROR", detail: String(err) }, 502);
-  }
+  // 4. Outbox: persist the message FIRST as `queued` — never send-then-persist
+  // (ADR-023 §1). The worker (messages/outbound.queued) drives the actual send.
+  const subject = ticket.subject?.startsWith("Re:") ? ticket.subject : `Re: ${ticket.subject ?? ""}`;
+  const nowIso = new Date().toISOString();
 
-  // 5. Record outbound message + link to ticket (KAI-165)
-  if (channelIntegrationId) {
-    const { data: outboundMsg } = await supabase.from("messages").insert({
+  const { data: outboundMsg, error: insertErr } = await supabase
+    .from("messages")
+    .insert({
       account_id: ticket.account_id,
       conversation_id: ticket.conversation_id,
       channel_integration_id: channelIntegrationId,
-      external_id: sendResult.messageId,
-      thread_external_id: sendResult.threadId,
+      external_id: null,
+      thread_external_id: threadId,
       direction: "outbound",
+      delivery_status: "queued",
       sender_external_id: gmailFromEmail,
       sender_display_name: gmailFromEmail,
       body_plain: parsed.data.body,
       body_html: parsed.data.bodyMarkdown ?? null,
       snippet: parsed.data.body.slice(0, 200),
-      raw_payload: { gmail_message_id: sendResult.messageId, thread_id: sendResult.threadId },
-      received_at: new Date().toISOString(),
-    }).select("id").single();
+      raw_payload: {},
+      received_at: nowIso,
+    })
+    .select("id, direction, sender_external_id, sender_display_name, body_plain, body_html, snippet, received_at, delivery_status")
+    .single();
 
-    if (outboundMsg?.id) {
-      await linkMessageToTicket(supabase, {
-        ticket_id: ticket.id,
-        message_id: outboundMsg.id,
-        is_origin: false,
-      });
-    }
+  if (insertErr || !outboundMsg) {
+    return c.json({ error: "Failed to queue reply", code: "QUEUE_FAILED" }, 500);
   }
 
-  // 6. Update ticket: last_response_at + auto-transition to awaiting_customer (KAI-50)
+  await linkMessageToTicket(supabase, {
+    ticket_id: ticket.id,
+    message_id: outboundMsg.id,
+    is_origin: false,
+  });
+
+  // 5. Enqueue the send — endpoint never talks to the provider directly (ADR-023 §2/§3).
+  await inngest.send({
+    name: "messages/outbound.queued",
+    data: {
+      messageId: outboundMsg.id,
+      ticketId: ticket.id,
+      accountId: ticket.account_id,
+      provider: "gmail",
+      to: ticket.from_email ?? "",
+      subject,
+      bodyPlain: parsed.data.body,
+      threadExternalId: threadId,
+    },
+  });
+
+  // 6. Update ticket: last_response_at + auto-transition to awaiting_customer (KAI-50).
+  // Optimistic — the agent has responded; delivery is tracked independently via delivery_status.
   const currentStatus = ticket.status ?? "open";
   const AUTO_AWAITING_SOURCES: TicketStatus[] = ["open", "in_progress"];
   const shouldTransition = isTicketStatus(currentStatus) && AUTO_AWAITING_SOURCES.includes(currentStatus as TicketStatus);
@@ -941,7 +947,7 @@ tickets.post("/:id/reply", async (c) => {
   await supabase
     .from("tickets")
     .update({
-      last_response_at: new Date().toISOString(),
+      last_response_at: nowIso,
       ...(shouldTransition ? { status: "awaiting_customer" } : {}),
     })
     .eq("id", id);
@@ -952,7 +958,7 @@ tickets.post("/:id/reply", async (c) => {
     authorId: user.id,
     eventType: "reply_sent",
     body: parsed.data.body,
-    metadata: { gmail_message_id: sendResult.messageId, thread_id: sendResult.threadId },
+    metadata: { message_id: outboundMsg.id, delivery_status: "queued" },
   });
 
   if (shouldTransition) {
@@ -964,7 +970,7 @@ tickets.post("/:id/reply", async (c) => {
     });
   }
 
-  return c.json({ success: true, messageId: sendResult.messageId });
+  return c.json({ success: true, messageId: outboundMsg.id, deliveryStatus: "queued", message: outboundMsg }, 202);
 });
 
 // ---------------------------------------------------------------------------
@@ -994,7 +1000,8 @@ tickets.get("/:id/messages", async (c) => {
       is_origin,
       messages (
         id, direction, sender_external_id, sender_display_name,
-        body_plain, body_html, snippet, received_at
+        body_plain, body_html, snippet, received_at,
+        delivery_status, send_error
       )
     `)
     .eq("ticket_id", id)

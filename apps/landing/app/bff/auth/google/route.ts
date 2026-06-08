@@ -9,7 +9,11 @@ export async function GET() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        scopes: "https://www.googleapis.com/auth/gmail.readonly",
+        // KAI-114: gmail.send is the minimum scope that unlocks outbound replies
+        // (ADR-023 §2 — gmail.modify rejected as over-broad). Adding it forces
+        // Google to re-prompt every existing user for consent (prompt: consent
+        // below already requires the consent screen on every connect).
+        scopes: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send",
         redirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback`,
         queryParams: {
           access_type: "offline",
