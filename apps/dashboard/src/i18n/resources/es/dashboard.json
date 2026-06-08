@@ -261,7 +261,9 @@
     "noBody": "No hay cuerpo de correo disponible.",
     "deliverySending": "Enviando…",
     "deliveryFailed": "Error al enviar",
-    "reconnectGmail": "Reconecta Gmail para reintentar"
+    "reconnectGmail": "Reconecta Gmail para reintentar",
+    "internalNote": "Nota interna",
+    "statusReopened": "Reabierto"
   },
   "ticketHeader": {
     "assignToMe": "Asignar a mí",
@@ -282,7 +284,19 @@
     "sendAndResolve": "Enviar y resolver",
     "actionReconocer": "Reconocer",
     "actionResolver": "Resolver",
-    "actionEscalar": "Escalar"
+    "actionEscalar": "Escalar",
+    "modeReply": "Respuesta",
+    "modeNote": "Nota interna",
+    "notePlaceholder": "Escribe una nota interna… (solo visible para tu equipo)",
+    "noteVisibilityHint": "Solo visible para tu equipo",
+    "sendNote": "Agregar nota",
+    "sendingNote": "Guardando…",
+    "noteSuccess": "Nota agregada.",
+    "escalateTitle": "Escalar ticket",
+    "escalateReasonPlaceholder": "Motivo de la escalación (opcional)…",
+    "escalateConfirm": "Confirmar escalación",
+    "escalateCancel": "Cancelar",
+    "escalating": "Escalando…"
   },
   "templatePicker": {
     "searchPlaceholder": "Buscar plantilla...",

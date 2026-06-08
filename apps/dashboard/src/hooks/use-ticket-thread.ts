@@ -5,7 +5,8 @@ export type DeliveryStatus = "queued" | "sending" | "sent" | "failed";
 
 export interface ThreadMessage {
   id: string;
-  direction: "inbound" | "outbound";
+  /** "internal" = agent-only note that never reaches the customer (KAI-221). */
+  direction: "inbound" | "outbound" | "internal";
   sender_external_id: string | null;
   sender_display_name: string | null;
   body_plain: string | null;

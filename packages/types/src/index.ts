@@ -17,4 +17,5 @@ export type TicketStatus =
   | 'resolved'
   | 'auto_resolved'
   | 'guided'
-  | 'escalated';
+  | 'escalated'
+  | 'reopened';

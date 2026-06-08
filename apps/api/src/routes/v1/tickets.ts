@@ -629,6 +629,7 @@ const UpdateStatusSchema = z.object({
     "auto_resolved",
     "guided",
     "escalated",
+    "reopened",
   ]),
 });
 
@@ -745,6 +746,74 @@ tickets.post("/:id/escalate", async (c) => {
 
   const { data: ticket, error: fetchErr } = await supabase
     .from("tickets")
+    .select("id, status")
+    .eq("id", id)
+    .eq("account_id", ctx.accountId)
+    .single();
+
+  if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  // Transition status to escalated if valid (KAI-221: unify escalate flow)
+  const fromStatus: TicketStatus = isTicketStatus(ticket.status ?? "") ? ticket.status as TicketStatus : "open";
+  const toEscalated: TicketStatus = "escalated";
+  let updatedTicket: Record<string, unknown> | null = null;
+
+  if (fromStatus !== toEscalated && isValidTransition(fromStatus, toEscalated)) {
+    const { data, error: updateErr } = await supabase
+      .from("tickets")
+      .update({ status: toEscalated })
+      .eq("id", id)
+      .select()
+      .single();
+    if (!updateErr && data) {
+      updatedTicket = data as Record<string, unknown>;
+      await emitTicketEvent({
+        ticketId: id,
+        authorId: user.id,
+        eventType: "status_change",
+        metadata: { from: fromStatus, to: toEscalated, trigger: "escalate_action" },
+      });
+    }
+  }
+
+  // Emit escalated event with reason
+  await emitTicketEvent({
+    ticketId: id,
+    authorId: user.id,
+    eventType: "escalated",
+    body: parsed.data.reason ?? undefined,
+    isInternal: true,
+  });
+
+  return c.json({ ticket_id: id, escalated: true, ticket: updatedTicket });
+});
+
+// ---------------------------------------------------------------------------
+// POST /v1/tickets/:id/notes — add an internal note (KAI-221)
+// Internal notes are visible only to agents. Stored as ticket_events with
+// event_type=internal_note, is_internal=true. Also returned as a synthetic
+// ThreadMessage so the UI can append it optimistically.
+// ---------------------------------------------------------------------------
+
+const InternalNoteSchema = z.object({
+  body: z.string().min(1).max(50000),
+});
+
+tickets.post("/:id/notes", async (c) => {
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+  const user = { id: ctx.userId };
+
+  const id = c.req.param("id");
+
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON body" }, 400); }
+
+  const parsed = InternalNoteSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "Invalid request", detail: parsed.error.flatten() }, 400);
+
+  const { data: ticket, error: fetchErr } = await supabase
+    .from("tickets")
     .select("id")
     .eq("id", id)
     .eq("account_id", ctx.accountId)
@@ -752,15 +821,52 @@ tickets.post("/:id/escalate", async (c) => {
 
   if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
-  await emitTicketEvent({
-    ticketId: id,
-    authorId: user.id,
-    eventType: "escalated",
-    body: parsed.data.reason ?? null,
-    isInternal: true,
-  });
+  // Fetch agent display name for the synthetic message
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("full_name, email")
+    .eq("id", user.id)
+    .single();
 
-  return c.json({ ticket_id: id, escalated: true });
+  const agentName = (profile as { full_name?: string; email?: string } | null)?.full_name ?? null;
+  const agentEmail = (profile as { full_name?: string; email?: string } | null)?.email ?? null;
+
+  const now = new Date().toISOString();
+
+  // Insert note into ticket_events
+  const { data: eventRow, error: insertErr } = await supabase
+    .from("ticket_events")
+    .insert({
+      ticket_id: id,
+      author_id: user.id,
+      event_type: "internal_note",
+      body: parsed.data.body,
+      is_internal: true,
+    })
+    .select("id, created_at")
+    .single();
+
+  if (insertErr || !eventRow) {
+    return c.json({ error: insertErr?.message ?? "Failed to insert note" }, 500);
+  }
+
+  // Return a ThreadMessage-shaped object (direction="internal") so the UI
+  // can append it to the thread without a full reload.
+  const note = {
+    id: (eventRow as { id: string; created_at: string }).id,
+    direction: "internal" as const,
+    sender_external_id: agentEmail,
+    sender_display_name: agentName,
+    body_plain: parsed.data.body,
+    body_html: null,
+    snippet: parsed.data.body.substring(0, 120),
+    received_at: (eventRow as { id: string; created_at: string }).created_at ?? now,
+    is_origin: false,
+    delivery_status: null,
+    send_error: null,
+  };
+
+  return c.json({ success: true, note }, 201);
 });
 
 // ---------------------------------------------------------------------------
@@ -1087,12 +1193,52 @@ tickets.get("/:id/messages", async (c) => {
 
   if (error) return c.json({ error: error.message }, 500);
 
-  const messages = (data ?? [])
+  const messages: Record<string, unknown>[] = (data ?? [])
     .map((row) => ({
-      ...(row.messages as Record<string, unknown>),
+      ...(row.messages as unknown as Record<string, unknown>),
       is_origin: row.is_origin,
-    }))
-    .filter((m) => m.id); // skip orphans
+    } as Record<string, unknown>))
+    .filter((m) => Boolean(m["id"])); // skip orphans
+
+  // Fetch internal notes from ticket_events and merge into thread (KAI-221)
+  const { data: noteEvents } = await supabase
+    .from("ticket_events")
+    .select("id, author_id, body, created_at")
+    .eq("ticket_id", id)
+    .eq("event_type", "internal_note")
+    .order("created_at", { ascending: true });
+
+  if (noteEvents && noteEvents.length > 0) {
+    // Resolve author names in one query
+    const authorIds = [...new Set((noteEvents as { author_id: string | null }[]).map((e) => e.author_id).filter(Boolean))] as string[];
+    const { data: profiles } = authorIds.length
+      ? await supabase.from("user_profiles").select("id, full_name, email").in("id", authorIds)
+      : { data: [] };
+    const profileMap = Object.fromEntries(
+      ((profiles ?? []) as { id: string; full_name?: string; email?: string }[]).map((p) => [p.id, p])
+    );
+
+    for (const evt of noteEvents as { id: string; author_id: string | null; body: string | null; created_at: string }[]) {
+      const profile = evt.author_id ? profileMap[evt.author_id] : null;
+      messages.push({
+        id: evt.id,
+        direction: "internal",
+        sender_external_id: profile?.email ?? null,
+        sender_display_name: profile?.full_name ?? null,
+        body_plain: evt.body,
+        body_html: null,
+        snippet: evt.body?.substring(0, 120) ?? null,
+        received_at: evt.created_at,
+        is_origin: false,
+        delivery_status: null,
+        send_error: null,
+      });
+    }
+    // Re-sort merged timeline by received_at ascending
+    messages.sort((a, b) =>
+      String(a.received_at ?? "").localeCompare(String(b.received_at ?? ""))
+    );
+  }
 
   return c.json({ messages, count: messages.length });
 });

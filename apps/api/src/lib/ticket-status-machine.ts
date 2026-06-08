@@ -5,7 +5,8 @@ export type TicketStatus =
   | 'resolved'
   | 'auto_resolved'
   | 'guided'
-  | 'escalated';
+  | 'escalated'
+  | 'reopened';
 
 export const TICKET_STATUSES: TicketStatus[] = [
   'open',
@@ -15,16 +16,18 @@ export const TICKET_STATUSES: TicketStatus[] = [
   'auto_resolved',
   'guided',
   'escalated',
+  'reopened',
 ];
 
 export const ALLOWED_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   open:               ['awaiting_customer', 'in_progress', 'resolved', 'escalated', 'guided', 'auto_resolved'],
   awaiting_customer:  ['open', 'resolved', 'escalated'],
   in_progress:        ['open', 'awaiting_customer', 'resolved', 'escalated'],
-  resolved:           ['open'],
-  escalated:          ['resolved', 'open'],
+  resolved:           ['open', 'reopened'],
+  escalated:          ['resolved', 'open', 'reopened'],
   guided:             ['resolved'],
-  auto_resolved:      ['open'],
+  auto_resolved:      ['open', 'reopened'],
+  reopened:           ['in_progress', 'resolved', 'escalated', 'awaiting_customer'],
 };
 
 export function isValidTransition(from: TicketStatus, to: TicketStatus): boolean {

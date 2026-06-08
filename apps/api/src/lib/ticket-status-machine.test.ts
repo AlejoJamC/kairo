@@ -46,10 +46,17 @@ describe("isValidTransition — allowed paths", () => {
     ["in_progress",       "resolved"],
     ["in_progress",       "escalated"],
     ["resolved",          "open"],
+    ["resolved",          "reopened"],       // KAI-221: customer re-opens resolved ticket
     ["escalated",         "resolved"],
     ["escalated",         "open"],
+    ["escalated",         "reopened"],       // KAI-221
     ["guided",            "resolved"],
     ["auto_resolved",     "open"],
+    ["auto_resolved",     "reopened"],       // KAI-221
+    ["reopened",          "in_progress"],    // KAI-221: agent picks up reopened ticket
+    ["reopened",          "resolved"],
+    ["reopened",          "escalated"],
+    ["reopened",          "awaiting_customer"],
   ];
 
   for (const [from, to] of valid) {
@@ -76,6 +83,9 @@ describe("isValidTransition — blocked paths", () => {
     ["auto_resolved", "resolved"],
     ["auto_resolved", "escalated"],
     ["auto_resolved", "guided"],
+    ["reopened",      "open"],              // KAI-221: direct → open not allowed from reopened
+    ["reopened",      "guided"],
+    ["reopened",      "auto_resolved"],
   ];
 
   for (const [from, to] of blocked) {

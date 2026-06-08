@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Paperclip, Send, X, Zap, RefreshCw } from "lucide-react";
+import { Paperclip, Send, X, Zap, RefreshCw, Lock, AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
 import { useTriageStore } from "@/stores/triage-store";
@@ -7,10 +7,16 @@ import { apiCall } from "@/lib/api-client";
 import type { ThreadMessage } from "@/hooks/use-ticket-thread";
 
 // ---------------------------------------------------------------------------
-// Action button types
+// Compose mode — "reply" sends to customer; "note" = internal-only
 // ---------------------------------------------------------------------------
 
-type TicketAction = "reconocer" | "resolver" | "escalar";
+type ComposeMode = "reply" | "note";
+
+// ---------------------------------------------------------------------------
+// Lifecycle action buttons
+// ---------------------------------------------------------------------------
+
+type TicketAction = "reconocer" | "resolver";
 
 const ACTION_CONFIG: Record<
   TicketAction,
@@ -18,7 +24,7 @@ const ACTION_CONFIG: Record<
 > = {
   reconocer: {
     labelKey: "replyBar.actionReconocer",
-    defaultLabel: "Reconocer",
+    defaultLabel: "Acknowledge",
     status: "in_progress",
     style: {
       background: "#EEF2FF",
@@ -28,22 +34,12 @@ const ACTION_CONFIG: Record<
   },
   resolver: {
     labelKey: "replyBar.actionResolver",
-    defaultLabel: "Resolver",
+    defaultLabel: "Resolve",
     status: "resolved",
     style: {
       background: "#ECFDF5",
       color: "#047857",
       border: "1px solid #A7F3D0",
-    },
-  },
-  escalar: {
-    labelKey: "replyBar.actionEscalar",
-    defaultLabel: "Escalar",
-    status: "escalated",
-    style: {
-      background: "#FFF7ED",
-      color: "#C2410C",
-      border: "1px solid #FED7AA",
     },
   },
 };
@@ -75,6 +71,10 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     "cliente.email": (ticket as { from_email?: string } | null)?.from_email ?? "",
   }), [selectedTicketId, ticket]);
 
+  // ---------------------------------------------------------------------------
+  // Core state
+  // ---------------------------------------------------------------------------
+  const [mode, setMode] = React.useState<ComposeMode>("reply");
   const [draft, setDraft] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sendError, setSendError] = React.useState<string | null>(null);
@@ -84,6 +84,16 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const [textareaHeight, setTextareaHeight] = React.useState(80);
   const dragRef = React.useRef<{ startY: number; startHeight: number } | null>(null);
 
+  // ---------------------------------------------------------------------------
+  // Escalation inline flow (KAI-221)
+  // ---------------------------------------------------------------------------
+  const [showEscalatePanel, setShowEscalatePanel] = React.useState(false);
+  const [escalateReason, setEscalateReason] = React.useState("");
+  const [escalating, setEscalating] = React.useState(false);
+
+  // ---------------------------------------------------------------------------
+  // AI banner
+  // ---------------------------------------------------------------------------
   React.useEffect(() => {
     if (!aiSuggestedReply?.trim()) return;
     setDraft(aiSuggestedReply);
@@ -91,8 +101,33 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     setSendError(null);
     setSendSuccess(false);
     clearSuggestedReply();
+    // AI drafts are always for reply mode
+    setMode("reply");
   }, [aiSuggestedReply, clearSuggestedReply]);
 
+  // Reset draft + error when switching between different tickets.
+  // Uses a ref to compare previous vs current so we only reset on actual ticket
+  // transitions (not on initial mount, and not when an AI suggestion lands in
+  // the same render batch as a ticket selection).
+  const prevTicketIdRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const prev = prevTicketIdRef.current;
+    prevTicketIdRef.current = selectedTicketId;
+    // Only reset when genuinely switching away from a ticket that was open
+    if (prev !== null && prev !== selectedTicketId) {
+      setDraft("");
+      setSendError(null);
+      setSendSuccess(false);
+      setShowAiBanner(false);
+      setShowEscalatePanel(false);
+      setEscalateReason("");
+      setMode("reply");
+    }
+  }, [selectedTicketId]);
+
+  // ---------------------------------------------------------------------------
+  // Template select
+  // ---------------------------------------------------------------------------
   function handleTemplateSelect(content: string) {
     if (draft.trim()) {
       if (!window.confirm(t("templatePicker.confirmOverwrite"))) return;
@@ -108,6 +143,9 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     setShowAiBanner(false);
   }
 
+  // ---------------------------------------------------------------------------
+  // Send reply
+  // ---------------------------------------------------------------------------
   async function handleSend(resolveAfter = false) {
     if (!draft.trim() || !selectedTicketId || sending) return;
     setSending(true);
@@ -151,6 +189,42 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Send internal note
+  // ---------------------------------------------------------------------------
+  async function handleSendNote() {
+    if (!draft.trim() || !selectedTicketId || sending) return;
+    setSending(true);
+    setSendError(null);
+    setSendSuccess(false);
+
+    try {
+      const res = await apiCall(`/api/v1/tickets/${selectedTicketId}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ body: draft }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setSendError((body as { error?: string }).error ?? t("replyBar.errorGeneric"));
+        return;
+      }
+
+      const body = await res.json().catch(() => null) as { note?: ThreadMessage } | null;
+      if (body?.note) onReplyQueued?.(body.note);
+
+      setDraft("");
+      setSendSuccess(true);
+    } catch {
+      setSendError(t("replyBar.errorGeneric"));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Patch status helper
+  // ---------------------------------------------------------------------------
   async function patchStatus(status: string) {
     if (!selectedTicketId) return;
     try {
@@ -167,6 +241,9 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Lifecycle actions (Reconocer / Resolver)
+  // ---------------------------------------------------------------------------
   async function handleAction(action: TicketAction) {
     if (!selectedTicketId || actionLoading) return;
     setActionLoading(action);
@@ -174,13 +251,47 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     setActionLoading(null);
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      handleSend(false);
+  // ---------------------------------------------------------------------------
+  // Escalation flow (KAI-221: reason dialog → POST /escalate)
+  // ---------------------------------------------------------------------------
+  async function handleEscalateConfirm() {
+    if (!selectedTicketId || escalating) return;
+    setEscalating(true);
+    try {
+      const res = await apiCall(`/api/v1/tickets/${selectedTicketId}/escalate`, {
+        method: "POST",
+        body: JSON.stringify({ reason: escalateReason.trim() || undefined }),
+      });
+      if (res.ok) {
+        const body = await res.json() as { ticket?: { status?: string } };
+        if (body.ticket?.status) updateClassification(selectedTicketId, body.ticket as never);
+      }
+    } catch {
+      // silent — best-effort
+    } finally {
+      setEscalating(false);
+      setShowEscalatePanel(false);
+      setEscalateReason("");
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Keyboard
+  // ---------------------------------------------------------------------------
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      if (mode === "note") {
+        handleSendNote();
+      } else {
+        handleSend(false);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Drag handle
+  // ---------------------------------------------------------------------------
   function handleDragStart(e: React.MouseEvent) {
     e.preventDefault();
     dragRef.current = { startY: e.clientY, startHeight: textareaHeight };
@@ -198,15 +309,33 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     document.addEventListener("mouseup", onUp);
   }
 
+  // ---------------------------------------------------------------------------
+  // Derived
+  // ---------------------------------------------------------------------------
   const canSend = !!draft.trim() && !!selectedTicketId && !sending;
+  const isNote = mode === "note";
 
-  // Which action buttons to show based on current status
-  const visibleActions: TicketAction[] = currentStatus === "open"
-    ? ["reconocer", "resolver", "escalar"]
-    : currentStatus === "in_progress"
-      ? ["resolver", "escalar"]
-      : [];
+  // Lifecycle action buttons (only in reply mode, based on current status)
+  const visibleActions: TicketAction[] = !isNote
+    ? (currentStatus === "open" || currentStatus === "reopened"
+      ? ["reconocer", "resolver"]
+      : currentStatus === "in_progress"
+        ? ["resolver"]
+        : [])
+    : [];
 
+  // Show escalate button only for statuses where escalation is valid
+  const canEscalate = !isNote && ["open", "in_progress", "reopened", "awaiting_customer"].includes(currentStatus);
+
+  // Accent / left stripe based on mode
+  const modeAccentColor = isNote ? "#F59E0B" : "var(--k-accent)";
+  const modeAccentGradient = isNote
+    ? "linear-gradient(180deg, #F59E0B, #D97706)"
+    : "linear-gradient(180deg, var(--k-accent), #6E8BFF)";
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
     <div
       style={{
@@ -217,7 +346,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         flexShrink: 0,
       }}
     >
-      {/* Left accent stripe */}
+      {/* Left accent stripe — changes color per mode */}
       <div
         style={{
           position: "absolute",
@@ -225,7 +354,8 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
           top: 0,
           bottom: 0,
           width: 2,
-          background: "linear-gradient(180deg, var(--k-accent), #6E8BFF)",
+          background: modeAccentGradient,
+          transition: "background 0.2s ease",
         }}
       />
 
@@ -254,28 +384,107 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         />
       </div>
 
-      {/* Tool buttons — above textarea */}
+      {/* ── DIMENSION 1: Mode selector ─────────────────────────────────── */}
+      <div
+        style={{
+          display: "flex",
+          gap: 2,
+          marginBottom: 8,
+          background: "var(--k-surface)",
+          borderRadius: 8,
+          padding: 3,
+          border: "1px solid var(--k-border-subtle)",
+          width: "fit-content",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => { setMode("reply"); setSendError(null); setSendSuccess(false); }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            fontSize: 11,
+            fontWeight: mode === "reply" ? 600 : 400,
+            padding: "4px 10px",
+            borderRadius: 6,
+            border: "none",
+            background: mode === "reply" ? "white" : "transparent",
+            color: mode === "reply" ? "var(--k-text-primary)" : "var(--k-text-tertiary)",
+            cursor: "pointer",
+            boxShadow: mode === "reply" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+            transition: "all 0.1s ease",
+          }}
+        >
+          <Send style={{ width: 10, height: 10 }} />
+          {t("replyBar.modeReply", "Reply")}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setMode("note"); setShowAiBanner(false); setSendError(null); setSendSuccess(false); setShowEscalatePanel(false); }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            fontSize: 11,
+            fontWeight: mode === "note" ? 600 : 400,
+            padding: "4px 10px",
+            borderRadius: 6,
+            border: "none",
+            background: mode === "note" ? "#FFFBEB" : "transparent",
+            color: mode === "note" ? "#92400E" : "var(--k-text-tertiary)",
+            cursor: "pointer",
+            boxShadow: mode === "note" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+            transition: "all 0.1s ease",
+          }}
+        >
+          <Lock style={{ width: 10, height: 10 }} />
+          {t("replyBar.modeNote", "Internal note")}
+        </button>
+      </div>
+
+      {/* Tool buttons row */}
       <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-        <TemplatePicker onSelect={handleTemplateSelect} previewVars={templatePreviewVars}>
-          <button
-            type="button"
+        {!isNote && (
+          <TemplatePicker onSelect={handleTemplateSelect} previewVars={templatePreviewVars}>
+            <button
+              type="button"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 11,
+                padding: "4px 9px",
+                border: "1px solid var(--k-border)",
+                borderRadius: 999,
+                color: "var(--k-text-secondary)",
+                background: "white",
+                cursor: "pointer",
+              }}
+            >
+              <Zap style={{ width: 11, height: 11 }} />
+              {t("ticketDetail.quickReply")}
+            </button>
+          </TemplatePicker>
+        )}
+        {isNote && (
+          <span
             style={{
+              fontSize: 11,
+              color: "#92400E",
               display: "flex",
               alignItems: "center",
               gap: 4,
-              fontSize: 11,
               padding: "4px 9px",
-              border: "1px solid var(--k-border)",
+              background: "#FEF3C7",
               borderRadius: 999,
-              color: "var(--k-text-secondary)",
-              background: "white",
-              cursor: "pointer",
+              border: "1px solid #FDE68A",
             }}
           >
-            <Zap style={{ width: 11, height: 11 }} />
-            {t("ticketDetail.quickReply")}
-          </button>
-        </TemplatePicker>
+            <Lock style={{ width: 10, height: 10 }} />
+            {t("replyBar.noteVisibilityHint", "Visible only to your team")}
+          </span>
+        )}
         <button
           type="button"
           style={{
@@ -296,8 +505,10 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         </button>
       </div>
 
-      {/* BORRADOR IA card */}
-      {showAiBanner ? (
+      {/* ── DIMENSION 2: Composer ──────────────────────────────────────── */}
+
+      {/* BORRADOR IA card (reply mode only) */}
+      {showAiBanner && !isNote ? (
         <div
           style={{
             marginBottom: 10,
@@ -329,10 +540,10 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
                   letterSpacing: "0.05em",
                 }}
               >
-                ✦ {t("replyBar.aiBadge", "BORRADOR IA")}
+                ✦ {t("replyBar.aiBadge", "AI DRAFT")}
               </span>
               <span style={{ fontSize: 11, color: "var(--k-text-tertiary)" }}>
-                {t("replyBar.aiDraftSource", "generado a partir de casos similares + KB")}
+                {t("replyBar.aiDraftSource", "generated from similar cases + KB")}
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -357,7 +568,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
                 }}
               >
                 <RefreshCw style={{ width: 10, height: 10 }} />
-                {t("replyBar.regenerate", "Regenerar")}
+                {t("replyBar.regenerate", "Regenerate")}
               </button>
               <button
                 type="button"
@@ -407,7 +618,11 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       ) : (
         /* Standard composer textarea */
         <textarea
-          placeholder={t("ticketDetail.replyPlaceholder")}
+          placeholder={
+            isNote
+              ? t("replyBar.notePlaceholder", "Write an internal note… (only visible to your team)")
+              : t("ticketDetail.replyPlaceholder")
+          }
           value={draft}
           onChange={(e) => {
             setDraft(e.target.value);
@@ -420,31 +635,136 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             height: textareaHeight,
             resize: "none",
             borderRadius: 8,
-            border: "1px solid var(--k-border)",
-            background: "var(--k-surface)",
+            border: isNote ? "1px solid #FDE68A" : "1px solid var(--k-border)",
+            background: isNote ? "#FFFBEB" : "var(--k-surface)",
             padding: "10px 12px",
             fontSize: 14,
             lineHeight: 1.6,
-            color: "var(--k-text-primary)",
+            color: isNote ? "#78350F" : "var(--k-text-primary)",
             outline: "none",
             fontFamily: "inherit",
             boxSizing: "border-box",
             marginBottom: 8,
-            transition: "border-color 0.1s ease",
+            transition: "border-color 0.1s ease, background 0.1s ease",
           }}
           onFocus={(e) => {
-            e.currentTarget.style.borderColor = "var(--k-accent)";
-            e.currentTarget.style.boxShadow = "0 0 0 2px #EEF2FF";
+            if (isNote) {
+              e.currentTarget.style.borderColor = "#F59E0B";
+              e.currentTarget.style.boxShadow = "0 0 0 2px #FEF3C7";
+            } else {
+              e.currentTarget.style.borderColor = "var(--k-accent)";
+              e.currentTarget.style.boxShadow = "0 0 0 2px #EEF2FF";
+            }
           }}
           onBlur={(e) => {
-            e.currentTarget.style.borderColor = "var(--k-border)";
+            e.currentTarget.style.borderColor = isNote ? "#FDE68A" : "var(--k-border)";
             e.currentTarget.style.boxShadow = "none";
           }}
         />
       )}
 
-      {/* Action buttons row — Reconocer / Resolver / Escalar */}
-      {visibleActions.length > 0 && (
+      {/* ── DIMENSION 3: Lifecycle actions ────────────────────────────── */}
+
+      {/* Escalation inline panel (KAI-221) */}
+      {showEscalatePanel && (
+        <div
+          style={{
+            marginBottom: 8,
+            border: "1px solid #FED7AA",
+            borderRadius: 8,
+            background: "#FFF7ED",
+            padding: "10px 12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+            <AlertTriangle style={{ width: 12, height: 12, color: "#C2410C", flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#C2410C" }}>
+              {t("replyBar.escalateTitle", "Escalate ticket")}
+            </span>
+            <button
+              type="button"
+              onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }}
+              style={{
+                marginLeft: "auto",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 2,
+                color: "var(--k-text-tertiary)",
+                display: "flex",
+                alignItems: "center",
+              }}
+              aria-label={t("replyBar.escalateCancel", "Cancel")}
+            >
+              <X style={{ width: 12, height: 12 }} />
+            </button>
+          </div>
+          <textarea
+            placeholder={t("replyBar.escalateReasonPlaceholder", "Reason for escalation (optional)…")}
+            value={escalateReason}
+            onChange={(e) => setEscalateReason(e.target.value)}
+            rows={2}
+            style={{
+              width: "100%",
+              resize: "none",
+              borderRadius: 6,
+              border: "1px solid #FED7AA",
+              background: "white",
+              padding: "7px 10px",
+              fontSize: 12,
+              lineHeight: 1.55,
+              color: "var(--k-text-primary)",
+              outline: "none",
+              fontFamily: "inherit",
+              boxSizing: "border-box",
+              marginBottom: 8,
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = "#F97316"; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = "#FED7AA"; }}
+          />
+          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }}
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: "1px solid var(--k-border)",
+                background: "white",
+                color: "var(--k-text-secondary)",
+                cursor: "pointer",
+              }}
+            >
+              {t("replyBar.escalateCancel", "Cancel")}
+            </button>
+            <button
+              type="button"
+              disabled={escalating}
+              onClick={handleEscalateConfirm}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "4px 12px",
+                borderRadius: 6,
+                border: "none",
+                background: escalating ? "var(--k-border)" : "#C2410C",
+                color: escalating ? "var(--k-text-tertiary)" : "white",
+                cursor: escalating ? "wait" : "pointer",
+                transition: "background 0.1s ease",
+              }}
+            >
+              {escalating
+                ? t("replyBar.escalating", "Escalating…")
+                : t("replyBar.escalateConfirm", "Confirm escalation")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lifecycle buttons row: Reconocer, Resolver, Escalar */}
+      {(visibleActions.length > 0 || canEscalate) && !showEscalatePanel && (
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
           {visibleActions.map((action) => {
             const cfg = ACTION_CONFIG[action];
@@ -470,6 +790,26 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
               </button>
             );
           })}
+          {canEscalate && (
+            <button
+              type="button"
+              disabled={showEscalatePanel}
+              onClick={() => setShowEscalatePanel(true)}
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                padding: "4px 11px",
+                borderRadius: 999,
+                cursor: "pointer",
+                background: "#FFF7ED",
+                color: "#C2410C",
+                border: "1px solid #FED7AA",
+                transition: "opacity 0.1s ease",
+              }}
+            >
+              {t("replyBar.actionEscalar", "Escalate")}
+            </button>
+          )}
         </div>
       )}
 
@@ -482,62 +822,88 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
           gap: 8,
         }}
       >
-        {/* Send CTA */}
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {/* Plain send (when reply doesn't auto-resolve) */}
+        {isNote ? (
+          /* Note mode: single "Add note" button */
           <button
             type="button"
             disabled={!canSend}
-            onClick={() => handleSend(false)}
+            onClick={handleSendNote}
             style={{
               display: "flex",
               alignItems: "center",
               gap: 5,
               fontSize: 12,
-              fontWeight: 500,
-              padding: "6px 12px",
-              borderRadius: 6,
-              border: "1px solid var(--k-border)",
-              background: "white",
-              color: canSend ? "var(--k-text-secondary)" : "var(--k-text-tertiary)",
-              cursor: canSend ? "pointer" : "not-allowed",
-            }}
-          >
-            <Send style={{ width: 12, height: 12 }} />
-            {sending ? t("replyBar.sending") : t("ticketDetail.send")}
-          </button>
-
-          {/* Enviar y resolver */}
-          <button
-            type="button"
-            disabled={!canSend}
-            onClick={() => handleSend(true)}
-            aria-label={t("replyBar.sendAndResolve", "Enviar y resolver")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: 12,
-              fontWeight: 500,
+              fontWeight: 600,
               padding: "6px 14px",
               borderRadius: 6,
               border: "none",
-              background: canSend ? "var(--k-accent)" : "var(--k-border)",
+              background: canSend ? "#F59E0B" : "var(--k-border)",
               color: canSend ? "white" : "var(--k-text-tertiary)",
               cursor: canSend ? "pointer" : "not-allowed",
               transition: "background 0.1s ease",
             }}
           >
-            {sending ? t("replyBar.sending") : t("replyBar.sendAndResolve", "Enviar y resolver")}
+            <Lock style={{ width: 11, height: 11 }} />
+            {sending ? t("replyBar.sendingNote", "Saving…") : t("replyBar.sendNote", "Add note")}
           </button>
-        </div>
+        ) : (
+          /* Reply mode: plain send + send & resolve */
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <button
+              type="button"
+              disabled={!canSend}
+              onClick={() => handleSend(false)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 500,
+                padding: "6px 12px",
+                borderRadius: 6,
+                border: "1px solid var(--k-border)",
+                background: "white",
+                color: canSend ? "var(--k-text-secondary)" : "var(--k-text-tertiary)",
+                cursor: canSend ? "pointer" : "not-allowed",
+              }}
+            >
+              <Send style={{ width: 12, height: 12 }} />
+              {sending ? t("replyBar.sending") : t("ticketDetail.send")}
+            </button>
+
+            <button
+              type="button"
+              disabled={!canSend}
+              onClick={() => handleSend(true)}
+              aria-label={t("replyBar.sendAndResolve", "Send & Resolve")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 500,
+                padding: "6px 14px",
+                borderRadius: 6,
+                border: "none",
+                background: canSend ? "var(--k-accent)" : "var(--k-border)",
+                color: canSend ? "white" : "var(--k-text-tertiary)",
+                cursor: canSend ? "pointer" : "not-allowed",
+                transition: "background 0.1s ease",
+              }}
+            >
+              {sending ? t("replyBar.sending") : t("replyBar.sendAndResolve", "Send & Resolve")}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Status messages */}
       {sendError ? (
         <p style={{ marginTop: 6, fontSize: 12, color: "#EF4444" }}>{sendError}</p>
       ) : sendSuccess ? (
-        <p style={{ marginTop: 6, fontSize: 12, color: "#10B981" }}>{t("replyBar.sendSuccess")}</p>
+        <p style={{ marginTop: 6, fontSize: 12, color: isNote ? "#D97706" : "#10B981" }}>
+          {isNote ? t("replyBar.noteSuccess", "Note added.") : t("replyBar.sendSuccess")}
+        </p>
       ) : (
         <p
           style={{
