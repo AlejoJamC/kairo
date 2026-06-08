@@ -10,6 +10,7 @@ description: Rules for implementing specs and managing git workflow
 - `git status` must be clean before starting
 - Create `feature/[spec-name]` branch before touching any file
 - Run `bun test` after implementation — fix all failures before stopping
+- **After any change to `apps/dashboard/`**: also run `turbo run typecheck --filter=@kairo/dashboard` — this is what Vercel runs (`tsc -b`) and it enforces `noUnusedLocals`, `noUnusedParameters`, and all strict TS rules. A green vitest run does NOT imply type safety.
 - Never modify `src/intelligence/` without explicit instruction
 
 ## Finishing a spec
