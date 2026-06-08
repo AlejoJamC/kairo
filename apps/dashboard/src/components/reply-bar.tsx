@@ -328,7 +328,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const canEscalate = !isNote && ["open", "in_progress", "reopened", "awaiting_customer"].includes(currentStatus);
 
   // Accent / left stripe based on mode
-  const modeAccentColor = isNote ? "#F59E0B" : "var(--k-accent)";
   const modeAccentGradient = isNote
     ? "linear-gradient(180deg, #F59E0B, #D97706)"
     : "linear-gradient(180deg, var(--k-accent), #6E8BFF)";
