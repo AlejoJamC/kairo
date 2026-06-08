@@ -32,6 +32,8 @@ import {
 } from "../../lib/ticket-status-machine.js";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
+import { ticketShortId, appendKairoToken } from "../../lib/ticket-traceability.js";
+import { resolveTemplateVars, buildPlainBody, buildHtmlBody, type TemplateVars } from "../../lib/template-renderer.js";
 
 export const tickets = new Hono();
 
@@ -789,10 +791,10 @@ tickets.post("/:id/reply", async (c) => {
   const parsed = ReplySchema.safeParse(reqBody);
   if (!parsed.success) return c.json({ error: "Invalid request", detail: parsed.error.flatten() }, 400);
 
-  // 1. Fetch ticket + linked conversation
+  // 1. Fetch ticket + linked conversation (short_id for traceability token)
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
-    .select("id, subject, from_email, gmail_thread_id, conversation_id, status, account_id")
+    .select("id, short_id, subject, from_email, gmail_thread_id, conversation_id, status, account_id")
     .eq("id", id)
     .eq("account_id", ctx.accountId)
     .single();
@@ -889,7 +891,81 @@ tickets.post("/:id/reply", async (c) => {
 
   // 4. Outbox: persist the message FIRST as `queued` — never send-then-persist
   // (ADR-023 §1). The worker (messages/outbound.queued) drives the actual send.
-  const subject = ticket.subject?.startsWith("Re:") ? ticket.subject : `Re: ${ticket.subject ?? ""}`;
+  //
+  // KAI-115: Before persisting, resolve template vars, inject signature + branding,
+  // and append the [KAIRO-<shortid>] traceability token. Also look up the RFC 2822
+  // Message-ID of the last inbound message for In-Reply-To / References headers.
+
+  // Resolve base subject, then append traceability token (KAI-115 §B)
+  const baseSubject = ticket.subject?.startsWith("Re:") ? ticket.subject : `Re: ${ticket.subject ?? ""}`;
+  const shortId = (ticket as { short_id?: string | null }).short_id ?? ticketShortId(ticket.id);
+  const subject = appendKairoToken(baseSubject, shortId);
+
+  // Fetch account branding + signature
+  const { data: account } = await supabase
+    .from("accounts")
+    .select("name, signature_plain, signature_html, brand_color")
+    .eq("id", ticket.account_id)
+    .maybeSingle();
+
+  // Fetch customer display name from conversation
+  let customerDisplayName: string | null = null;
+  if (ticket.conversation_id) {
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("customer_display_name")
+      .eq("id", ticket.conversation_id)
+      .maybeSingle();
+    customerDisplayName = conv?.customer_display_name ?? null;
+  }
+
+  // Fetch RFC 2822 Message-ID from the most recent inbound message for threading (KAI-115 §A)
+  let inReplyToExternalId: string | undefined;
+  if (ticket.conversation_id) {
+    const { data: lastInbound } = await supabase
+      .from("messages")
+      .select("message_id_header")
+      .eq("conversation_id", ticket.conversation_id)
+      .eq("direction", "inbound")
+      .order("received_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    inReplyToExternalId = lastInbound?.message_id_header ?? undefined;
+  }
+
+  // Build template variables (KAI-115 §C)
+  const templateVars: Partial<TemplateVars> = {
+    "cliente.nombre": customerDisplayName ?? "",
+    "cliente.email": ticket.from_email ?? "",
+    "ticket.id": shortId,
+    "ticket.asunto": ticket.subject ?? "",
+    "agente.email": gmailFromEmail ?? "",
+    "agente.nombre": gmailFromEmail ?? "",
+    firma: account?.signature_plain ?? "",
+  };
+
+  const rawBody = parsed.data.body;
+  const resolvedBody = resolveTemplateVars(rawBody, templateVars);
+
+  const kairoToken = `[KAIRO-${shortId}]`;
+  const finalBodyPlain = buildPlainBody({
+    body: resolvedBody,
+    kairoToken,
+    signaturePlain: account?.signature_plain ?? null,
+  });
+
+  const finalBodyHtml = buildHtmlBody({
+    bodyPlain: resolvedBody,
+    bodyHtml: parsed.data.bodyMarkdown
+      ? resolveTemplateVars(parsed.data.bodyMarkdown, templateVars)
+      : null,
+    kairoToken,
+    brandColor: account?.brand_color ?? null,
+    accountName: account?.name ?? null,
+    signatureHtml: account?.signature_html ?? null,
+    signaturePlain: account?.signature_plain ?? null,
+  });
+
   const nowIso = new Date().toISOString();
 
   const { data: outboundMsg, error: insertErr } = await supabase
@@ -904,9 +980,9 @@ tickets.post("/:id/reply", async (c) => {
       delivery_status: "queued",
       sender_external_id: gmailFromEmail,
       sender_display_name: gmailFromEmail,
-      body_plain: parsed.data.body,
-      body_html: parsed.data.bodyMarkdown ?? null,
-      snippet: parsed.data.body.slice(0, 200),
+      body_plain: finalBodyPlain,
+      body_html: finalBodyHtml,
+      snippet: resolvedBody.slice(0, 200),
       raw_payload: {},
       received_at: nowIso,
     })
@@ -933,8 +1009,10 @@ tickets.post("/:id/reply", async (c) => {
       provider: "gmail",
       to: ticket.from_email ?? "",
       subject,
-      bodyPlain: parsed.data.body,
+      bodyPlain: finalBodyPlain,
+      bodyHtml: finalBodyHtml,
       threadExternalId: threadId,
+      ...(inReplyToExternalId ? { inReplyToExternalId } : {}),
     },
   });
 

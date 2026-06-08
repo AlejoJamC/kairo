@@ -8,8 +8,11 @@ export interface OutboundMessage {
   to: string;
   subject: string;
   bodyPlain: string;
+  /** HTML version of the body (multipart/alternative). Null/absent = plain-only send. */
+  bodyHtml?: string | null;
   threadExternalId: string;
-  inReplyToExternalId?: string;
+  /** RFC 2822 Message-ID of the last inbound message — sets In-Reply-To + References. */
+  inReplyToExternalId?: string | null;
 }
 
 export interface ChannelCredential {

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Paperclip, Send, X, Zap, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { TemplatePicker } from "./template-picker";
+import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
 import { useTriageStore } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
 import type { ThreadMessage } from "@/hooks/use-ticket-thread";
@@ -68,6 +68,13 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
   const currentStatus = ticket?.status ?? "open";
 
+  // KAI-115: client-side template variable context (best-effort; server does authoritative render)
+  const templatePreviewVars: TemplatePreviewVars = React.useMemo(() => ({
+    "ticket.id": selectedTicketId?.substring(0, 8) ?? "",
+    "ticket.asunto": (ticket as { subject?: string } | null)?.subject ?? "",
+    "cliente.email": (ticket as { from_email?: string } | null)?.from_email ?? "",
+  }), [selectedTicketId, ticket]);
+
   const [draft, setDraft] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sendError, setSendError] = React.useState<string | null>(null);
@@ -90,7 +97,12 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     if (draft.trim()) {
       if (!window.confirm(t("templatePicker.confirmOverwrite"))) return;
     }
-    setDraft(content);
+    // KAI-115: apply known variables client-side so the agent sees a realistic draft
+    const resolved = content.replace(/\{\{([^}]+)\}\}/g, (match, key: string) => {
+      const k = key.trim().toLowerCase() as keyof TemplatePreviewVars;
+      return templatePreviewVars[k] ?? match;
+    });
+    setDraft(resolved);
     setSendError(null);
     setSendSuccess(false);
     setShowAiBanner(false);
@@ -244,7 +256,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
 
       {/* Tool buttons — above textarea */}
       <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-        <TemplatePicker onSelect={handleTemplateSelect}>
+        <TemplatePicker onSelect={handleTemplateSelect} previewVars={templatePreviewVars}>
           <button
             type="button"
             style={{

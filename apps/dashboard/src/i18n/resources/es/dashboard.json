@@ -294,7 +294,8 @@
     "uncategorized": "General",
     "confirmOverwrite": "¿Reemplazar el borrador actual con esta plantilla?",
     "dummyFormalGreetingTitle": "Saludo formal básico",
-    "dummyFormalGreetingContent": "Hola,\n\nGracias por contactarnos. Con gusto revisaremos tu solicitud y te responderemos con una actualización en breve.\n\nQuedamos atentos a cualquier detalle adicional.\n\nSaludos cordiales,"
+    "dummyFormalGreetingContent": "Hola,\n\nGracias por contactarnos. Con gusto revisaremos tu solicitud y te responderemos con una actualización en breve.\n\nQuedamos atentos a cualquier detalle adicional.\n\nSaludos cordiales,",
+    "varsNote": "Las variables restantes se reemplazarán al enviar"
   },
   "clientProfile": {
     "noData": "Datos de cliente no disponibles.",

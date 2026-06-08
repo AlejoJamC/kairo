@@ -16,6 +16,7 @@ import { upsertConversationByThread } from "../../lib/conversations.js";
 import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
+import { extractKairoToken, findTicketByKairoToken } from "../../lib/ticket-traceability.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -264,6 +265,8 @@ export const tier1FastPath = inngest.createFunction(
         const { from_name, from_email } = parseFromHeader(from);
         const to_email = headerValue(headers, "To") || null;
         const snippet = message.snippet ?? "";
+        // KAI-115 §A: RFC 2822 Message-ID header — stored for In-Reply-To / References in outbound replies
+        const messageIdHeader = headerValue(headers, "Message-ID") || null;
 
         pipelineLog("tier1:filter", `id=${message.id} from="${from}" subject="${subject}" → ${filterResult.status}${filterResult.skip_reason ? ` (${filterResult.skip_reason})` : ""}`);
 
@@ -282,6 +285,7 @@ export const tier1FastPath = inngest.createFunction(
                 snippet: snippet || null,
                 body_plain: body_plain || null,
                 body_html: body_html || null,
+                message_id_header: messageIdHeader,
                 classification_status: "skipped",
                 skip_reason: filterResult.skip_reason,
                 processing_tier: 1,
@@ -346,19 +350,39 @@ export const tier1FastPath = inngest.createFunction(
             else pipelineLog("tier1:db", `ticket_proposals OK → proposal_id=${proposal?.id}`);
 
             // KAI-165: upsert conversation by thread, then find-or-create ticket.
+            // KAI-115 §B: Before upsert, attempt broken-thread re-association via [KAIRO-xxx] token.
             let ticket: { id: string } | null = null;
             let was_created = true;
             let prior_status: string | null = null;
 
             if (channelIntegrationId) {
               try {
-                const { conversation_id } = await upsertConversationByThread(supabase, {
-                  accountId,
-                  channelIntegrationId,
-                  externalThreadId: message.threadId,
-                  customerExternalId: from_email,
-                  customerDisplayName: from_name,
-                });
+                // KAI-115: Broken-thread re-association — if subject carries a [KAIRO-<shortid>]
+                // token, try to find the original ticket's conversation and bypass threadId upsert.
+                // KAI-115: Broken-thread re-association check
+                let resolvedConversationId: string | undefined;
+                const kairoShortId = extractKairoToken(subject);
+                if (kairoShortId) {
+                  const existing = await findTicketByKairoToken(supabase, accountId, kairoShortId);
+                  if (existing?.conversationId) {
+                    resolvedConversationId = existing.conversationId;
+                    pipelineLog("tier1:db", `KAI-115 token re-association → short_id=${kairoShortId} conversation_id=${resolvedConversationId}`);
+                  }
+                }
+
+                if (!resolvedConversationId) {
+                  // Normal path: resolve or create conversation by Gmail thread ID
+                  const convResult = await upsertConversationByThread(supabase, {
+                    accountId,
+                    channelIntegrationId,
+                    externalThreadId: message.threadId,
+                    customerExternalId: from_email,
+                    customerDisplayName: from_name,
+                  });
+                  resolvedConversationId = convResult.conversation_id;
+                }
+
+                const conversation_id = resolvedConversationId;
 
                 const result = await findOrCreateTicketForThread(supabase, {
                   accountId,
@@ -393,7 +417,7 @@ export const tier1FastPath = inngest.createFunction(
                 prior_status = result.prior_status;
                 pipelineLog("tier1:db", `tickets OK → ticket_id=${ticket.id} was_created=${was_created}`);
 
-                // Upsert the message row
+                // Upsert the message row (message_id_header: KAI-115 §A for In-Reply-To / References)
                 const { data: messageRow } = await supabase.from("messages").upsert(
                   {
                     account_id: accountId,
@@ -408,6 +432,7 @@ export const tier1FastPath = inngest.createFunction(
                     snippet: snippet || null,
                     body_plain: body_plain || null,
                     body_html: body_html || null,
+                    message_id_header: messageIdHeader,
                     classification_status: "classified",
                     processing_tier: 1,
                     classified_at,
