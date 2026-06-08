@@ -19,24 +19,64 @@ export class GmailSendException extends Error {
   }
 }
 
+const BOUNDARY = "kairo_mime_boundary_v1";
+
 function buildMimeMessage(opts: {
   to: string;
   subject: string;
   bodyPlain: string;
+  bodyHtml?: string;
   threadId: string;
   inReplyToMessageId?: string;
 }): string {
-  const lines = [
-    `To: ${opts.to}`,
-    `Subject: ${opts.subject}`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 7bit",
-    ...(opts.inReplyToMessageId ? [`In-Reply-To: ${opts.inReplyToMessageId}`] : []),
-    "",
-    opts.bodyPlain,
-  ];
-  return Buffer.from(lines.join("\r\n"))
+  const threadingHeaders = opts.inReplyToMessageId
+    ? [
+        `In-Reply-To: ${opts.inReplyToMessageId}`,
+        `References: ${opts.inReplyToMessageId}`,
+      ]
+    : [];
+
+  let raw: string;
+
+  if (opts.bodyHtml) {
+    // multipart/alternative: plain first, then HTML (email clients prefer the last part)
+    const lines = [
+      `To: ${opts.to}`,
+      `Subject: ${opts.subject}`,
+      "MIME-Version: 1.0",
+      `Content-Type: multipart/alternative; boundary="${BOUNDARY}"`,
+      ...threadingHeaders,
+      "",
+      `--${BOUNDARY}`,
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: quoted-printable",
+      "",
+      opts.bodyPlain,
+      "",
+      `--${BOUNDARY}`,
+      "Content-Type: text/html; charset=UTF-8",
+      "Content-Transfer-Encoding: quoted-printable",
+      "",
+      opts.bodyHtml,
+      "",
+      `--${BOUNDARY}--`,
+    ];
+    raw = lines.join("\r\n");
+  } else {
+    const lines = [
+      `To: ${opts.to}`,
+      `Subject: ${opts.subject}`,
+      "MIME-Version: 1.0",
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 7bit",
+      ...threadingHeaders,
+      "",
+      opts.bodyPlain,
+    ];
+    raw = lines.join("\r\n");
+  }
+
+  return Buffer.from(raw)
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
@@ -54,12 +94,14 @@ export async function sendGmailReply(opts: {
   to: string;
   subject: string;
   bodyPlain: string;
+  bodyHtml?: string;
   inReplyToMessageId?: string;
 }): Promise<GmailSendResult> {
   const raw = buildMimeMessage({
     to: opts.to,
     subject: opts.subject,
     bodyPlain: opts.bodyPlain,
+    bodyHtml: opts.bodyHtml,
     threadId: opts.threadId,
     inReplyToMessageId: opts.inReplyToMessageId,
   });

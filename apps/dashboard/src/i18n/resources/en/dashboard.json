@@ -294,7 +294,8 @@
     "uncategorized": "General",
     "confirmOverwrite": "Replace current draft with this template?",
     "dummyFormalGreetingTitle": "Basic formal greeting",
-    "dummyFormalGreetingContent": "Hello,\n\nThank you for contacting us. We will gladly review your request and get back to you with an update shortly.\n\nPlease feel free to share any additional details.\n\nBest regards,"
+    "dummyFormalGreetingContent": "Hello,\n\nThank you for contacting us. We will gladly review your request and get back to you with an update shortly.\n\nPlease feel free to share any additional details.\n\nBest regards,",
+    "varsNote": "Remaining variables will be replaced on send"
   },
   "clientProfile": {
     "noData": "Customer data not available.",

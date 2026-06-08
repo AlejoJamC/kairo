@@ -95,27 +95,36 @@ export type Database = {
       }
       accounts: {
         Row: {
+          brand_color: string | null
           created_at: string
           id: string
           name: string
           plan_id: string
           seat_limit: number | null
+          signature_html: string | null
+          signature_plain: string | null
           slug: string
         }
         Insert: {
+          brand_color?: string | null
           created_at?: string
           id?: string
           name: string
           plan_id: string
           seat_limit?: number | null
+          signature_html?: string | null
+          signature_plain?: string | null
           slug: string
         }
         Update: {
+          brand_color?: string | null
           created_at?: string
           id?: string
           name?: string
           plan_id?: string
           seat_limit?: number | null
+          signature_html?: string | null
+          signature_plain?: string | null
           slug?: string
         }
         Relationships: [
@@ -927,6 +936,7 @@ export type Database = {
           direction: string
           external_id: string | null
           id: string
+          message_id_header: string | null
           processing_batch: string | null
           processing_tier: number | null
           raw_payload: Json | null
@@ -952,6 +962,7 @@ export type Database = {
           direction: string
           external_id?: string | null
           id?: string
+          message_id_header?: string | null
           processing_batch?: string | null
           processing_tier?: number | null
           raw_payload?: Json | null
@@ -977,6 +988,7 @@ export type Database = {
           direction?: string
           external_id?: string | null
           id?: string
+          message_id_header?: string | null
           processing_batch?: string | null
           processing_tier?: number | null
           raw_payload?: Json | null
@@ -1131,6 +1143,7 @@ export type Database = {
           account_id: string
           category: string | null
           content: string
+          content_html: string | null
           created_at: string
           id: string
           is_active: boolean
@@ -1142,6 +1155,7 @@ export type Database = {
           account_id: string
           category?: string | null
           content: string
+          content_html?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
@@ -1153,6 +1167,7 @@ export type Database = {
           account_id?: string
           category?: string | null
           content?: string
+          content_html?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
@@ -1621,6 +1636,7 @@ export type Database = {
           resolved_at: string | null
           score_computed_at: string | null
           sentiment: string | null
+          short_id: string | null
           sla_breached: boolean
           sla_due_at: string | null
           snippet: string | null
@@ -1671,6 +1687,7 @@ export type Database = {
           resolved_at?: string | null
           score_computed_at?: string | null
           sentiment?: string | null
+          short_id?: string | null
           sla_breached?: boolean
           sla_due_at?: string | null
           snippet?: string | null
@@ -1721,6 +1738,7 @@ export type Database = {
           resolved_at?: string | null
           score_computed_at?: string | null
           sentiment?: string | null
+          short_id?: string | null
           sla_breached?: boolean
           sla_due_at?: string | null
           snippet?: string | null

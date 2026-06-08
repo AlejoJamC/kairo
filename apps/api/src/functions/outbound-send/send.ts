@@ -52,7 +52,7 @@ export const outboundMessageSend = inngest.createFunction(
     },
   },
   async ({ event, step }) => {
-    const { messageId, accountId, provider, to, subject, bodyPlain, threadExternalId } = event.data;
+    const { messageId, accountId, provider, to, subject, bodyPlain, bodyHtml, threadExternalId, inReplyToExternalId } = event.data;
 
     const runId = (await step.run("start-run", () =>
       startWorkerRun(supabase, {
@@ -81,7 +81,7 @@ export const outboundMessageSend = inngest.createFunction(
       const sendResult = await step.run("send", async () => {
         try {
           return await getChannelSender(provider).send(
-            { to, subject, bodyPlain, threadExternalId },
+            { to, subject, bodyPlain, bodyHtml, threadExternalId, inReplyToExternalId },
             credential,
           );
         } catch (err) {

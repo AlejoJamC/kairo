@@ -11,14 +11,40 @@ interface Template {
   category: string | null;
 }
 
+/** Variables used for client-side preview substitution (KAI-115 Templates 2.0). */
+export interface TemplatePreviewVars {
+  "cliente.nombre"?: string;
+  "cliente.email"?: string;
+  "ticket.id"?: string;
+  "ticket.asunto"?: string;
+  "agente.email"?: string;
+}
+
 interface TemplatePickerProps {
   onSelect: (content: string) => void;
   children: React.ReactNode;
+  /** When provided, variables in preview are substituted with real values. */
+  previewVars?: TemplatePreviewVars;
+}
+
+/** Replace {{key}} placeholders in a string using a partial variable map. */
+function applyVars(content: string, vars?: TemplatePreviewVars): string {
+  if (!vars) return content;
+  return content.replace(/\{\{([^}]+)\}\}/g, (match, key: string) => {
+    const k = key.trim().toLowerCase() as keyof TemplatePreviewVars;
+    return vars[k] ?? match;
+  });
+}
+
+/** Returns true if content has any unresolved {{...}} placeholders. */
+function hasUnresolvedVars(content: string, vars?: TemplatePreviewVars): boolean {
+  const resolved = applyVars(content, vars);
+  return /\{\{[^}]+\}\}/.test(resolved);
 }
 
 const DUMMY_TEMPLATE_ID = "__dummy-formal-greeting-template";
 
-export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
+export function TemplatePicker({ onSelect, children, previewVars }: TemplatePickerProps) {
   const { t, i18n } = useTranslation("dashboard");
   const [open, setOpen] = React.useState(false);
   const [templates, setTemplates] = React.useState<Template[]>([]);
@@ -172,9 +198,16 @@ export function TemplatePicker({ onSelect, children }: TemplatePickerProps) {
                 {t("templatePicker.preview")}
               </p>
               {hovered ? (
-                <p style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.55, color: "var(--k-text-secondary)" }}>
-                  {hovered.content}
-                </p>
+                <>
+                  <p style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.55, color: "var(--k-text-secondary)" }}>
+                    {applyVars(hovered.content, previewVars)}
+                  </p>
+                  {hasUnresolvedVars(hovered.content, previewVars) && (
+                    <p style={{ marginTop: 8, fontSize: 10, color: "var(--k-text-tertiary)", fontStyle: "italic" }}>
+                      {t("templatePicker.varsNote", "Variables restantes se reemplazarán al enviar")}
+                    </p>
+                  )}
+                </>
               ) : (
                 <p style={{ fontSize: 11, color: "var(--k-text-tertiary)" }}>{t("templatePicker.previewEmpty")}</p>
               )}

@@ -897,11 +897,26 @@ CREATE TABLE IF NOT EXISTS "public"."accounts" (
     "slug" "text" NOT NULL,
     "seat_limit" integer,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "plan_id" "uuid" NOT NULL
+    "plan_id" "uuid" NOT NULL,
+    "signature_plain" "text",
+    "signature_html" "text",
+    "brand_color" "text" DEFAULT '#5c6bc0'::"text"
 );
 
 
 ALTER TABLE "public"."accounts" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."accounts"."signature_plain" IS 'Agent email signature (plain text) appended to all outbound messages (KAI-115)';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."signature_html" IS 'Agent email signature (HTML) used inside the HTML email wrapper (KAI-115)';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."brand_color" IS 'Primary brand color (hex e.g. #5c6bc0) for HTML email wrapper header (KAI-115)';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."admin_audit_log" (
@@ -1189,6 +1204,7 @@ CREATE TABLE IF NOT EXISTS "public"."messages" (
     "delivery_status" "text",
     "send_error" "jsonb",
     "send_attempts" integer DEFAULT 0 NOT NULL,
+    "message_id_header" "text",
     CONSTRAINT "messages_classification_status_check" CHECK ((("classification_status" IS NULL) OR ("classification_status" = ANY (ARRAY['pending'::"text", 'classified'::"text", 'skipped'::"text", 'failed'::"text"])))),
     CONSTRAINT "messages_delivery_status_check" CHECK ((("delivery_status" IS NULL) OR ("delivery_status" = ANY (ARRAY['queued'::"text", 'sending'::"text", 'sent'::"text", 'failed'::"text"]))))
 );
@@ -1210,6 +1226,10 @@ COMMENT ON COLUMN "public"."messages"."send_error" IS 'Last send error detail ({
 
 
 COMMENT ON COLUMN "public"."messages"."send_attempts" IS 'Number of send attempts made by the outbound worker. KAI-114.';
+
+
+
+COMMENT ON COLUMN "public"."messages"."message_id_header" IS 'RFC 2822 Message-ID header value (e.g. <abc@mail.gmail.com>) stored for inbound messages; used as In-Reply-To / References in outbound sends (KAI-115)';
 
 
 
@@ -1275,11 +1295,16 @@ CREATE TABLE IF NOT EXISTS "public"."response_templates" (
     "is_active" boolean DEFAULT true NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "account_id" "uuid" NOT NULL
+    "account_id" "uuid" NOT NULL,
+    "content_html" "text"
 );
 
 
 ALTER TABLE "public"."response_templates" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."response_templates"."content_html" IS 'HTML version of template content (optional; derived from content if null) (KAI-115)';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."support_channels" (
@@ -1481,6 +1506,7 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "auto_replied_out_of_hours" boolean DEFAULT false NOT NULL,
     "auto_replied_at" timestamp with time zone,
     "account_id" "uuid" NOT NULL,
+    "short_id" "text" GENERATED ALWAYS AS ("substring"(("id")::"text", 1, 8)) STORED,
     CONSTRAINT "chk_category" CHECK ((("category" IS NULL) OR ("category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_emotion" CHECK ((("emotion" IS NULL) OR ("emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_priority" CHECK ((("priority" IS NULL) OR ("priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
@@ -1492,6 +1518,10 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
 
 
 ALTER TABLE "public"."tickets" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."tickets"."short_id" IS 'First 8 hex chars of ticket UUID used as stable token [KAIRO-<shortid>] in outbound email subject/footer for broken-thread re-association (KAI-115)';
+
 
 
 ALTER TABLE "public"."tickets" ALTER COLUMN "ticket_number" ADD GENERATED ALWAYS AS IDENTITY (
@@ -2131,6 +2161,10 @@ CREATE INDEX "idx_worker_runs_account_worker_started" ON "public"."worker_runs" 
 
 
 CREATE INDEX "idx_worker_runs_status_running" ON "public"."worker_runs" USING "btree" ("started_at") WHERE ("status" = 'running'::"text");
+
+
+
+CREATE INDEX "tickets_account_short_id_idx" ON "public"."tickets" USING "btree" ("account_id", "short_id");
 
 
 

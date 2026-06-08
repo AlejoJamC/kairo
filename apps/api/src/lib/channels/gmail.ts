@@ -31,7 +31,8 @@ export class GmailChannelSender implements ChannelSender {
         to: message.to,
         subject: message.subject,
         bodyPlain: message.bodyPlain,
-        inReplyToMessageId: message.inReplyToExternalId,
+        bodyHtml: message.bodyHtml ?? undefined,
+        inReplyToMessageId: message.inReplyToExternalId ?? undefined,
       });
       return { providerMessageId: result.messageId, providerThreadId: result.threadId };
     } catch (err) {

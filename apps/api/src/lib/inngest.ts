@@ -52,7 +52,11 @@ export type KairoEvents = {
       to: string;
       subject: string;
       bodyPlain: string;
+      /** HTML version for multipart/alternative sends (KAI-115 Templates 2.0). */
+      bodyHtml?: string;
       threadExternalId: string;
+      /** RFC 2822 Message-ID of last inbound message — sets In-Reply-To + References (KAI-115). */
+      inReplyToExternalId?: string;
     };
   };
 };
