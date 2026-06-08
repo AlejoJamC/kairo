@@ -44,12 +44,13 @@ function SenderAvatar({ name, email }: { name: string | null; email: string | nu
 function MessageCard({ message }: { message: ThreadMessage }) {
   const { t } = useTranslation("dashboard");
   const isOutbound = message.direction === "outbound";
+  const isInternal = message.direction === "internal";
 
-  const senderLabel = isOutbound
+  const senderLabel = isInternal || isOutbound
     ? (message.sender_display_name ?? message.sender_external_id ?? t("ticketDetail.agent", "Agent"))
     : (message.sender_display_name ?? message.sender_external_id ?? t("ticketDetail.unknownSender", "Unknown sender"));
 
-  const senderEmail = !isOutbound && message.sender_display_name && message.sender_external_id
+  const senderEmail = !isOutbound && !isInternal && message.sender_display_name && message.sender_external_id
     ? `<${message.sender_external_id}>`
     : "";
 
@@ -58,6 +59,79 @@ function MessageCard({ message }: { message: ThreadMessage }) {
     : "";
 
   const bodyText = message.body_plain ?? message.snippet ?? null;
+
+  // Internal note: compact amber card, full-width, no avatar offset
+  if (isInternal) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 0,
+          borderLeft: "3px solid #F59E0B",
+          background: "#FFFBEB",
+          border: "1px solid #FDE68A",
+          borderRadius: 8,
+          overflow: "hidden",
+          padding: "10px 14px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: "#92400E",
+              background: "#FEF3C7",
+              border: "1px solid #FDE68A",
+              borderRadius: 4,
+              padding: "1px 5px",
+              flexShrink: 0,
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+            }}
+          >
+            {t("ticketDetail.internalNote", "Internal note")}
+          </span>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#92400E",
+            }}
+          >
+            {senderLabel}
+          </span>
+          <span
+            style={{
+              fontSize: 11,
+              color: "#A16207",
+              marginLeft: "auto",
+              flexShrink: 0,
+            }}
+          >
+            {timestamp}
+          </span>
+        </div>
+        {bodyText ? (
+          <pre
+            style={{
+              fontFamily: "inherit",
+              fontSize: 13,
+              lineHeight: 1.65,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              overflowX: "hidden",
+              color: "#78350F",
+              margin: 0,
+            }}
+          >
+            {bodyText}
+          </pre>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div

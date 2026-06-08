@@ -261,7 +261,9 @@
     "noBody": "No email body available.",
     "deliverySending": "Sending…",
     "deliveryFailed": "Failed to send",
-    "reconnectGmail": "Reconnect Gmail to retry"
+    "reconnectGmail": "Reconnect Gmail to retry",
+    "internalNote": "Internal note",
+    "statusReopened": "Reopened"
   },
   "ticketHeader": {
     "assignToMe": "Assign to me",
@@ -282,7 +284,19 @@
     "sendAndResolve": "Send & Resolve",
     "actionReconocer": "Acknowledge",
     "actionResolver": "Resolve",
-    "actionEscalar": "Escalate"
+    "actionEscalar": "Escalate",
+    "modeReply": "Reply",
+    "modeNote": "Internal note",
+    "notePlaceholder": "Write an internal note… (only visible to your team)",
+    "noteVisibilityHint": "Visible only to your team",
+    "sendNote": "Add note",
+    "sendingNote": "Saving…",
+    "noteSuccess": "Note added.",
+    "escalateTitle": "Escalate ticket",
+    "escalateReasonPlaceholder": "Reason for escalation (optional)…",
+    "escalateConfirm": "Confirm escalation",
+    "escalateCancel": "Cancel",
+    "escalating": "Escalating…"
   },
   "templatePicker": {
     "searchPlaceholder": "Search template...",

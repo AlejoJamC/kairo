@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitTicketEvent } from "./ticket-events.js";
+import { isValidTransition, isTicketStatus } from "./ticket-status-machine.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbClient = SupabaseClient<any>;
@@ -21,10 +22,22 @@ export async function applyCustomerReplyTransition(
 ): Promise<{ newStatus: string | null }> {
   let newStatus: string | null = null;
 
+  // Determine candidate transition
+  let candidate: string | null = null;
   if (priorStatus === "awaiting_customer") {
-    newStatus = "open";
+    candidate = "open";
   } else if (priorStatus === "resolved") {
-    newStatus = "reopened";
+    candidate = "reopened";
+  }
+
+  // Validate against state machine — skip if candidate is not a registered transition
+  if (candidate && isTicketStatus(priorStatus ?? "") && isTicketStatus(candidate)) {
+    if (isValidTransition(priorStatus as never, candidate as never)) {
+      newStatus = candidate;
+    }
+  } else if (candidate) {
+    // priorStatus or candidate not in machine yet — allow direct write (defensive)
+    newStatus = candidate;
   }
 
   // Always bump last_response_at
