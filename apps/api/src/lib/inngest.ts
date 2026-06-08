@@ -43,6 +43,18 @@ export type KairoEvents = {
       accountId: string | null; // null = all accounts (use with caution)
     };
   };
+  "messages/outbound.queued": {
+    data: {
+      messageId: string;
+      ticketId: string;
+      accountId: string;
+      provider: string;
+      to: string;
+      subject: string;
+      bodyPlain: string;
+      threadExternalId: string;
+    };
+  };
 };
 
 // In inngest v4, EventSchemas was removed. Event types are enforced via

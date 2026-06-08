@@ -91,4 +91,50 @@ describe("ReplyBar", () => {
     expect(screen.queryByText(/replyBar\.aiBadge/i)).not.toBeInTheDocument();
     expect(screen.getByText("replyBar.sendSuccess")).toBeInTheDocument();
   });
+
+  it("calls onReplyQueued with the optimistic message from a 202 outbox response", async () => {
+    const optimisticMessage = {
+      id: "msg-queued-1",
+      direction: "outbound",
+      sender_external_id: "agent@kairo.dev",
+      sender_display_name: "agent@kairo.dev",
+      body_plain: "On it, thanks for your patience!",
+      body_html: null,
+      snippet: "On it, thanks for your patience!",
+      received_at: "2026-06-07T12:00:00.000Z",
+      delivery_status: "queued",
+    };
+    apiCallMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, messageId: optimisticMessage.id, deliveryStatus: "queued", message: optimisticMessage }),
+    });
+
+    const onReplyQueued = vi.fn();
+    renderWithProviders(<ReplyBar onReplyQueued={onReplyQueued} />);
+    useTriageStore.getState().selectTicket("ticket-1");
+
+    const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
+    await userEvent.type(composer, "On it, thanks for your patience!");
+    await userEvent.click(screen.getByRole("button", { name: "ticketDetail.send" }));
+
+    await waitFor(() => expect(onReplyQueued).toHaveBeenCalledTimes(1));
+    expect(onReplyQueued).toHaveBeenCalledWith(optimisticMessage);
+    expect(screen.getByText("replyBar.sendSuccess")).toBeInTheDocument();
+  });
+
+  it("shows the no-Gmail-integration error using the response error code", async () => {
+    apiCallMock.mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "No Gmail integration found", code: "NO_GMAIL_INTEGRATION" }),
+    });
+
+    renderWithProviders(<ReplyBar />);
+    useTriageStore.getState().selectTicket("ticket-1");
+
+    const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
+    await userEvent.type(composer, "Trying to reply...");
+    await userEvent.click(screen.getByRole("button", { name: "ticketDetail.send" }));
+
+    expect(await screen.findByText("replyBar.errorNoGmail")).toBeInTheDocument();
+  });
 });

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { apiCall } from "@/lib/api-client";
 
+export type DeliveryStatus = "queued" | "sending" | "sent" | "failed";
+
 export interface ThreadMessage {
   id: string;
   direction: "inbound" | "outbound";
@@ -11,12 +13,21 @@ export interface ThreadMessage {
   snippet: string | null;
   received_at: string;
   is_origin: boolean;
+  delivery_status?: DeliveryStatus | null;
+  send_error?: { code: string; message?: string } | null;
 }
 
 interface UseTicketThreadResult {
   messages: ThreadMessage[];
   loading: boolean;
   error: string | null;
+  /**
+   * Appends a message to the local thread immediately (KAI-114 outbox optimism).
+   * Used right after POST /reply returns 202 — the worker will later land the
+   * real delivery_status; we don't poll for it (per KAI-165, no realtime needed
+   * — full live tracking is KAI-221's reply-bar redesign).
+   */
+  appendOptimisticMessage: (message: ThreadMessage) => void;
 }
 
 /**
@@ -63,5 +74,9 @@ export function useTicketThread(ticketId: string | null): UseTicketThreadResult 
     };
   }, [ticketId]);
 
-  return { messages, loading, error };
+  function appendOptimisticMessage(message: ThreadMessage) {
+    setMessages((prev) => [...prev, message]);
+  }
+
+  return { messages, loading, error, appendOptimisticMessage };
 }

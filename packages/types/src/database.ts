@@ -923,13 +923,16 @@ export type Database = {
           classified_at: string | null
           conversation_id: string | null
           created_at: string
+          delivery_status: string | null
           direction: string
-          external_id: string
+          external_id: string | null
           id: string
           processing_batch: string | null
           processing_tier: number | null
           raw_payload: Json | null
           received_at: string
+          send_attempts: number
+          send_error: Json | null
           sender_display_name: string | null
           sender_external_id: string | null
           skip_reason: string | null
@@ -945,13 +948,16 @@ export type Database = {
           classified_at?: string | null
           conversation_id?: string | null
           created_at?: string
+          delivery_status?: string | null
           direction: string
-          external_id: string
+          external_id?: string | null
           id?: string
           processing_batch?: string | null
           processing_tier?: number | null
           raw_payload?: Json | null
           received_at: string
+          send_attempts?: number
+          send_error?: Json | null
           sender_display_name?: string | null
           sender_external_id?: string | null
           skip_reason?: string | null
@@ -967,13 +973,16 @@ export type Database = {
           classified_at?: string | null
           conversation_id?: string | null
           created_at?: string
+          delivery_status?: string | null
           direction?: string
-          external_id?: string
+          external_id?: string | null
           id?: string
           processing_batch?: string | null
           processing_tier?: number | null
           raw_payload?: Json | null
           received_at?: string
+          send_attempts?: number
+          send_error?: Json | null
           sender_display_name?: string | null
           sender_external_id?: string | null
           skip_reason?: string | null
