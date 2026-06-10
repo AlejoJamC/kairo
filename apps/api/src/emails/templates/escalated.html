@@ -171,6 +171,7 @@
               </tr>
 
               <!-- CTA -->
+              <!-- kairo:if ticket_url -->
               <tr>
                 <td class="px btn-cell" style="padding:22px 36px 6px;">
                   <!--[if mso]>
@@ -184,6 +185,7 @@
                   <!--<![endif]-->
                 </td>
               </tr>
+              <!-- /kairo:if -->
 
               <!-- Note -->
               <tr>
@@ -233,16 +235,22 @@
               <tr>
                 <td align="center" style="font-family:'Inter',Arial,sans-serif; font-size:12px; line-height:1.7; color:#A1A1AA;">
                   <div style="margin-bottom:8px;">
+                    <!-- kairo:if help_center_url -->
                     <a href="{{help_center_url}}" class="kairo-link" style="color:#52525B; font-weight:500;">Centro de ayuda</a>
                     <span style="color:#E4E4E7;">&nbsp;·&nbsp;</span>
+                    <!-- /kairo:if -->
+                    <!-- kairo:if status_url -->
                     <a href="{{status_url}}" class="kairo-link" style="color:#52525B; font-weight:500;">Estado del sistema</a>
                     <span style="color:#E4E4E7;">&nbsp;·&nbsp;</span>
+                    <!-- /kairo:if -->
                     <a href="{{privacy_url}}" class="kairo-link" style="color:#52525B; font-weight:500;">Privacidad</a>
                   </div>
                   <div style="margin-bottom:6px; color:#A1A1AA;">Recibes este correo por tu ticket de soporte en Kairo.</div>
                   <div style="color:#C4C4CC; font-size:11px;">
-                    Kairo · El cockpit de soporte para equipos hispanohablantes<br/>
+                    Kairo · El cockpit de soporte para equipos hispanohablantes
+                    <!-- kairo:if unsubscribe_url --><br/>
                     <a href="{{unsubscribe_url}}" style="color:#A1A1AA; text-decoration:underline;">Gestionar notificaciones</a>
+                    <!-- /kairo:if -->
                   </div>
                   <div class="mono" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#C4C4CC; letter-spacing:0.05em; margin-top:14px;">[{{ticket_id}}]</div>
                 </td>

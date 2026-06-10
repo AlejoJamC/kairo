@@ -154,6 +154,56 @@ describe("renderEscalated", () => {
   });
 });
 
+describe("hidden footer links and CTAs (KAI-245)", () => {
+  const emptyFooterUrls = {
+    help_center_url: "",
+    status_url: "",
+    unsubscribe_url: "",
+  };
+
+  function expectNoDeadLinksOrMarkers(html: string): void {
+    expect(html).not.toContain('href=""');
+    expect(html).not.toContain("kairo:if");
+    expect(html).not.toMatch(/&nbsp;·&nbsp;\s*<\/div>/);
+  }
+
+  it("renderAcknowledgement hides help/status/unsubscribe links and the ticket_url CTA when empty", () => {
+    const html = renderAcknowledgement({ ...ackVars, ...emptyFooterUrls, ticket_url: "" });
+    expectNoDeadLinksOrMarkers(html);
+    expect(html).toContain(ackVars.privacy_url);
+    expect(html).not.toContain("Ver mi ticket");
+  });
+
+  it("renderAgentReply hides help/status/unsubscribe links and the ticket_url CTA when empty", () => {
+    const html = renderAgentReply({ ...agentReplyVars, ...emptyFooterUrls, ticket_url: "" });
+    expectNoDeadLinksOrMarkers(html);
+    expect(html).toContain(agentReplyVars.privacy_url);
+    expect(html).not.toContain("Abrir conversación");
+  });
+
+  it("renderResolved hides the CSAT teaser and reopen CTA when csat_url/reopen_url are empty, keeping 'Ver resolución'", () => {
+    const html = renderResolved({ ...resolvedVars, ...emptyFooterUrls, csat_url: "", reopen_url: "" });
+    expectNoDeadLinksOrMarkers(html);
+    expect(html).toContain(resolvedVars.privacy_url);
+    expect(html).not.toContain("¿Cómo estuvo nuestra atención?");
+    expect(html).not.toContain("Reabrir ticket");
+    expect(html).toContain("Ver resolución");
+  });
+
+  it("renderCsatSurvey hides help/status/unsubscribe links when empty", () => {
+    const html = renderCsatSurvey({ ...csatVars, ...emptyFooterUrls });
+    expectNoDeadLinksOrMarkers(html);
+    expect(html).toContain(csatVars.privacy_url);
+  });
+
+  it("renderEscalated hides help/status/unsubscribe links and the ticket_url CTA when empty", () => {
+    const html = renderEscalated({ ...escalatedVars, ...emptyFooterUrls, ticket_url: "" });
+    expectNoDeadLinksOrMarkers(html);
+    expect(html).toContain(escalatedVars.privacy_url);
+    expect(html).not.toContain("Seguir el caso");
+  });
+});
+
 describe("missing variables", () => {
   let warnSpy: ReturnType<typeof mock>;
 

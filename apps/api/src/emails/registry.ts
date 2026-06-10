@@ -13,6 +13,13 @@
  *  - Human-authored content (`agent_message`, `resolution_summary`,
  *    `original_message`) is passed through `sanitizeHtml()` before
  *    injection.
+ *
+ * Conditional blocks (KAI-245 / ADR-024 §5):
+ *  - `<!-- kairo:if some_var -->...<!-- /kairo:if -->` is stripped entirely
+ *    when `some_var` is empty/unset, or unwrapped (markers removed, content
+ *    kept) when it has a value. Used for footer links and CTAs whose
+ *    destination doesn't exist for a tenant (e.g. `csat_url`, `reopen_url`,
+ *    `help_center_url`) — hides the link instead of rendering a dead URL.
  */
 
 import { readFileSync } from "fs";
@@ -52,6 +59,18 @@ function loadTemplate(name: EmailTemplateName): string {
 }
 
 /**
+ * Strip `<!-- kairo:if VAR -->...<!-- /kairo:if -->` blocks whose `VAR` is
+ * empty/unset, and unwrap the markers (keeping the content) for blocks whose
+ * `VAR` has a value.
+ */
+function stripConditionalBlocks(html: string, vars: Record<string, string>): string {
+  return html.replace(
+    /<!--\s*kairo:if\s+([a-z][a-z0-9_]*)\s*-->([\s\S]*?)<!--\s*\/kairo:if\s*-->/g,
+    (_match, key: string, content: string) => (vars[key] ? content : "")
+  );
+}
+
+/**
  * Replace every `{{snake_case}}` placeholder with its resolved value.
  * Missing or empty values resolve to `""` and emit a `console.warn` so a
  * raw placeholder never leaks to the customer.
@@ -73,7 +92,8 @@ export function buildTicketId(ticketNumber: number): string {
 }
 
 export function renderAcknowledgement(vars: AcknowledgementVars): string {
-  return resolveVariables(loadTemplate("acknowledgement"), { ...vars }, "acknowledgement");
+  const html = stripConditionalBlocks(loadTemplate("acknowledgement"), { ...vars });
+  return resolveVariables(html, { ...vars }, "acknowledgement");
 }
 
 export function renderAgentReply(vars: AgentReplyVars): string {
@@ -82,7 +102,8 @@ export function renderAgentReply(vars: AgentReplyVars): string {
     agent_message: sanitizeHtml(vars.agent_message),
     original_message: sanitizeHtml(vars.original_message),
   };
-  return resolveVariables(loadTemplate("agent-reply"), { ...resolved }, "agent-reply");
+  const html = stripConditionalBlocks(loadTemplate("agent-reply"), { ...resolved });
+  return resolveVariables(html, { ...resolved }, "agent-reply");
 }
 
 export function renderResolved(vars: ResolvedVars): string {
@@ -91,13 +112,16 @@ export function renderResolved(vars: ResolvedVars): string {
     resolution_summary: sanitizeHtml(vars.resolution_summary),
     message_count: String(vars.message_count),
   };
-  return resolveVariables(loadTemplate("resolved"), resolved, "resolved");
+  const html = stripConditionalBlocks(loadTemplate("resolved"), resolved);
+  return resolveVariables(html, resolved, "resolved");
 }
 
 export function renderCsatSurvey(vars: CsatSurveyVars): string {
-  return resolveVariables(loadTemplate("csat-survey"), { ...vars }, "csat-survey");
+  const html = stripConditionalBlocks(loadTemplate("csat-survey"), { ...vars });
+  return resolveVariables(html, { ...vars }, "csat-survey");
 }
 
 export function renderEscalated(vars: EscalatedVars): string {
-  return resolveVariables(loadTemplate("escalated"), { ...vars }, "escalated");
+  const html = stripConditionalBlocks(loadTemplate("escalated"), { ...vars });
+  return resolveVariables(html, { ...vars }, "escalated");
 }
