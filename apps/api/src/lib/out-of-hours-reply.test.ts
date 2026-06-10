@@ -176,7 +176,10 @@ describe("maybeSendOutOfHoursReply — happy path", () => {
     // raw is base64url MIME — decode and assert recipient
     const decoded = Buffer.from(body.raw, "base64").toString("utf-8");
     expect(decoded).toContain("To: jane@example.com");
-    expect(decoded).toContain("horario de soporte");
+    // Body part is base64-encoded (Content-Transfer-Encoding: base64) — decode it
+    const bodyPart = decoded.split("\r\n\r\n").slice(1).join("\r\n\r\n").replace(/\s+/g, "");
+    const decodedBody = Buffer.from(bodyPart, "base64").toString("utf-8");
+    expect(decodedBody).toContain("horario de soporte");
 
     expect(state.ticketUpdates.length).toBeGreaterThan(0);
     const lastUpdate = state.ticketUpdates[state.ticketUpdates.length - 1];

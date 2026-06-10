@@ -32,7 +32,7 @@ import {
 } from "../../lib/ticket-status-machine.js";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
-import { ticketShortId, appendKairoToken } from "../../lib/ticket-traceability.js";
+import { appendKairoToken, buildKairoToken } from "../../lib/ticket-traceability.js";
 import { resolveTemplateVars, buildPlainBody, buildHtmlBody, type TemplateVars } from "../../lib/template-renderer.js";
 
 export const tickets = new Hono();
@@ -897,10 +897,10 @@ tickets.post("/:id/reply", async (c) => {
   const parsed = ReplySchema.safeParse(reqBody);
   if (!parsed.success) return c.json({ error: "Invalid request", detail: parsed.error.flatten() }, 400);
 
-  // 1. Fetch ticket + linked conversation (short_id for traceability token)
+  // 1. Fetch ticket + linked conversation (ticket_number for traceability token)
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
-    .select("id, short_id, subject, from_email, gmail_thread_id, conversation_id, status, account_id")
+    .select("id, ticket_number, subject, from_email, gmail_thread_id, conversation_id, status, account_id")
     .eq("id", id)
     .eq("account_id", ctx.accountId)
     .single();
@@ -1002,10 +1002,11 @@ tickets.post("/:id/reply", async (c) => {
   // and append the [KAIRO-<shortid>] traceability token. Also look up the RFC 2822
   // Message-ID of the last inbound message for In-Reply-To / References headers.
 
-  // Resolve base subject, then append traceability token (KAI-115 §B)
+  // Resolve base subject, then append traceability token (KAI-115 §B).
+  // Token uses the human-visible ticket_number (KAI-T-453), not a UUID fragment.
   const baseSubject = ticket.subject?.startsWith("Re:") ? ticket.subject : `Re: ${ticket.subject ?? ""}`;
-  const shortId = (ticket as { short_id?: string | null }).short_id ?? ticketShortId(ticket.id);
-  const subject = appendKairoToken(baseSubject, shortId);
+  const ticketNumber = (ticket as { ticket_number: number }).ticket_number;
+  const subject = appendKairoToken(baseSubject, ticketNumber);
 
   // Fetch account branding + signature
   const { data: account } = await supabase
@@ -1043,7 +1044,7 @@ tickets.post("/:id/reply", async (c) => {
   const templateVars: Partial<TemplateVars> = {
     "cliente.nombre": customerDisplayName ?? "",
     "cliente.email": ticket.from_email ?? "",
-    "ticket.id": shortId,
+    "ticket.id": `KAI-T-${ticketNumber}`,
     "ticket.asunto": ticket.subject ?? "",
     "agente.email": gmailFromEmail ?? "",
     "agente.nombre": gmailFromEmail ?? "",
@@ -1053,7 +1054,7 @@ tickets.post("/:id/reply", async (c) => {
   const rawBody = parsed.data.body;
   const resolvedBody = resolveTemplateVars(rawBody, templateVars);
 
-  const kairoToken = `[KAIRO-${shortId}]`;
+  const kairoToken = buildKairoToken(ticketNumber);
   const finalBodyPlain = buildPlainBody({
     body: resolvedBody,
     kairoToken,

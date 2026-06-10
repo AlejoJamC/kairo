@@ -21,6 +21,32 @@ export class GmailSendException extends Error {
 
 const BOUNDARY = "kairo_mime_boundary_v1";
 
+/** True when the string contains only 7-bit ASCII. */
+function isAscii(value: string): boolean {
+  return /^[\x00-\x7F]*$/.test(value);
+}
+
+/**
+ * RFC 2047 encoded-word for header values. Email headers must be ASCII; any
+ * non-ASCII (e.g. "–", "ñ", "¿") must be wrapped as =?UTF-8?B?<base64>?=,
+ * otherwise the receiving client misreads the raw UTF-8 bytes as Latin-1 and
+ * produces mojibake ("Ã¢Â€Â"). ASCII values are returned unchanged.
+ */
+function encodeHeader(value: string): string {
+  if (isAscii(value)) return value;
+  return `=?UTF-8?B?${Buffer.from(value, "utf-8").toString("base64")}?=`;
+}
+
+/**
+ * Base64-encode a body part and wrap at 76 chars per RFC 2045. The declared
+ * Content-Transfer-Encoding must match the actual encoding — declaring
+ * quoted-printable/7bit while shipping raw 8-bit UTF-8 is malformed and breaks
+ * on strict clients.
+ */
+function base64Body(value: string): string {
+  return Buffer.from(value, "utf-8").toString("base64").replace(/(.{76})/g, "$1\r\n");
+}
+
 function buildMimeMessage(opts: {
   to: string;
   subject: string;
@@ -42,22 +68,22 @@ function buildMimeMessage(opts: {
     // multipart/alternative: plain first, then HTML (email clients prefer the last part)
     const lines = [
       `To: ${opts.to}`,
-      `Subject: ${opts.subject}`,
+      `Subject: ${encodeHeader(opts.subject)}`,
       "MIME-Version: 1.0",
       `Content-Type: multipart/alternative; boundary="${BOUNDARY}"`,
       ...threadingHeaders,
       "",
       `--${BOUNDARY}`,
       "Content-Type: text/plain; charset=UTF-8",
-      "Content-Transfer-Encoding: quoted-printable",
+      "Content-Transfer-Encoding: base64",
       "",
-      opts.bodyPlain,
+      base64Body(opts.bodyPlain),
       "",
       `--${BOUNDARY}`,
       "Content-Type: text/html; charset=UTF-8",
-      "Content-Transfer-Encoding: quoted-printable",
+      "Content-Transfer-Encoding: base64",
       "",
-      opts.bodyHtml,
+      base64Body(opts.bodyHtml),
       "",
       `--${BOUNDARY}--`,
     ];
@@ -65,13 +91,13 @@ function buildMimeMessage(opts: {
   } else {
     const lines = [
       `To: ${opts.to}`,
-      `Subject: ${opts.subject}`,
+      `Subject: ${encodeHeader(opts.subject)}`,
       "MIME-Version: 1.0",
       "Content-Type: text/plain; charset=UTF-8",
-      "Content-Transfer-Encoding: 7bit",
+      "Content-Transfer-Encoding: base64",
       ...threadingHeaders,
       "",
-      opts.bodyPlain,
+      base64Body(opts.bodyPlain),
     ];
     raw = lines.join("\r\n");
   }
