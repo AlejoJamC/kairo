@@ -1,4 +1,5 @@
-import { classifyEmail, detectEscalationTriggers } from "@kairo/intelligence";
+import { classifyEmailWithMeta, detectEscalationTriggers } from "@kairo/intelligence";
+import { logLlmCall } from "../../lib/llm-logging.js";
 import { getFlag } from "@kairo/feature-flags";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
@@ -310,8 +311,22 @@ export const tier1FastPath = inngest.createFunction(
 
         pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
 
-        const promise = classifyEmail({ subject, body: classifierBody, from })
-          .then(async (classification) => {
+        const llmStart = Date.now();
+        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from })
+          .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+            logLlmCall({
+              feature: "email_classification",
+              model: meta.model,
+              promptVersion,
+              promptText: prompt,
+              responseText: meta.rawText,
+              promptTokens: meta.usage.promptTokens,
+              completionTokens: meta.usage.completionTokens,
+              confidenceScore: classification.confidence,
+              latencyMs: Date.now() - llmStart,
+              triggeredByUserId: userId,
+              accountId,
+            });
             pipelineLog("tier1:llm", `id=${messageId} → type=${classification.type} category=${classification.category} priority=${classification.priority} tone=${classification.tone} confidence=${classification.confidence}`);
             classifiedIds.push(messageId);
             const classified_at = new Date().toISOString();
@@ -597,6 +612,17 @@ export const tier1FastPath = inngest.createFunction(
           .catch(async (err: unknown) => {
             const detail = err instanceof Error ? err.message : String(err);
             console.error(`[tier1] Classification failed for ${messageId}: ${detail}`);
+
+            logLlmCall({
+              feature: "email_classification",
+              model: resolveModelVersion(),
+              promptText: `${from} | ${subject}`,
+              latencyMs: Date.now() - llmStart,
+              errorCode: "LLM_ERROR",
+              errorDetail: detail,
+              triggeredByUserId: userId,
+              accountId,
+            });
 
             if (channelIntegrationId) {
               await supabase.from("messages").upsert(

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { classifyEmail, generateEmbedding } from "@kairo/intelligence";
+import { classifyEmailWithMeta, generateEmbedding, extractPromptVersion } from "@kairo/intelligence";
+import { logLlmCall } from "../../lib/llm-logging.js";
 import { supabase } from "../../lib/supabase.js";
 import { resolveUserAndAccount } from "../../lib/auth.js";
 import { inngest } from "../../lib/inngest.js";
@@ -329,17 +330,46 @@ tickets.post("/:id/classify", async (c) => {
   }
 
   let classification;
+  const llmStart = Date.now();
   try {
-    classification = await classifyEmail({
+    const { result, meta, prompt, promptVersion } = await classifyEmailWithMeta({
       subject: ticket.subject,
       body: ticket.body_plain ?? "",
       from: ticket.from_email,
     });
+    classification = result;
+
+    logLlmCall({
+      feature: "email_classification",
+      model: meta.model,
+      promptVersion,
+      promptText: prompt,
+      responseText: meta.rawText,
+      promptTokens: meta.usage.promptTokens,
+      completionTokens: meta.usage.completionTokens,
+      confidenceScore: classification.confidence,
+      latencyMs: Date.now() - llmStart,
+      triggeredByUserId: user.id,
+      accountId: ctx.accountId,
+      ticketId: id,
+    });
   } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    logLlmCall({
+      feature: "email_classification",
+      model: resolveModelVersion(),
+      promptText: `${ticket.from_email} | ${ticket.subject}`,
+      latencyMs: Date.now() - llmStart,
+      errorCode: "LLM_ERROR",
+      errorDetail: detail,
+      triggeredByUserId: user.id,
+      accountId: ctx.accountId,
+      ticketId: id,
+    });
     return c.json(
       {
         error: "Classification failed",
-        detail: err instanceof Error ? err.message : String(err),
+        detail,
       },
       500
     );
@@ -509,11 +539,27 @@ tickets.post("/classify-batch", async (c) => {
     }
 
     // Classify
+    const llmStart = Date.now();
     try {
-      const classification = await classifyEmail({
+      const { result: classification, meta, prompt, promptVersion } = await classifyEmailWithMeta({
         subject: ticket.subject,
         body: ticket.body_plain ?? "",
         from: ticket.from_email,
+      });
+
+      logLlmCall({
+        feature: "email_classification",
+        model: meta.model,
+        promptVersion,
+        promptText: prompt,
+        responseText: meta.rawText,
+        promptTokens: meta.usage.promptTokens,
+        completionTokens: meta.usage.completionTokens,
+        confidenceScore: classification.confidence,
+        latencyMs: Date.now() - llmStart,
+        triggeredByUserId: userId,
+        accountId,
+        ticketId: ticket.id,
       });
 
       const classified_at = new Date().toISOString();
@@ -533,10 +579,22 @@ tickets.post("/classify-batch", async (c) => {
 
       results.push({ ticket_id: ticket.id, status: "success", classification });
     } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      logLlmCall({
+        feature: "email_classification",
+        model: resolveModelVersion(),
+        promptText: `${ticket.from_email} | ${ticket.subject}`,
+        latencyMs: Date.now() - llmStart,
+        errorCode: "LLM_ERROR",
+        errorDetail: detail,
+        triggeredByUserId: userId,
+        accountId,
+        ticketId: ticket.id,
+      });
       results.push({
         ticket_id: ticket.id,
         status: "failed",
-        reason: err instanceof Error ? err.message : String(err),
+        reason: detail,
       });
     }
   }
@@ -1428,22 +1486,72 @@ tickets.post("/:id/suggest-reply", async (c) => {
 
   // Call Claude
   const provider = createCompletionProvider();
+  const promptVersion = extractPromptVersion(promptTemplate);
   let suggestion: string;
   let confidence: number;
+  const llmStart = Date.now();
+  let meta: Awaited<ReturnType<typeof provider.completeWithMeta>> | null = null;
 
   try {
-    const raw = await provider.complete(prompt, { maxTokens: 1500, temperature: 0.4 });
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    meta = await provider.completeWithMeta(prompt, { maxTokens: 1500, temperature: 0.4 });
+    const jsonMatch = meta.rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON in response");
 
     const parsed = SuggestReplyResponseSchema.parse(JSON.parse(jsonMatch[0]));
     suggestion = parsed.suggestion;
     confidence = parsed.confidence;
   } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    logLlmCall({
+      feature: "reply_suggestion",
+      model: meta?.model ?? resolveModelVersion(),
+      promptVersion,
+      promptText: prompt,
+      responseText: meta?.rawText ?? null,
+      promptTokens: meta?.usage.promptTokens ?? null,
+      completionTokens: meta?.usage.completionTokens ?? null,
+      latencyMs: Date.now() - llmStart,
+      errorCode: "LLM_ERROR",
+      errorDetail: detail,
+      triggeredByUserId: ctx.userId,
+      accountId: ctx.accountId,
+      ticketId: id,
+    });
     return c.json(
-      { error: "Suggestion failed", detail: err instanceof Error ? err.message : String(err) },
+      { error: "Suggestion failed", detail },
       500
     );
+  }
+
+  // KAI-110: awaited insert into llm_calls — we need the row id to return to
+  // the client so the agent's eventual outcome (accepted/edited/...) can be
+  // written back. Wrapped so a logging failure degrades to llm_call_id: null
+  // and never fails the suggestion itself.
+  let llmCallId: string | null = null;
+  try {
+    const { data: llmCall, error: llmCallErr } = await supabase
+      .from("llm_calls")
+      .insert({
+        triggered_by_user_id: ctx.userId,
+        account_id: ctx.accountId,
+        ticket_id: id,
+        feature: "reply_suggestion",
+        provider: process.env["INTELLIGENCE_PROVIDER"] ?? "ollama",
+        model: meta.model,
+        prompt_version: promptVersion,
+        prompt_text: prompt,
+        response_text: meta.rawText,
+        prompt_tokens: meta.usage.promptTokens,
+        completion_tokens: meta.usage.completionTokens,
+        confidence_score: confidence,
+        latency_ms: Date.now() - llmStart,
+      })
+      .select("id")
+      .single();
+    if (llmCallErr) console.error("[llm_calls] log failed", llmCallErr.message);
+    else llmCallId = llmCall?.id ?? null;
+  } catch (err) {
+    console.error("[llm_calls] log failed", err instanceof Error ? err.message : String(err));
   }
 
   // Store in ticket_proposals
@@ -1468,7 +1576,53 @@ tickets.post("/:id/suggest-reply", async (c) => {
     referencedKbArticles,
     confidence,
     proposal_id: proposal?.id ?? null,
+    llm_call_id: llmCallId,
   });
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /v1/tickets/:id/suggest-reply/:llmCallId/outcome — record agent
+// outcome on a logged LLM call (accepted/edited/rejected/ignored/auto_applied).
+// (KAI-110)
+// ---------------------------------------------------------------------------
+
+const LlmCallOutcomeSchema = z.object({
+  outcome: z.enum(["accepted", "edited", "rejected", "ignored", "auto_applied"]),
+});
+
+tickets.patch("/:id/suggest-reply/:llmCallId/outcome", async (c) => {
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+
+  const llmCallId = c.req.param("llmCallId");
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const parsed = LlmCallOutcomeSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Invalid request", detail: parsed.error.flatten() }, 400);
+  }
+
+  const { data, error } = await supabase
+    .from("llm_calls")
+    .update({
+      outcome: parsed.data.outcome,
+      outcome_recorded_at: new Date().toISOString(),
+    })
+    .eq("id", llmCallId)
+    .eq("account_id", ctx.accountId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return c.json({ error: error.message }, 500);
+  if (!data) return c.json({ error: "LLM call not found" }, 404);
+
+  return c.json({ id: data.id, outcome: parsed.data.outcome });
 });
 
 // ---------------------------------------------------------------------------

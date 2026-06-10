@@ -1,4 +1,4 @@
-# Email Classification Prompt (EN)
+# Email Classification Prompt (EN) — v1.0.0
 
 You are an email classification assistant for a technical support system.
 
