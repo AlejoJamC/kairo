@@ -27,7 +27,7 @@ export function Inbox() {
       let query = supabase
         .from("tickets")
         .select("*")
-        .neq("status", "awaiting_customer")
+        .not("status", "in", "(awaiting_customer,resolved,auto_resolved)")
         .order("priority_score", { ascending: false, nullsFirst: false })
         .limit(200);
 

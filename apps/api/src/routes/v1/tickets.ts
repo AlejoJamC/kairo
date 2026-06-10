@@ -1126,7 +1126,10 @@ tickets.post("/:id/reply", async (c) => {
   // 6. Update ticket: last_response_at + auto-transition to awaiting_customer (KAI-50).
   // Optimistic — the agent has responded; delivery is tracked independently via delivery_status.
   const currentStatus = ticket.status ?? "open";
-  const AUTO_AWAITING_SOURCES: TicketStatus[] = ["open", "in_progress"];
+  // Replying means "now waiting on the customer" — applies to any active state
+  // (incl. reopened, KAI-221), not just open/in_progress. Resolved/awaiting are
+  // intentionally excluded.
+  const AUTO_AWAITING_SOURCES: TicketStatus[] = ["open", "in_progress", "reopened"];
   const shouldTransition = isTicketStatus(currentStatus) && AUTO_AWAITING_SOURCES.includes(currentStatus as TicketStatus);
 
   await supabase
