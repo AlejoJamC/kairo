@@ -1,11 +1,12 @@
 import { describe, it, expect, mock, beforeEach } from "bun:test";
+import type { EmitTicketEventOptions } from "./ticket-events.js";
 
 // ---------------------------------------------------------------------------
 // KAI-165: ticket-thread-transitions.ts unit tests
 // ---------------------------------------------------------------------------
 
 // Mock emitTicketEvent so we can verify calls without hitting DB
-const emitMock = mock(async () => {});
+const emitMock = mock(async (_opts: EmitTicketEventOptions) => {});
 
 mock.module("./ticket-events.js", () => ({
   emitTicketEvent: emitMock,
@@ -14,9 +15,7 @@ mock.module("./ticket-events.js", () => ({
 const { applyCustomerReplyTransition } = await import("./ticket-thread-transitions.js");
 
 function makeMockClient(updateError: unknown = null) {
-  const updateFn = mock(async () => ({ error: updateError }));
-  const eqFn = mock(() => ({ error: null }));
-  const updateObj = { eq: eqFn };
+  const eqFn = mock(async () => ({ error: updateError }));
   // chain: .from("tickets").update({}).eq("id", id)
   const fromFn = mock(() => ({
     update: mock(() => ({ eq: eqFn })),

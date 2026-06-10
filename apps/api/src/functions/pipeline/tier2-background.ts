@@ -301,7 +301,7 @@ export const tier2Background = inngest.createFunction(
               .select("id")
               .single();
 
-            const { data: ticket, error: ticketErr } = await supabase
+            const { data: ticket } = await supabase
               .from("tickets")
               .insert({
                 account_id:          accountId,

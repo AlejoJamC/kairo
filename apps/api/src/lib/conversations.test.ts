@@ -1,4 +1,4 @@
-import { describe, it, expect, mock, beforeEach } from "bun:test";
+import { describe, it, expect, mock } from "bun:test";
 
 // ---------------------------------------------------------------------------
 // KAI-165: conversations.ts unit tests
@@ -12,13 +12,16 @@ const CONV_ID    = "conv-0001";
 // We construct a mock supabase client inline — no module-level mock needed
 // because conversations.ts accepts the client as a parameter.
 
-function makeMockClient({ insertData = null as { id: string } | null, insertError = null, selectData = null as { id: string } | null, selectError = null } = {}) {
+function makeMockClient({
+  insertData = null as { id: string } | null,
+  insertError = null as { code: string; message: string } | null,
+  selectData = null as { id: string } | null,
+  selectError = null as { code: string; message: string } | null,
+} = {}) {
   const selectSingle = mock(async () => ({ data: selectData, error: selectError }));
-  const selectObj = { single: selectSingle };
-  const eqFn = mock(() => selectObj);
   // chain: .select().eq().eq().eq().single()
+  const eqFn = mock((): { eq: typeof eqFn; single: typeof selectSingle } => ({ eq: eqFn, single: selectSingle }));
   const selectFn = mock(() => ({ eq: eqFn }));
-  eqFn.mockReturnValue({ eq: eqFn, single: selectSingle });
 
   const insertSingle = mock(async () => ({ data: insertData, error: insertError }));
   const insertSelect = mock(() => ({ single: insertSingle }));

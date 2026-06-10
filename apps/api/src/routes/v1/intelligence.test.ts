@@ -46,16 +46,16 @@ describe("classification accuracy response shape", () => {
 
   it("returns 100% accuracy when no corrections", () => {
     const payload = buildAccuracyPayload(50, { priority: 0, category: 0, ticket_type: 0, sentiment: 0 });
-    expect(payload.dimensions.priority.accuracy).toBe(1);
-    expect(payload.dimensions.category.accuracy).toBe(1);
+    expect(payload.dimensions.priority?.accuracy).toBe(1);
+    expect(payload.dimensions.category?.accuracy).toBe(1);
   });
 
   it("accuracy drops proportionally after corrections", () => {
     const payload = buildAccuracyPayload(100, { priority: 10, category: 5, ticket_type: 0, sentiment: 20 });
-    expect(payload.dimensions.priority.accuracy).toBe(0.9);
-    expect(payload.dimensions.category.accuracy).toBe(0.95);
-    expect(payload.dimensions.ticket_type.accuracy).toBe(1);
-    expect(payload.dimensions.sentiment.accuracy).toBe(0.8);
+    expect(payload.dimensions.priority?.accuracy).toBe(0.9);
+    expect(payload.dimensions.category?.accuracy).toBe(0.95);
+    expect(payload.dimensions.ticket_type?.accuracy).toBe(1);
+    expect(payload.dimensions.sentiment?.accuracy).toBe(0.8);
   });
 
   it("returns null dimensions and zero total when no classified tickets", () => {

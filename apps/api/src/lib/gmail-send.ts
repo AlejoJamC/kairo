@@ -14,8 +14,11 @@ export type GmailSendError =
   | { code: "GMAIL_API_ERROR"; detail: string };
 
 export class GmailSendException extends Error {
-  constructor(public readonly gmailError: GmailSendError) {
+  readonly gmailError: GmailSendError;
+
+  constructor(gmailError: GmailSendError) {
     super(gmailError.code);
+    this.gmailError = gmailError;
   }
 }
 
