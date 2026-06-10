@@ -171,8 +171,12 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         return;
       }
 
-      const body = await res.json().catch(() => null) as { message?: ThreadMessage } | null;
+      const body = await res.json().catch(() => null) as { message?: ThreadMessage; status?: string } | null;
       if (body?.message) onReplyQueued?.(body.message);
+
+      // Reflect the server's auto-transition (open/in_progress → awaiting_customer)
+      // so the ticket leaves the main triage list and moves to "awaiting customer".
+      if (body?.status) updateClassification(selectedTicketId, { status: body.status } as never);
 
       setDraft("");
       setSendSuccess(true);

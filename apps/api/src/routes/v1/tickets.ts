@@ -1155,7 +1155,16 @@ tickets.post("/:id/reply", async (c) => {
     });
   }
 
-  return c.json({ success: true, messageId: outboundMsg.id, deliveryStatus: "queued", message: outboundMsg }, 202);
+  return c.json(
+    {
+      success: true,
+      messageId: outboundMsg.id,
+      deliveryStatus: "queued",
+      message: outboundMsg,
+      status: shouldTransition ? "awaiting_customer" : currentStatus,
+    },
+    202,
+  );
 });
 
 // ---------------------------------------------------------------------------

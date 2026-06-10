@@ -45,6 +45,10 @@ const INITIAL_FILTERS: FilterState = {
 
 function applyFilters(tickets: Ticket[], f: FilterState): Ticket[] {
   return tickets.filter((t) => {
+    // Awaiting-customer tickets live in their own view (mirrors the inbox
+    // fetch's .neq filter); drop them here so a reply moves the ticket out
+    // of the main triage list immediately when its status updates in the store.
+    if (t.status === "awaiting_customer") return false;
     if (f.priority === "PX") {
       // Only tickets that have a real priority and are not spam
       if (!t.priority) return false;
