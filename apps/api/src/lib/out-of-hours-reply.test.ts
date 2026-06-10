@@ -85,7 +85,7 @@ function makeSupabaseStub(opts: Partial<SupabaseStub> = {}): {
 }
 
 const BASE_ARGS = {
-  userId: "u-1",
+  accountId: "acc-1",
   ticketId: "tk-1",
   gmailAccessToken: "tok",
   gmailThreadId: "t-1",

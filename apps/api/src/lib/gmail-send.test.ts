@@ -31,7 +31,7 @@ afterEach(() => mockFetch.mockClear());
 
 describe("sendGmailReply — success", () => {
   it("calls Gmail send endpoint with Bearer token", async () => {
-    const result = await sendGmailReply(BASE_OPTS);
+    await sendGmailReply(BASE_OPTS);
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("messages/send");
@@ -66,6 +66,7 @@ describe("sendGmailReply — GMAIL_TOKEN_EXPIRED", () => {
     mockFetch.mockImplementationOnce(async () => ({
       ok: false,
       status: 401,
+      json: async () => ({ id: "", threadId: "" }),
       text: async () => "Unauthorized",
     }));
 
@@ -83,6 +84,7 @@ describe("sendGmailReply — INSUFFICIENT_SCOPE", () => {
     mockFetch.mockImplementationOnce(async () => ({
       ok: false,
       status: 403,
+      json: async () => ({ id: "", threadId: "" }),
       text: async () => "Request had insufficient authentication scopes.",
     }));
 
@@ -99,6 +101,7 @@ describe("sendGmailReply — INSUFFICIENT_SCOPE", () => {
     mockFetch.mockImplementationOnce(async () => ({
       ok: false,
       status: 403,
+      json: async () => ({ id: "", threadId: "" }),
       text: async () => "Forbidden",
     }));
 
@@ -117,6 +120,7 @@ describe("sendGmailReply — GMAIL_API_ERROR", () => {
     mockFetch.mockImplementationOnce(async () => ({
       ok: false,
       status: 500,
+      json: async () => ({ id: "", threadId: "" }),
       text: async () => "Internal Server Error",
     }));
 
@@ -133,6 +137,7 @@ describe("sendGmailReply — GMAIL_API_ERROR", () => {
     mockFetch.mockImplementationOnce(async () => ({
       ok: false,
       status: 503,
+      json: async () => ({ id: "", threadId: "" }),
       text: async () => "Service Unavailable",
     }));
 

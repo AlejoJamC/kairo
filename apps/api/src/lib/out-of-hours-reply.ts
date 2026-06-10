@@ -120,7 +120,7 @@ export async function maybeSendOutOfHoursReply(
     const detail =
       err instanceof GmailSendException ? err.gmailError.code : String(err);
     console.error(
-      `[out-of-hours] gmail send failed user=${args.userId} ticket=${args.ticketId}: ${detail}`
+      `[out-of-hours] gmail send failed account=${args.accountId} ticket=${args.ticketId}: ${detail}`
     );
     return { sent: false, reason: "send_failed" };
   }

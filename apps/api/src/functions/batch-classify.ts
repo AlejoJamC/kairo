@@ -44,7 +44,7 @@ export const batchClassify = inngest.createFunction(
     // -----------------------------------------------------------------------
     const protectedIds = (await step.run("check-human-corrections", async () => {
       if (!forceReclassify) return [] as string[];
-      const candidates = ticketIds.filter((id) => foundIds.has(id));
+      const candidates = ticketIds.filter((id: string) => foundIds.has(id));
       if (candidates.length === 0) return [] as string[];
       const { data } = await supabase
         .from("classification_feedback")

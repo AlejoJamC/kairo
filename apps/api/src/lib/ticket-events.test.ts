@@ -8,7 +8,7 @@ import { describe, it, expect, mock, beforeEach } from "bun:test";
 // ---------------------------------------------------------------------------
 
 // Mock supabase so tests don't hit the real DB
-const insertMock = mock(() => Promise.resolve({ error: null }));
+const insertMock = mock((): Promise<{ error: { message: string } | null }> => Promise.resolve({ error: null }));
 const fromMock = mock(() => ({ insert: insertMock }));
 
 mock.module("../lib/supabase.js", () => ({

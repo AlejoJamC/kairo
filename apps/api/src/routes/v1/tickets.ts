@@ -50,7 +50,6 @@ export const tickets = new Hono();
 tickets.get("/", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
   if (!ctx) return c.json({ error: "Unauthorized" }, 401);
-  const user = { id: ctx.userId };
 
   const limit = Math.min(Number(c.req.query("limit") ?? 20), 100);
   const cursor = c.req.query("cursor");
@@ -98,7 +97,6 @@ tickets.get("/", async (c) => {
 tickets.post("/:id/recalculate-score", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
   if (!ctx) return c.json({ error: "Unauthorized" }, 401);
-  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
@@ -202,7 +200,6 @@ tickets.post("/:id/recalculate-score", async (c) => {
 tickets.get("/:id/related-history", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
   if (!ctx) return c.json({ error: "Unauthorized" }, 401);
-  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
@@ -239,7 +236,7 @@ tickets.get("/:id/related-history", async (c) => {
   // Fallback: full-text — same sender OR shared subject words, resolved tickets only
   const keywords = (ticket.subject ?? "")
     .split(/\s+/)
-    .filter((w) => w.length > 3)
+    .filter((w: string) => w.length > 3)
     .slice(0, 5);
 
   let fallbackQuery = supabase
@@ -278,7 +275,6 @@ tickets.get("/:id/related-history", async (c) => {
 tickets.get("/:id/similar", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
   if (!ctx) return c.json({ error: "Unauthorized" }, 401);
-  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
   const limit = Math.min(Number(c.req.query("limit") ?? 5), 20);
@@ -570,7 +566,6 @@ tickets.post("/classify-batch", async (c) => {
 tickets.get("/:id/activity", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
   if (!ctx) return c.json({ error: "Unauthorized" }, 401);
-  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
   const limit = Math.min(Number(c.req.query("limit") ?? 50), 100);
@@ -1349,7 +1344,6 @@ const SuggestReplyResponseSchema = z.object({
 tickets.post("/:id/suggest-reply", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
   if (!ctx) return c.json({ error: "Unauthorized" }, 401);
-  const user = { id: ctx.userId };
 
   const id = c.req.param("id");
 
@@ -1397,12 +1391,14 @@ tickets.post("/:id/suggest-reply", async (c) => {
 
   // 4. Similar resolved case — graceful degrade (RPC may not be available)
   let similarCase = "No hay casos similares resueltos disponibles.";
-  const { data: similar } = await supabase.rpc("find_similar_tickets", {
-    p_ticket_id: id,
-    p_account_id: ctx.accountId,
-    p_limit: 1,
-    p_status_filter: "resolved",
-  }).catch(() => ({ data: null }));
+  const { data: similar } = await Promise.resolve(
+    supabase.rpc("find_similar_tickets", {
+      p_ticket_id: id,
+      p_account_id: ctx.accountId,
+      p_limit: 1,
+      p_status_filter: "resolved",
+    }),
+  ).catch(() => ({ data: null }));
 
   if (similar && similar.length > 0) {
     const s = similar[0] as { subject?: string; resolution_summary?: string };
@@ -1726,7 +1722,6 @@ export async function buildEscalationContext(
 tickets.post("/:id/escalation-reasons", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
   if (!ctx) return c.json({ error: "Unauthorized" }, 401);
-  const user = { id: ctx.userId };
 
   const ticketId = c.req.param("id");
 
@@ -1861,7 +1856,7 @@ const BODY_PREVIEW_CHARS = 200;
 tickets.get("/:id/knowledge-context", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
   if (!ctx) return c.json({ error: "Unauthorized" }, 401);
-  const user = { id: ctx.userId };
+  const accountId = ctx.accountId;
 
   const id = c.req.param("id");
 
@@ -1869,7 +1864,7 @@ tickets.get("/:id/knowledge-context", async (c) => {
     .from("tickets")
     .select("id, subject, body_plain")
     .eq("id", id)
-    .eq("account_id", ctx.accountId)
+    .eq("account_id", accountId)
     .single();
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
@@ -1879,7 +1874,7 @@ tickets.get("/:id/knowledge-context", async (c) => {
     const q = supabase
       .from("kb_articles")
       .select("id, title, content, tags")
-      .eq("account_id", ctx.accountId)
+      .eq("account_id", accountId)
       .eq("is_published", true);
 
     if (ids && ids.length > 0) {
@@ -1921,12 +1916,12 @@ tickets.get("/:id/knowledge-context", async (c) => {
   const [kbResult, similarResult] = await Promise.allSettled([
     supabase.rpc("find_relevant_kb", {
       p_query_embedding: queryVector,
-      p_account_id: ctx.accountId,
+      p_account_id: accountId,
       p_limit: KB_LIMIT,
     }),
     supabase.rpc("find_similar_tickets", {
       p_ticket_id: id,
-      p_account_id: ctx.accountId,
+      p_account_id: accountId,
       p_limit: SIMILAR_CASES_LIMIT,
       p_threshold: KNOWLEDGE_CONTEXT_THRESHOLD,
       p_status_filter: "resolved",

@@ -34,11 +34,13 @@ export type ChannelSendErrorCode =
   | "PROVIDER_ERROR";
 
 export class ChannelSendException extends Error {
-  constructor(
-    public readonly code: ChannelSendErrorCode,
-    public readonly detail?: string,
-  ) {
+  readonly code: ChannelSendErrorCode;
+  readonly detail?: string;
+
+  constructor(code: ChannelSendErrorCode, detail?: string) {
     super(detail ?? code);
+    this.code = code;
+    this.detail = detail;
   }
 }
 

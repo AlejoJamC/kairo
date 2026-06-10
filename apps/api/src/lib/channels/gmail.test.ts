@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeEach } from "bun:test";
-import { ChannelSendException } from "./types.js";
+import { ChannelSendException, type ChannelSendErrorCode } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // KAI-114: GmailChannelSender — delegates to sendGmailReply and maps Gmail
@@ -11,8 +11,11 @@ import { ChannelSendException } from "./types.js";
 const sendGmailReplyMock = mock(async () => ({ messageId: "msg-123", threadId: "thread-abc" }));
 
 class FakeGmailSendException extends Error {
-  constructor(public readonly gmailError: { code: string; detail?: string }) {
+  readonly gmailError: { code: string; detail?: string };
+
+  constructor(gmailError: { code: string; detail?: string }) {
     super(gmailError.code);
+    this.gmailError = gmailError;
   }
 }
 
@@ -40,7 +43,7 @@ describe("GmailChannelSender — happy path", () => {
     await sender.send(MESSAGE, CREDENTIAL);
 
     expect(sendGmailReplyMock).toHaveBeenCalledTimes(1);
-    const [opts] = sendGmailReplyMock.mock.calls[0] as [Record<string, unknown>];
+    const [opts] = sendGmailReplyMock.mock.calls[0] as unknown as [Record<string, unknown>];
     expect(opts.accessToken).toBe("token-xyz");
     expect(opts.threadId).toBe("thread-abc");
     expect(opts.to).toBe("client@example.com");
@@ -56,7 +59,7 @@ describe("GmailChannelSender — happy path", () => {
 });
 
 describe("GmailChannelSender — error code mapping", () => {
-  const cases: Array<[string, string]> = [
+  const cases: Array<[string, ChannelSendErrorCode]> = [
     ["GMAIL_TOKEN_EXPIRED", "TOKEN_EXPIRED"],
     ["NO_GMAIL_INTEGRATION", "NO_INTEGRATION"],
     ["INSUFFICIENT_SCOPE", "INSUFFICIENT_SCOPE"],
