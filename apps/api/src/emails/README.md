@@ -24,6 +24,7 @@ Regla del botón Enviar: si la acción es solo enviar → `agent-reply.html`; si
 4. **Sintaxis de variables:** `{{snake_case}}`. Una variable sin valor se resuelve a `""` (nunca dejar el placeholder visible al cliente). El resolver de estos templates es independiente del vocabulario `{{cliente.nombre}}` del composer de agentes — son dos contratos distintos.
 5. **Trazabilidad:** el token `[KAIRO-<ticket_number>]` viaja en el subject (vía `appendKairoToken`, `lib/ticket-traceability.ts`) y los templates ya renderizan `[{{ticket_id}}]` en el footer. `{{ticket_id}}` = id humano `KAI-T-<ticket_number>`, no UUID.
 6. **Threading:** todo envío sobre un ticket existente setea `In-Reply-To`/`References` desde el último `message_id_header` entrante (ya implementado en `/reply`).
+7. **Bloques condicionales (KAI-245):** `<!-- kairo:if some_var -->...<!-- /kairo:if -->` se elimina por completo si `some_var` resuelve a `""`/no está definida, o se "desenvuelve" (se quitan los comentarios, se conserva el contenido) si tiene valor. Se usa para ocultar enlaces de footer y CTAs cuyo destino no existe para un tenant (`csat_url`, `reopen_url`, `help_center_url`, `status_url`, `unsubscribe_url`, `ticket_url`) en lugar de renderizar una URL muerta. Se aplica en `registry.ts` **antes** de `resolveVariables()`.
 
 ## Contrato de variables por template
 
@@ -33,8 +34,13 @@ Regla del botón Enviar: si la acción es solo enviar → `agent-reply.html`; si
 | `{{customer_name}}` | `conversations.customer_display_name` (fallback: parte local del email) |
 | `{{ticket_id}}` | `KAI-T-<tickets.ticket_number>` |
 | `{{ticket_subject}}` | `tickets.subject` |
-| `{{help_center_url}}`, `{{status_url}}`, `{{privacy_url}}`, `{{unsubscribe_url}}` | Config de tenant/entorno (env o columnas en `accounts`; ver KAI-223 §Config) |
-| `{{ticket_url}}` | URL pública del ticket. **Gap conocido:** no existe portal de cliente; ver KAI-223 §Decisiones abiertas (fallback: `mailto:` al buzón de soporte con el token en subject) |
+| `{{help_center_url}}` | `accounts.help_center_url` (override por tenant). Sin fallback de plataforma — no existe centro de ayuda hoy. Si está vacía, el bloque del footer se oculta vía `kairo:if` |
+| `{{status_url}}` | `accounts.status_url` (override por tenant). Sin fallback de plataforma — no existe página de estado hoy. Si está vacía, el bloque del footer se oculta vía `kairo:if` |
+| `{{privacy_url}}` | `accounts.privacy_url` (override por tenant), fallback a `env.PRIVACY_URL` (`https://kairo.alejojamc.com/privacy/`, página de privacidad de Kairo). Siempre tiene valor — nunca se oculta |
+| `{{unsubscribe_url}}` | `accounts.unsubscribe_url` (override por tenant). Sin fallback de plataforma — no existe flujo de unsubscribe hoy. Si está vacía, el bloque del footer se oculta vía `kairo:if` |
+| `{{ticket_url}}` | **Gap conocido (KAI-223 §Decisiones abiertas):** no existe portal de cliente. Resuelve a un `mailto:<buzón Gmail del tenant>?subject=<"Re: {ticket_subject} [KAIRO-n]">` vía `resolveEmailUrls()` (`emails/urls.ts`). Si el tenant no tiene buzón Gmail conectado, resuelve a `""` y el CTA se oculta vía `kairo:if` |
+
+Las cuatro primeras (`help_center_url`, `status_url`, `privacy_url`, `unsubscribe_url`) y `ticket_url` se resuelven con el helper único `resolveEmailUrls()` (`apps/api/src/emails/urls.ts`) — single source of truth para todos los templates.
 
 ### `acknowledgement.html`
 `{{ticket_category}}` (clasificación del pipeline), `{{ticket_created_at}}` (formateada, locale es).
@@ -45,8 +51,12 @@ Regla del botón Enviar: si la acción es solo enviar → `agent-reply.html`; si
 ### `resolved.html`
 `{{agent_name}}`, `{{agent_initials}}`, `{{resolution_summary}}` (texto final del agente), `{{resolved_at}}`, `{{time_to_resolve}}` (humanizado: "4h 12m"), `{{message_count}}` (mensajes del hilo), `{{csat_url}}` (CTA con `?score=bad|ok|good`), `{{reopen_url}}`.
 
+**Gap conocido (`csat_url`, `reopen_url`):** no existe endpoint de captura de CSAT ni de reapertura (historia futura, separada). Los callers pasan `""` para ambas — el teaser de CSAT completo y el botón "Reabrir ticket" se ocultan vía `kairo:if`. El botón "Ver resolución" (`ticket_url`) no se ve afectado.
+
 ### `csat-survey.html`
 `{{agent_name}}`, `{{csat_url}}` (botones 1–5: `?score=1`..`?score=5`).
+
+**Sin trigger** (ver tabla de inventario): este template no se renderiza hoy, por lo que `{{csat_url}}` queda como lo entregó KAI-244 (render-ready, sin botones ocultos). Su footer sigue las mismas reglas de `help_center_url`/`status_url`/`unsubscribe_url` que el resto.
 
 ### `escalated.html`
 `{{specialist_name}}`, `{{specialist_role}}`, `{{specialist_initials}}`, `{{priority_sla}}`.

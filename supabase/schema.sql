@@ -900,7 +900,11 @@ CREATE TABLE IF NOT EXISTS "public"."accounts" (
     "plan_id" "uuid" NOT NULL,
     "signature_plain" "text",
     "signature_html" "text",
-    "brand_color" "text" DEFAULT '#5c6bc0'::"text"
+    "brand_color" "text" DEFAULT '#5c6bc0'::"text",
+    "help_center_url" "text",
+    "status_url" "text",
+    "privacy_url" "text",
+    "unsubscribe_url" "text"
 );
 
 

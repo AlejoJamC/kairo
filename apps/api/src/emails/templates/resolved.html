@@ -153,6 +153,7 @@
               </tr>
 
               <!-- CSAT teaser -->
+              <!-- kairo:if csat_url -->
               <tr>
                 <td class="px" style="padding:18px 36px 0;">
                   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EEF2FF; border:1px solid #DBE3FF; border-radius:8px;">
@@ -184,6 +185,7 @@
                   </table>
                 </td>
               </tr>
+              <!-- /kairo:if -->
 
               <!-- Reopen CTA -->
               <tr>
@@ -193,9 +195,11 @@
                       <td class="btn-cell" style="padding-right:8px;">
                         <a href="{{ticket_url}}" style="display:inline-block; background:#FFFFFF; color:#52525B; font-family:'Inter',Arial,sans-serif; font-size:13.5px; font-weight:600; line-height:42px; text-align:center; padding:0 20px; border-radius:8px; border:1px solid #E4E4E7;">Ver resolución</a>
                       </td>
+                      <!-- kairo:if reopen_url -->
                       <td class="btn-cell">
                         <a href="{{reopen_url}}" style="display:inline-block; background:#FFFFFF; color:#52525B; font-family:'Inter',Arial,sans-serif; font-size:13.5px; font-weight:600; line-height:42px; text-align:center; padding:0 20px; border-radius:8px; border:1px solid #E4E4E7;">Reabrir ticket</a>
                       </td>
+                      <!-- /kairo:if -->
                     </tr>
                   </table>
                 </td>
@@ -245,16 +249,22 @@
               <tr>
                 <td align="center" style="font-family:'Inter',Arial,sans-serif; font-size:12px; line-height:1.7; color:#A1A1AA;">
                   <div style="margin-bottom:8px;">
+                    <!-- kairo:if help_center_url -->
                     <a href="{{help_center_url}}" class="kairo-link" style="color:#52525B; font-weight:500;">Centro de ayuda</a>
                     <span style="color:#E4E4E7;">&nbsp;·&nbsp;</span>
+                    <!-- /kairo:if -->
+                    <!-- kairo:if status_url -->
                     <a href="{{status_url}}" class="kairo-link" style="color:#52525B; font-weight:500;">Estado del sistema</a>
                     <span style="color:#E4E4E7;">&nbsp;·&nbsp;</span>
+                    <!-- /kairo:if -->
                     <a href="{{privacy_url}}" class="kairo-link" style="color:#52525B; font-weight:500;">Privacidad</a>
                   </div>
                   <div style="margin-bottom:6px; color:#A1A1AA;">Recibes este correo por tu ticket de soporte en Kairo.</div>
                   <div style="color:#C4C4CC; font-size:11px;">
-                    Kairo · El cockpit de soporte para equipos hispanohablantes<br/>
+                    Kairo · El cockpit de soporte para equipos hispanohablantes
+                    <!-- kairo:if unsubscribe_url --><br/>
                     <a href="{{unsubscribe_url}}" style="color:#A1A1AA; text-decoration:underline;">Gestionar notificaciones</a>
+                    <!-- /kairo:if -->
                   </div>
                   <div class="mono" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#C4C4CC; letter-spacing:0.05em; margin-top:14px;">[{{ticket_id}}]</div>
                 </td>

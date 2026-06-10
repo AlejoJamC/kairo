@@ -33,6 +33,9 @@ export const env = createEnv({
         // KAI-201 feature flag: enable detection UI in onboarding wizard (default: off).
         // Set FEATURE_FLAG_ENABLE_DETECTION_UI=true to enable.
         FEATURE_FLAG_ENABLE_DETECTION_UI: z.string().optional(),
+        // KAI-245: platform-wide fallback for {{privacy_url}} in transactional emails
+        // when accounts.privacy_url is not set per-tenant.
+        PRIVACY_URL: z.string().url().default("https://kairo.alejojamc.com/privacy/"),
     },
     clientPrefix: "VITE_",
     client: {

@@ -97,35 +97,47 @@ export type Database = {
         Row: {
           brand_color: string | null
           created_at: string
+          help_center_url: string | null
           id: string
           name: string
           plan_id: string
+          privacy_url: string | null
           seat_limit: number | null
           signature_html: string | null
           signature_plain: string | null
           slug: string
+          status_url: string | null
+          unsubscribe_url: string | null
         }
         Insert: {
           brand_color?: string | null
           created_at?: string
+          help_center_url?: string | null
           id?: string
           name: string
           plan_id: string
+          privacy_url?: string | null
           seat_limit?: number | null
           signature_html?: string | null
           signature_plain?: string | null
           slug: string
+          status_url?: string | null
+          unsubscribe_url?: string | null
         }
         Update: {
           brand_color?: string | null
           created_at?: string
+          help_center_url?: string | null
           id?: string
           name?: string
           plan_id?: string
+          privacy_url?: string | null
           seat_limit?: number | null
           signature_html?: string | null
           signature_plain?: string | null
           slug?: string
+          status_url?: string | null
+          unsubscribe_url?: string | null
         }
         Relationships: [
           {
