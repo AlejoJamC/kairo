@@ -157,6 +157,25 @@ describe("MIME message construction", () => {
     expect(decoded).toContain("Subject: Re: My Test");
   });
 
+  it("RFC 2047-encodes a subject with non-ASCII chars (no mojibake)", async () => {
+    // "–" (en-dash) + "ó" must NOT appear as raw bytes in the header.
+    await sendGmailReply({ ...BASE_OPTS, subject: "Re: Acceso – contraseña" });
+    const [, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(opts.body as string);
+    const decoded = Buffer.from(body.raw, "base64").toString("utf-8");
+    // Header is an encoded-word, and the raw UTF-8 string is absent from the header line.
+    expect(decoded).toContain("Subject: =?UTF-8?B?");
+    expect(decoded).not.toContain("Subject: Re: Acceso – contraseña");
+  });
+
+  it("leaves a pure-ASCII subject unencoded", async () => {
+    await sendGmailReply({ ...BASE_OPTS, subject: "Re: Plain ASCII" });
+    const [, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(opts.body as string);
+    const decoded = Buffer.from(body.raw, "base64").toString("utf-8");
+    expect(decoded).toContain("Subject: Re: Plain ASCII");
+  });
+
   it("encodes recipient correctly", async () => {
     await sendGmailReply({ ...BASE_OPTS, to: "test@client.com" });
     const [, opts] = mockFetch.mock.calls[0] as [string, RequestInit];

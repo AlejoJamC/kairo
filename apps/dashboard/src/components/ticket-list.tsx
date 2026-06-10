@@ -43,8 +43,18 @@ const INITIAL_FILTERS: FilterState = {
   status: null,
 };
 
+// Statuses that are NOT part of the active triage queue: awaiting the customer,
+// or closed. They live in their own views, so they must leave the main triage
+// list (and its count) the moment a reply/resolve updates the store.
+const NON_TRIAGE_STATUSES = new Set(["awaiting_customer", "resolved", "auto_resolved"]);
+
+export function isTriageActive(status: string | null | undefined): boolean {
+  return !NON_TRIAGE_STATUSES.has(status ?? "");
+}
+
 function applyFilters(tickets: Ticket[], f: FilterState): Ticket[] {
   return tickets.filter((t) => {
+    if (!isTriageActive(t.status)) return false;
     if (f.priority === "PX") {
       // Only tickets that have a real priority and are not spam
       if (!t.priority) return false;
@@ -194,6 +204,11 @@ export function TicketList() {
 
   const filtered = applyFilters(tickets, filters);
 
+  // Header count reflects the active triage queue (excludes awaiting/resolved),
+  // so it always matches the list instead of the raw store total.
+  const activeTickets = tickets.filter((t) => isTriageActive(t.status));
+  const activeClassifiedCount = activeTickets.filter((t) => t.classified_at !== null).length;
+
   // Count how many tickets share each group_id (for "similares agrupados" label)
   const groupCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -247,7 +262,7 @@ export function TicketList() {
         .from("tickets")
         .select("*")
         .eq("account_id", accountId!)
-        .neq("status", "awaiting_customer")
+        .not("status", "in", "(awaiting_customer,resolved,auto_resolved)")
         .order("priority_score", { ascending: false, nullsFirst: false })
         .limit(200);
       if (fresh) setTickets(fresh as Ticket[]);
@@ -367,7 +382,7 @@ export function TicketList() {
               {t("ticketList.header")}
             </span>
             <span style={{ fontSize: 12, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>
-              {classifiedCount}/{tickets.length}
+              {activeClassifiedCount}/{activeTickets.length}
             </span>
           </div>
 

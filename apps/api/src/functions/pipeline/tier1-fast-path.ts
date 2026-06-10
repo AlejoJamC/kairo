@@ -357,16 +357,17 @@ export const tier1FastPath = inngest.createFunction(
 
             if (channelIntegrationId) {
               try {
-                // KAI-115: Broken-thread re-association — if subject carries a [KAIRO-<shortid>]
-                // token, try to find the original ticket's conversation and bypass threadId upsert.
-                // KAI-115: Broken-thread re-association check
+                // KAI-115: Broken-thread re-association — if subject carries a
+                // [KAIRO-<ticket_number>] token, find the original ticket's
+                // conversation and bypass threadId upsert (handles clients that
+                // break the Gmail thread).
                 let resolvedConversationId: string | undefined;
-                const kairoShortId = extractKairoToken(subject);
-                if (kairoShortId) {
-                  const existing = await findTicketByKairoToken(supabase, accountId, kairoShortId);
+                const kairoTicketNumber = extractKairoToken(subject);
+                if (kairoTicketNumber !== null) {
+                  const existing = await findTicketByKairoToken(supabase, accountId, kairoTicketNumber);
                   if (existing?.conversationId) {
                     resolvedConversationId = existing.conversationId;
-                    pipelineLog("tier1:db", `KAI-115 token re-association → short_id=${kairoShortId} conversation_id=${resolvedConversationId}`);
+                    pipelineLog("tier1:db", `KAI-115 token re-association → ticket_number=${kairoTicketNumber} conversation_id=${resolvedConversationId}`);
                   }
                 }
 

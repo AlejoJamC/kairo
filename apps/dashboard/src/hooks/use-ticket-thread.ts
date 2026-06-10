@@ -24,22 +24,33 @@ interface UseTicketThreadResult {
   error: string | null;
   /**
    * Appends a message to the local thread immediately (KAI-114 outbox optimism).
-   * Used right after POST /reply returns 202 — the worker will later land the
-   * real delivery_status; we don't poll for it (per KAI-165, no realtime needed
-   * — full live tracking is KAI-221's reply-bar redesign).
+   * Used right after POST /reply returns 202 with a `queued` message. While any
+   * message is still queued/sending, the hook polls until the worker lands the
+   * real delivery_status (sent/failed), so "Enviando…" resolves on its own.
    */
   appendOptimisticMessage: (message: ThreadMessage) => void;
 }
 
+/** Outbound message is still in flight — keep polling until it settles. */
+function hasPendingDelivery(messages: ThreadMessage[]): boolean {
+  return messages.some(
+    (m) => m.delivery_status === "queued" || m.delivery_status === "sending",
+  );
+}
+
+const POLL_INTERVAL_MS = 3000;
+
 /**
  * Fetches the message thread for a ticket via GET /api/v1/tickets/:id/messages.
- * Refreshes whenever ticketId changes. No polling — no realtime needed per KAI-165.
+ * Refreshes whenever ticketId changes, and polls while an outbound message is
+ * still queued/sending so its delivery status updates without a manual refresh.
  */
 export function useTicketThread(ticketId: string | null): UseTicketThreadResult {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Initial load (and reset) whenever the selected ticket changes.
   useEffect(() => {
     if (!ticketId) {
       setMessages([]);
@@ -74,6 +85,30 @@ export function useTicketThread(ticketId: string | null): UseTicketThreadResult 
       cancelled = true;
     };
   }, [ticketId]);
+
+  // Poll the thread while an outbound message is queued/sending. The effect
+  // re-evaluates when `pending` flips false (worker finished) and tears down.
+  const pending = hasPendingDelivery(messages);
+  useEffect(() => {
+    if (!ticketId || !pending) return;
+
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      try {
+        const res = await apiCall(`/api/v1/tickets/${ticketId}/messages`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { messages: ThreadMessage[] };
+        if (!cancelled) setMessages(data.messages ?? []);
+      } catch {
+        // transient — keep polling
+      }
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [ticketId, pending]);
 
   function appendOptimisticMessage(message: ThreadMessage) {
     setMessages((prev) => [...prev, message]);
