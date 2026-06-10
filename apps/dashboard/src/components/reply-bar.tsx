@@ -60,6 +60,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const aiSuggestedReply = useTriageStore((s) => s.aiSuggestedReply);
   const clearSuggestedReply = useTriageStore((s) => s.clearSuggestedReply);
   const updateClassification = useTriageStore((s) => s.updateClassification);
+  const selectTicket = useTriageStore((s) => s.selectTicket);
 
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
   const currentStatus = ticket?.status ?? "open";
@@ -83,6 +84,21 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const [actionLoading, setActionLoading] = React.useState<TicketAction | null>(null);
   const [textareaHeight, setTextareaHeight] = React.useState(80);
   const dragRef = React.useRef<{ startY: number; startHeight: number } | null>(null);
+
+  // After a reply moves the ticket out of triage, clear the center view back to
+  // the empty "select a ticket" state after a short, deliberate delay — long
+  // enough to register the success feedback, short enough to invite the next
+  // ticket instead of leaving a stale, already-answered thread on screen.
+  const CLEAR_AFTER_SEND_MS = 2500;
+  const deselectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cancel a pending auto-clear if the agent navigates to another ticket first,
+  // and on unmount — so we never yank them out of a freshly selected ticket.
+  React.useEffect(() => {
+    return () => {
+      if (deselectTimerRef.current) clearTimeout(deselectTimerRef.current);
+    };
+  }, [selectedTicketId]);
 
   // ---------------------------------------------------------------------------
   // Escalation inline flow (KAI-221)
@@ -186,6 +202,18 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       if (resolveAfter) {
         await patchStatus("resolved");
       }
+
+      // The ticket has left the triage queue (awaiting_customer / resolved).
+      // Clear the center view shortly after so the agent isn't left staring at
+      // a thread they already answered — invite the next ticket instead.
+      const repliedTicketId = selectedTicketId;
+      if (deselectTimerRef.current) clearTimeout(deselectTimerRef.current);
+      deselectTimerRef.current = setTimeout(() => {
+        // Only clear if we're still on the ticket we just replied to.
+        if (useTriageStore.getState().selectedTicketId === repliedTicketId) {
+          selectTicket(null);
+        }
+      }, CLEAR_AFTER_SEND_MS);
     } catch {
       setSendError(t("replyBar.errorGeneric"));
     } finally {
