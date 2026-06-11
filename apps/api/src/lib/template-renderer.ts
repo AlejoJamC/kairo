@@ -162,7 +162,7 @@ function escHtml(s: string): string {
 }
 
 /** Convert plain-text paragraphs (double-newline separated) to <p> tags. */
-function plainToHtmlParagraphs(text: string): string {
+export function plainToHtmlParagraphs(text: string): string {
   return text
     .split(/\n{2,}/)
     .map((para) => `<p style="margin:0 0 12px 0">${escHtml(para).replace(/\n/g, "<br>")}</p>`)

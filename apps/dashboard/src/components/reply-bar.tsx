@@ -171,7 +171,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     try {
       const res = await apiCall(`/api/v1/tickets/${selectedTicketId}/reply`, {
         method: "POST",
-        body: JSON.stringify({ body: draft }),
+        body: JSON.stringify({ body: draft, intent: resolveAfter ? "resolve" : "reply" }),
       });
 
       if (!res.ok) {
@@ -198,10 +198,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       setSendSuccess(true);
       setShowAiBanner(false);
       clearSuggestedReply();
-
-      if (resolveAfter) {
-        await patchStatus("resolved");
-      }
 
       // The ticket has left the triage queue (awaiting_customer / resolved).
       // Clear the center view shortly after so the agent isn't left staring at

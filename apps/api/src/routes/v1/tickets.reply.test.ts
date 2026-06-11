@@ -11,6 +11,7 @@ const ReplySchema = z.object({
   body: z.string().min(1),
   bodyMarkdown: z.string().optional(),
   templateId: z.string().uuid().optional(),
+  intent: z.enum(["reply", "resolve"]).default("reply"),
 });
 
 describe("ReplySchema — request validation", () => {
@@ -37,6 +38,29 @@ describe("ReplySchema — request validation", () => {
 
   it("rejects a non-UUID templateId", () => {
     expect(ReplySchema.safeParse({ body: "Thanks!", templateId: "not-a-uuid" }).success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// intent — KAI-247: 'reply' renders agent-reply.html, 'resolve' renders
+// resolved.html and resolves the ticket atomically.
+// ---------------------------------------------------------------------------
+
+describe("ReplySchema — intent", () => {
+  it("defaults to 'reply' when intent is omitted", () => {
+    const result = ReplySchema.safeParse({ body: "Thanks!" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.intent).toBe("reply");
+  });
+
+  it("accepts intent='resolve'", () => {
+    const result = ReplySchema.safeParse({ body: "Thanks!", intent: "resolve" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.intent).toBe("resolve");
+  });
+
+  it("rejects an invalid intent value", () => {
+    expect(ReplySchema.safeParse({ body: "Thanks!", intent: "close" }).success).toBe(false);
   });
 });
 
