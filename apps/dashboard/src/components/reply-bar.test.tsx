@@ -122,6 +122,45 @@ describe("ReplyBar", () => {
     expect(screen.getByText("replyBar.sendSuccess")).toBeInTheDocument();
   });
 
+  it("Send & Resolve sends intent='resolve' in a single call and applies the returned status", async () => {
+    const optimisticMessage = {
+      id: "msg-queued-2",
+      direction: "outbound",
+      sender_external_id: "agent@kairo.dev",
+      sender_display_name: "agent@kairo.dev",
+      body_plain: "All set, this is now resolved!",
+      body_html: null,
+      snippet: "All set, this is now resolved!",
+      received_at: "2026-06-07T12:00:00.000Z",
+      delivery_status: "queued",
+    };
+    apiCallMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        messageId: optimisticMessage.id,
+        deliveryStatus: "queued",
+        message: optimisticMessage,
+        status: "resolved",
+      }),
+    });
+
+    renderWithProviders(<ReplyBar />);
+    useTriageStore.getState().selectTicket("ticket-1");
+
+    const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
+    await userEvent.type(composer, "All set, this is now resolved!");
+    await userEvent.click(screen.getByRole("button", { name: "replyBar.sendAndResolve" }));
+
+    await waitFor(() => expect(apiCallMock).toHaveBeenCalledTimes(1));
+    const [, options] = apiCallMock.mock.calls[0] as [string, { body: string }];
+    expect(JSON.parse(options.body)).toEqual({ body: "All set, this is now resolved!", intent: "resolve" });
+
+    expect(await screen.findByText("replyBar.sendSuccess")).toBeInTheDocument();
+    // No separate PATCH /status round-trip — a single reply call carries the result.
+    expect(apiCallMock).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the no-Gmail-integration error using the response error code", async () => {
     apiCallMock.mockResolvedValue({
       ok: false,

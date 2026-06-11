@@ -30,3 +30,13 @@ export async function linkMessageToTicket(
     );
   }
 }
+
+/** Count messages currently linked to a ticket via ticket_messages. */
+export async function countTicketMessages(client: DbClient, ticketId: string): Promise<number> {
+  const { count } = await client
+    .from("ticket_messages")
+    .select("*", { count: "exact", head: true })
+    .eq("ticket_id", ticketId);
+
+  return count ?? 0;
+}

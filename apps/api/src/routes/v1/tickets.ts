@@ -31,9 +31,14 @@ import {
   type TicketStatus,
 } from "../../lib/ticket-status-machine.js";
 import { upsertConversationByThread } from "../../lib/conversations.js";
-import { linkMessageToTicket } from "../../lib/ticket-messages.js";
+import { linkMessageToTicket, countTicketMessages } from "../../lib/ticket-messages.js";
 import { appendKairoToken, buildKairoToken } from "../../lib/ticket-traceability.js";
-import { resolveTemplateVars, buildPlainBody, buildHtmlBody, type TemplateVars } from "../../lib/template-renderer.js";
+import { resolveTemplateVars, buildPlainBody, plainToHtmlParagraphs, type TemplateVars } from "../../lib/template-renderer.js";
+import { resolveAgentIdentity } from "../../lib/agent-identity.js";
+import { humanizeDuration } from "../../lib/duration.js";
+import { renderAgentReply, renderResolved } from "../../emails/registry.js";
+import { resolveEmailUrls } from "../../emails/urls.js";
+import { formatEmailDate } from "../../emails/format.js";
 
 export const tickets = new Hono();
 
@@ -877,6 +882,7 @@ const ReplySchema = z.object({
   body: z.string().min(1),
   bodyMarkdown: z.string().optional(),
   templateId: z.string().uuid().optional(),
+  intent: z.enum(["reply", "resolve"]).default("reply"),
 });
 
 tickets.post("/:id/reply", async (c) => {
@@ -895,12 +901,26 @@ tickets.post("/:id/reply", async (c) => {
   // 1. Fetch ticket + linked conversation (ticket_number for traceability token)
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
-    .select("id, ticket_number, subject, from_email, gmail_thread_id, conversation_id, status, account_id")
+    .select("id, ticket_number, subject, from_email, gmail_thread_id, conversation_id, status, account_id, created_at")
     .eq("id", id)
     .eq("account_id", ctx.accountId)
     .single();
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  // KAI-247: "Enviar y resolver" transitions the ticket to `resolved` atomically
+  // with the enqueue. Validate the transition up front so an invalid resolve
+  // never queues an email or touches ticket state.
+  const intent = parsed.data.intent;
+  if (intent === "resolve") {
+    const fromStatus: TicketStatus = isTicketStatus(ticket.status ?? "") ? (ticket.status as TicketStatus) : "open";
+    if (!isValidTransition(fromStatus, "resolved")) {
+      return c.json(
+        { error: getTransitionError(fromStatus, "resolved"), code: "INVALID_TRANSITION" },
+        422,
+      );
+    }
+  }
 
   // 2. Resolve Gmail thread ID: prefer omnichannel path, fall back to legacy column
   let threadId: string | null = null;
@@ -1003,10 +1023,10 @@ tickets.post("/:id/reply", async (c) => {
   const ticketNumber = (ticket as { ticket_number: number }).ticket_number;
   const subject = appendKairoToken(baseSubject, ticketNumber);
 
-  // Fetch account branding + signature
+  // Fetch account signature (plain body footer)
   const { data: account } = await supabase
     .from("accounts")
-    .select("name, signature_plain, signature_html, brand_color")
+    .select("signature_plain")
     .eq("id", ticket.account_id)
     .maybeSingle();
 
@@ -1023,16 +1043,18 @@ tickets.post("/:id/reply", async (c) => {
 
   // Fetch RFC 2822 Message-ID from the most recent inbound message for threading (KAI-115 §A)
   let inReplyToExternalId: string | undefined;
+  let lastInboundMessage: { body_plain: string | null; snippet: string | null } | null = null;
   if (ticket.conversation_id) {
     const { data: lastInbound } = await supabase
       .from("messages")
-      .select("message_id_header")
+      .select("message_id_header, body_plain, snippet")
       .eq("conversation_id", ticket.conversation_id)
       .eq("direction", "inbound")
       .order("received_at", { ascending: false })
       .limit(1)
       .maybeSingle();
     inReplyToExternalId = lastInbound?.message_id_header ?? undefined;
+    lastInboundMessage = lastInbound ?? null;
   }
 
   // Build template variables (KAI-115 §C)
@@ -1056,19 +1078,54 @@ tickets.post("/:id/reply", async (c) => {
     signaturePlain: account?.signature_plain ?? null,
   });
 
-  const finalBodyHtml = buildHtmlBody({
-    bodyPlain: resolvedBody,
-    bodyHtml: parsed.data.bodyMarkdown
-      ? resolveTemplateVars(parsed.data.bodyMarkdown, templateVars)
-      : null,
-    kairoToken,
-    brandColor: account?.brand_color ?? null,
-    accountName: account?.name ?? null,
-    signatureHtml: account?.signature_html ?? null,
-    signaturePlain: account?.signature_plain ?? null,
-  });
-
   const nowIso = new Date().toISOString();
+
+  // KAI-247: render the design system templates instead of the generic wrapper.
+  const emailUrls = await resolveEmailUrls({
+    accountId: ticket.account_id,
+    ticketNumber,
+    ticketSubject: ticket.subject ?? "",
+  });
+  const { agent_name, agent_role, agent_initials } = await resolveAgentIdentity(
+    supabase,
+    user.id,
+    gmailFromEmail,
+  );
+  const emailBaseVars = {
+    customer_name: customerDisplayName ?? (ticket.from_email?.split("@")[0] ?? ""),
+    ticket_id: `KAI-T-${ticketNumber}`,
+    ticket_subject: ticket.subject ?? "",
+    ...emailUrls,
+  };
+  const bodyHtmlContent = parsed.data.bodyMarkdown
+    ? resolveTemplateVars(parsed.data.bodyMarkdown, templateVars)
+    : plainToHtmlParagraphs(resolvedBody);
+
+  let finalBodyHtml: string;
+  if (intent === "resolve") {
+    const messageCountBefore = await countTicketMessages(supabase, ticket.id);
+    finalBodyHtml = renderResolved({
+      ...emailBaseVars,
+      agent_name,
+      agent_initials,
+      resolution_summary: bodyHtmlContent,
+      resolved_at: formatEmailDate(nowIso),
+      time_to_resolve: humanizeDuration(ticket.created_at, nowIso),
+      message_count: messageCountBefore + 1,
+      csat_url: "",
+      reopen_url: "",
+    });
+  } else {
+    finalBodyHtml = renderAgentReply({
+      ...emailBaseVars,
+      agent_name,
+      agent_role,
+      agent_initials,
+      agent_message: bodyHtmlContent,
+      sent_at: formatEmailDate(nowIso),
+      original_message: plainToHtmlParagraphs(lastInboundMessage?.body_plain ?? lastInboundMessage?.snippet ?? ""),
+    });
+  }
 
   const { data: outboundMsg, error: insertErr } = await supabase
     .from("messages")
@@ -1118,20 +1175,24 @@ tickets.post("/:id/reply", async (c) => {
     },
   });
 
-  // 6. Update ticket: last_response_at + auto-transition to awaiting_customer (KAI-50).
+  // 6. Update ticket: last_response_at + status transition.
   // Optimistic — the agent has responded; delivery is tracked independently via delivery_status.
   const currentStatus = ticket.status ?? "open";
   // Replying means "now waiting on the customer" — applies to any active state
   // (incl. reopened, KAI-221), not just open/in_progress. Resolved/awaiting are
   // intentionally excluded.
   const AUTO_AWAITING_SOURCES: TicketStatus[] = ["open", "in_progress", "reopened"];
-  const shouldTransition = isTicketStatus(currentStatus) && AUTO_AWAITING_SOURCES.includes(currentStatus as TicketStatus);
+  const shouldTransitionToAwaiting =
+    intent === "reply" && isTicketStatus(currentStatus) && AUTO_AWAITING_SOURCES.includes(currentStatus as TicketStatus);
+
+  // KAI-247: "Enviar y resolver" transitions to `resolved` atomically with the enqueue.
+  const finalStatus: string = intent === "resolve" ? "resolved" : shouldTransitionToAwaiting ? "awaiting_customer" : currentStatus;
 
   await supabase
     .from("tickets")
     .update({
       last_response_at: nowIso,
-      ...(shouldTransition ? { status: "awaiting_customer" } : {}),
+      ...(finalStatus !== currentStatus ? { status: finalStatus } : {}),
     })
     .eq("id", id);
 
@@ -1144,12 +1205,12 @@ tickets.post("/:id/reply", async (c) => {
     metadata: { message_id: outboundMsg.id, delivery_status: "queued" },
   });
 
-  if (shouldTransition) {
+  if (finalStatus !== currentStatus) {
     await emitTicketEvent({
       ticketId: id,
       authorId: user.id,
       eventType: "status_change",
-      metadata: { from: currentStatus, to: "awaiting_customer", trigger: "reply_sent" },
+      metadata: { from: currentStatus, to: finalStatus, trigger: intent === "resolve" ? "reply_resolve" : "reply_sent" },
     });
   }
 
@@ -1159,7 +1220,7 @@ tickets.post("/:id/reply", async (c) => {
       messageId: outboundMsg.id,
       deliveryStatus: "queued",
       message: outboundMsg,
-      status: shouldTransition ? "awaiting_customer" : currentStatus,
+      status: finalStatus,
     },
     202,
   );
