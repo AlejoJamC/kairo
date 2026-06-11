@@ -20,68 +20,87 @@ The offline eval scripts in `scripts/eval/` currently use synthetic `.eml` files
 
 ## How to instrument a new LLM call site
 
-Every call to `createCompletionProvider().complete()` or `completeJSON()` should be wrapped like this:
+`@kairo/intelligence` providers expose `completeWithMeta()` / `completeJSONWithMeta()`
+in addition to the original `complete()` / `completeJSON()`. The `*WithMeta` variants
+return `{ text | data, rawText, model, usage: { promptTokens, completionTokens } }`,
+which is exactly the shape `llm_calls` needs — use them for any new instrumented call
+site. For email classification, use `classifyEmailWithMeta()`, which additionally
+returns the resolved `prompt` and `promptVersion`.
+
+Use the shared `logLlmCall()` helper (`apps/api/src/lib/llm-logging.ts`) — it is
+fire-and-forget, skips inserts when `NODE_ENV === "test"`, and maps to the real
+`llm_calls` columns (note: `triggered_by_user_id`, NOT `user_id`):
 
 ```typescript
-import { supabase } from "../lib/supabase.js";
-import { createCompletionProvider } from "@kairo/intelligence";
+import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { logLlmCall } from "../lib/llm-logging.js";
 import { resolveModelVersion } from "../lib/model-version.js";
 
-const provider = createCompletionProvider();
 const start = Date.now();
-let responseText: string | null = null;
-let errorCode: string | null = null;
-let errorDetail: string | null = null;
-
 try {
-  responseText = await provider.complete(prompt, { maxTokens: 1500 });
-} catch (err) {
-  errorCode = "LLM_ERROR";
-  errorDetail = err instanceof Error ? err.message : String(err);
-}
+  const { result, meta, prompt, promptVersion } = await classifyEmailWithMeta({
+    subject, body, from,
+  });
 
-// Log — fire and forget, never block the primary action
-supabase.from("llm_calls").insert({
-  user_id: userId,
-  ticket_id: ticketId,
-  feature: "reply_suggestion",          // snake_case feature name
-  provider: process.env["INTELLIGENCE_PROVIDER"] ?? "ollama",
-  model: resolveModelVersion(),
-  prompt_version: "1.0.0",              // from prompt frontmatter
-  prompt_text: prompt,
-  response_text: responseText,
-  confidence_score: parsedConfidence,   // null if not available
-  latency_ms: Date.now() - start,
-  error_code: errorCode,
-  error_detail: errorDetail,
-}).then(({ error }) => {
-  if (error) console.error("[llm_calls] log failed", error.message);
-});
+  logLlmCall({
+    feature: "email_classification",     // snake_case feature name
+    model: meta.model,
+    promptVersion,                        // from prompt file heading, or null
+    promptText: prompt,
+    responseText: meta.rawText,
+    promptTokens: meta.usage.promptTokens,
+    completionTokens: meta.usage.completionTokens,
+    confidenceScore: result.confidence,
+    latencyMs: Date.now() - start,
+    triggeredByUserId: userId,            // null if not yet known
+    accountId,
+    ticketId: ticketId ?? null,           // null if not yet known
+  });
+} catch (err) {
+  logLlmCall({
+    feature: "email_classification",
+    model: resolveModelVersion(),
+    promptText: `${from} | ${subject}`,
+    latencyMs: Date.now() - start,
+    errorCode: "LLM_ERROR",
+    errorDetail: err instanceof Error ? err.message : String(err),
+    triggeredByUserId: userId,
+    accountId,
+  });
+}
 ```
 
+For a raw `complete()`-style call (e.g. reply suggestion), use
+`provider.completeWithMeta(prompt, options)` the same way — `meta.rawText`,
+`meta.model`, and `meta.usage` come straight from the provider response
+(Ollama: `prompt_eval_count` / `eval_count`; Anthropic: `usage.input_tokens` /
+`usage.output_tokens`).
+
 **Rules:**
-- Log is fire-and-forget — a logging failure must NEVER fail the user request
+- Log is fire-and-forget (`logLlmCall` never throws/blocks) — a logging failure must NEVER fail the user request
+- The one exception is `reply_suggestion`'s `suggest-reply` endpoint, which does an **awaited** insert into `llm_calls` (still wrapped in try/catch) so it can return `llm_call_id` to the client for outcome writeback
 - Always capture `latency_ms` — it's the most actionable signal for cost/perf
 - Always set `feature` to a stable snake_case identifier — this is the grouping key for all analysis
-- Always set `prompt_version` from the prompt file's frontmatter — without this, regression analysis is impossible
+- Always set `prompt_version` from the prompt file's heading/frontmatter (`extractPromptVersion()` / `getPromptVersion()`) — without this, regression analysis is impossible
 
 ---
 
 ## Writing back the agent outcome
 
-When the agent accepts, edits, or rejects a suggestion, record it:
+When the agent accepts, edits, or rejects a suggestion, record it via:
 
-```typescript
-await supabase
-  .from("llm_calls")
-  .update({
-    outcome: "accepted",            // 'accepted' | 'edited' | 'rejected' | 'ignored' | 'auto_applied'
-    outcome_recorded_at: new Date().toISOString(),
-  })
-  .eq("id", llmCallId);
+```
+PATCH /v1/tickets/:id/suggest-reply/:llmCallId/outcome
+Body: { "outcome": "accepted" }   // 'accepted' | 'edited' | 'rejected' | 'ignored' | 'auto_applied'
 ```
 
-The `llm_call_id` should be returned from the suggestion endpoint and stored client-side until the agent acts.
+This validates `outcome` against the enum, and updates `llm_calls` setting
+`outcome` + `outcome_recorded_at = new Date().toISOString()` scoped to
+`id = :llmCallId AND account_id = ctx.accountId` (tenant-scoped). Returns 400
+on an invalid outcome value, 404 if no row matched.
+
+The `llm_call_id` is returned from `POST /v1/tickets/:id/suggest-reply` and
+should be stored client-side until the agent acts on the suggestion.
 
 ---
 
@@ -161,9 +180,14 @@ GROUP BY model;
 
 | Call site | Instrumented |
 |---|---|
-| `email_classification` (pipeline tier1/2/3) | ⏳ pending |
-| `reply_suggestion` (KAI-31) | ⏳ pending — `llm_call_id` not yet returned to client |
+| `email_classification` — pipeline tier1 (`functions/pipeline/tier1-fast-path.ts`) | ✅ done (KAI-110) |
+| `email_classification` — pipeline tier2 (`functions/pipeline/tier2-background.ts`) | ✅ done (KAI-110) |
+| `email_classification` — pipeline tier3 (`functions/pipeline/tier3-deferred.ts`) | ✅ done (KAI-110) |
+| `email_classification` — incremental sync (`functions/pipeline/incremental-sync.ts`) | ✅ done (KAI-110) |
+| `email_classification` — batch classify (`functions/batch-classify.ts`) | ✅ done (KAI-110) |
+| `email_classification` — manual classify (`routes/v1/tickets.ts` `POST /:id/classify`, `POST /classify-batch`) | ✅ done (KAI-110) |
+| `reply_suggestion` (KAI-31, `routes/v1/tickets.ts` `POST /:id/suggest-reply`) | ✅ done (KAI-110) — `llm_call_id` returned to client; outcome writeback via `PATCH /:id/suggest-reply/:llmCallId/outcome` |
 | `kb_search` | ⏳ not built yet (ADR-012 pending) |
 | `resolution_summary` | ⏳ pending |
 
-Table exists. Instrumentation is the next step per feature as they are built or revisited.
+Table exists and is now actively populated by the call sites above.

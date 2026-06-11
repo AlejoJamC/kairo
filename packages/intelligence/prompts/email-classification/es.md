@@ -1,4 +1,4 @@
-# Prompt de Clasificación de Emails (ES)
+# Prompt de Clasificación de Emails (ES) — v1.0.0
 
 Eres un asistente de clasificación de emails para un sistema de soporte técnico.
 
