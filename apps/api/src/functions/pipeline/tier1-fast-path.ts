@@ -9,6 +9,7 @@ import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { buildEscalationContext } from "../../routes/v1/tickets.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
+import { maybeSendTicketAcknowledgement } from "../../lib/ticket-acknowledgement.js";
 import { maybeGenerateTicketEmbedding } from "../../lib/ticket-embedding.js";
 import { pipelineLog, pipelineLogRun } from "../../lib/pipeline-logger.js";
 import { NonRetriableError } from "inngest";
@@ -351,9 +352,10 @@ export const tier1FastPath = inngest.createFunction(
 
             // KAI-165: upsert conversation by thread, then find-or-create ticket.
             // KAI-115 §B: Before upsert, attempt broken-thread re-association via [KAIRO-xxx] token.
-            let ticket: { id: string } | null = null;
+            let ticket: { id: string; ticket_number: number } | null = null;
             let was_created = true;
             let prior_status: string | null = null;
+            let conversationIdForMessages: string | null = null;
 
             if (channelIntegrationId) {
               try {
@@ -413,9 +415,10 @@ export const tier1FastPath = inngest.createFunction(
                   classificationTier: 1,
                   priorityScore,
                 });
-                ticket = { id: result.ticket_id };
+                ticket = { id: result.ticket_id, ticket_number: result.ticket_number };
                 was_created = result.was_created;
                 prior_status = result.prior_status;
+                conversationIdForMessages = conversation_id;
                 pipelineLog("tier1:db", `tickets OK → ticket_id=${ticket.id} was_created=${was_created}`);
 
                 // Upsert the message row (message_id_header: KAI-115 §A for In-Reply-To / References)
@@ -484,7 +487,7 @@ export const tier1FastPath = inngest.createFunction(
                     emotion_confidence: classification.confidence,
                     score_computed_at: classified_at,
                   })
-                  .select("id")
+                  .select("id, ticket_number")
                   .single();
                 if (ticketErr) pipelineLog("tier1:db", `fallback tickets FAILED for ${messageId}: ${ticketErr.message}`);
                 else {
@@ -522,7 +525,7 @@ export const tier1FastPath = inngest.createFunction(
                   emotion_confidence: classification.confidence,
                   score_computed_at: classified_at,
                 })
-                .select("id")
+                .select("id, ticket_number")
                 .single();
               if (ticketErr) pipelineLog("tier1:db", `tickets FAILED for ${messageId}: ${ticketErr.message}`);
               else {
@@ -570,19 +573,44 @@ export const tier1FastPath = inngest.createFunction(
                 });
               }
 
-              maybeSendOutOfHoursReply({
+              // KAI-246: send the acknowledgement first. If it goes out, skip the
+              // out-of-hours reply for this creation — the customer should not get
+              // two auto-replies for the same inbound email. When the flag is off
+              // (default) or the ack didn't send, out-of-hours behaves as before.
+              const ackOutcome = await maybeSendTicketAcknowledgement({
                 supabase,
                 accountId,
                 ticketId: ticket.id,
-                gmailAccessToken,
+                ticketNumber: ticket.ticket_number,
+                conversationId: conversationIdForMessages,
+                channelIntegrationId,
                 gmailThreadId: message.threadId,
-                gmailMessageId: messageId,
-                fromHeader: from,
                 subject,
+                fromHeader: from,
+                customerDisplayName: from_name,
+                category: classification.category,
                 receivedAt,
+                messageIdHeader,
               }).catch((err: unknown) => {
-                console.error(`[tier1] Out-of-hours reply failed for ticket ${ticket!.id}:`, err);
+                console.error(`[tier1] Acknowledgement failed for ticket ${ticket!.id}:`, err);
+                return { sent: false as const, reason: "send_failed" as const };
               });
+
+              if (!ackOutcome.sent) {
+                maybeSendOutOfHoursReply({
+                  supabase,
+                  accountId,
+                  ticketId: ticket.id,
+                  gmailAccessToken,
+                  gmailThreadId: message.threadId,
+                  gmailMessageId: messageId,
+                  fromHeader: from,
+                  subject,
+                  receivedAt,
+                }).catch((err: unknown) => {
+                  console.error(`[tier1] Out-of-hours reply failed for ticket ${ticket!.id}:`, err);
+                });
+              }
 
               maybeGenerateTicketEmbedding({
                 supabase,

@@ -34,6 +34,7 @@ export interface FindOrCreateTicketArgs {
 
 export interface FindOrCreateTicketResult {
   ticket_id: string;
+  ticket_number: number;
   was_created: boolean;
   prior_status: string | null; // when was_created=false; for transitions
 }
@@ -56,7 +57,7 @@ export async function findOrCreateTicketForThread(
   // 1. Look for an existing active ticket for this conversation
   const { data: existing } = await client
     .from("tickets")
-    .select("id, status")
+    .select("id, ticket_number, status")
     .eq("account_id", accountId)
     .eq("conversation_id", conversationId)
     .is("merged_into_ticket_id", null)
@@ -66,6 +67,7 @@ export async function findOrCreateTicketForThread(
   if (existing) {
     return {
       ticket_id: existing.id,
+      ticket_number: existing.ticket_number,
       was_created: false,
       prior_status: existing.status ?? null,
     };
@@ -102,7 +104,7 @@ export async function findOrCreateTicketForThread(
       score_computed_at: classifiedAt,
       status: "open",
     })
-    .select("id")
+    .select("id, ticket_number")
     .single();
 
   if (insertErr) {
@@ -112,7 +114,7 @@ export async function findOrCreateTicketForThread(
     // Race condition — another worker inserted between our SELECT and INSERT
     const { data: raceRow, error: raceErr } = await client
       .from("tickets")
-      .select("id, status")
+      .select("id, ticket_number, status")
       .eq("account_id", accountId)
       .eq("conversation_id", conversationId)
       .is("merged_into_ticket_id", null)
@@ -126,6 +128,7 @@ export async function findOrCreateTicketForThread(
     }
     return {
       ticket_id: raceRow.id,
+      ticket_number: raceRow.ticket_number,
       was_created: false,
       prior_status: raceRow.status ?? null,
     };
@@ -137,6 +140,7 @@ export async function findOrCreateTicketForThread(
 
   return {
     ticket_id: inserted.id,
+    ticket_number: inserted.ticket_number,
     was_created: true,
     prior_status: null,
   };

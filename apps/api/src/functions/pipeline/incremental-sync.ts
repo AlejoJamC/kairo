@@ -5,6 +5,7 @@ import { getFreshGmailToken, getGmailEmailByAccount } from "../../lib/gmail-toke
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
+import { maybeSendTicketAcknowledgement } from "../../lib/ticket-acknowledgement.js";
 import { maybeGenerateTicketEmbedding } from "../../lib/ticket-embedding.js";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
@@ -231,6 +232,7 @@ export const incrementalSync = inngest.createFunction(
         const msgHeaders = message.payload?.headers ?? [];
         const from = headerValue(msgHeaders, "From");
         const subject = headerValue(msgHeaders, "Subject");
+        const messageIdHeader = headerValue(msgHeaders, "Message-ID") || null;
         const dateStr = headerValue(msgHeaders, "Date");
         const receivedAt = dateStr
           ? new Date(dateStr).toISOString()
@@ -288,8 +290,10 @@ export const incrementalSync = inngest.createFunction(
             const classified_at = new Date().toISOString();
 
             let ticketId: string | null = null;
+            let ticketNumber: number | null = null;
             let was_created = true;
             let prior_status: string | null = null;
+            let conversationIdForMessages: string | null = null;
 
             if (channelIntegrationId) {
               try {
@@ -330,8 +334,10 @@ export const incrementalSync = inngest.createFunction(
                   priorityScore: null,
                 });
                 ticketId = result.ticket_id;
+                ticketNumber = result.ticket_number;
                 was_created = result.was_created;
                 prior_status = result.prior_status;
+                conversationIdForMessages = conversation_id;
 
                 // Update message row with conversation + classified status
                 await supabase
@@ -389,9 +395,10 @@ export const incrementalSync = inngest.createFunction(
                     classified_at,
                     classification_tier: 0,
                   })
-                  .select("id")
+                  .select("id, ticket_number")
                   .single();
                 ticketId = fallbackTicket?.id ?? null;
+                ticketNumber = fallbackTicket?.ticket_number ?? null;
 
                 await supabase
                   .from("messages")
@@ -420,28 +427,57 @@ export const incrementalSync = inngest.createFunction(
                   classified_at,
                   classification_tier: 0,
                 })
-                .select("id")
+                .select("id, ticket_number")
                 .single();
               ticketId = bareTicket?.id ?? null;
+              ticketNumber = bareTicket?.ticket_number ?? null;
             }
 
             if (ticketId && was_created) {
-              maybeSendOutOfHoursReply({
-                supabase,
-                accountId,
-                ticketId,
-                gmailAccessToken,
-                gmailThreadId: threadId,
-                gmailMessageId: messageId,
-                fromHeader: from,
-                subject,
-                receivedAt,
-              }).catch((err: unknown) => {
-                console.error(
-                  `[incremental-sync] Out-of-hours reply failed for ticket ${ticketId}:`,
-                  err
-                );
-              });
+              // KAI-246: send the acknowledgement first. If it goes out, skip the
+              // out-of-hours reply for this creation — the customer should not get
+              // two auto-replies for the same inbound email. When the flag is off
+              // (default), the ack didn't send, or ticketNumber is unavailable,
+              // out-of-hours behaves as before.
+              const ackOutcome = ticketNumber === null
+                ? { sent: false as const, reason: "send_failed" as const }
+                : await maybeSendTicketAcknowledgement({
+                    supabase,
+                    accountId,
+                    ticketId,
+                    ticketNumber,
+                    conversationId: conversationIdForMessages,
+                    channelIntegrationId,
+                    gmailThreadId: threadId,
+                    subject,
+                    fromHeader: from,
+                    customerDisplayName: null,
+                    category: classification.category,
+                    receivedAt,
+                    messageIdHeader,
+                  }).catch((err: unknown) => {
+                    console.error(`[incremental-sync] Acknowledgement failed for ticket ${ticketId}:`, err);
+                    return { sent: false as const, reason: "send_failed" as const };
+                  });
+
+              if (!ackOutcome.sent) {
+                maybeSendOutOfHoursReply({
+                  supabase,
+                  accountId,
+                  ticketId,
+                  gmailAccessToken,
+                  gmailThreadId: threadId,
+                  gmailMessageId: messageId,
+                  fromHeader: from,
+                  subject,
+                  receivedAt,
+                }).catch((err: unknown) => {
+                  console.error(
+                    `[incremental-sync] Out-of-hours reply failed for ticket ${ticketId}:`,
+                    err
+                  );
+                });
+              }
 
               maybeGenerateTicketEmbedding({
                 supabase,
