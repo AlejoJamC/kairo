@@ -36,10 +36,10 @@ const BASE_ARGS = {
 };
 
 function makeMockClient({
-  existingTicket = null as { id: string; status: string } | null,
-  insertedTicket = null as { id: string } | null,
+  existingTicket = null as { id: string; ticket_number: number; status: string } | null,
+  insertedTicket = null as { id: string; ticket_number: number } | null,
   insertError = null as { code: string; message: string } | null,
-  raceTicket = null as { id: string; status: string } | null,
+  raceTicket = null as { id: string; ticket_number: number; status: string } | null,
 } = {}) {
   // Track how many times maybeSingle is called so we can return different values
   // for the initial SELECT (existingTicket) and the race re-read (raceTicket).
@@ -77,17 +77,19 @@ function makeMockClient({
 
 describe("findOrCreateTicketForThread", () => {
   it("returns existing ticket when found (was_created=false)", async () => {
-    const client = makeMockClient({ existingTicket: { id: "ticket-existing", status: "open" } });
+    const client = makeMockClient({ existingTicket: { id: "ticket-existing", ticket_number: 42, status: "open" } });
     const result = await findOrCreateTicketForThread(client, BASE_ARGS);
     expect(result.ticket_id).toBe("ticket-existing");
+    expect(result.ticket_number).toBe(42);
     expect(result.was_created).toBe(false);
     expect(result.prior_status).toBe("open");
   });
 
   it("creates new ticket when none exists (was_created=true)", async () => {
-    const client = makeMockClient({ insertedTicket: { id: "ticket-new" } });
+    const client = makeMockClient({ insertedTicket: { id: "ticket-new", ticket_number: 101 } });
     const result = await findOrCreateTicketForThread(client, BASE_ARGS);
     expect(result.ticket_id).toBe("ticket-new");
+    expect(result.ticket_number).toBe(101);
     expect(result.was_created).toBe(true);
     expect(result.prior_status).toBeNull();
   });
@@ -95,10 +97,11 @@ describe("findOrCreateTicketForThread", () => {
   it("handles 23505 race condition — re-reads and returns was_created=false", async () => {
     const client = makeMockClient({
       insertError: { code: "23505", message: "unique violation" },
-      raceTicket: { id: "ticket-race", status: "awaiting_customer" },
+      raceTicket: { id: "ticket-race", ticket_number: 7, status: "awaiting_customer" },
     });
     const result = await findOrCreateTicketForThread(client, BASE_ARGS);
     expect(result.ticket_id).toBe("ticket-race");
+    expect(result.ticket_number).toBe(7);
     expect(result.was_created).toBe(false);
     expect(result.prior_status).toBe("awaiting_customer");
   });

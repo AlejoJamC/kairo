@@ -15,6 +15,12 @@
 //                                  contact-extraction worker (creates draft_contact rows from
 //                                  classified tickets). OFF by default — the classifier
 //                                  pipeline is intentionally decoupled and the worker is opt-in.
+//   enable_ticket_acknowledgement — KAI-246: send `acknowledgement.html` (via outbox) to the
+//                                  customer when a new ticket is created from an inbound
+//                                  email (tier1-fast-path / incremental-sync, was_created=true).
+//                                  OFF by default. When ON and the send succeeds, the
+//                                  out-of-hours auto-reply (KAI-40) is skipped for that
+//                                  creation to avoid double auto-replies.
 // =============================================================================
 
 // ─── Static dashboard flags (build-time, no env override) ────────────────────
@@ -39,6 +45,7 @@ const ENV_PREFIX = "FEATURE_FLAG_";
 const FLAG_DEFAULTS = {
   enable_detection_ui: false,
   enable_contact_extraction: false,
+  enable_ticket_acknowledgement: false,
 } as const;
 
 type RuntimeFlagName = keyof typeof FLAG_DEFAULTS;

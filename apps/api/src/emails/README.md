@@ -8,7 +8,7 @@ Sistema de templates HTML para todos los correos **system-generated** que Kairo 
 
 | Archivo | Template | Disparador | Estado backend |
 |---|---|---|---|
-| `templates/acknowledgement.html` | Kairo Support (acknowledgement) | Creación de ticket nuevo desde correo entrante (`was_created=true` en tier1 / incremental-sync) | **Implementar** (KAI-223) |
+| `templates/acknowledgement.html` | Kairo Support (acknowledgement) | Creación de ticket nuevo desde correo entrante (`was_created=true` en tier1 / incremental-sync) | **Implementado** (KAI-246), detrás de la feature flag `enable_ticket_acknowledgement` (OFF por defecto) |
 | `templates/agent-reply.html` | Agent Reply | Botón **Enviar** del triage → `POST /v1/tickets/:id/reply` | **Implementar** — reemplaza el wrapper genérico de `buildHtmlBody()` en `lib/template-renderer.ts` |
 | `templates/resolved.html` | Resolved | Botón **Enviar y resolver** del triage (reply + transición a `resolved`) | **Implementar** (KAI-223) |
 | `templates/csat-survey.html` | CSAT Survey | Encuesta post-resolución (cron/worker futuro) | **Sin trigger** — solo dejar renderizable |
@@ -44,6 +44,10 @@ Las cuatro primeras (`help_center_url`, `status_url`, `privacy_url`, `unsubscrib
 
 ### `acknowledgement.html`
 `{{ticket_category}}` (clasificación del pipeline), `{{ticket_created_at}}` (formateada, locale es).
+
+**Feature flag (KAI-246):** `enable_ticket_acknowledgement` (`packages/feature-flags`), **OFF por defecto**. Disparado desde `apps/api/src/lib/ticket-acknowledgement.ts` (`maybeSendTicketAcknowledgement`), llamado por `tier1-fast-path.ts` e `incremental-sync.ts` justo después de `findOrCreateTicketForThread` cuando `was_created=true`. Guards (cualquiera aborta el envío sin romper el pipeline): flag OFF, mensaje fuera de la ventana de frescura de 15 min (protege backfills/re-syncs), sin `gmailThreadId`, o sin email de destinatario parseable.
+
+**Coexistencia con out-of-hours (KAI-40):** ambos triggers comparten el mismo bloque `was_created=true`. Si el acknowledgement se envía exitosamente (`{ sent: true }`), se **omite** el reply de out-of-hours para esa creación — el cliente no debe recibir dos auto-replies para el mismo correo entrante. Si la flag está OFF o el ack no se envía (cualquier guard o error), out-of-hours funciona exactamente igual que hoy.
 
 ### `agent-reply.html`
 `{{agent_name}}`, `{{agent_role}}`, `{{agent_initials}}` (derivar de identidad del agente; fallback actual: buzón del tenant), `{{agent_message}}` (cuerpo del agente ya resuelto y sanitizado — `sanitizeHtml()`), `{{sent_at}}`, `{{original_message}}` (snippet/quote del último mensaje del cliente).
