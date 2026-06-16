@@ -8,6 +8,7 @@ Cockpit de soporte con IA para empresas que usan n8n — clasifica correos, enru
 |---|---|
 | Monorepo | Turborepo + Bun |
 | WebApp | Vite + React 19 |
+| API | Bun + Hono + Inngest |
 | Landing | Next.js 15 |
 | Admin (Kelan) | Next.js 15 |
 | Base de datos | Supabase (Postgres + Auth) |
@@ -21,15 +22,19 @@ Cockpit de soporte con IA para empresas que usan n8n — clasifica correos, enru
 ```
 kairo/
 ├── apps/
-│   ├── dashboard/    # Vite + React — dashboard de soporte
-│   ├── landing/   # Next.js — sitio de marketing
-│   ├── kelan/     # Next.js — panel de administración (interno)
+│   ├── api/       # Bun + Hono — API backend + funciones Inngest (puerto 3001)
+│   ├── dashboard/ # Vite + React — dashboard de soporte (puerto 5173)
+│   ├── landing/   # Next.js — sitio de marketing (puerto 3000)
+│   ├── kelan/     # Next.js — panel de administración (interno, puerto 3002)
 │   └── mobile/    # Expo — app móvil
 ├── packages/
 │   ├── env/            # validación centralizada de variables (@t3-oss/env-core)
 │   ├── types/          # interfaces TypeScript compartidas
 │   ├── i18n/           # traducciones compartidas (EN/ES)
 │   ├── ui/             # componentes ShadCN compartidos
+│   ├── feature-flags/  # feature flags estáticos y de runtime
+│   ├── identity/       # normalización de email/teléfono, dedup de contactos
+│   ├── claude_design/  # paquete de tokens de diseño Pencil
 │   └── intelligence/   # proveedor LLM modular (Ollama / Anthropic)
 │       └── prompts/    # prompts LLM versionados (markdown + frontmatter YAML)
 ├── supabase/
@@ -45,6 +50,7 @@ bun install
 bun run dev
 ```
 
+- API → http://localhost:3001
 - WebApp → http://localhost:5173
 - Landing → http://localhost:3000
 - Kelan (admin) → http://localhost:3002
@@ -74,8 +80,10 @@ Cada app lee desde ese único archivo:
 
 | App | Cómo lee el `.env.local` raíz |
 |---|---|
+| `apps/api` | `bun run --env-file ../../.env.local` — cargado directamente por Bun al arrancar |
 | `apps/dashboard` | Vite tiene `envDir: "../../"` apuntando a la raíz del monorepo |
 | `apps/landing` | `next.config.ts` llama a `loadEnvConfig("../../")` antes de que webpack compile, para que las variables `NEXT_PUBLIC_*` queden embebidas en el bundle del cliente |
+| `apps/kelan` | `next.config.ts` llama a `loadEnvConfig("../../")` — mismo patrón que landing |
 
 El `.env.example` está agrupado en tres secciones — `SHARED`, `LANDING` y `WEBAPP` — con comentarios que explican cada variable.
 
@@ -83,9 +91,10 @@ El `.env.example` está agrupado en tres secciones — `SHARED`, `LANDING` y `WE
 
 | Paquete / App | Archivo | Variables que gestiona |
 |---|---|---|
-| `packages/env` | `index.ts` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INTELLIGENCE_PROVIDER`, `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_SECRET` |
+| `packages/env` | `index.ts` | Variables de backend compartidas: Supabase, AI/LLM, pipeline (tiempos, concurrencia), Inngest, feature flags de servidor |
 | `apps/dashboard` | `src/env.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LANDING_URL` |
-| `apps/landing` | `env.ts` | Todas las variables `NEXT_PUBLIC_*` + `GOOGLE_CLIENT_SECRET` |
+| `apps/landing` | `env.ts` | Todas las variables `NEXT_PUBLIC_*` + `GOOGLE_CLIENT_SECRET`, `INNGEST_EVENT_KEY` |
+| `apps/kelan` | `env.ts` | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_KELAN_URL` |
 
 Nunca accedas a `process.env` o `import.meta.env` directamente — siempre importa desde el `env.ts` más cercano:
 

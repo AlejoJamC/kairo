@@ -10,6 +10,7 @@ AI-powered support cockpit for n8n companies — classifies emails, routes ticke
 |---|---|
 | Monorepo | Turborepo + Bun |
 | WebApp | Vite + React 19 |
+| API | Bun + Hono + Inngest |
 | Landing | Next.js 15 |
 | Admin (Kelan) | Next.js 15 |
 | Database | Supabase (Postgres + Auth) |
@@ -23,9 +24,10 @@ AI-powered support cockpit for n8n companies — classifies emails, routes ticke
 ```
 kairo/
 ├── apps/
-│   ├── dashboard/    # Vite + React — support dashboard
-│   ├── landing/   # Next.js — marketing site
-│   ├── kelan/     # Next.js — admin panel (internal)
+│   ├── api/       # Bun + Hono — backend API + Inngest functions (port 3001)
+│   ├── dashboard/ # Vite + React — support dashboard (port 5173)
+│   ├── landing/   # Next.js — marketing site (port 3000)
+│   ├── kelan/     # Next.js — admin panel (internal, port 3002)
 │   └── mobile/    # Expo — mobile app
 ├── packages/
 │   ├── env/            # centralized env validation (@t3-oss/env-core)
@@ -50,6 +52,7 @@ bun install
 bun run dev
 ```
 
+- API → http://localhost:3001
 - WebApp → http://localhost:5173
 - Landing → http://localhost:3000
 - Kelan (admin) → http://localhost:3002
@@ -79,6 +82,7 @@ Each app reads from that single file:
 
 | App | How it reads root `.env.local` |
 |---|---|
+| `apps/api` | `bun run --env-file ../../.env.local` — loaded directly by Bun at startup |
 | `apps/dashboard` | Vite `envDir: "../../"` points it at the monorepo root |
 | `apps/landing` | `next.config.ts` calls `loadEnvConfig("../../")` before webpack compiles, so `NEXT_PUBLIC_*` vars get inlined into the client bundle |
 | `apps/kelan` | `next.config.ts` calls `loadEnvConfig("../../")` — same pattern as landing |
@@ -89,10 +93,10 @@ The `.env.example` is grouped into three sections — `SHARED`, `LANDING`, and `
 
 | Package / App | File | Variables it owns |
 |---|---|---|
-| `packages/env` | `index.ts` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INTELLIGENCE_PROVIDER`, `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_SECRET` |
+| `packages/env` | `index.ts` | Shared backend variables: Supabase, AI/LLM, pipeline (concurrency, timeouts), Inngest, server-side feature flags |
 | `apps/dashboard` | `src/env.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LANDING_URL` |
-| `apps/landing` | `env.ts` | All `NEXT_PUBLIC_*` vars + `GOOGLE_CLIENT_SECRET` |
-| `apps/kelan` | `env.ts` | Supabase public vars for admin panel |
+| `apps/landing` | `env.ts` | All `NEXT_PUBLIC_*` vars + `GOOGLE_CLIENT_SECRET`, `INNGEST_EVENT_KEY` |
+| `apps/kelan` | `env.ts` | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_KELAN_URL` |
 
 Never access `process.env` or `import.meta.env` directly — always import from the nearest `env.ts`:
 

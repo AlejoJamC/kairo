@@ -47,6 +47,7 @@ Valid values: `"true"` and `"false"`. Anything else (empty, missing, typo) falls
 |---|---|---|---|---|
 | `enable_detection_ui` | `FEATURE_FLAG_ENABLE_DETECTION_UI` | `false` | KAI-201 | Shows the real-time email detection step inside the onboarding wizard. When off, the wizard skips straight to completion. |
 | `enable_contact_extraction` | `FEATURE_FLAG_ENABLE_CONTACT_EXTRACTION` | `false` | KAI-225 | Emits the `tickets/ticket.created` Inngest event from both `tier1-fast-path.ts` and `apps/landing/app/bff/gmail/sync/route.ts`. When off, the classifier pipeline is completely unaware of the contact-extraction worker — zero side effects, no `worker_runs` rows, no `draft_contact` writes. Designed so the classifier promise (ADR-017's 60s SLO) is never put at risk by an opt-in subscriber. |
+| `enable_ticket_acknowledgement` | `FEATURE_FLAG_ENABLE_TICKET_ACKNOWLEDGEMENT` | `false` | KAI-246 | Sends `acknowledgement.html` (via outbox) to the customer when a new ticket is created from an inbound email (`was_created=true` in tier1-fast-path / incremental-sync). Guards: flag OFF, message outside 15-min freshness window, no `gmailThreadId`, or no parseable recipient email. When the ack is sent successfully, the out-of-hours auto-reply (KAI-40) is skipped for that creation to avoid double auto-replies. |
 
 ## Adding a new runtime flag
 
