@@ -1,7 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { buildPrompt } from './prompt';
-import { classifyEmail } from './classify';
+import { buildPrompt, extractPromptVersion, getPromptVersion } from './prompt';
+import { classifyEmail, classifyEmailWithMeta } from './classify';
 import { TONE } from './schema';
+
+describe('extractPromptVersion', () => {
+  it('extracts a semver version from a heading', () => {
+    expect(extractPromptVersion('# Some Prompt — v1.0.0\n\nBody')).toBe('1.0.0');
+  });
+
+  it('returns null when no version marker is present', () => {
+    expect(extractPromptVersion('# Some Prompt\n\nBody')).toBeNull();
+  });
+});
+
+describe('getPromptVersion', () => {
+  it('reads the version from the ES classification prompt', async () => {
+    expect(await getPromptVersion('es')).toBe('1.0.0');
+  });
+
+  it('reads the version from the EN classification prompt', async () => {
+    expect(await getPromptVersion('en')).toBe('1.0.0');
+  });
+});
 
 describe('buildPrompt', () => {
   it('loads the Spanish template by default and substitutes placeholders', async () => {
@@ -133,5 +153,21 @@ describe.skipIf(skipLlm)('classifyEmail with real prompt', () => {
     expect(es.priority).toBe(en.priority);
     expect(es.type).toBe(en.type);
     expect(es.urgency).toBe(en.urgency);
+  });
+
+  it('classifyEmailWithMeta returns result, meta (rawText/model/usage), prompt and promptVersion', async () => {
+    const { result, meta, prompt, promptVersion } = await classifyEmailWithMeta({
+      subject: 'No puedo iniciar sesión',
+      body: 'Llevo dos horas intentando entrar y no puedo. Es muy frustrante.',
+      from: 'user@client.com',
+    });
+
+    expect(TONE).toContain(result.tone);
+    expect(typeof meta.rawText).toBe('string');
+    expect(typeof meta.model).toBe('string');
+    expect(meta.usage).toHaveProperty('promptTokens');
+    expect(meta.usage).toHaveProperty('completionTokens');
+    expect(prompt).toContain('user@client.com');
+    expect(promptVersion).toBe('1.0.0');
   });
 });

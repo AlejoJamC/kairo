@@ -34,3 +34,18 @@ export async function buildPrompt(
     .replaceAll('{{subject}}', message.subject)
     .replaceAll('{{body}}', message.body);
 }
+
+/**
+ * Extracts the prompt version from the first heading line, e.g.
+ * `# Prompt de Clasificación de Emails (ES) — v1.0.0` → `1.0.0`.
+ * Returns null if no version marker is present (KAI-110).
+ */
+export function extractPromptVersion(template: string): string | null {
+  const match = template.match(/v(\d+\.\d+\.\d+)/);
+  return match ? match[1] : null;
+}
+
+export async function getPromptVersion(lang: PromptLang = DEFAULT_LANG): Promise<string | null> {
+  const template = await loadTemplate(lang);
+  return extractPromptVersion(template);
+}
