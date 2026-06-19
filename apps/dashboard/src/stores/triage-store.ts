@@ -70,6 +70,9 @@ interface TriageStore {
   selectTicket: (id: string | null) => void;
   // Realtime UPDATE: merge classification fields into existing row
   updateClassification: (id: string, data: Partial<Ticket>) => void;
+  // Realtime UPDATE (any field, any status): merge if present, insert if the
+  // ticket re-enters the active triage queue (e.g. awaiting_customer -> open).
+  upsertTicket: (ticket: Ticket) => void;
   // Human correction: update ticket fields + mark as corrected
   applyCorrection: (id: string, fields: Partial<Ticket>) => void;
   setScanning: (v: boolean) => void;
@@ -102,10 +105,12 @@ export const useTriageStore = create<TriageStore>((set) => ({
   addTicket: (ticket) =>
     set((state) => {
       const deduped = [ticket, ...state.tickets.filter((t) => t.id !== ticket.id)];
+      const sorted = sortTickets(deduped);
       return {
-        tickets: deduped,
+        tickets: sorted,
         // First arrival auto-selects; subsequent arrivals don't change selection
         selectedTicketId: state.selectedTicketId ?? ticket.id,
+        classifiedCount: sorted.filter((t) => t.classified_at !== null).length,
       };
     }),
 
@@ -114,6 +119,19 @@ export const useTriageStore = create<TriageStore>((set) => ({
   updateClassification: (id, data) =>
     set((state) => {
       const merged = state.tickets.map((t) => (t.id === id ? { ...t, ...data } : t));
+      const sorted = sortTickets(merged);
+      return {
+        tickets: sorted,
+        classifiedCount: sorted.filter((t) => t.classified_at !== null).length,
+      };
+    }),
+
+  upsertTicket: (ticket) =>
+    set((state) => {
+      const exists = state.tickets.some((t) => t.id === ticket.id);
+      const merged = exists
+        ? state.tickets.map((t) => (t.id === ticket.id ? { ...t, ...ticket } : t))
+        : [...state.tickets, ticket];
       const sorted = sortTickets(merged);
       return {
         tickets: sorted,
