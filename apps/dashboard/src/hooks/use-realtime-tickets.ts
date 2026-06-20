@@ -6,7 +6,7 @@ import type { Ticket } from "@kairo/types";
 
 export function useRealtimeTickets() {
   const { user, accountId } = useAuth();
-  const { addTicket, updateClassification } = useTriageStore();
+  const { addTicket, upsertTicket } = useTriageStore();
 
   useEffect(() => {
     if (!user) return;
@@ -37,12 +37,11 @@ export function useRealtimeTickets() {
           ...(rowFilter ? { filter: rowFilter } : {}),
         },
         (payload) => {
-          const next = payload.new as Ticket;
-          const prev = payload.old as Partial<Ticket>;
-          // Only fire updateClassification when classified_at is newly set
-          if (next.classified_at && !prev.classified_at) {
-            updateClassification(next.id, next);
-          }
+          // Merge any field change (classification, status, etc.) and re-insert
+          // the ticket if it re-entered the active triage queue (e.g. a customer
+          // reply moves it awaiting_customer -> open). The render-time filter in
+          // ticket-list.tsx (isTriageActive) hides it again if it left the queue.
+          upsertTicket(payload.new as Ticket);
         }
       )
       .subscribe();
