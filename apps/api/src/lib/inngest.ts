@@ -43,6 +43,17 @@ export type KairoEvents = {
       accountId: string | null; // null = all accounts (use with caution)
     };
   };
+  /**
+   * KAI-248 — per-account Gmail poll request. Emitted by the new
+   * gmail-poll-cron fan-out function (and the reconverted manual sync
+   * button) and consumed by the new gmail-poll worker. Independent of
+   * apps/api/src/functions/pipeline/* — do NOT wire this into those.
+   */
+  "inbound/gmail.poll.requested": {
+    data: {
+      accountId: string;
+    };
+  };
   "messages/outbound.queued": {
     data: {
       messageId: string;

@@ -4,27 +4,23 @@ import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { apiCall } from '@/lib/api-client';
 
-interface SyncSummary {
-  processed: number;
-  created: number;
-  skipped: number;
-  total: number;
-  message?: string;
-}
-
 interface SyncButtonProps {
   onSyncComplete?: () => void;
 }
 
 export function SyncButton({ onSyncComplete }: SyncButtonProps) {
   const [syncing, setSyncing] = useState(false);
-  const [summary, setSummary] = useState<SyncSummary | null>(null);
+  // KAI-248: /bff/gmail/sync no longer processes emails synchronously — it
+  // only dispatches the inbound/gmail.poll.requested event. There is no more
+  // per-request summary (processed/created/skipped); the poll worker runs
+  // asynchronously, so we just confirm the dispatch succeeded.
+  const [dispatched, setDispatched] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSync = async () => {
     setSyncing(true);
     setError(null);
-    setSummary(null);
+    setDispatched(false);
 
     try {
       const response = await apiCall('/bff/gmail/sync', { method: 'POST' });
@@ -34,8 +30,7 @@ export function SyncButton({ onSyncComplete }: SyncButtonProps) {
         throw new Error(data.error || 'Sync failed');
       }
 
-      const data = await response.json();
-      setSummary(data.summary);
+      setDispatched(true);
       onSyncComplete?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sync Gmail');
@@ -76,7 +71,7 @@ export function SyncButton({ onSyncComplete }: SyncButtonProps) {
         {syncing ? 'Syncing…' : 'Sync Gmail'}
       </button>
 
-      {summary && (
+      {dispatched && (
         <div
           style={{
             marginTop: 6,
@@ -89,7 +84,7 @@ export function SyncButton({ onSyncComplete }: SyncButtonProps) {
             fontFamily: "var(--k-font-mono)",
           }}
         >
-          {summary.created} new · {summary.skipped} skipped
+          Sync requested — new emails will appear shortly
         </div>
       )}
 
