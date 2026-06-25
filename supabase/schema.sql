@@ -1002,11 +1002,16 @@ CREATE TABLE IF NOT EXISTS "public"."channel_integrations" (
     "last_synced_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "account_id" "uuid" NOT NULL
+    "account_id" "uuid" NOT NULL,
+    "gmail_history_id" "text"
 );
 
 
 ALTER TABLE "public"."channel_integrations" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."channel_integrations"."gmail_history_id" IS 'Gmail History API cursor (historyId) for incremental polling (KAI-248). NULL until seeded via users.getProfile on first poll for the account.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."classification_feedback" (

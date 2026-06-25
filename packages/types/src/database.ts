@@ -337,6 +337,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           external_account_id: string
+          gmail_history_id: string | null
           id: string
           is_active: boolean
           last_synced_at: string | null
@@ -348,6 +349,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           external_account_id: string
+          gmail_history_id?: string | null
           id?: string
           is_active?: boolean
           last_synced_at?: string | null
@@ -359,6 +361,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           external_account_id?: string
+          gmail_history_id?: string | null
           id?: string
           is_active?: boolean
           last_synced_at?: string | null
