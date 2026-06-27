@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "bun:test";
-import { FLAGS, getFlag } from "../src/flags.js";
+import { FLAGS, getFlag, getNumericFlag } from "../src/flags.js";
 
 const ENV_KEY = "FEATURE_FLAG_ENABLE_DETECTION_UI";
 const ENV_KEY_CONTACT = "FEATURE_FLAG_ENABLE_CONTACT_EXTRACTION";
@@ -64,6 +64,46 @@ describe("getFlag('enable_ticket_acknowledgement')", () => {
   it("returns false when env var is 'false'", () => {
     process.env[ENV_KEY_ACKNOWLEDGEMENT] = "false";
     expect(getFlag("enable_ticket_acknowledgement")).toBe(false);
+  });
+});
+
+describe("getNumericFlag('gmail_poll_cron_interval_minutes')", () => {
+  const ENV_KEY_INTERVAL = "FEATURE_FLAG_GMAIL_POLL_CRON_INTERVAL_MINUTES";
+
+  afterEach(() => {
+    delete process.env[ENV_KEY_INTERVAL];
+  });
+
+  it("returns the default (5) when env var is unset", () => {
+    delete process.env[ENV_KEY_INTERVAL];
+    expect(getNumericFlag("gmail_poll_cron_interval_minutes")).toBe(5);
+  });
+
+  it("returns the override when env var is a positive integer", () => {
+    process.env[ENV_KEY_INTERVAL] = "2";
+    expect(getNumericFlag("gmail_poll_cron_interval_minutes")).toBe(2);
+  });
+
+  it("falls back to the default on a non-integer value", () => {
+    process.env[ENV_KEY_INTERVAL] = "2.5";
+    expect(getNumericFlag("gmail_poll_cron_interval_minutes")).toBe(5);
+  });
+
+  it("falls back to the default on a zero or negative value", () => {
+    process.env[ENV_KEY_INTERVAL] = "0";
+    expect(getNumericFlag("gmail_poll_cron_interval_minutes")).toBe(5);
+    process.env[ENV_KEY_INTERVAL] = "-3";
+    expect(getNumericFlag("gmail_poll_cron_interval_minutes")).toBe(5);
+  });
+
+  it("falls back to the default on a non-numeric value", () => {
+    process.env[ENV_KEY_INTERVAL] = "soon";
+    expect(getNumericFlag("gmail_poll_cron_interval_minutes")).toBe(5);
+  });
+
+  it("falls back to the default on an empty string", () => {
+    process.env[ENV_KEY_INTERVAL] = "";
+    expect(getNumericFlag("gmail_poll_cron_interval_minutes")).toBe(5);
   });
 });
 

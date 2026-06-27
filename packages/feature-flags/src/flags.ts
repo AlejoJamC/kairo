@@ -15,6 +15,15 @@
 //                                  OFF by default. When ON and the send succeeds, the
 //                                  out-of-hours auto-reply (KAI-40) is skipped for that
 //                                  creation to avoid double auto-replies.
+//
+// Runtime-overrideable numeric flags (server-only, via FEATURE_FLAG_<UPPER_SNAKE> env vars):
+//   gmail_poll_cron_interval_minutes — KAI-248: how often (in minutes) the Gmail
+//                                  history.list poll cron fans out one event per active
+//                                  Gmail integration. Default: 5. Inngest cron syntax only
+//                                  supports whole-minute granularity. Set
+//                                  FEATURE_FLAG_GMAIL_POLL_CRON_INTERVAL_MINUTES=<n> to
+//                                  override. The cron schedule is registered at app
+//                                  startup, so a new value takes effect on next deploy/restart.
 // =============================================================================
 
 // ─── Static dashboard flags (build-time, no env override) ────────────────────
@@ -58,4 +67,32 @@ function readEnvFlag(envKey: string, defaultValue: boolean): boolean {
 export function getFlag(name: RuntimeFlagName): boolean {
   const envKey = `${ENV_PREFIX}${name.toUpperCase()}`;
   return readEnvFlag(envKey, FLAG_DEFAULTS[name]);
+}
+
+// ─── Runtime numeric flags with env override support ──────────────────────────
+
+const NUMERIC_FLAG_DEFAULTS = {
+  gmail_poll_cron_interval_minutes: 5,
+} as const;
+
+type NumericFlagName = keyof typeof NUMERIC_FLAG_DEFAULTS;
+
+function readEnvNumericFlag(envKey: string, defaultValue: number): number {
+  if (typeof process === "undefined") return defaultValue;
+  const raw = process.env[envKey];
+  if (raw === undefined || raw === "") return defaultValue;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) return defaultValue; // invalid → default
+  return parsed;
+}
+
+/**
+ * Returns the value of a runtime-overrideable numeric flag.
+ * Env var: FEATURE_FLAG_<UPPER_SNAKE_NAME>  (e.g. FEATURE_FLAG_GMAIL_POLL_CRON_INTERVAL_MINUTES)
+ * Server-only — reads process.env at call time. Falls back to the documented
+ * default when unset, empty, or not a positive integer.
+ */
+export function getNumericFlag(name: NumericFlagName): number {
+  const envKey = `${ENV_PREFIX}${name.toUpperCase()}`;
+  return readEnvNumericFlag(envKey, NUMERIC_FLAG_DEFAULTS[name]);
 }
