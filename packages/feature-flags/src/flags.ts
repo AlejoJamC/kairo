@@ -33,7 +33,7 @@ export const FLAGS = {
       clientTab:   true,
       similarTab:  true,
       articlesTab: true,
-      escalateTab: import.meta.env.VITE_ENABLE_ESCALATE_TAB === "true",
+      // escalateTab is handled separately — see ai-assistant.tsx for dynamic loading
     },
   },
 } as const;

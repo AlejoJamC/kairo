@@ -13,6 +13,9 @@ import {
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
 import { FLAGS } from "@kairo/feature-flags";
 
+// KAI-249: escalateTab is controlled by VITE_ENABLE_ESCALATE_TAB (defaults to false)
+const escalateTabEnabled = import.meta.env.VITE_ENABLE_ESCALATE_TAB === "true";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -605,7 +608,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
     { id: "client",   label: t("ai.tabClient")   },
     { id: "similar",  label: t("ai.tabSimilar")  },
     { id: "articles", label: t("ai.tabArticles") },
-    { id: "escalate", label: t("ai.tabEscalate"), disabled: !FLAGS.dashboard.rightPanel.escalateTab },
+    { id: "escalate", label: t("ai.tabEscalate"), disabled: !escalateTabEnabled },
   ];
 
   return (
@@ -668,7 +671,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
           <ArticlesTab ticketId={selectedTicketId} />
         )}
         {activeTab === "escalate" && (
-          FLAGS.dashboard.rightPanel.escalateTab ? (
+          escalateTabEnabled ? (
             <EscalateTab
               ticketId={selectedTicketId}
               customer={customer}
