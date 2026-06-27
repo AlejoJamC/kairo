@@ -4,6 +4,7 @@
 // Hierarchy:
 //   dashboard
 //     └── rightPanel
+//           ├── assistantTab    (Pestaña 0 — Assistant)
 //           ├── clientTab       (Pestaña 1 — Cliente)
 //           ├── similarTab      (Pestaña 2 — Similares)
 //           ├── articlesTab     (Pestaña 3 — Artículos)
@@ -28,10 +29,11 @@
 export const FLAGS = {
   dashboard: {
     rightPanel: {
+      assistantTab: true,
       clientTab:   true,
       similarTab:  true,
       articlesTab: true,
-      escalateTab: false, // 🚧 not ready for testing — re-enable when escalation flow is refined
+      escalateTab: import.meta.env.VITE_ENABLE_ESCALATE_TAB === "true",
     },
   },
 } as const;

@@ -140,6 +140,8 @@
   --k-accent:         #2B5BFF;
   --k-accent-hover:   #1E48E5;
   --k-accent-subtle:  #EEF2FF;
+  --k-accent-2:       #6E8BFF;
+  --k-gradient-ai:    linear-gradient(135deg, var(--k-accent), var(--k-accent-2));
   --k-font-mono:      "JetBrains Mono", "SF Mono", ui-monospace, monospace;
   --k-font-display:   "Inter Display", "Inter", system-ui, sans-serif;
 }

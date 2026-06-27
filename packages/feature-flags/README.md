@@ -34,12 +34,12 @@ Valid values: `"true"` and `"false"`. Anything else (empty, missing, typo) falls
 
 ## Static flags catalog
 
-| Path | Default | Description |
-|---|---|---|
-| `dashboard.rightPanel.clientTab` | `true` | Tab 1 of the ticket right panel — Client. |
-| `dashboard.rightPanel.similarTab` | `true` | Tab 2 — Similar tickets (semantic search). |
-| `dashboard.rightPanel.articlesTab` | `true` | Tab 3 — Knowledge base articles. |
-| `dashboard.rightPanel.escalateTab` | `false` | Tab 4 — Escalation flow. Disabled until the escalation UX is finalized. |
+| Path | Env var | Default | Description |
+|---|---|---|---|
+| `dashboard.rightPanel.clientTab` | — | `true` | Tab 1 of the ticket right panel — Client. |
+| `dashboard.rightPanel.similarTab` | — | `true` | Tab 2 — Similar tickets (semantic search). |
+| `dashboard.rightPanel.articlesTab` | — | `true` | Tab 3 — Knowledge base articles. |
+| `dashboard.rightPanel.escalateTab` | `VITE_ENABLE_ESCALATE_TAB` | `false` | Tab 4 — Escalation flow. Set `VITE_ENABLE_ESCALATE_TAB=true` in `.env.local` to enable. |
 
 ## Runtime flags catalog
 
@@ -60,8 +60,9 @@ Valid values: `"true"` and `"false"`. Anything else (empty, missing, typo) falls
 ## Adding a new static flag
 
 1. Add the entry to the `FLAGS` object in `src/flags.ts`.
-2. Add a row to the "Static flags catalog" table in this README.
-3. No env var, no test scaffolding — these are compile-time constants.
+2. Optionally bind it to a `VITE_*` variable if it needs environment override (e.g., `escalateTab`).
+3. Add a row to the "Static flags catalog" table in this README with the env var (if any).
+4. If backed by a VITE var: document in `.env.example` and comment the default value.
 
 ## Design notes
 

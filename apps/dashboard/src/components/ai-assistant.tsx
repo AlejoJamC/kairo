@@ -10,6 +10,7 @@ import {
   ClientProfileCard,
   ClientProfileSkeleton,
 } from "@/components/triage/ClientProfileCard";
+import { AssistantPanel } from "@/components/triage/AssistantPanel";
 import { FLAGS } from "@kairo/feature-flags";
 
 // ---------------------------------------------------------------------------
@@ -86,7 +87,7 @@ function formatSim(s: number | null): string | null {
 // Tab definitions
 // ---------------------------------------------------------------------------
 
-const TAB_IDS = ["client", "similar", "articles", "escalate"] as const;
+const TAB_IDS = ["assistant", "client", "similar", "articles", "escalate"] as const;
 type TabId = typeof TAB_IDS[number];
 
 // ---------------------------------------------------------------------------
@@ -578,7 +579,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   const { selectedTicketId, tickets, setClientProfile } = useTriageStore();
   const selectedTicket = tickets.find((tk) => tk.id === selectedTicketId) ?? null;
 
-  const [activeTab,      setActiveTab]      = useState<TabId>("client");
+  const [activeTab,      setActiveTab]      = useState<TabId>("assistant");
   const [profileLoading, setProfileLoading] = useState(false);
 
   // Single fetch owned here — runs on ticket change regardless of active tab.
@@ -596,10 +597,11 @@ export function AiAssistant({ customer }: AiAssistantProps) {
       .finally(() => setProfileLoading(false));
   }, [selectedTicketId]);
 
-  // Reset to "client" tab when ticket changes
-  useEffect(() => { setActiveTab("client"); }, [selectedTicketId]);
+  // Reset to "assistant" tab when ticket changes
+  useEffect(() => { setActiveTab("assistant"); }, [selectedTicketId]);
 
-  const tabs: { id: TabId; label: string; disabled?: boolean }[] = [
+  const tabs: { id: TabId; label: string; disabled?: boolean; ai?: boolean }[] = [
+    { id: "assistant", label: t("ai.tabAssistant"), disabled: !FLAGS.dashboard.rightPanel.assistantTab, ai: true },
     { id: "client",   label: t("ai.tabClient")   },
     { id: "similar",  label: t("ai.tabSimilar")  },
     { id: "articles", label: t("ai.tabArticles") },
@@ -615,13 +617,16 @@ export function AiAssistant({ customer }: AiAssistantProps) {
           {t("ai.panelTitle")}
         </p>
         <div style={{ display: "flex", borderBottom: "1px solid var(--k-border)" }}>
-          {tabs.map(({ id, label, disabled }) => (
+          {tabs.map(({ id, label, disabled, ai }) => (
             <button
               key={id}
               type="button"
               onClick={() => !disabled && setActiveTab(id)}
               disabled={disabled}
               style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
                 fontSize: 12,
                 padding: "8px 10px",
                 fontWeight: activeTab === id ? 500 : 400,
@@ -639,6 +644,9 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                 opacity: disabled ? 0.5 : 1,
               }}
             >
+              {ai && (
+                <span style={{ width: 5, height: 5, borderRadius: 999, flexShrink: 0, background: "var(--k-gradient-ai)" }} />
+              )}
               {label}
             </button>
           ))}
@@ -647,6 +655,9 @@ export function AiAssistant({ customer }: AiAssistantProps) {
 
       {/* Tab content */}
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+        {activeTab === "assistant" && (
+          <AssistantPanel />
+        )}
         {activeTab === "client" && (
           <ClientTab loading={profileLoading} />
         )}

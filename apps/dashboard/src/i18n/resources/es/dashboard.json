@@ -382,6 +382,17 @@
     "lastInteractions": "Últimas interacciones",
     "resolvedCases": "casos resueltos",
     "featureDisabledTitle": "Feature deshabilitado",
-    "featureDisabledEscalate": "El flujo de escalación aún no está listo. Vuelve cuando esté refinado."
+    "featureDisabledEscalate": "El flujo de escalación aún no está listo. Vuelve cuando esté refinado.",
+    "tabAssistant": "Assistant",
+    "assistantEmptyTitle": "Ningún ticket seleccionado",
+    "assistantEmptyBody": "Selecciona un ticket de la bandeja para usar el copiloto de IA.",
+    "assistantIntro": "Genera un borrador de respuesta a partir del contexto de este ticket — revísalo y edítalo antes de enviarlo.",
+    "assistantGenerate": "Generar borrador",
+    "assistantGenerating": "Generando…",
+    "assistantInsertedTitle": "Borrador insertado",
+    "assistantInsertedBody": "El borrador se insertó en el redactor. Revísalo y edítalo antes de enviarlo.",
+    "assistantRegenerate": "Generar de nuevo",
+    "assistantResponseBadge": "RESPUESTA",
+    "assistantMockDraftBody": "Hola {{customer}},\n\nGracias por escribirnos sobre \"{{subject}}\". Estamos revisando este caso y te daremos más detalles en breve.\n\nSaludos,\nEquipo de Soporte"
   }
 }

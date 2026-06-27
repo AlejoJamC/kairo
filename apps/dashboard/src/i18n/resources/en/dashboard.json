@@ -382,6 +382,17 @@
     "lastInteractions": "Last interactions",
     "resolvedCases": "resolved cases",
     "featureDisabledTitle": "Feature disabled",
-    "featureDisabledEscalate": "The escalation flow is not ready yet. Come back when it's been refined."
+    "featureDisabledEscalate": "The escalation flow is not ready yet. Come back when it's been refined.",
+    "tabAssistant": "Assistant",
+    "assistantEmptyTitle": "No ticket selected",
+    "assistantEmptyBody": "Select a ticket from the queue to use the AI copilot.",
+    "assistantIntro": "Generate a draft reply based on this ticket's context — review and edit before sending.",
+    "assistantGenerate": "Generate draft",
+    "assistantGenerating": "Generating…",
+    "assistantInsertedTitle": "Draft inserted",
+    "assistantInsertedBody": "The draft was inserted into the composer. Review and edit it before sending.",
+    "assistantRegenerate": "Generate again",
+    "assistantResponseBadge": "RESPONSE",
+    "assistantMockDraftBody": "Hi {{customer}},\n\nThanks for reaching out about \"{{subject}}\". We're looking into this and will follow up with the details shortly.\n\nBest regards,\nSupport Team"
   }
 }
