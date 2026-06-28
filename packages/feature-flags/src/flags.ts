@@ -1,14 +1,7 @@
 // =============================================================================
 // Feature flags — flip ON/OFF to enable or disable high-level product areas.
 //
-// Hierarchy:
-//   dashboard
-//     └── rightPanel
-//           ├── assistantTab    (Pestaña 0 — Assistant)
-//           ├── clientTab       (Pestaña 1 — Cliente)
-//           ├── similarTab      (Pestaña 2 — Similares)
-//           ├── articlesTab     (Pestaña 3 — Artículos)
-//           └── escalateTab     (Pestaña 4 — Escalar)  ← OFF: not ready yet
+// Dashboard right panel tabs are now build-time flags (VITE_FF_*) — see .env.example
 //
 // Runtime-overrideable flags (server-only, via FEATURE_FLAG_<UPPER_SNAKE> env vars):
 //   enable_detection_ui          — KAI-201: show real-time detection step in onboarding wizard
@@ -29,11 +22,8 @@
 export const FLAGS = {
   dashboard: {
     rightPanel: {
-      assistantTab: true,
-      clientTab:   true,
-      similarTab:  true,
-      articlesTab: true,
-      // escalateTab is handled separately — see ai-assistant.tsx for dynamic loading
+      // All tabs are now build-time flags (VITE_FF_*) in apps/dashboard
+      // See .env.example and ai-assistant.tsx for configuration
     },
   },
 } as const;

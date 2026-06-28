@@ -42,17 +42,25 @@ const isFeatureEnabled = import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB === "true";
 
 These flags follow the same semantic naming as `FEATURE_FLAG_*` but are suffixed with the framework prefix.
 
+#### Dashboard → Right Panel Tabs (VITE_FF_*)
+
+All tabs in the triage right panel are build-time flags. When disabled, the tab does not render and the UI never loads it.
+
+| Flag | Env var | Default | Description |
+|---|---|---|---|
+| assistantTab | `VITE_FF_ENABLE_ASSISTANT_TAB` | `false` | AI copilot chat for ticket resolution (KAI-249) |
+| clientTab | `VITE_FF_ENABLE_CLIENT_TAB` | `false` | Client profile, contact info, KPIs |
+| similarTab | `VITE_FF_ENABLE_SIMILAR_TAB` | `false` | Semantic search for similar resolved cases |
+| articlesTab | `VITE_FF_ENABLE_ARTICLES_TAB` | `false` | Knowledge base article recommendations |
+| escalateTab | `VITE_FF_ENABLE_ESCALATE_TAB` | `false` | Escalation flow & recommendation (KAI-249) |
+
 Valid values: `"true"` and `"false"`. Anything else (empty, missing, typo) falls back to the default declared in `FLAG_DEFAULTS`.
 
 ## Static flags catalog
 
 | Path | Default | Description |
 |---|---|---|
-| `dashboard.rightPanel.clientTab` | `true` | Tab 1 of the ticket right panel — Client. |
-| `dashboard.rightPanel.similarTab` | `true` | Tab 2 — Similar tickets (semantic search). |
-| `dashboard.rightPanel.articlesTab` | `true` | Tab 3 — Knowledge base articles. |
-
-**Note:** `escalateTab` (KAI-249) is a **build-time flag** in `apps/dashboard` — controlled by `VITE_FF_ENABLE_ESCALATE_TAB` (defaults to `false`). See `.env.example`.
+**Moved to build-time flags (see below):** All `dashboard.rightPanel.*Tab` flags are now build-time `VITE_FF_*` variables in `apps/dashboard`.
 
 ## Runtime flags catalog
 

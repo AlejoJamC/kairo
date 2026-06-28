@@ -11,10 +11,19 @@ import {
   ClientProfileSkeleton,
 } from "@/components/triage/ClientProfileCard";
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
-import { FLAGS } from "@kairo/feature-flags";
 
-// KAI-249: escalateTab is controlled by VITE_FF_ENABLE_ESCALATE_TAB (defaults to false)
-const escalateTabEnabled = import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB === "true";
+// ═══════════════════════════════════════════════════════════════════════════
+// Dashboard > Right Panel — Feature Flags (VITE_FF_*)
+// ═══════════════════════════════════════════════════════════════════════════
+// Each tab can be enabled/disabled via VITE_FF_ENABLE_<TAB_NAME> in .env
+// Default: false (disabled) — only renders if explicitly enabled
+// ═══════════════════════════════════════════════════════════════════════════
+
+const assistantTabEnabled = import.meta.env.VITE_FF_ENABLE_ASSISTANT_TAB === "true";
+const clientTabEnabled    = import.meta.env.VITE_FF_ENABLE_CLIENT_TAB === "true";
+const similarTabEnabled   = import.meta.env.VITE_FF_ENABLE_SIMILAR_TAB === "true";
+const articlesTabEnabled  = import.meta.env.VITE_FF_ENABLE_ARTICLES_TAB === "true";
+const escalateTabEnabled  = import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB === "true";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -604,10 +613,10 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   useEffect(() => { setActiveTab("assistant"); }, [selectedTicketId]);
 
   const tabs: { id: TabId; label: string; disabled?: boolean; ai?: boolean }[] = [
-    { id: "assistant", label: t("ai.tabAssistant"), disabled: !FLAGS.dashboard.rightPanel.assistantTab, ai: true },
-    { id: "client",   label: t("ai.tabClient")   },
-    { id: "similar",  label: t("ai.tabSimilar")  },
-    { id: "articles", label: t("ai.tabArticles") },
+    ...(assistantTabEnabled ? [{ id: "assistant" as const, label: t("ai.tabAssistant"), ai: true }] : []),
+    ...(clientTabEnabled ? [{ id: "client" as const, label: t("ai.tabClient") }] : []),
+    ...(similarTabEnabled ? [{ id: "similar" as const, label: t("ai.tabSimilar") }] : []),
+    ...(articlesTabEnabled ? [{ id: "articles" as const, label: t("ai.tabArticles") }] : []),
     ...(escalateTabEnabled ? [{ id: "escalate" as const, label: t("ai.tabEscalate") }] : []),
   ];
 
@@ -658,19 +667,19 @@ export function AiAssistant({ customer }: AiAssistantProps) {
 
       {/* Tab content — the Assistant chat owns full height (internal scroll +
           pinned composer); the other tabs use a padded, scrollable container. */}
-      {activeTab === "assistant" ? (
+      {assistantTabEnabled && activeTab === "assistant" ? (
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           <AssistantPanel />
         </div>
       ) : (
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        {activeTab === "client" && (
+        {clientTabEnabled && activeTab === "client" && (
           <ClientTab loading={profileLoading} />
         )}
-        {activeTab === "similar" && (
+        {similarTabEnabled && activeTab === "similar" && (
           <SimilarTab ticketId={selectedTicketId} lang={i18n.language} />
         )}
-        {activeTab === "articles" && (
+        {articlesTabEnabled && activeTab === "articles" && (
           <ArticlesTab ticketId={selectedTicketId} />
         )}
         {escalateTabEnabled && activeTab === "escalate" && (
