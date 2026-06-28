@@ -41,6 +41,24 @@ export function extractKairoToken(subject: string): number | null {
 }
 
 /**
+ * Extract the ticket_number from the LAST [KAIRO-<ticket_number>] token in a
+ * subject, or return null. Subjects can accumulate multiple tokens across a
+ * long reply chain (e.g. a customer replying to an old quoted email whose
+ * subject still carries a stale token) — the last occurrence is the one
+ * appended most recently by Kairo and therefore reflects the ticket that is
+ * actually current. Used by the gmail-poll ingestion worker (KAI-248 Grupo 1)
+ * for broken-thread re-association.
+ */
+export function extractLastKairoToken(subject: string): number | null {
+  const matches = [...subject.matchAll(/\[KAIRO-(\d+)\]/gi)];
+  if (matches.length === 0) return null;
+  const last = matches[matches.length - 1]?.[1];
+  if (!last) return null;
+  const n = Number(last);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+/**
  * Look up a ticket by (accountId, ticketNumber).
  * Returns `{ ticketId, conversationId }` when found, or null.
  * Used in the ingestion pipeline for broken-thread re-association.

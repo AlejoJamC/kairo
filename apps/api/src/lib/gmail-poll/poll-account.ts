@@ -90,6 +90,9 @@ async function ingestMessages(
     const gmailCategories = (message.labelIds ?? []).filter((l) => l.startsWith("CATEGORY_"));
     const snippet = message.snippet ?? "";
     const threadId = message.threadId;
+    // KAI-248 Grupo 1 §1: RFC 2822 Message-ID header — stored for In-Reply-To /
+    // References in outbound replies (mirrors tier1-fast-path KAI-115 §A).
+    const messageIdHeader = headerValue(msgHeaders, "Message-ID") || null;
 
     const filterResult = deps.preFilterEmail({
       from,
@@ -113,6 +116,7 @@ async function ingestMessages(
         received_at: receivedAt,
         sender_external_id: from,
         snippet,
+        message_id_header: messageIdHeader,
         classification_status: filterResult.status === "skip" ? "skipped" : "pending",
         skip_reason: filterResult.status === "skip" ? filterResult.skip_reason ?? null : null,
         processing_batch: "gmail-poll",
@@ -137,13 +141,33 @@ async function ingestMessages(
 
     // Gate passed — threading + Flow 1 / Flow 2.
     try {
-      const { conversation_id } = await deps.upsertConversationByThread(deps.db, {
-        accountId,
-        channelIntegrationId,
-        externalThreadId: threadId,
-        customerExternalId: from,
-        customerDisplayName: null,
-      });
+      // KAI-248 Grupo 1 §2: broken-thread re-association — if the subject
+      // carries a [KAIRO-<ticket_number>] token, prefer re-attaching to that
+      // ticket's existing conversation over the Gmail threadId. Use the LAST
+      // token in the subject (the current ticket), not the first. Mirrors
+      // tier1-fast-path's KAI-115 §B re-association, minus sender validation
+      // (out of scope for Grupo 1).
+      let resolvedConversationId: string | undefined;
+      const kairoTicketNumber = deps.extractLastKairoToken(subject);
+      if (kairoTicketNumber !== null) {
+        const existingTicket = await deps.findTicketByKairoToken(deps.db, accountId, kairoTicketNumber);
+        if (existingTicket?.conversationId) {
+          resolvedConversationId = existingTicket.conversationId;
+        }
+      }
+
+      if (!resolvedConversationId) {
+        const { conversation_id } = await deps.upsertConversationByThread(deps.db, {
+          accountId,
+          channelIntegrationId,
+          externalThreadId: threadId,
+          customerExternalId: from,
+          customerDisplayName: null,
+        });
+        resolvedConversationId = conversation_id;
+      }
+
+      const conversation_id = resolvedConversationId;
 
       const classification = await deps.classifyEmail({ subject, body: snippet, from });
       const classifiedAt = new Date().toISOString();

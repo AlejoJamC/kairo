@@ -24,6 +24,9 @@ const METADATA_HEADERS = [
   "X-Auto-Response-Suppress",
   "Precedence",
   "In-Reply-To",
+  // KAI-248 Grupo 1: RFC 2822 Message-ID — persisted to messages.message_id_header
+  // so outbound replies can set In-Reply-To / References (mirrors tier1-fast-path).
+  "Message-ID",
 ];
 
 async function gmailGet<T>(

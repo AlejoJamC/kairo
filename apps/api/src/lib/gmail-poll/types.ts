@@ -127,6 +127,17 @@ export interface GmailPollDeps {
     ticketId: string,
     priorStatus: string | null
   ) => Promise<{ newStatus: string | null }>;
+  /**
+   * KAI-248 Grupo 1 — broken-thread re-association via [KAIRO-<n>] subject
+   * token (mirrors tier1-fast-path's extractKairoToken usage, but takes the
+   * LAST token in the subject rather than the first).
+   */
+  extractLastKairoToken: (subject: string) => number | null;
+  findTicketByKairoToken: (
+    client: DbClient,
+    accountId: string,
+    ticketNumber: number
+  ) => Promise<{ ticketId: string; conversationId: string | null } | null>;
 }
 
 export interface PollAccountResult {

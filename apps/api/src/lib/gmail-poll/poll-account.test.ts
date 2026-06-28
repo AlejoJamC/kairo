@@ -138,6 +138,8 @@ function baseDeps(overrides: Partial<GmailPollDeps>): GmailPollDeps {
     }),
     linkMessageToTicket: async () => undefined,
     applyCustomerReplyTransition: async () => ({ newStatus: null }),
+    extractLastKairoToken: () => null,
+    findTicketByKairoToken: async () => null,
     ...overrides,
   };
 }
@@ -219,6 +221,171 @@ describe("pollGmailAccount — history.list parsing + ingestion", () => {
     expect(result.ticketsReopened).toBe(1);
     expect(result.ticketsCreated).toBe(0);
     expect(transitionSpy).toHaveBeenCalledWith(expect.anything(), "ticket-existing", "resolved");
+  });
+});
+
+describe("pollGmailAccount — message_id_header persistence", () => {
+  it("persists the Message-ID header value into messages.message_id_header on insert", async () => {
+    const { db, inserts } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+
+    const deps = baseDeps({
+      db,
+      historyList: async () => ({
+        history: [{ id: "h1", messagesAdded: [{ message: { id: "msg-mid", threadId: "thread-mid" } }] }],
+        historyId: "1060",
+      }),
+      getMessage: async (_token, id) => ({
+        id,
+        threadId: "thread-mid",
+        labelIds: ["INBOX"],
+        snippet: "hello",
+        payload: {
+          headers: [
+            { name: "From", value: "client@external.com" },
+            { name: "Subject", value: "Need help" },
+            { name: "Date", value: new Date().toUTCString() },
+            { name: "Message-ID", value: "<abc123@mail.gmail.com>" },
+          ],
+        },
+      }),
+    });
+
+    await pollGmailAccount(deps, ACCOUNT_ID);
+
+    const messageInsert = inserts.find((i) => i.table === "messages");
+    expect(messageInsert?.payload.message_id_header).toBe("<abc123@mail.gmail.com>");
+  });
+
+  it("stores null when the incoming message has no Message-ID header", async () => {
+    const { db, inserts } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+
+    const deps = baseDeps({
+      db,
+      historyList: async () => ({
+        history: [{ id: "h1", messagesAdded: [{ message: { id: "msg-no-mid", threadId: "thread-no-mid" } }] }],
+        historyId: "1070",
+      }),
+    });
+
+    await pollGmailAccount(deps, ACCOUNT_ID);
+
+    const messageInsert = inserts.find((i) => i.table === "messages");
+    expect(messageInsert?.payload.message_id_header).toBeNull();
+  });
+});
+
+describe("pollGmailAccount — KAI-248 Grupo 1 §2: [KAIRO-n] broken-thread re-association", () => {
+  it("attaches the message to the existing ticket's conversation when the subject carries a [KAIRO-n] token, even though the Gmail threadId does not match", async () => {
+    const { db } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+
+    const upsertConversationSpy = mock(async () => ({ conversation_id: "conv-NEW-thread", was_created: true }));
+    const findOrCreateSpy = mock(async (_client: unknown, args: { conversationId: string }) => {
+      // Simulate tickets-by-thread behavior: an existing ticket is found for
+      // the resolved (re-associated) conversation_id.
+      expect(args.conversationId).toBe("conv-EXISTING");
+      return {
+        ticket_id: "ticket-existing",
+        ticket_number: 42,
+        was_created: false,
+        prior_status: "resolved",
+      };
+    });
+    const transitionSpy = mock(async () => ({ newStatus: "reopened" }));
+    const findByTokenSpy = mock(async (_client: unknown, _accountId: string, ticketNumber: number) => {
+      expect(ticketNumber).toBe(42);
+      return { ticketId: "ticket-existing", conversationId: "conv-EXISTING" };
+    });
+
+    const deps = baseDeps({
+      db,
+      historyList: async () => ({
+        history: [{ id: "h1", messagesAdded: [{ message: { id: "msg-broken-thread", threadId: "thread-BRAND-NEW" } }] }],
+        historyId: "1080",
+      }),
+      getMessage: async (_token, id) => ({
+        id,
+        threadId: "thread-BRAND-NEW",
+        labelIds: ["INBOX"],
+        snippet: "hello again",
+        payload: {
+          headers: [
+            { name: "From", value: "client@external.com" },
+            { name: "Subject", value: "Re: Need help [KAIRO-42]" },
+            { name: "Date", value: new Date().toUTCString() },
+          ],
+        },
+      }),
+      extractLastKairoToken: (subject: string) => (subject.includes("[KAIRO-42]") ? 42 : null),
+      findTicketByKairoToken: findByTokenSpy,
+      upsertConversationByThread: upsertConversationSpy,
+      findOrCreateTicketForThread: findOrCreateSpy,
+      applyCustomerReplyTransition: transitionSpy,
+    });
+
+    const result = await pollGmailAccount(deps, ACCOUNT_ID);
+
+    expect(findByTokenSpy).toHaveBeenCalledTimes(1);
+    // The broken-thread path must NOT create a new conversation via threadId.
+    expect(upsertConversationSpy).not.toHaveBeenCalled();
+    expect(result.ticketsCreated).toBe(0);
+    expect(result.ticketsReopened).toBe(1);
+    expect(transitionSpy).toHaveBeenCalledWith(expect.anything(), "ticket-existing", "resolved");
+  });
+
+  it("falls back to normal threadId flow when the subject has no [KAIRO-n] token (unchanged behavior)", async () => {
+    const { db } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+
+    const upsertConversationSpy = mock(async () => ({ conversation_id: "conv-by-thread", was_created: true }));
+    const findByTokenSpy = mock(async () => null);
+
+    const deps = baseDeps({
+      db,
+      historyList: async () => ({
+        history: [{ id: "h1", messagesAdded: [{ message: { id: "msg-plain", threadId: "thread-plain" } }] }],
+        historyId: "1090",
+      }),
+      extractLastKairoToken: () => null,
+      findTicketByKairoToken: findByTokenSpy,
+      upsertConversationByThread: upsertConversationSpy,
+    });
+
+    const result = await pollGmailAccount(deps, ACCOUNT_ID);
+
+    expect(findByTokenSpy).not.toHaveBeenCalled();
+    expect(upsertConversationSpy).toHaveBeenCalledTimes(1);
+    expect(result.ticketsCreated).toBe(1);
+  });
+
+  it("falls back to normal threadId flow when a [KAIRO-n] token is present but no matching ticket is found", async () => {
+    const { db } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+
+    const upsertConversationSpy = mock(async () => ({ conversation_id: "conv-by-thread-2", was_created: true }));
+
+    const deps = baseDeps({
+      db,
+      historyList: async () => ({
+        history: [{ id: "h1", messagesAdded: [{ message: { id: "msg-stale-token", threadId: "thread-stale" } }] }],
+        historyId: "1100",
+      }),
+      extractLastKairoToken: () => 999,
+      findTicketByKairoToken: async () => null,
+      upsertConversationByThread: upsertConversationSpy,
+    });
+
+    const result = await pollGmailAccount(deps, ACCOUNT_ID);
+
+    expect(upsertConversationSpy).toHaveBeenCalledTimes(1);
+    expect(result.ticketsCreated).toBe(1);
   });
 });
 

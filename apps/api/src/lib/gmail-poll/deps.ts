@@ -13,6 +13,7 @@ import { upsertConversationByThread } from "../conversations.js";
 import { findOrCreateTicketForThread } from "../tickets-by-thread.js";
 import { linkMessageToTicket } from "../ticket-messages.js";
 import { applyCustomerReplyTransition } from "../ticket-thread-transitions.js";
+import { extractLastKairoToken, findTicketByKairoToken } from "../ticket-traceability.js";
 import { getProfile, historyList, messagesList, getMessage } from "./gmail-client.js";
 import type { GmailPollDeps } from "./types.js";
 
@@ -31,5 +32,7 @@ export function createGmailPollDeps(): GmailPollDeps {
     findOrCreateTicketForThread,
     linkMessageToTicket,
     applyCustomerReplyTransition,
+    extractLastKairoToken,
+    findTicketByKairoToken,
   };
 }
