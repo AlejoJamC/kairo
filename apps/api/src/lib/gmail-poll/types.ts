@@ -138,6 +138,17 @@ export interface GmailPollDeps {
     accountId: string,
     ticketNumber: number
   ) => Promise<{ ticketId: string; conversationId: string | null } | null>;
+  /**
+   * KAI-248 Grupo 4 — sender-validation guard for broken-thread re-association.
+   * Looks up the `customer_external_id` of a conversation (by id) so the
+   * gmail-poll worker can confirm the inbound sender actually owns that
+   * conversation before re-attaching a message to it via [KAIRO-<n>] token.
+   * Returns null if the conversation does not exist.
+   */
+  getConversationCustomer: (
+    client: DbClient,
+    conversationId: string
+  ) => Promise<{ customerExternalId: string | null } | null>;
 }
 
 export interface PollAccountResult {
