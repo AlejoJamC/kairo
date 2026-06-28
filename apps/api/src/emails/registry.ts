@@ -86,9 +86,9 @@ function resolveVariables(html: string, vars: Record<string, string>, templateNa
   });
 }
 
-/** Build the human ticket id, e.g. `KAI-T-453`, from `tickets.ticket_number`. */
+/** Build the human ticket id, e.g. `KAI-453`, from `tickets.ticket_number`. */
 export function buildTicketId(ticketNumber: number): string {
-  return `KAI-T-${ticketNumber}`;
+  return `KAI-${ticketNumber}`;
 }
 
 export function renderAcknowledgement(vars: AcknowledgementVars): string {

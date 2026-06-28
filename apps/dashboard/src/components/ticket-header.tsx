@@ -92,7 +92,7 @@ export function TicketHeader({ ticket }: TicketHeaderProps) {
     }
   }
 
-  const ticketNum = ticket.ticket_number ? `KAI-T-${ticket.ticket_number}` : null;
+  const ticketNum = ticket.ticket_number ? `KAI-${ticket.ticket_number}` : null;
 
   return (
     <div

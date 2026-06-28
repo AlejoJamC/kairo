@@ -229,7 +229,7 @@ export function TicketCard({
               letterSpacing: "0.02em",
             }}
           >
-            KAI-T-{ticket.ticket_number}
+            KAI-{ticket.ticket_number}
           </span>
         )}
         <PriorityBadge priority={ticket.priority} />

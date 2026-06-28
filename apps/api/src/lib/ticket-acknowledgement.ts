@@ -3,7 +3,7 @@
 // Called from the Gmail sync pipeline (tier1-fast-path + incremental-sync)
 // immediately after a NEW ticket is persisted (was_created=true). Renders
 // `acknowledgement.html` (KAI-244) and sends it via the outbox (ADR-023 §1) so
-// the customer gets their `KAI-T-n` ticket number.
+// the customer gets their `KAI-n` ticket number.
 //
 // Guards (in priority order, first one matching aborts the send):
 //   1. Feature flag — `enable_ticket_acknowledgement`, OFF by default.
@@ -83,8 +83,6 @@ export async function maybeSendTicketAcknowledgement(
 
   const urls = await resolveEmailUrls({
     accountId: args.accountId,
-    ticketNumber: args.ticketNumber,
-    ticketSubject: args.subject,
   });
 
   const ticketIdHuman = buildTicketId(args.ticketNumber);

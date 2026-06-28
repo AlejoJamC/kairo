@@ -8,7 +8,7 @@
  * Merge variable vocabulary:
  *   {{cliente.nombre}}  → conversation.customer_display_name (or empty string)
  *   {{cliente.email}}   → ticket.from_email
- *   {{ticket.id}}       → human ticket id (KAI-T-<ticket_number>)
+ *   {{ticket.id}}       → human ticket id (KAI-<ticket_number>)
  *   {{ticket.asunto}}   → ticket.subject
  *   {{agente.email}}    → sending mailbox address (gmailFromEmail)
  *   {{agente.nombre}}   → same as agente.email until display names are stored

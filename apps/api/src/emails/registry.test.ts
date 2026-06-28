@@ -17,7 +17,7 @@ import type {
 
 const base = {
   customer_name: "Ada Lovelace",
-  ticket_id: "KAI-T-453",
+  ticket_id: "KAI-453",
   ticket_subject: "No puedo acceder a mi cuenta",
   help_center_url: "https://help.kairo.test",
   status_url: "https://status.kairo.test",
@@ -27,14 +27,12 @@ const base = {
 
 const ackVars: AcknowledgementVars = {
   ...base,
-  ticket_url: "https://kairo.test/tickets/453",
   ticket_category: "account_access",
   ticket_created_at: "10 de junio de 2026, 14:32",
 };
 
 const agentReplyVars: AgentReplyVars = {
   ...base,
-  ticket_url: "https://kairo.test/tickets/453",
   agent_name: "Bea",
   agent_role: "Soporte N2",
   agent_initials: "BC",
@@ -45,7 +43,6 @@ const agentReplyVars: AgentReplyVars = {
 
 const resolvedVars: ResolvedVars = {
   ...base,
-  ticket_url: "https://kairo.test/tickets/453",
   agent_name: "Bea",
   agent_initials: "BC",
   resolution_summary: "<p>Resuelto: restablecimos tu contraseña.</p>",
@@ -64,7 +61,6 @@ const csatVars: CsatSurveyVars = {
 
 const escalatedVars: EscalatedVars = {
   ...base,
-  ticket_url: "https://kairo.test/tickets/453",
   specialist_name: "Carla",
   specialist_role: "Especialista de Producto",
   specialist_initials: "CR",
@@ -72,8 +68,8 @@ const escalatedVars: EscalatedVars = {
 };
 
 describe("buildTicketId", () => {
-  it("formats KAI-T-<ticket_number>", () => {
-    expect(buildTicketId(453)).toBe("KAI-T-453");
+  it("formats KAI-<ticket_number>", () => {
+    expect(buildTicketId(453)).toBe("KAI-453");
   });
 });
 
@@ -167,27 +163,32 @@ describe("hidden footer links and CTAs (KAI-245)", () => {
     expect(html).not.toMatch(/&nbsp;·&nbsp;\s*<\/div>/);
   }
 
-  it("renderAcknowledgement hides help/status/unsubscribe links and the ticket_url CTA when empty", () => {
-    const html = renderAcknowledgement({ ...ackVars, ...emptyFooterUrls, ticket_url: "" });
+  // KAI-248 Grupo 3: the mailto ticket_url CTA was removed from every template;
+  // the "Responde directamente a este correo" block now drives Gmail threading.
+  it("renderAcknowledgement hides help/status/unsubscribe links; no mailto CTA, reply-hint present", () => {
+    const html = renderAcknowledgement({ ...ackVars, ...emptyFooterUrls });
     expectNoDeadLinksOrMarkers(html);
     expect(html).toContain(ackVars.privacy_url);
     expect(html).not.toContain("Ver mi ticket");
+    expect(html).toContain("Responde directamente a este correo");
   });
 
-  it("renderAgentReply hides help/status/unsubscribe links and the ticket_url CTA when empty", () => {
-    const html = renderAgentReply({ ...agentReplyVars, ...emptyFooterUrls, ticket_url: "" });
+  it("renderAgentReply hides help/status/unsubscribe links; no mailto CTA, reply-hint present", () => {
+    const html = renderAgentReply({ ...agentReplyVars, ...emptyFooterUrls });
     expectNoDeadLinksOrMarkers(html);
     expect(html).toContain(agentReplyVars.privacy_url);
     expect(html).not.toContain("Abrir conversación");
+    expect(html).toContain("Responde directamente a este correo");
   });
 
-  it("renderResolved hides the CSAT teaser and reopen CTA when csat_url/reopen_url are empty, keeping 'Ver resolución'", () => {
+  it("renderResolved hides the CSAT teaser and reopen CTA when csat_url/reopen_url are empty; no 'Ver resolución' mailto, reply-hint present", () => {
     const html = renderResolved({ ...resolvedVars, ...emptyFooterUrls, csat_url: "", reopen_url: "" });
     expectNoDeadLinksOrMarkers(html);
     expect(html).toContain(resolvedVars.privacy_url);
     expect(html).not.toContain("¿Cómo estuvo nuestra atención?");
     expect(html).not.toContain("Reabrir ticket");
-    expect(html).toContain("Ver resolución");
+    expect(html).not.toContain("Ver resolución");
+    expect(html).toContain("Responde directamente a este correo");
   });
 
   it("renderCsatSurvey hides help/status/unsubscribe links when empty", () => {
@@ -196,11 +197,12 @@ describe("hidden footer links and CTAs (KAI-245)", () => {
     expect(html).toContain(csatVars.privacy_url);
   });
 
-  it("renderEscalated hides help/status/unsubscribe links and the ticket_url CTA when empty", () => {
-    const html = renderEscalated({ ...escalatedVars, ...emptyFooterUrls, ticket_url: "" });
+  it("renderEscalated hides help/status/unsubscribe links; no mailto CTA, reply-hint present", () => {
+    const html = renderEscalated({ ...escalatedVars, ...emptyFooterUrls });
     expectNoDeadLinksOrMarkers(html);
     expect(html).toContain(escalatedVars.privacy_url);
     expect(html).not.toContain("Seguir el caso");
+    expect(html).toContain("Responde directamente a este correo");
   });
 });
 

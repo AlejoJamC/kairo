@@ -3,7 +3,7 @@
  *
  * [KAIRO-<ticket_number>] tokens are injected into every outbound email
  * (subject + body footer). The number is the human-visible ticket number
- * (`tickets.ticket_number`, shown in the UI as `KAI-T-453`) — NOT the UUID
+ * (`tickets.ticket_number`, shown in the UI as `KAI-453`) — NOT the UUID
  * fragment — so the token a customer sees matches the ticket the agent sees.
  *
  * When an email client breaks the Gmail thread, the ingestion pipeline extracts

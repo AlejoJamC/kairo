@@ -4,7 +4,7 @@ import { describe, it, expect, mock, beforeEach } from "bun:test";
 // KAI-245: resolveEmailUrls tests
 // AC: help_center_url/status_url/unsubscribe_url -> accounts column or ""
 // AC: privacy_url -> accounts column or env.PRIVACY_URL
-// AC: ticket_url -> mailto: to tenant Gmail mailbox with [KAIRO-n] token, or ""
+// (KAI-248 Grupo 3: ticket_url was removed — the mailto CTA no longer exists.)
 // ---------------------------------------------------------------------------
 
 let accountRow: Record<string, unknown> | null = null;
@@ -18,13 +18,6 @@ mock.module("../lib/supabase.js", () => ({
   supabase: { from: fromMock },
 }));
 
-let gmailEmail = "";
-const getGmailEmailByAccountMock = mock(() => Promise.resolve(gmailEmail));
-
-mock.module("../lib/gmail-token.js", () => ({
-  getGmailEmailByAccount: getGmailEmailByAccountMock,
-}));
-
 const DEFAULT_PRIVACY_URL = "https://kairo.alejojamc.com/privacy/";
 
 mock.module("../env.js", () => ({
@@ -36,12 +29,10 @@ const { resolveEmailUrls } = await import("./urls.js");
 describe("resolveEmailUrls", () => {
   beforeEach(() => {
     accountRow = null;
-    gmailEmail = "";
     singleMock.mockClear();
     eqMock.mockClear();
     selectMock.mockClear();
     fromMock.mockClear();
-    getGmailEmailByAccountMock.mockClear();
   });
 
   it("returns accounts columns verbatim when set", async () => {
@@ -52,11 +43,7 @@ describe("resolveEmailUrls", () => {
       unsubscribe_url: "https://acme.com/unsubscribe",
     };
 
-    const result = await resolveEmailUrls({
-      accountId: "acc-1",
-      ticketNumber: 42,
-      ticketSubject: "Need help",
-    });
+    const result = await resolveEmailUrls({ accountId: "acc-1" });
 
     expect(result.help_center_url).toBe("https://help.acme.com");
     expect(result.status_url).toBe("https://status.acme.com");
@@ -73,11 +60,7 @@ describe("resolveEmailUrls", () => {
       unsubscribe_url: null,
     };
 
-    const result = await resolveEmailUrls({
-      accountId: "acc-2",
-      ticketNumber: 1,
-      ticketSubject: "Hello",
-    });
+    const result = await resolveEmailUrls({ accountId: "acc-2" });
 
     expect(result.help_center_url).toBe("");
     expect(result.status_url).toBe("");
@@ -92,49 +75,8 @@ describe("resolveEmailUrls", () => {
       unsubscribe_url: null,
     };
 
-    const result = await resolveEmailUrls({
-      accountId: "acc-3",
-      ticketNumber: 1,
-      ticketSubject: "Hello",
-    });
+    const result = await resolveEmailUrls({ accountId: "acc-3" });
 
     expect(result.privacy_url).toBe(DEFAULT_PRIVACY_URL);
-  });
-
-  it("resolves ticket_url to a mailto: with the [KAIRO-n] token when a Gmail mailbox is connected", async () => {
-    accountRow = {
-      help_center_url: null,
-      status_url: null,
-      privacy_url: null,
-      unsubscribe_url: null,
-    };
-    gmailEmail = "support@acme.com";
-
-    const result = await resolveEmailUrls({
-      accountId: "acc-4",
-      ticketNumber: 99,
-      ticketSubject: "Order issue",
-    });
-
-    const expectedSubject = encodeURIComponent("Re: Order issue [KAIRO-99]");
-    expect(result.ticket_url).toBe(`mailto:support@acme.com?subject=${expectedSubject}`);
-  });
-
-  it("resolves ticket_url to an empty string when no Gmail mailbox is connected", async () => {
-    accountRow = {
-      help_center_url: null,
-      status_url: null,
-      privacy_url: null,
-      unsubscribe_url: null,
-    };
-    gmailEmail = "";
-
-    const result = await resolveEmailUrls({
-      accountId: "acc-5",
-      ticketNumber: 1,
-      ticketSubject: "Hello",
-    });
-
-    expect(result.ticket_url).toBe("");
   });
 });
