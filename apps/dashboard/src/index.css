@@ -141,7 +141,11 @@
   --k-accent-hover:   #1E48E5;
   --k-accent-subtle:  #EEF2FF;
   --k-accent-2:       #6E8BFF;
+  --k-accent-border:  #C7D3FF;
+  --k-accent-faint:   #FAFBFF;
   --k-gradient-ai:    linear-gradient(135deg, var(--k-accent), var(--k-accent-2));
+  --k-success:        #10B981;
+  --k-shadow-card:    0 1px 2px rgba(9, 9, 11, 0.04);
   --k-font-mono:      "JetBrains Mono", "SF Mono", ui-monospace, monospace;
   --k-font-display:   "Inter Display", "Inter", system-ui, sans-serif;
 }
@@ -311,6 +315,13 @@
   border-radius: 50%;
   animation: kairo-spin 0.7s linear infinite;
 }
+/* KAI-249 — Assistant chat copilot animations (mirror Kairo Assistant.html) */
+@keyframes kai-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.kai-caret { animation: kai-blink 1s steps(2) infinite; }
+@keyframes kai-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.kai-fade { animation: kai-fade-in 0.26s ease both; }
+.kai-spin { animation: kairo-spin 0.7s linear infinite; }
+
 /* KAI-227 — new draft row enters the directory: slide from the right + fade in */
 @keyframes kairo-row-in {
   from {

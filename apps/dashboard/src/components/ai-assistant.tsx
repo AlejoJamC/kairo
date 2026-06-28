@@ -656,11 +656,14 @@ export function AiAssistant({ customer }: AiAssistantProps) {
         </div>
       </div>
 
-      {/* Tab content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        {activeTab === "assistant" && (
+      {/* Tab content — the Assistant chat owns full height (internal scroll +
+          pinned composer); the other tabs use a padded, scrollable container. */}
+      {activeTab === "assistant" ? (
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           <AssistantPanel />
-        )}
+        </div>
+      ) : (
+      <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
         {activeTab === "client" && (
           <ClientTab loading={profileLoading} />
         )}
@@ -697,6 +700,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
           )
         )}
       </div>
+      )}
     </div>
   );
 }
