@@ -405,6 +405,7 @@
     "assistantModelContext": "active ticket context",
     "assistantNoTicketTitle": "No ticket selected",
     "assistantNoTicketBody": "Pick a ticket from the queue to chat with the copilot about it.",
-    "assistantUnknownSender": "the customer"
+    "assistantUnknownSender": "the customer",
+    "resizeHint": "Drag to resize · double-click to reset"
   }
 }

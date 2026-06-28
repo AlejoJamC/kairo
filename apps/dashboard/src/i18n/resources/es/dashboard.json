@@ -405,6 +405,7 @@
     "assistantModelContext": "contexto del ticket activo",
     "assistantNoTicketTitle": "Sin ticket seleccionado",
     "assistantNoTicketBody": "Elige un ticket de la bandeja para conversar sobre él con el copiloto.",
-    "assistantUnknownSender": "el cliente"
+    "assistantUnknownSender": "el cliente",
+    "resizeHint": "Arrastra para redimensionar · doble clic para restablecer"
   }
 }

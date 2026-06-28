@@ -478,18 +478,22 @@ function Composer({ onSend, busy, onStop, ticketLabel, senderName }: {
           placeholder={t("ai.assistantComposerPlaceholder")}
           style={{ width: "100%", border: "none", outline: "none", resize: "none", padding: "8px 12px 4px", fontSize: 13.5, lineHeight: 1.5, color: "var(--k-text-primary)", background: "transparent", display: "block", fontFamily: "inherit", boxSizing: "border-box" }}
         />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px 8px" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-secondary)", padding: "3px 7px", borderRadius: 6, border: "1px solid var(--k-border)" }}>
-            <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--k-gradient-ai)" }} />kairo-1
-            <ChevronDown style={{ width: 11, height: 11, color: "var(--k-text-tertiary)" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px 8px", minWidth: 0 }}>
+          {/* Model selector — keep the name on one line; clip rather than wrap
+              when the panel is at its minimum width (it's a combobox: the full
+              name reads again on resize / when more models are available). */}
+          <span style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", fontSize: 11.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-secondary)", padding: "3px 7px", borderRadius: 6, border: "1px solid var(--k-border)" }}>
+            <span style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, background: "var(--k-gradient-ai)" }} />kairo-1
+            <ChevronDown style={{ width: 11, height: 11, flexShrink: 0, color: "var(--k-text-tertiary)" }} />
           </span>
-          <span style={{ fontSize: 10.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>{t("ai.assistantModelContext")}</span>
+          {/* Helper text yields first: truncates with ellipsis before anything wraps. */}
+          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>{t("ai.assistantModelContext")}</span>
           {busy ? (
-            <button type="button" onClick={onStop} style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: 8, background: "var(--k-surface-2)", display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer" }}>
+            <button type="button" onClick={onStop} style={{ marginLeft: "auto", flexShrink: 0, width: 30, height: 30, borderRadius: 8, background: "var(--k-surface-2)", display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer" }}>
               <Square style={{ width: 12, height: 12, color: "var(--k-text-secondary)" }} />
             </button>
           ) : (
-            <button type="button" onClick={submit} disabled={!val.trim()} style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: val.trim() ? "var(--k-accent)" : "var(--k-surface-2)", border: "none", cursor: val.trim() ? "pointer" : "default", transition: "background .12s" }}>
+            <button type="button" onClick={submit} disabled={!val.trim()} style={{ marginLeft: "auto", flexShrink: 0, width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: val.trim() ? "var(--k-accent)" : "var(--k-surface-2)", border: "none", cursor: val.trim() ? "pointer" : "default", transition: "background .12s" }}>
               <ArrowUp style={{ width: 15, height: 15, color: val.trim() ? "white" : "var(--k-text-tertiary)" }} />
             </button>
           )}

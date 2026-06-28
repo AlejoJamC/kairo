@@ -10,6 +10,7 @@ import {
   ClientProfileCard,
   ClientProfileSkeleton,
 } from "@/components/triage/ClientProfileCard";
+import { useResizablePanel } from "@/hooks/use-resizable-panel";
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -620,8 +621,29 @@ export function AiAssistant({ customer }: AiAssistantProps) {
     ...(escalateTabEnabled ? [{ id: "escalate" as const, label: t("ai.tabEscalate") }] : []),
   ];
 
+  // Drag-to-resize. Floor = the current fixed width (340). Ceiling is computed
+  // so the center column keeps a usable width; the left rail + ticket list
+  // (reserveLeft) are never touched — only the center yields. See the hook.
+  const { panelRef, width, onHandleMouseDown, reset } = useResizablePanel({
+    min: 340,          // current fixed design width — the minimum
+    cap: 720,          // absolute ceiling (optimal reading/chat line length)
+    reserveLeft: 360,  // fixed ticket-list column to the panel's left
+    centerMin: 520,    // smallest comfortable width for the email/composer column
+  });
+
   return (
-    <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column", height: "100%", borderLeft: "1px solid var(--k-border)", background: "white" }}>
+    <div ref={panelRef} style={{ position: "relative", width, flexShrink: 0, display: "flex", flexDirection: "column", height: "100%", borderLeft: "1px solid var(--k-border)", background: "white" }}>
+
+      {/* Resize handle — drag the left edge to widen (steals from center only);
+          double-click to reset to the minimum width. */}
+      <div
+        onMouseDown={onHandleMouseDown}
+        onDoubleClick={reset}
+        title={t("ai.resizeHint")}
+        style={{ position: "absolute", left: -3, top: 0, bottom: 0, width: 6, cursor: "col-resize", zIndex: 5 }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-accent-subtle)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+      />
 
       {/* Header + tab bar */}
       <div style={{ padding: "12px 14px 0", flexShrink: 0 }}>
