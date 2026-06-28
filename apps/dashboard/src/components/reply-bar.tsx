@@ -358,7 +358,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   // Accent / left stripe based on mode
   const modeAccentGradient = isNote
     ? "linear-gradient(180deg, #F59E0B, #D97706)"
-    : "linear-gradient(180deg, var(--k-accent), #6E8BFF)";
+    : "linear-gradient(180deg, var(--k-accent), var(--k-accent-2))";
 
   // ---------------------------------------------------------------------------
   // Render

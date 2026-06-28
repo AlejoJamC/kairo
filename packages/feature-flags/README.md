@@ -2,7 +2,7 @@
 
 Centralized feature flag definitions for the Kairo monorepo. All flags live in `src/flags.ts` — never define ad-hoc booleans elsewhere.
 
-## Two kinds of flags
+## Three kinds of flags
 
 ### 1. Static flags (`FLAGS`)
 
@@ -11,12 +11,12 @@ Build-time constants. No environment override. Used for product areas whose visi
 ```ts
 import { FLAGS } from "@kairo/feature-flags";
 
-if (FLAGS.dashboard.rightPanel.escalateTab) {
+if (FLAGS.dashboard.rightPanel.assistantTab) {
   // render the tab
 }
 ```
 
-### 2. Runtime flags (`getFlag`)
+### 2. Runtime flags (`getFlag`) — Server-side
 
 Server-only booleans backed by `process.env`. Used for opt-in behavior that needs to be toggled per environment (dev, staging, prod) without a redeploy. The function reads `process.env` at call time, so changing the env var and restarting the process is enough.
 
@@ -28,7 +28,31 @@ if (getFlag("enable_contact_extraction")) {
 }
 ```
 
-Naming convention for the env var: `FEATURE_FLAG_<UPPER_SNAKE_OF_FLAG_NAME>`.
+Env var naming: `FEATURE_FLAG_<UPPER_SNAKE_OF_FLAG_NAME>`.
+
+### 3. Build-time flags (Framework-specific) — Client-side
+
+For client-side code (e.g., Vite SPA) that can't access `process.env` at runtime. Compiled into the bundle during the build. Use framework-specific prefixes:
+- **Vite**: `VITE_FF_<UPPER_SNAKE_OF_FLAG_NAME>`
+
+```ts
+// In a Vite component
+const isFeatureEnabled = import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB === "true";
+```
+
+These flags follow the same semantic naming as `FEATURE_FLAG_*` but are suffixed with the framework prefix.
+
+#### Dashboard → Right Panel Tabs (VITE_FF_*)
+
+All tabs in the triage right panel are build-time flags. When disabled, the tab does not render and the UI never loads it.
+
+| Flag | Env var | Default | Description |
+|---|---|---|---|
+| assistantTab | `VITE_FF_ENABLE_ASSISTANT_TAB` | `false` | AI copilot chat for ticket resolution (KAI-249) |
+| clientTab | `VITE_FF_ENABLE_CLIENT_TAB` | `false` | Client profile, contact info, KPIs |
+| similarTab | `VITE_FF_ENABLE_SIMILAR_TAB` | `false` | Semantic search for similar resolved cases |
+| articlesTab | `VITE_FF_ENABLE_ARTICLES_TAB` | `false` | Knowledge base article recommendations |
+| escalateTab | `VITE_FF_ENABLE_ESCALATE_TAB` | `false` | Escalation flow & recommendation (KAI-249) |
 
 Valid values: `"true"` and `"false"`. Anything else (empty, missing, typo) falls back to the default declared in `FLAG_DEFAULTS`.
 
@@ -36,10 +60,7 @@ Valid values: `"true"` and `"false"`. Anything else (empty, missing, typo) falls
 
 | Path | Default | Description |
 |---|---|---|
-| `dashboard.rightPanel.clientTab` | `true` | Tab 1 of the ticket right panel — Client. |
-| `dashboard.rightPanel.similarTab` | `true` | Tab 2 — Similar tickets (semantic search). |
-| `dashboard.rightPanel.articlesTab` | `true` | Tab 3 — Knowledge base articles. |
-| `dashboard.rightPanel.escalateTab` | `false` | Tab 4 — Escalation flow. Disabled until the escalation UX is finalized. |
+**Moved to build-time flags (see below):** All `dashboard.rightPanel.*Tab` flags are now build-time `VITE_FF_*` variables in `apps/dashboard`.
 
 ## Runtime flags catalog
 
@@ -61,7 +82,7 @@ Valid values: `"true"` and `"false"`. Anything else (empty, missing, typo) falls
 
 1. Add the entry to the `FLAGS` object in `src/flags.ts`.
 2. Add a row to the "Static flags catalog" table in this README.
-3. No env var, no test scaffolding — these are compile-time constants.
+3. No env var, no test scaffolding — these are compile-time constants. To disable a static flag, edit `src/flags.ts` directly.
 
 ## Design notes
 

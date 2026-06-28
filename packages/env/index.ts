@@ -23,7 +23,7 @@ export const env = createEnv({
         INCREMENTAL_SYNC_CONCURRENCY: z.coerce.number().int().positive().default(3),
         // KAI-248: cron interval (minutes) for the Gmail history.list poll fan-out.
         // Inngest cron syntax only supports whole-minute granularity; default 1 min.
-        GMAIL_POLL_CRON_INTERVAL_MINUTES: z.coerce.number().int().positive().default(1),
+        GMAIL_POLL_CRON_INTERVAL_MINUTES: z.coerce.number().int().positive().default(5),
         // Kelan backoffice — optional comma-separated admin email allowlist
         KELAN_ADMIN_EMAILS: z.string().optional(),
         GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),

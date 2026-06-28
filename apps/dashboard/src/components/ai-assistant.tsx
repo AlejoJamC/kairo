@@ -10,7 +10,21 @@ import {
   ClientProfileCard,
   ClientProfileSkeleton,
 } from "@/components/triage/ClientProfileCard";
-import { FLAGS } from "@kairo/feature-flags";
+import { useResizablePanel } from "@/hooks/use-resizable-panel";
+import { AssistantPanel } from "@/components/triage/AssistantPanel";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Dashboard > Right Panel — Feature Flags (VITE_FF_*)
+// ═══════════════════════════════════════════════════════════════════════════
+// Each tab can be enabled/disabled via VITE_FF_ENABLE_<TAB_NAME> in .env
+// Default: false (disabled) — only renders if explicitly enabled
+// ═══════════════════════════════════════════════════════════════════════════
+
+const assistantTabEnabled = import.meta.env.VITE_FF_ENABLE_ASSISTANT_TAB === "true";
+const clientTabEnabled    = import.meta.env.VITE_FF_ENABLE_CLIENT_TAB === "true";
+const similarTabEnabled   = import.meta.env.VITE_FF_ENABLE_SIMILAR_TAB === "true";
+const articlesTabEnabled  = import.meta.env.VITE_FF_ENABLE_ARTICLES_TAB === "true";
+const escalateTabEnabled  = import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB === "true";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,7 +100,7 @@ function formatSim(s: number | null): string | null {
 // Tab definitions
 // ---------------------------------------------------------------------------
 
-const TAB_IDS = ["client", "similar", "articles", "escalate"] as const;
+const TAB_IDS = ["assistant", "client", "similar", "articles", "escalate"] as const;
 type TabId = typeof TAB_IDS[number];
 
 // ---------------------------------------------------------------------------
@@ -578,7 +592,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   const { selectedTicketId, tickets, setClientProfile } = useTriageStore();
   const selectedTicket = tickets.find((tk) => tk.id === selectedTicketId) ?? null;
 
-  const [activeTab,      setActiveTab]      = useState<TabId>("client");
+  const [activeTab,      setActiveTab]      = useState<TabId>("assistant");
   const [profileLoading, setProfileLoading] = useState(false);
 
   // Single fetch owned here — runs on ticket change regardless of active tab.
@@ -596,18 +610,40 @@ export function AiAssistant({ customer }: AiAssistantProps) {
       .finally(() => setProfileLoading(false));
   }, [selectedTicketId]);
 
-  // Reset to "client" tab when ticket changes
-  useEffect(() => { setActiveTab("client"); }, [selectedTicketId]);
+  // Reset to "assistant" tab when ticket changes
+  useEffect(() => { setActiveTab("assistant"); }, [selectedTicketId]);
 
-  const tabs: { id: TabId; label: string; disabled?: boolean }[] = [
-    { id: "client",   label: t("ai.tabClient")   },
-    { id: "similar",  label: t("ai.tabSimilar")  },
-    { id: "articles", label: t("ai.tabArticles") },
-    { id: "escalate", label: t("ai.tabEscalate"), disabled: !FLAGS.dashboard.rightPanel.escalateTab },
+  const tabs: { id: TabId; label: string; disabled?: boolean; ai?: boolean }[] = [
+    ...(assistantTabEnabled ? [{ id: "assistant" as const, label: t("ai.tabAssistant"), ai: true }] : []),
+    ...(clientTabEnabled ? [{ id: "client" as const, label: t("ai.tabClient") }] : []),
+    ...(similarTabEnabled ? [{ id: "similar" as const, label: t("ai.tabSimilar") }] : []),
+    ...(articlesTabEnabled ? [{ id: "articles" as const, label: t("ai.tabArticles") }] : []),
+    ...(escalateTabEnabled ? [{ id: "escalate" as const, label: t("ai.tabEscalate") }] : []),
   ];
 
+  // Drag-to-resize. Floor = the current fixed width (340). Ceiling is computed
+  // so the center column keeps a usable width; the left rail + ticket list
+  // (reserveLeft) are never touched — only the center yields. See the hook.
+  const { panelRef, width, onHandleMouseDown, reset } = useResizablePanel({
+    min: 340,          // current fixed design width — the minimum
+    cap: 720,          // absolute ceiling (optimal reading/chat line length)
+    reserveLeft: 360,  // fixed ticket-list column to the panel's left
+    centerMin: 520,    // smallest comfortable width for the email/composer column
+  });
+
   return (
-    <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column", height: "100%", borderLeft: "1px solid var(--k-border)", background: "white" }}>
+    <div ref={panelRef} style={{ position: "relative", width, flexShrink: 0, display: "flex", flexDirection: "column", height: "100%", borderLeft: "1px solid var(--k-border)", background: "white" }}>
+
+      {/* Resize handle — drag the left edge to widen (steals from center only);
+          double-click to reset to the minimum width. */}
+      <div
+        onMouseDown={onHandleMouseDown}
+        onDoubleClick={reset}
+        title={t("ai.resizeHint")}
+        style={{ position: "absolute", left: -3, top: 0, bottom: 0, width: 6, cursor: "col-resize", zIndex: 5 }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-accent-subtle)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+      />
 
       {/* Header + tab bar */}
       <div style={{ padding: "12px 14px 0", flexShrink: 0 }}>
@@ -615,13 +651,16 @@ export function AiAssistant({ customer }: AiAssistantProps) {
           {t("ai.panelTitle")}
         </p>
         <div style={{ display: "flex", borderBottom: "1px solid var(--k-border)" }}>
-          {tabs.map(({ id, label, disabled }) => (
+          {tabs.map(({ id, label, disabled, ai }) => (
             <button
               key={id}
               type="button"
               onClick={() => !disabled && setActiveTab(id)}
               disabled={disabled}
               style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
                 fontSize: 12,
                 padding: "8px 10px",
                 fontWeight: activeTab === id ? 500 : 400,
@@ -639,50 +678,43 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                 opacity: disabled ? 0.5 : 1,
               }}
             >
+              {ai && (
+                <span style={{ width: 5, height: 5, borderRadius: 999, flexShrink: 0, background: "var(--k-gradient-ai)" }} />
+              )}
               {label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Tab content */}
+      {/* Tab content — the Assistant chat owns full height (internal scroll +
+          pinned composer); the other tabs use a padded, scrollable container. */}
+      {assistantTabEnabled && activeTab === "assistant" ? (
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <AssistantPanel />
+        </div>
+      ) : (
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        {activeTab === "client" && (
+        {clientTabEnabled && activeTab === "client" && (
           <ClientTab loading={profileLoading} />
         )}
-        {activeTab === "similar" && (
+        {similarTabEnabled && activeTab === "similar" && (
           <SimilarTab ticketId={selectedTicketId} lang={i18n.language} />
         )}
-        {activeTab === "articles" && (
+        {articlesTabEnabled && activeTab === "articles" && (
           <ArticlesTab ticketId={selectedTicketId} />
         )}
-        {activeTab === "escalate" && (
-          FLAGS.dashboard.rightPanel.escalateTab ? (
-            <EscalateTab
-              ticketId={selectedTicketId}
-              customer={customer}
-              selectedTicketStatus={selectedTicket?.status ?? null}
-              selectedTicketCategory={selectedTicket?.category ?? null}
-              lang={i18n.language}
-            />
-          ) : (
-            <div style={{
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              gap: 8, padding: "32px 16px", textAlign: "center",
-              border: "1px dashed #E5E7EB", borderRadius: 10, background: "#FAFAFA",
-              marginTop: 8,
-            }}>
-              <span style={{ fontSize: 20 }}>🚧</span>
-              <p style={{ fontSize: 13, fontWeight: 600, color: "#374151", margin: 0 }}>
-                {t("ai.featureDisabledTitle")}
-              </p>
-              <p style={{ fontSize: 11, color: "#9CA3AF", margin: 0, lineHeight: 1.5 }}>
-                {t("ai.featureDisabledEscalate")}
-              </p>
-            </div>
-          )
+        {escalateTabEnabled && activeTab === "escalate" && (
+          <EscalateTab
+            ticketId={selectedTicketId}
+            customer={customer}
+            selectedTicketStatus={selectedTicket?.status ?? null}
+            selectedTicketCategory={selectedTicket?.category ?? null}
+            lang={i18n.language}
+          />
         )}
       </div>
+      )}
     </div>
   );
 }
