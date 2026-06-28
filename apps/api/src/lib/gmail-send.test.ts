@@ -5,12 +5,36 @@ import { GmailSendException } from "./gmail-send.js";
 // KAI-29: gmail-send helper tests — all Gmail API calls are mocked
 // ---------------------------------------------------------------------------
 
-const mockFetch = mock(async (_url: string, _opts: RequestInit) => ({
-  ok: true,
-  status: 200,
-  json: async () => ({ id: "msg-abc123", threadId: "thread-xyz" }),
-  text: async () => "",
-}));
+// KAI-248 Group 2: sendGmailReply now makes a follow-up `messages.get` call
+// to read back the real Message-ID header, so this default mock must answer
+// both the `messages/send` POST and the `messages/{id}` GET. We branch on the
+// URL: a GET to the per-message endpoint returns the metadata-header shape,
+// everything else (the send) returns the send response.
+interface FakeFetchResponse {
+  ok: boolean;
+  status: number;
+  json: () => Promise<unknown>;
+  text: () => Promise<string>;
+}
+
+const mockFetch = mock(async (url: string, _opts: RequestInit): Promise<FakeFetchResponse> => {
+  if (url.includes("/messages/") && !url.includes("/send")) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        payload: { headers: [{ name: "Message-ID", value: "<sent-abc123@mail.gmail.com>" }] },
+      }),
+      text: async () => "",
+    };
+  }
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ id: "msg-abc123", threadId: "thread-xyz" }),
+    text: async () => "",
+  };
+});
 
 // Patch global fetch before importing the module
 globalThis.fetch = mockFetch as unknown as typeof fetch;
@@ -32,7 +56,8 @@ afterEach(() => mockFetch.mockClear());
 describe("sendGmailReply — success", () => {
   it("calls Gmail send endpoint with Bearer token", async () => {
     await sendGmailReply(BASE_OPTS);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    // 1 call to send + 1 follow-up `messages.get` for the real Message-ID header.
+    expect(mockFetch).toHaveBeenCalledTimes(2);
     const [url, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("messages/send");
     expect((opts.headers as Record<string, string>)["Authorization"]).toBe("Bearer valid-token");
@@ -58,6 +83,71 @@ describe("sendGmailReply — success", () => {
     const result = await sendGmailReply(BASE_OPTS);
     expect(result.messageId).toBe("msg-abc123");
     expect(result.threadId).toBe("thread-xyz");
+  });
+});
+
+describe("sendGmailReply — Message-ID header follow-up lookup (KAI-248 Group 2)", () => {
+  it("fetches and returns the real RFC 2822 Message-ID header after sending", async () => {
+    const result = await sendGmailReply(BASE_OPTS);
+    expect(result.messageIdHeader).toBe("<sent-abc123@mail.gmail.com>");
+
+    const [getUrl, getOpts] = mockFetch.mock.calls[1] as [string, RequestInit];
+    expect(getUrl).toContain("/messages/msg-abc123");
+    expect(getUrl).toContain("format=metadata");
+    expect(getUrl).toContain("metadataHeaders=Message-ID");
+    expect((getOpts.headers as Record<string, string>)["Authorization"]).toBe("Bearer valid-token");
+  });
+
+  it("resolves messageIdHeader to null (without throwing) when the follow-up lookup fails", async () => {
+    mockFetch.mockImplementationOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: "msg-abc123", threadId: "thread-xyz" }),
+      text: async () => "",
+    }));
+    mockFetch.mockImplementationOnce(async () => ({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+      text: async () => "boom",
+    }));
+
+    const result = await sendGmailReply(BASE_OPTS);
+    expect(result.messageId).toBe("msg-abc123");
+    expect(result.messageIdHeader).toBeNull();
+  });
+
+  it("resolves messageIdHeader to null when the metadata response has no Message-ID header", async () => {
+    mockFetch.mockImplementationOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: "msg-abc123", threadId: "thread-xyz" }),
+      text: async () => "",
+    }));
+    mockFetch.mockImplementationOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ payload: { headers: [] } }),
+      text: async () => "",
+    }));
+
+    const result = await sendGmailReply(BASE_OPTS);
+    expect(result.messageIdHeader).toBeNull();
+  });
+
+  it("resolves messageIdHeader to null when the follow-up fetch throws (network error)", async () => {
+    mockFetch.mockImplementationOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: "msg-abc123", threadId: "thread-xyz" }),
+      text: async () => "",
+    }));
+    mockFetch.mockImplementationOnce(async () => {
+      throw new Error("network blip");
+    });
+
+    const result = await sendGmailReply(BASE_OPTS);
+    expect(result.messageIdHeader).toBeNull();
   });
 });
 
