@@ -13,8 +13,8 @@ import {
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
 import { FLAGS } from "@kairo/feature-flags";
 
-// KAI-249: escalateTab is controlled by VITE_ENABLE_ESCALATE_TAB (defaults to false)
-const escalateTabEnabled = import.meta.env.VITE_ENABLE_ESCALATE_TAB === "true";
+// KAI-249: escalateTab is controlled by VITE_FF_ENABLE_ESCALATE_TAB (defaults to false)
+const escalateTabEnabled = import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB === "true";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -608,7 +608,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
     { id: "client",   label: t("ai.tabClient")   },
     { id: "similar",  label: t("ai.tabSimilar")  },
     { id: "articles", label: t("ai.tabArticles") },
-    { id: "escalate", label: t("ai.tabEscalate"), disabled: !escalateTabEnabled },
+    ...(escalateTabEnabled ? [{ id: "escalate" as const, label: t("ai.tabEscalate") }] : []),
   ];
 
   return (
@@ -673,31 +673,14 @@ export function AiAssistant({ customer }: AiAssistantProps) {
         {activeTab === "articles" && (
           <ArticlesTab ticketId={selectedTicketId} />
         )}
-        {activeTab === "escalate" && (
-          escalateTabEnabled ? (
-            <EscalateTab
-              ticketId={selectedTicketId}
-              customer={customer}
-              selectedTicketStatus={selectedTicket?.status ?? null}
-              selectedTicketCategory={selectedTicket?.category ?? null}
-              lang={i18n.language}
-            />
-          ) : (
-            <div style={{
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              gap: 8, padding: "32px 16px", textAlign: "center",
-              border: "1px dashed #E5E7EB", borderRadius: 10, background: "#FAFAFA",
-              marginTop: 8,
-            }}>
-              <span style={{ fontSize: 20 }}>🚧</span>
-              <p style={{ fontSize: 13, fontWeight: 600, color: "#374151", margin: 0 }}>
-                {t("ai.featureDisabledTitle")}
-              </p>
-              <p style={{ fontSize: 11, color: "#9CA3AF", margin: 0, lineHeight: 1.5 }}>
-                {t("ai.featureDisabledEscalate")}
-              </p>
-            </div>
-          )
+        {escalateTabEnabled && activeTab === "escalate" && (
+          <EscalateTab
+            ticketId={selectedTicketId}
+            customer={customer}
+            selectedTicketStatus={selectedTicket?.status ?? null}
+            selectedTicketCategory={selectedTicket?.category ?? null}
+            lang={i18n.language}
+          />
         )}
       </div>
       )}
