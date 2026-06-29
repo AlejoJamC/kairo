@@ -20,11 +20,15 @@ import { AssistantPanel } from "@/components/triage/AssistantPanel";
 // Default: false (disabled) — only renders if explicitly enabled
 // ═══════════════════════════════════════════════════════════════════════════
 
-const assistantTabEnabled = import.meta.env.VITE_FF_ENABLE_ASSISTANT_TAB === "true";
-const clientTabEnabled    = import.meta.env.VITE_FF_ENABLE_CLIENT_TAB === "true";
-const similarTabEnabled   = import.meta.env.VITE_FF_ENABLE_SIMILAR_TAB === "true";
-const articlesTabEnabled  = import.meta.env.VITE_FF_ENABLE_ARTICLES_TAB === "true";
-const escalateTabEnabled  = import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB === "true";
+export function isFlagEnabled(value: string | undefined): boolean {
+  return value === "true";
+}
+
+const assistantTabEnabled = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ASSISTANT_TAB);
+const clientTabEnabled    = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_CLIENT_TAB);
+const similarTabEnabled   = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_SIMILAR_TAB);
+const articlesTabEnabled  = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ARTICLES_TAB);
+const escalateTabEnabled  = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB);
 
 // ---------------------------------------------------------------------------
 // Types

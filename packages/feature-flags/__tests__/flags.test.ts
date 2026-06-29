@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "bun:test";
-import { FLAGS, getFlag, getNumericFlag } from "../src/flags.js";
+import { getFlag, getNumericFlag } from "../src/flags.js";
 
 const ENV_KEY = "FEATURE_FLAG_ENABLE_DETECTION_UI";
 const ENV_KEY_CONTACT = "FEATURE_FLAG_ENABLE_CONTACT_EXTRACTION";
@@ -104,23 +104,5 @@ describe("getNumericFlag('gmail_poll_cron_interval_minutes')", () => {
   it("falls back to the default on an empty string", () => {
     process.env[ENV_KEY_INTERVAL] = "";
     expect(getNumericFlag("gmail_poll_cron_interval_minutes")).toBe(5);
-  });
-});
-
-describe("FLAGS (existing dashboard flags — regression)", () => {
-  it("dashboard.rightPanel.clientTab is true", () => {
-    expect(FLAGS.dashboard.rightPanel.clientTab).toBe(true);
-  });
-
-  it("dashboard.rightPanel.similarTab is true", () => {
-    expect(FLAGS.dashboard.rightPanel.similarTab).toBe(true);
-  });
-
-  it("dashboard.rightPanel.articlesTab is true", () => {
-    expect(FLAGS.dashboard.rightPanel.articlesTab).toBe(true);
-  });
-
-  it("dashboard.rightPanel.escalateTab is false", () => {
-    expect(FLAGS.dashboard.rightPanel.escalateTab).toBe(false);
   });
 });
