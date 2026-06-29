@@ -83,6 +83,65 @@ export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCu
     })();
   }, [user, accountId]);
 
+  // ---------------------------------------------------------------------------
+  // Realtime — keep this list in sync the same way the main triage queue does.
+  // When a customer replies, the ticket's status moves awaiting_customer -> open
+  // and it returns to the main inbox. We must drop it from this view's local
+  // list; because `showDetailPane` derives from that list, the detail pane for a
+  // ticket that left also closes automatically (mirrors the inbox behaviour).
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!user) return;
+
+    const supabase = createClient();
+    const channelName = accountId
+      ? `awaiting:tickets:${accountId}`
+      : `awaiting:tickets:${user.id}`;
+    const rowFilter = accountId ? `account_id=eq.${accountId}` : undefined;
+
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tickets",
+          ...(rowFilter ? { filter: rowFilter } : {}),
+        },
+        (payload) => {
+          const row = payload.new as Ticket | undefined;
+          const oldRow = payload.old as Partial<Ticket> | undefined;
+
+          // Deleted, or moved out of awaiting_customer → remove from this list.
+          if (payload.eventType === "DELETE" || (row && row.status !== "awaiting_customer")) {
+            const removedId = row?.id ?? oldRow?.id;
+            if (removedId) setTickets((prev) => prev.filter((t) => t.id !== removedId));
+            return;
+          }
+
+          // Still awaiting (or just entered) → upsert and keep SLA ordering.
+          if (row && row.status === "awaiting_customer") {
+            setTickets((prev) => {
+              const next = prev.some((t) => t.id === row.id)
+                ? prev.map((t) => (t.id === row.id ? { ...t, ...row } : t))
+                : [...prev, row];
+              return next.sort((a, b) => {
+                const da = a.sla_due_at ? new Date(a.sla_due_at).getTime() : Infinity;
+                const db = b.sla_due_at ? new Date(b.sla_due_at).getTime() : Infinity;
+                return da - db;
+              });
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, accountId]);
+
   const relativeTime = (dateStr: string | null | undefined): string => {
     if (!dateStr) return "—";
     const diff = Date.now() - new Date(dateStr).getTime();
