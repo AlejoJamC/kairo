@@ -9,7 +9,7 @@
 /** Variables shared by every transactional template. */
 export interface BaseEmailVars {
   customer_name: string;
-  /** Human ticket id, e.g. `KAI-T-453` (= `KAI-T-<ticket_number>`). */
+  /** Human ticket id, e.g. `KAI-453` (= `KAI-<ticket_number>`). */
   ticket_id: string;
   ticket_subject: string;
   help_center_url: string;
@@ -19,7 +19,6 @@ export interface BaseEmailVars {
 }
 
 export interface AcknowledgementVars extends BaseEmailVars {
-  ticket_url: string;
   /** Pipeline classification label. */
   ticket_category: string;
   /** Formatted timestamp, locale es. */
@@ -27,7 +26,6 @@ export interface AcknowledgementVars extends BaseEmailVars {
 }
 
 export interface AgentReplyVars extends BaseEmailVars {
-  ticket_url: string;
   agent_name: string;
   agent_role: string;
   agent_initials: string;
@@ -39,7 +37,6 @@ export interface AgentReplyVars extends BaseEmailVars {
 }
 
 export interface ResolvedVars extends BaseEmailVars {
-  ticket_url: string;
   agent_name: string;
   agent_initials: string;
   /** Agent-authored resolution text — sanitized via `sanitizeHtml()` before injection. */
@@ -61,7 +58,6 @@ export interface CsatSurveyVars extends BaseEmailVars {
 }
 
 export interface EscalatedVars extends BaseEmailVars {
-  ticket_url: string;
   specialist_name: string;
   specialist_role: string;
   specialist_initials: string;

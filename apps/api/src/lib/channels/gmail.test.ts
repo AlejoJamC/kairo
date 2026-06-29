@@ -8,7 +8,13 @@ import { ChannelSendException, type ChannelSendErrorCode } from "./types.js";
 // NO_INTEGRATION/PROVIDER_ERROR, never Gmail-specific codes).
 // ---------------------------------------------------------------------------
 
-const sendGmailReplyMock = mock(async () => ({ messageId: "msg-123", threadId: "thread-abc" }));
+const sendGmailReplyMock = mock(
+  async (): Promise<{ messageId: string; threadId: string; messageIdHeader: string | null }> => ({
+    messageId: "msg-123",
+    threadId: "thread-abc",
+    messageIdHeader: "<sent-msg-123@mail.gmail.com>",
+  }),
+);
 
 class FakeGmailSendException extends Error {
   readonly gmailError: { code: string; detail?: string };
@@ -54,7 +60,31 @@ describe("GmailChannelSender — happy path", () => {
   it("returns a ChannelSendResult mapped from Gmail's response", async () => {
     const sender = new GmailChannelSender();
     const result = await sender.send(MESSAGE, CREDENTIAL);
-    expect(result).toEqual({ providerMessageId: "msg-123", providerThreadId: "thread-abc" });
+    expect(result).toEqual({
+      providerMessageId: "msg-123",
+      providerThreadId: "thread-abc",
+      providerMessageIdHeader: "<sent-msg-123@mail.gmail.com>",
+    });
+  });
+
+  it("passes inReplyToExternalId through to sendGmailReply as inReplyToMessageId (KAI-248 Group 2)", async () => {
+    const sender = new GmailChannelSender();
+    await sender.send({ ...MESSAGE, inReplyToExternalId: "<original@gmail.com>" }, CREDENTIAL);
+
+    const [opts] = sendGmailReplyMock.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(opts.inReplyToMessageId).toBe("<original@gmail.com>");
+  });
+
+  it("forwards null providerMessageIdHeader when sendGmailReply could not resolve it", async () => {
+    sendGmailReplyMock.mockImplementationOnce(async () => ({
+      messageId: "msg-456",
+      threadId: "thread-abc",
+      messageIdHeader: null,
+    }));
+
+    const sender = new GmailChannelSender();
+    const result = await sender.send(MESSAGE, CREDENTIAL);
+    expect(result.providerMessageIdHeader).toBeNull();
   });
 });
 

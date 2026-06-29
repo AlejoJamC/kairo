@@ -71,3 +71,30 @@ export async function upsertConversationByThread(
 
   return { conversation_id: inserted.id, was_created: true };
 }
+
+export interface ConversationCustomer {
+  customerExternalId: string | null;
+}
+
+/**
+ * KAI-248 Grupo 4 — fetch the `customer_external_id` of a conversation by id.
+ * Used by the gmail-poll worker to validate that an inbound sender actually
+ * owns the conversation it is about to be re-attached to via a [KAIRO-<n>]
+ * subject token, before accepting that re-association.
+ *
+ * Returns null if the conversation does not exist.
+ */
+export async function getConversationCustomer(
+  client: DbClient,
+  conversationId: string
+): Promise<ConversationCustomer | null> {
+  const { data, error } = await client
+    .from("conversations")
+    .select("customer_external_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return { customerExternalId: data.customer_external_id ?? null };
+}

@@ -3,7 +3,8 @@
 //
 // Deliberately independent Inngest function — does NOT touch
 // apps/api/src/functions/pipeline/*. Runs on a schedule (default every
-// minute, configurable via GMAIL_POLL_CRON_INTERVAL_MINUTES) and emits one
+// 5 minutes, configurable via the FEATURE_FLAG_GMAIL_POLL_CRON_INTERVAL_MINUTES
+// runtime flag — see packages/feature-flags/src/flags.ts) and emits one
 // inbound/gmail.poll.requested event per active Gmail channel_integration.
 //
 // Event IDs are deterministic per (accountId, tick) so that if Inngest
@@ -13,9 +14,12 @@
 
 import { inngest } from "../../lib/inngest.js";
 import { supabase } from "../../lib/supabase.js";
-import { env } from "../../env.js";
+import { getNumericFlag } from "@kairo/feature-flags";
 
-const intervalMinutes = Math.max(1, Math.floor(env.GMAIL_POLL_CRON_INTERVAL_MINUTES));
+const intervalMinutes = Math.max(
+  1,
+  Math.floor(getNumericFlag("gmail_poll_cron_interval_minutes"))
+);
 const CRON_EXPRESSION = `*/${intervalMinutes} * * * *`;
 
 /** Truncates "now" to the current tick boundary for deterministic event IDs. */

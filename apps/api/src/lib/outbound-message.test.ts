@@ -92,6 +92,31 @@ describe("markMessageSent", () => {
       provider_thread_id: "gmail-thread-xyz",
     });
   });
+
+  it("persists message_id_header when the channel sender resolved one (KAI-248 Group 2)", async () => {
+    const client = makeMessagesMockClient({ delivery_status: "sending", send_attempts: 1 });
+
+    await markMessageSent(client, "msg-1", {
+      providerMessageId: "gmail-msg-abc",
+      providerThreadId: "gmail-thread-xyz",
+      providerMessageIdHeader: "<sent-abc@mail.gmail.com>",
+    });
+
+    expect(client._row.message_id_header).toBe("<sent-abc@mail.gmail.com>");
+  });
+
+  it("omits message_id_header from the update when the sender could not resolve one", async () => {
+    const client = makeMessagesMockClient({ delivery_status: "sending", send_attempts: 1, message_id_header: undefined });
+
+    await markMessageSent(client, "msg-1", {
+      providerMessageId: "gmail-msg-abc",
+      providerThreadId: "gmail-thread-xyz",
+      providerMessageIdHeader: null,
+    });
+
+    // Untouched — must not write `null` over a value, and must not error when absent.
+    expect(client._row.message_id_header).toBeUndefined();
+  });
 });
 
 describe("markMessageFailed", () => {

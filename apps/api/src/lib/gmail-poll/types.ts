@@ -127,6 +127,28 @@ export interface GmailPollDeps {
     ticketId: string,
     priorStatus: string | null
   ) => Promise<{ newStatus: string | null }>;
+  /**
+   * KAI-248 Grupo 1 — broken-thread re-association via [KAIRO-<n>] subject
+   * token (mirrors tier1-fast-path's extractKairoToken usage, but takes the
+   * LAST token in the subject rather than the first).
+   */
+  extractLastKairoToken: (subject: string) => number | null;
+  findTicketByKairoToken: (
+    client: DbClient,
+    accountId: string,
+    ticketNumber: number
+  ) => Promise<{ ticketId: string; conversationId: string | null } | null>;
+  /**
+   * KAI-248 Grupo 4 — sender-validation guard for broken-thread re-association.
+   * Looks up the `customer_external_id` of a conversation (by id) so the
+   * gmail-poll worker can confirm the inbound sender actually owns that
+   * conversation before re-attaching a message to it via [KAIRO-<n>] token.
+   * Returns null if the conversation does not exist.
+   */
+  getConversationCustomer: (
+    client: DbClient,
+    conversationId: string
+  ) => Promise<{ customerExternalId: string | null } | null>;
 }
 
 export interface PollAccountResult {

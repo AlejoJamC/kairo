@@ -7,6 +7,7 @@ import {
   buildKairoToken,
   appendKairoToken,
   extractKairoToken,
+  extractLastKairoToken,
   findTicketByKairoToken,
 } from "./ticket-traceability.js";
 
@@ -46,6 +47,31 @@ describe("extractKairoToken", () => {
 
   it("returns null for non-numeric tokens (old UUID-fragment format)", () => {
     expect(extractKairoToken("[KAIRO-abc12345]")).toBeNull();
+  });
+});
+
+describe("extractLastKairoToken", () => {
+  it("extracts the ticket_number from a single-tagged subject", () => {
+    expect(extractLastKairoToken("Re: Order issue [KAIRO-453]")).toBe(453);
+  });
+
+  it("returns the LAST token when the subject carries multiple tokens", () => {
+    // Simulates a long reply chain where an older quoted subject line still
+    // carries a stale token — the most recently appended (last) one wins.
+    const subject = "Re: Re: [KAIRO-100] Order issue [KAIRO-453]";
+    expect(extractLastKairoToken(subject)).toBe(453);
+  });
+
+  it("is case-insensitive for KAIRO prefix", () => {
+    expect(extractLastKairoToken("Re: Subject [kairo-453]")).toBe(453);
+  });
+
+  it("returns null when no token present", () => {
+    expect(extractLastKairoToken("Regular subject line")).toBeNull();
+  });
+
+  it("returns null for non-numeric tokens (old UUID-fragment format)", () => {
+    expect(extractLastKairoToken("[KAIRO-abc12345]")).toBeNull();
   });
 });
 

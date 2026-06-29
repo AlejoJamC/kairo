@@ -166,6 +166,20 @@ describe("outbound-message-send — happy path", () => {
     expect(run?.status).toBe("succeeded");
   });
 
+  it("persists the provider's Message-ID header for future threading (KAI-248 Group 2)", async () => {
+    const client = makeMockClient({ delivery_status: "queued", send_attempts: 0 });
+    const sender = makeFakeSender(async () => ({
+      providerMessageId: "gmail-1",
+      providerThreadId: "thread-abc",
+      providerMessageIdHeader: "<sent-gmail-1@mail.gmail.com>",
+    }));
+
+    await runHandlerSimulation(client, sender);
+
+    const message = client._tables.get("messages")?.get("msg-1");
+    expect(message?.message_id_header).toBe("<sent-gmail-1@mail.gmail.com>");
+  });
+
   it("is idempotent — skips sending when the message is already sent", async () => {
     const client = makeMockClient({ delivery_status: "sent", send_attempts: 1, external_id: "gmail-old" });
     const sender = makeFakeSender(async () => {

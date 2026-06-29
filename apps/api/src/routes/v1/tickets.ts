@@ -1018,7 +1018,7 @@ tickets.post("/:id/reply", async (c) => {
   // Message-ID of the last inbound message for In-Reply-To / References headers.
 
   // Resolve base subject, then append traceability token (KAI-115 §B).
-  // Token uses the human-visible ticket_number (KAI-T-453), not a UUID fragment.
+  // Token uses the human-visible ticket_number (KAI-453), not a UUID fragment.
   const baseSubject = ticket.subject?.startsWith("Re:") ? ticket.subject : `Re: ${ticket.subject ?? ""}`;
   const ticketNumber = (ticket as { ticket_number: number }).ticket_number;
   const subject = appendKairoToken(baseSubject, ticketNumber);
@@ -1061,7 +1061,7 @@ tickets.post("/:id/reply", async (c) => {
   const templateVars: Partial<TemplateVars> = {
     "cliente.nombre": customerDisplayName ?? "",
     "cliente.email": ticket.from_email ?? "",
-    "ticket.id": `KAI-T-${ticketNumber}`,
+    "ticket.id": `KAI-${ticketNumber}`,
     "ticket.asunto": ticket.subject ?? "",
     "agente.email": gmailFromEmail ?? "",
     "agente.nombre": gmailFromEmail ?? "",
@@ -1083,8 +1083,6 @@ tickets.post("/:id/reply", async (c) => {
   // KAI-247: render the design system templates instead of the generic wrapper.
   const emailUrls = await resolveEmailUrls({
     accountId: ticket.account_id,
-    ticketNumber,
-    ticketSubject: ticket.subject ?? "",
   });
   const { agent_name, agent_role, agent_initials } = await resolveAgentIdentity(
     supabase,
@@ -1093,7 +1091,7 @@ tickets.post("/:id/reply", async (c) => {
   );
   const emailBaseVars = {
     customer_name: customerDisplayName ?? (ticket.from_email?.split("@")[0] ?? ""),
-    ticket_id: `KAI-T-${ticketNumber}`,
+    ticket_id: `KAI-${ticketNumber}`,
     ticket_subject: ticket.subject ?? "",
     ...emailUrls,
   };

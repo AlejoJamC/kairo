@@ -188,27 +188,37 @@
               <!-- /kairo:if -->
 
               <!-- Reopen CTA -->
+              <!-- kairo:if reopen_url -->
               <tr>
                 <td class="px" style="padding:20px 36px 0;">
                   <table role="presentation" cellpadding="0" cellspacing="0" align="left">
                     <tr>
-                      <td class="btn-cell" style="padding-right:8px;">
-                        <a href="{{ticket_url}}" style="display:inline-block; background:#FFFFFF; color:#52525B; font-family:'Inter',Arial,sans-serif; font-size:13.5px; font-weight:600; line-height:42px; text-align:center; padding:0 20px; border-radius:8px; border:1px solid #E4E4E7;">Ver resolución</a>
-                      </td>
-                      <!-- kairo:if reopen_url -->
                       <td class="btn-cell">
                         <a href="{{reopen_url}}" style="display:inline-block; background:#FFFFFF; color:#52525B; font-family:'Inter',Arial,sans-serif; font-size:13.5px; font-weight:600; line-height:42px; text-align:center; padding:0 20px; border-radius:8px; border:1px solid #E4E4E7;">Reabrir ticket</a>
                       </td>
-                      <!-- /kairo:if -->
                     </tr>
                   </table>
                 </td>
               </tr>
+              <!-- /kairo:if -->
 
-              <!-- Note -->
+              <!-- Reply hint -->
               <tr>
-                <td class="px" style="padding:14px 36px 0; font-family:'Inter',Arial,sans-serif; font-size:12px; line-height:1.6; color:#A1A1AA;">
-                  ¿Algo quedó pendiente? Responde a este correo y reabriremos el ticket automáticamente.
+                <td class="px" style="padding:20px 36px 0;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EEF2FF; border:1px solid #DBE3FF; border-radius:8px;">
+                    <tr>
+                      <td style="padding:14px 16px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td valign="middle" style="font-family:'Inter',Arial,sans-serif; font-size:13px; line-height:1.55; color:#52525B;">
+                              <strong style="color:#2B5BFF; font-weight:600;">Responde directamente a este correo</strong><br/>
+                              <span style="color:#A1A1AA; font-size:12px;">¿Algo quedó pendiente? Tu respuesta reabre el ticket automáticamente.</span>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
 

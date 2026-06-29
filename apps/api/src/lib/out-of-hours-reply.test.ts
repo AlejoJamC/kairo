@@ -167,7 +167,9 @@ describe("maybeSendOutOfHoursReply — happy path", () => {
       now: monBogota22,
     });
     expect(result).toEqual({ sent: true });
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    // 1 call to send + 1 follow-up `messages.get` for the real Message-ID
+    // header (KAI-248 Group 2 — see gmail-send.ts sendGmailReply()).
+    expect(mockFetch).toHaveBeenCalledTimes(2);
 
     const [url, opts] = mockFetch.mock.calls[0];
     expect(String(url)).toContain("gmail.googleapis.com");

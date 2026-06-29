@@ -3,7 +3,7 @@
  *
  * [KAIRO-<ticket_number>] tokens are injected into every outbound email
  * (subject + body footer). The number is the human-visible ticket number
- * (`tickets.ticket_number`, shown in the UI as `KAI-T-453`) — NOT the UUID
+ * (`tickets.ticket_number`, shown in the UI as `KAI-453`) — NOT the UUID
  * fragment — so the token a customer sees matches the ticket the agent sees.
  *
  * When an email client breaks the Gmail thread, the ingestion pipeline extracts
@@ -37,6 +37,24 @@ export function extractKairoToken(subject: string): number | null {
   const match = subject.match(/\[KAIRO-(\d+)\]/i);
   if (!match?.[1]) return null;
   const n = Number(match[1]);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+/**
+ * Extract the ticket_number from the LAST [KAIRO-<ticket_number>] token in a
+ * subject, or return null. Subjects can accumulate multiple tokens across a
+ * long reply chain (e.g. a customer replying to an old quoted email whose
+ * subject still carries a stale token) — the last occurrence is the one
+ * appended most recently by Kairo and therefore reflects the ticket that is
+ * actually current. Used by the gmail-poll ingestion worker (KAI-248 Grupo 1)
+ * for broken-thread re-association.
+ */
+export function extractLastKairoToken(subject: string): number | null {
+  const matches = [...subject.matchAll(/\[KAIRO-(\d+)\]/gi)];
+  if (matches.length === 0) return null;
+  const last = matches[matches.length - 1]?.[1];
+  if (!last) return null;
+  const n = Number(last);
   return Number.isSafeInteger(n) ? n : null;
 }
 

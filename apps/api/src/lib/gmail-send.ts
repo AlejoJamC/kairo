@@ -7,6 +7,18 @@
 
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
+/**
+ * Builds the `messages.get` URL for fetching just the `Message-ID` header of a
+ * just-sent message. `format=metadata&metadataHeaders=Message-ID` returns the
+ * minimal payload (no body, no full header list) needed to recover the RFC 2822
+ * Message-ID Gmail assigned — see KAI-248 Group 2 rationale below.
+ */
+function buildGetMetadataUrl(messageId: string): string {
+  const params = new URLSearchParams({ format: "metadata" });
+  params.append("metadataHeaders", "Message-ID");
+  return `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}?${params.toString()}`;
+}
+
 export type GmailSendError =
   | { code: "GMAIL_TOKEN_EXPIRED" }
   | { code: "NO_GMAIL_INTEGRATION" }
@@ -115,6 +127,15 @@ function buildMimeMessage(opts: {
 export interface GmailSendResult {
   messageId: string;
   threadId: string;
+  /**
+   * RFC 2822 `Message-ID` header (e.g. "<abc@mail.gmail.com>") that Gmail
+   * actually stamped on the sent message — distinct from `messageId`, which is
+   * Gmail's internal API id and never appears in the wire-format email.
+   * `null` when the follow-up metadata lookup fails (KAI-248 Group 2: best
+   * effort — a failed lookup must never fail the send itself, since the email
+   * has already been delivered at that point).
+   */
+  messageIdHeader: string | null;
 }
 
 export async function sendGmailReply(opts: {
@@ -162,5 +183,47 @@ export async function sendGmailReply(opts: {
   }
 
   const data = (await res.json()) as { id: string; threadId: string };
-  return { messageId: data.id, threadId: data.threadId };
+
+  // KAI-248 Group 2: `users.messages.send` only returns Gmail's internal
+  // message id + thread id — never the RFC 2822 `Message-ID` header that
+  // actually goes out on the wire. We need that real header value (not a
+  // self-generated one) so a future customer reply that quotes/threads off
+  // this message can be matched back via In-Reply-To/References: Gmail is
+  // free to rewrite or ignore a client-supplied Message-ID header on send, so
+  // generating our own and trusting it to survive would silently break
+  // threading. A best-effort `messages.get(format=metadata)` follow-up call
+  // is the only reliable way to read back what Gmail actually stamped.
+  //
+  // This call is intentionally fire-and-forget from the caller's point of
+  // view: the email has already been sent by this point, so a failure here
+  // must never surface as a send failure. Missing thread continuity on a
+  // future reply (falls back to Gmail's native threadId matching) is an
+  // acceptable degradation versus retrying/failing an already-sent email.
+  const messageIdHeader = await fetchMessageIdHeader(opts.accessToken, data.id);
+
+  return { messageId: data.id, threadId: data.threadId, messageIdHeader };
+}
+
+/**
+ * Best-effort lookup of the RFC 2822 `Message-ID` header for a message Gmail
+ * just sent. Never throws — any failure (network, non-200, missing header)
+ * resolves to `null` so the caller can proceed without it.
+ */
+async function fetchMessageIdHeader(accessToken: string, gmailMessageId: string): Promise<string | null> {
+  try {
+    const res = await fetch(buildGetMetadataUrl(gmailMessageId), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      payload?: { headers?: Array<{ name: string; value: string }> };
+    };
+    const header = data.payload?.headers?.find((h) => h.name.toLowerCase() === "message-id");
+    return header?.value ?? null;
+  } catch {
+    return null;
+  }
 }

@@ -9,7 +9,7 @@ const ENV_KEY = "FEATURE_FLAG_ENABLE_TICKET_ACKNOWLEDGEMENT";
 const renderAcknowledgementMock = mock((vars: Record<string, unknown>) => `<html>${JSON.stringify(vars)}</html>`);
 mock.module("../emails/registry.js", () => ({
   renderAcknowledgement: renderAcknowledgementMock,
-  buildTicketId: (n: number) => `KAI-T-${n}`,
+  buildTicketId: (n: number) => `KAI-${n}`,
 }));
 
 let resolvedUrls = {
@@ -17,7 +17,6 @@ let resolvedUrls = {
   status_url: "",
   privacy_url: "https://kairo.alejojamc.com/privacy/",
   unsubscribe_url: "",
-  ticket_url: "",
 };
 const resolveEmailUrlsMock = mock(() => Promise.resolve(resolvedUrls));
 mock.module("../emails/urls.js", () => ({
@@ -112,7 +111,6 @@ beforeEach(() => {
     status_url: "",
     privacy_url: "https://kairo.alejojamc.com/privacy/",
     unsubscribe_url: "",
-    ticket_url: "",
   };
   gmailEmail = "support@acme.com";
 });
@@ -183,7 +181,7 @@ describe("maybeSendTicketAcknowledgement — happy path", () => {
     expect(renderAcknowledgementMock).toHaveBeenCalledTimes(1);
     const vars = renderAcknowledgementMock.mock.calls[0][0] as Record<string, unknown>;
     expect(vars.customer_name).toBe("Jane");
-    expect(vars.ticket_id).toBe("KAI-T-453");
+    expect(vars.ticket_id).toBe("KAI-453");
     expect(vars.ticket_subject).toBe("Order issue");
     expect(vars.ticket_category).toBe("billing");
     expect(vars.ticket_created_at).toBe(`formatted(${BASE_ARGS.receivedAt})`);

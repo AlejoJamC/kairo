@@ -57,6 +57,15 @@ export async function markMessageSending(client: DbClient, messageId: string): P
 
 /**
  * Marks a message as `sent` and records the provider's identifiers + raw payload.
+ *
+ * KAI-248 Group 2: also persists `message_id_header` — the RFC 2822 Message-ID
+ * of the email we just sent — when the channel sender was able to report it
+ * (e.g. Gmail's `messages.get` follow-up in gmail-send.ts). This mirrors how
+ * inbound messages already store their own `message_id_header` (KAI-115), so a
+ * future customer reply that quotes/threads off *this* outbound message can be
+ * resolved back to In-Reply-To/References the same way. Left untouched
+ * (`undefined` -> omitted from the update) when the provider couldn't report
+ * it, so we never overwrite a previous value with null on a retry.
  */
 export async function markMessageSent(
   client: DbClient,
@@ -70,6 +79,7 @@ export async function markMessageSent(
       external_id: result.providerMessageId,
       thread_external_id: result.providerThreadId,
       raw_payload: { provider_message_id: result.providerMessageId, provider_thread_id: result.providerThreadId },
+      ...(result.providerMessageIdHeader ? { message_id_header: result.providerMessageIdHeader } : {}),
     })
     .eq("id", messageId);
 

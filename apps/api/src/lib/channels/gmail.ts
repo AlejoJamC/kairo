@@ -34,7 +34,11 @@ export class GmailChannelSender implements ChannelSender {
         bodyHtml: message.bodyHtml ?? undefined,
         inReplyToMessageId: message.inReplyToExternalId ?? undefined,
       });
-      return { providerMessageId: result.messageId, providerThreadId: result.threadId };
+      return {
+        providerMessageId: result.messageId,
+        providerThreadId: result.threadId,
+        providerMessageIdHeader: result.messageIdHeader,
+      };
     } catch (err) {
       if (err instanceof GmailSendException) {
         const code = GMAIL_ERROR_CODE_MAP[err.gmailError.code];

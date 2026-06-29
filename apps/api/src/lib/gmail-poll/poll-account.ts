@@ -29,6 +29,24 @@ function headersToRecord(headers: { name: string; value: string }[]): Record<str
   return out;
 }
 
+/**
+ * Extract the bare email address from a raw `From:` header value
+ * (e.g. "Cliente Name <cliente@mail.com>" -> "cliente@mail.com").
+ * Falls back to the raw input lowercased/trimmed if no address is found.
+ * Mirrors the local extractors in ticket-acknowledgement.ts / out-of-hours-reply.ts.
+ */
+function extractEmailAddress(raw: string): string {
+  const angleMatch = raw.match(/<([^>]+)>/);
+  if (angleMatch?.[1]) return angleMatch[1].trim().toLowerCase();
+  const bareMatch = raw.match(/\S+@\S+/);
+  return (bareMatch ? bareMatch[0] : raw).trim().toLowerCase();
+}
+
+/** Normalize an email-ish string for case/whitespace-insensitive comparison. */
+function normalizeEmail(raw: string): string {
+  return extractEmailAddress(raw);
+}
+
 interface ChannelIntegrationRow {
   id: string;
   account_id: string;
@@ -90,6 +108,9 @@ async function ingestMessages(
     const gmailCategories = (message.labelIds ?? []).filter((l) => l.startsWith("CATEGORY_"));
     const snippet = message.snippet ?? "";
     const threadId = message.threadId;
+    // KAI-248 Grupo 1 §1: RFC 2822 Message-ID header — stored for In-Reply-To /
+    // References in outbound replies (mirrors tier1-fast-path KAI-115 §A).
+    const messageIdHeader = headerValue(msgHeaders, "Message-ID") || null;
 
     const filterResult = deps.preFilterEmail({
       from,
@@ -113,6 +134,7 @@ async function ingestMessages(
         received_at: receivedAt,
         sender_external_id: from,
         snippet,
+        message_id_header: messageIdHeader,
         classification_status: filterResult.status === "skip" ? "skipped" : "pending",
         skip_reason: filterResult.status === "skip" ? filterResult.skip_reason ?? null : null,
         processing_batch: "gmail-poll",
@@ -137,13 +159,55 @@ async function ingestMessages(
 
     // Gate passed — threading + Flow 1 / Flow 2.
     try {
-      const { conversation_id } = await deps.upsertConversationByThread(deps.db, {
-        accountId,
-        channelIntegrationId,
-        externalThreadId: threadId,
-        customerExternalId: from,
-        customerDisplayName: null,
-      });
+      // KAI-248 Grupo 1 §2 + Grupo 4: broken-thread re-association — if the
+      // subject carries a [KAIRO-<ticket_number>] token, prefer re-attaching
+      // to that ticket's existing conversation over the Gmail threadId. Use
+      // the LAST token in the subject (the current ticket), not the first.
+      // Mirrors tier1-fast-path's KAI-115 §B re-association.
+      //
+      // Grupo 4 — security: re-association is only honored after confirming
+      // the inbound sender matches the conversation's recorded customer
+      // (`conversations.customer_external_id`). Without this check, any
+      // sender who guesses or copies a [KAIRO-<n>] token from a quoted reply
+      // could inject their message into another customer's ticket within the
+      // same account. On mismatch we discard the token match entirely and
+      // fall through to the normal threadId-based flow below, so the message
+      // lands in its own conversation/ticket instead of someone else's.
+      let resolvedConversationId: string | undefined;
+      const kairoTicketNumber = deps.extractLastKairoToken(subject);
+      if (kairoTicketNumber !== null) {
+        const existingTicket = await deps.findTicketByKairoToken(deps.db, accountId, kairoTicketNumber);
+        if (existingTicket?.conversationId) {
+          const conversationCustomer = await deps.getConversationCustomer(
+            deps.db,
+            existingTicket.conversationId
+          );
+          const recordedCustomer = conversationCustomer?.customerExternalId ?? null;
+          const senderMatches =
+            recordedCustomer !== null && normalizeEmail(from) === normalizeEmail(recordedCustomer);
+
+          if (senderMatches) {
+            resolvedConversationId = existingTicket.conversationId;
+          } else {
+            console.warn(
+              `[gmail-poll] rejected [KAIRO-${kairoTicketNumber}] re-association: sender does not match conversation owner (account ${accountId})`
+            );
+          }
+        }
+      }
+
+      if (!resolvedConversationId) {
+        const { conversation_id } = await deps.upsertConversationByThread(deps.db, {
+          accountId,
+          channelIntegrationId,
+          externalThreadId: threadId,
+          customerExternalId: from,
+          customerDisplayName: null,
+        });
+        resolvedConversationId = conversation_id;
+      }
+
+      const conversation_id = resolvedConversationId;
 
       const classification = await deps.classifyEmail({ subject, body: snippet, from });
       const classifiedAt = new Date().toISOString();
