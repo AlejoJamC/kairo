@@ -16,6 +16,7 @@ import {
   type TenantWeights,
 } from "../../lib/scoring.js";
 import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
+import { attachOperationalSla, buildConfigByPriority } from "../../lib/operational-sla.js";
 import { emitTicketEvent } from "../../lib/ticket-events.js";
 import { createCompletionProvider, detectEscalationTriggers } from "@kairo/intelligence";
 import type { EscalationContext } from "@kairo/intelligence";
@@ -92,7 +93,15 @@ tickets.get("/", async (c) => {
       ? btoa(JSON.stringify({ score: last.priority_score ?? null, id: last.id }))
       : null;
 
-  return c.json({ data: items, next_cursor: nextCursor, count: items.length });
+  // KAI-168 — attach the operational SLA (by ticket priority) computed field.
+  const { data: slaConfigRows } = await supabase
+    .from("ticket_priority_sla_config")
+    .select("priority, max_response_seconds, min_response_seconds, risk_alert_seconds, escalation_seconds")
+    .eq("account_id", ctx.accountId);
+  const configByPriority = buildConfigByPriority(slaConfigRows ?? []);
+  const enrichedItems = attachOperationalSla(items, configByPriority);
+
+  return c.json({ data: enrichedItems, next_cursor: nextCursor, count: enrichedItems.length });
 });
 
 // ---------------------------------------------------------------------------
@@ -901,7 +910,7 @@ tickets.post("/:id/reply", async (c) => {
   // 1. Fetch ticket + linked conversation (ticket_number for traceability token)
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
-    .select("id, ticket_number, subject, from_email, gmail_thread_id, conversation_id, status, account_id, created_at")
+    .select("id, ticket_number, subject, from_email, gmail_thread_id, conversation_id, status, account_id, created_at, first_response_at")
     .eq("id", id)
     .eq("account_id", ctx.accountId)
     .single();
@@ -1190,6 +1199,8 @@ tickets.post("/:id/reply", async (c) => {
     .from("tickets")
     .update({
       last_response_at: nowIso,
+      // KAI-168 — first agent response freezes the operational SLA clock.
+      ...(ticket.first_response_at ? {} : { first_response_at: nowIso }),
       ...(finalStatus !== currentStatus ? { status: finalStatus } : {}),
     })
     .eq("id", id);
@@ -1596,6 +1607,7 @@ tickets.get("/:id/client-profile", async (c) => {
       totalTickets:      draft.evidence_count ?? 0,
       ticketsLast30Days: 0,
       recentTickets:     [],
+      slaBreachedCount:  0,
     };
 
     // Cache by draft id to avoid re-querying on tab switches.
@@ -1615,7 +1627,7 @@ tickets.get("/:id/client-profile", async (c) => {
   const now30  = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const now90  = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [clientRes, totalRes, last30Res, last90Res, recentRes] = await Promise.all([
+  const [clientRes, totalRes, last30Res, last90Res, recentRes, slaTicketsRes, slaConfigRes] = await Promise.all([
     supabase
       .from("clients")
       .select("id, name, telephone, authorized_emails, plan_type, sla_level, internal_id, created_at")
@@ -1650,6 +1662,18 @@ tickets.get("/:id/client-profile", async (c) => {
       .eq("client_id", ticket.client_id)
       .order("created_at", { ascending: false })
       .limit(5),
+
+    // KAI-168 — operational SLA history (own domain, does NOT use tickets.sla_breached).
+    supabase
+      .from("tickets")
+      .select("priority, received_at, created_at, first_response_at, resolved_at")
+      .eq("account_id", ctx.accountId)
+      .eq("client_id", ticket.client_id),
+
+    supabase
+      .from("ticket_priority_sla_config")
+      .select("priority, max_response_seconds, min_response_seconds, risk_alert_seconds, escalation_seconds")
+      .eq("account_id", ctx.accountId),
   ]);
 
   if (clientRes.error || !clientRes.data) {
@@ -1663,6 +1687,13 @@ tickets.get("/:id/client-profile", async (c) => {
   const recentTickets     = recentRes.data ?? [];
 
   const { isRecurrent, isNewClient } = computeClientFlags(ticketsLast30Days, ticketsLast90Days);
+
+  // KAI-168 — "X de Y tickets con ANS incumplido" for this client.
+  const configByPriority = buildConfigByPriority(slaConfigRes.data ?? []);
+  const slaBreachedCount = attachOperationalSla(
+    (slaTicketsRes.data ?? []).map((row, i) => ({ id: `${i}`, ...row })),
+    configByPriority
+  ).filter((t) => t.operational_sla?.status === "breached").length;
 
   const profile = {
     clientId:        client.id,
@@ -1679,6 +1710,7 @@ tickets.get("/:id/client-profile", async (c) => {
     totalTickets,
     ticketsLast30Days,
     recentTickets,
+    slaBreachedCount,
   };
 
   // 4. Cache and return

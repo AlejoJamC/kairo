@@ -43,6 +43,8 @@ export interface ClientProfile {
   totalTickets:     number;
   ticketsLast30Days: number;
   recentTickets:    RecentTicket[];
+  /** KAI-168 — count of this client's tickets whose operational SLA (by ticket priority) was breached. */
+  slaBreachedCount: number;
 
   // KAI-227 — origin of this profile. When the ticket has no `client_id`,
   // the API falls back to `draft_contact` matched by email and returns

@@ -45,27 +45,31 @@ const mockMessages = [
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback ?? key,
+    // Interpolation options (KAI-168 prioritySla.* keys) are an object, not a
+    // string fallback — fall back to the raw key in that case so tests can
+    // match on it.
+    t: (key: string, fallback?: string | Record<string, unknown>) =>
+      typeof fallback === "string" ? fallback : key,
     i18n: { language: "en" },
   }),
 }));
 
+let mockTicket: Record<string, unknown> = {
+  id: "ticket-1",
+  subject: "Test ticket",
+  from_name: "Alice",
+  from_email: "alice@example.com",
+  received_at: "2026-06-01T10:00:00Z",
+  body_plain: "Legacy body",
+  snippet: null,
+  ai_reasoning: null,
+  status: "open",
+  priority: null,
+};
+
 vi.mock("@/stores/triage-store", () => ({
   useTriageStore: () => ({
-    tickets: [
-      {
-        id: "ticket-1",
-        subject: "Test ticket",
-        from_name: "Alice",
-        from_email: "alice@example.com",
-        received_at: "2026-06-01T10:00:00Z",
-        body_plain: "Legacy body",
-        snippet: null,
-        ai_reasoning: null,
-        status: "open",
-        priority: null,
-      },
-    ],
+    tickets: [mockTicket],
     selectedTicketId: "ticket-1",
   }),
 }));
@@ -94,6 +98,18 @@ const { TicketDetail } = await import("./ticket-detail");
 describe("TicketDetail", () => {
   beforeEach(() => {
     mockThreadResult = { messages: [], loading: false, error: null };
+    mockTicket = {
+      id: "ticket-1",
+      subject: "Test ticket",
+      from_name: "Alice",
+      from_email: "alice@example.com",
+      received_at: "2026-06-01T10:00:00Z",
+      body_plain: "Legacy body",
+      snippet: null,
+      ai_reasoning: null,
+      status: "open",
+      priority: null,
+    };
   });
 
   it("renders 3 message cards when thread has 3 messages", async () => {
@@ -134,5 +150,49 @@ describe("TicketDetail", () => {
     // No message bodies while loading
     expect(screen.queryByText("First message from Alice")).not.toBeInTheDocument();
     expect(screen.queryByText("Legacy body")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KAI-168: operational SLA progress bar below the subject
+// ---------------------------------------------------------------------------
+
+describe("TicketDetail — priority SLA bar (KAI-168)", () => {
+  beforeEach(() => {
+    mockThreadResult = { messages: [], loading: false, error: null };
+  });
+
+  it("renders nothing when the ticket has no operational_sla", () => {
+    mockTicket = { ...mockTicket, operational_sla: null };
+    renderWithProviders(React.createElement(TicketDetail));
+    expect(screen.queryByText(/restantes|remaining/i)).not.toBeInTheDocument();
+  });
+
+  it("shows remaining time text when status is 'ok'", () => {
+    mockTicket = {
+      ...mockTicket,
+      operational_sla: {
+        status: "ok",
+        percentUsed: 20,
+        remainingSeconds: 2880,
+        overdueSeconds: 0,
+      },
+    };
+    renderWithProviders(React.createElement(TicketDetail));
+    expect(screen.getByText(/prioritySla.detailRemaining/i)).toBeInTheDocument();
+  });
+
+  it("shows overdue text when status is 'breached'", () => {
+    mockTicket = {
+      ...mockTicket,
+      operational_sla: {
+        status: "breached",
+        percentUsed: 150,
+        remainingSeconds: 0,
+        overdueSeconds: 3600,
+      },
+    };
+    renderWithProviders(React.createElement(TicketDetail));
+    expect(screen.getByText(/prioritySla.detailOverdue/i)).toBeInTheDocument();
   });
 });

@@ -5,6 +5,54 @@ import { TicketHeader } from "./ticket-header";
 import { useTriageStore } from "@/stores/triage-store";
 import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
 import { getLandingUrl } from "@/lib/api-client";
+import type { Ticket } from "@kairo/types";
+
+// ---------------------------------------------------------------------------
+// KAI-168 — operational SLA (by ticket priority) progress bar. Shown below
+// the subject, above the AI reasoning banner. Own domain — driven entirely by
+// ticket.operational_sla (server-computed from the ticket's own priority).
+// ---------------------------------------------------------------------------
+
+const PRIORITY_SLA_BAR_COLOR: Record<"ok" | "at_risk" | "breached", string> = {
+  ok: "#10B981",
+  at_risk: "#F97316",
+  breached: "#EF4444",
+};
+
+function PrioritySlaBar({ ticket }: { ticket: Ticket }) {
+  const { t } = useTranslation("dashboard");
+  const sla = ticket.operational_sla;
+  if (!sla) return null;
+
+  const hours = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 3600);
+  const minutes = Math.floor(((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) % 3600) / 60);
+
+  const detail =
+    sla.status === "ok"
+      ? t("prioritySla.detailRemaining", { count: hours, minutes })
+      : sla.status === "at_risk"
+        ? t("prioritySla.detailDueSoon", { count: hours, minutes })
+        : t("prioritySla.detailOverdue", { count: hours, minutes });
+
+  const barWidth = Math.min(100, sla.percentUsed);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ height: 6, borderRadius: 3, background: "var(--k-border-subtle)", overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${barWidth}%`,
+            background: PRIORITY_SLA_BAR_COLOR[sla.status],
+            borderRadius: 3,
+            transition: "width 0.2s ease",
+          }}
+        />
+      </div>
+      <span style={{ fontSize: 12, color: PRIORITY_SLA_BAR_COLOR[sla.status], fontWeight: 500 }}>{detail}</span>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Sender avatar (initials circle)
@@ -369,6 +417,8 @@ export function TicketDetail() {
         >
           {ticket.subject ?? t("ticketDetail.noSubject", "(Sin asunto)")}
         </h1>
+
+        <PrioritySlaBar ticket={ticket} />
 
         {/* AI reasoning banner */}
         {ticket.ai_reasoning && (

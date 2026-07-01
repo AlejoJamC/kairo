@@ -1040,6 +1040,57 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          account_id: string
+          body: string
+          created_at: string
+          id: string
+          kind: string
+          read_at: string | null
+          recipient_user_id: string
+          ticket_id: string | null
+          title: string
+        }
+        Insert: {
+          account_id: string
+          body: string
+          created_at?: string
+          id?: string
+          kind: string
+          read_at?: string | null
+          recipient_user_id: string
+          ticket_id?: string | null
+          title: string
+        }
+        Update: {
+          account_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          read_at?: string | null
+          recipient_user_id?: string
+          ticket_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       oauth_credentials: {
         Row: {
           access_token_enc: string | null
@@ -1490,6 +1541,89 @@ export type Database = {
           },
           {
             foreignKeyName: "ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_priority_sla_config: {
+        Row: {
+          account_id: string
+          created_at: string
+          escalation_seconds: number
+          id: string
+          max_response_seconds: number
+          min_response_seconds: number
+          priority: string
+          risk_alert_seconds: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          escalation_seconds: number
+          id?: string
+          max_response_seconds: number
+          min_response_seconds: number
+          priority: string
+          risk_alert_seconds: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          escalation_seconds?: number
+          id?: string
+          max_response_seconds?: number
+          min_response_seconds?: number
+          priority?: string
+          risk_alert_seconds?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_priority_sla_config_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_priority_sla_events: {
+        Row: {
+          account_id: string
+          event_type: string
+          id: string
+          occurred_at: string
+          ticket_id: string
+        }
+        Insert: {
+          account_id: string
+          event_type: string
+          id?: string
+          occurred_at?: string
+          ticket_id: string
+        }
+        Update: {
+          account_id?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_priority_sla_events_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_priority_sla_events_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"

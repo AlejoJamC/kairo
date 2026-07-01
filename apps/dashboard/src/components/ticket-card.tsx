@@ -117,6 +117,53 @@ function SlaBadge({ slaDate }: SlaBadgeProps) {
 }
 
 // ---------------------------------------------------------------------------
+// KAI-168 — operational SLA (by ticket priority) badge.
+// Own domain from the contractual SlaBadge above (sla_due_at/plan-tier) — this
+// one is driven by ticket.operational_sla, computed server-side from the
+// ticket's own priority (P1/P2/P3). Only this badge's background/text color
+// changes per state; no stripe or other existing element is touched.
+// ---------------------------------------------------------------------------
+
+const PRIORITY_SLA_STYLE: Record<"ok" | "at_risk" | "breached", React.CSSProperties> = {
+  ok:       { background: "#ECFDF5", color: "#047857" },
+  at_risk:  { background: "#FFF7ED", color: "#C2410C" },
+  breached: { background: "#FEF2F2", color: "#DC2626" },
+};
+
+function PrioritySlaBadge({ ticket }: { ticket: Ticket }) {
+  const { t } = useTranslation("dashboard");
+  const sla = ticket.operational_sla;
+  if (!sla) return null;
+
+  const hours = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 3600);
+  const minutes = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 60);
+  const days = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 86400);
+
+  let label: string;
+  if (sla.status === "ok") {
+    label = hours > 0 ? t("prioritySla.remainingHours", { count: hours }) : t("prioritySla.remainingMinutes", { count: minutes });
+  } else if (sla.status === "at_risk") {
+    label = hours > 0 ? t("prioritySla.dueInHours", { count: hours }) : t("prioritySla.dueInMinutes", { count: minutes });
+  } else {
+    label = days > 0 ? t("prioritySla.overdueDays", { count: days }) : t("prioritySla.overdueHours", { count: hours });
+  }
+
+  return (
+    <span
+      style={{
+        ...PRIORITY_SLA_STYLE[sla.status],
+        fontSize: 10,
+        fontWeight: 600,
+        padding: "2px 6px",
+        borderRadius: 4,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Relative timestamp
 // ---------------------------------------------------------------------------
 
@@ -359,6 +406,7 @@ export function TicketCard({
         }}
       >
         <SlaBadge slaDate={ticket.sla_due_at} />
+        <PrioritySlaBadge ticket={ticket} />
         {ticket.group_id && groupCount > 1 && (
           <span
             style={{

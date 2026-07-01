@@ -15,6 +15,11 @@
 //                                  OFF by default. When ON and the send succeeds, the
 //                                  out-of-hours auto-reply (KAI-40) is skipped for that
 //                                  creation to avoid double auto-replies.
+//   enable_operational_sla_escalation — KAI-168: run the operational-SLA-by-priority
+//                                  escalation cron, which notifies the assigned agent
+//                                  (or a supervisor/admin fallback) via an in-app
+//                                  notification once a ticket crosses its priority's
+//                                  configured escalation threshold. OFF by default.
 //
 // Runtime-overrideable numeric flags (server-only, via FEATURE_FLAG_<UPPER_SNAKE> env vars):
 //   gmail_poll_cron_interval_minutes — KAI-248: how often (in minutes) the Gmail
@@ -24,6 +29,9 @@
 //                                  FEATURE_FLAG_GMAIL_POLL_CRON_INTERVAL_MINUTES=<n> to
 //                                  override. The cron schedule is registered at app
 //                                  startup, so a new value takes effect on next deploy/restart.
+//   operational_sla_escalation_check_interval_minutes — KAI-168: how often (in minutes)
+//                                  the operational-SLA escalation cron scans open tickets
+//                                  for priority-based escalation thresholds. Default: 5.
 // =============================================================================
 
 // ─── Static dashboard flags (build-time, no env override) ────────────────────
@@ -47,6 +55,7 @@ const FLAG_DEFAULTS = {
   enable_detection_ui: false,
   enable_contact_extraction: false,
   enable_ticket_acknowledgement: false,
+  enable_operational_sla_escalation: false,
 } as const;
 
 type RuntimeFlagName = keyof typeof FLAG_DEFAULTS;
@@ -73,6 +82,7 @@ export function getFlag(name: RuntimeFlagName): boolean {
 
 const NUMERIC_FLAG_DEFAULTS = {
   gmail_poll_cron_interval_minutes: 5,
+  operational_sla_escalation_check_interval_minutes: 5,
 } as const;
 
 type NumericFlagName = keyof typeof NUMERIC_FLAG_DEFAULTS;

@@ -16,9 +16,11 @@ import {
   Plus,
   X,
   MoreHorizontal,
+  AlarmClock,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { createClient } from "@/lib/supabase/client";
+import { apiCall } from "@/lib/api-client";
 import type { AppView } from "@/types";
 
 interface Props {
@@ -30,6 +32,7 @@ type SettingsSection =
   | "team"
   | "integrations"
   | "triage"
+  | "sla"
   | "kb"
   | "billing"
   | "security"
@@ -42,6 +45,7 @@ function buildNavItems(t: (...args: any[]) => string): { id: SettingsSection; la
     { id: "team",         label: t("dashboard:settings.nav.team"),         Icon: Users },
     { id: "integrations", label: t("dashboard:settings.nav.integrations"), Icon: Layers },
     { id: "triage",       label: t("dashboard:settings.nav.triage"),       Icon: Sparkles },
+    { id: "sla",          label: t("dashboard:settings.nav.sla"),          Icon: AlarmClock },
     { id: "kb",           label: t("dashboard:settings.nav.kb"),           Icon: BookOpen },
     { id: "billing",      label: t("dashboard:settings.nav.billing"),      Icon: Tag },
     { id: "security",     label: t("dashboard:settings.nav.security"),     Icon: Lock },
@@ -414,6 +418,139 @@ function TriageSection() {
   );
 }
 
+// ── Operational SLA (KAI-168) ─────────────────────────────────────────────────
+
+type Priority = "P1" | "P2" | "P3";
+
+interface PrioritySlaRow {
+  priority: Priority;
+  maxResponseSeconds: number;
+  minResponseSeconds: number;
+  riskAlertSeconds: number;
+  escalationSeconds: number;
+}
+
+const PRIORITY_ORDER: Priority[] = ["P1", "P2", "P3"];
+const SLA_FIELDS = [
+  { key: "maxResponseSeconds", labelKey: "dashboard:settings.sla.fieldMax" },
+  { key: "minResponseSeconds", labelKey: "dashboard:settings.sla.fieldMin" },
+  { key: "riskAlertSeconds",   labelKey: "dashboard:settings.sla.fieldRisk" },
+  { key: "escalationSeconds",  labelKey: "dashboard:settings.sla.fieldEscalation" },
+] as const satisfies readonly { key: keyof Omit<PrioritySlaRow, "priority">; labelKey: string }[];
+
+function secondsToMinutes(seconds: number): number {
+  return Math.round(seconds / 60);
+}
+
+function minutesToSeconds(minutes: number): number {
+  return Math.round(minutes * 60);
+}
+
+function OperationalSlaSection() {
+  const { t } = useTranslation(["dashboard"]);
+  const [rows, setRows] = useState<PrioritySlaRow[] | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiCall("/api/v1/tenants/operational-sla-config")
+      .then((res) => res.json())
+      .then((body: { config: PrioritySlaRow[] }) => {
+        if (!cancelled) setRows(body.config);
+      })
+      .catch(() => {
+        if (!cancelled) setMsg({ type: "error", text: t("dashboard:settings.savedError") });
+      });
+    return () => { cancelled = true; };
+  }, [t]);
+
+  function updateField(priority: Priority, key: keyof Omit<PrioritySlaRow, "priority">, minutes: number) {
+    setRows((prev) =>
+      prev
+        ? prev.map((row) => (row.priority === priority ? { ...row, [key]: minutesToSeconds(minutes) } : row))
+        : prev
+    );
+  }
+
+  async function save() {
+    if (!rows) return;
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiCall("/api/v1/tenants/operational-sla-config", {
+        method: "PUT",
+        body: JSON.stringify({ config: rows }),
+      });
+      if (!res.ok) { setMsg({ type: "error", text: t("dashboard:settings.savedError") }); return; }
+      setMsg({ type: "success", text: t("dashboard:settings.savedSuccess") });
+    } catch {
+      setMsg({ type: "error", text: t("dashboard:settings.savedError") });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMsg(null), 3000);
+    }
+  }
+
+  if (!rows) {
+    return (
+      <div>
+        <h1 style={styles.pageTitle}>{t("dashboard:settings.nav.sla")}</h1>
+        <Loader2 size={20} className="animate-spin" style={{ color: "var(--k-text-tertiary)" }} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h1 style={styles.pageTitle}>{t("dashboard:settings.nav.sla")}</h1>
+      <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "-16px 0 24px" }}>
+        {t("dashboard:settings.sla.subtitle")}
+      </p>
+
+      {PRIORITY_ORDER.map((priority) => {
+        const row = rows.find((r) => r.priority === priority);
+        if (!row) return null;
+        return (
+          <div key={priority} style={{ ...styles.card, marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--k-text-primary)", marginBottom: 12 }}>
+              {t(`dashboard:settings.sla.priority${priority}`)}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
+              {SLA_FIELDS.map((field) => (
+                <div key={field.key}>
+                  <label style={styles.label}>{t(field.labelKey)}</label>
+                  <input
+                    type="number"
+                    min={1}
+                    style={styles.input}
+                    value={secondsToMinutes(row[field.key])}
+                    onChange={(e) => updateField(priority, field.key, Number(e.target.value))}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      {msg && (
+        <div style={{ ...styles.msgBanner, background: msg.type === "success" ? "#ECFDF5" : "#FEF2F2", color: msg.type === "success" ? "#065F46" : "#991B1B", border: `1px solid ${msg.type === "success" ? "#A7F3D0" : "#FECACA"}`, marginBottom: 16 }}>
+          {msg.type === "success" ? <Check size={14} /> : <AlertCircle size={14} />}
+          {msg.text}
+        </div>
+      )}
+
+      <div style={styles.formFooter}>
+        <button style={styles.btnPrimary} onClick={save} disabled={saving}>
+          {saving && <Loader2 size={13} className="animate-spin" />}
+          {saving ? t("dashboard:settings.savingState") : t("dashboard:settings.saveChanges")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Security ──────────────────────────────────────────────────────────────────
 
 function SecuritySection({ onViewChange }: { onViewChange: (view: AppView) => void }) {
@@ -641,6 +778,7 @@ export function ProfileSettings({ onViewChange }: Props) {
         {section === "team" && <TeamSection />}
         {section === "integrations" && <IntegrationsSection onViewChange={onViewChange} />}
         {section === "triage" && <TriageSection />}
+        {section === "sla" && <OperationalSlaSection />}
         {section === "security" && <SecuritySection onViewChange={onViewChange} />}
         {section === "kb" && <ComingSoonSection title={t("dashboard:settings.nav.kb")} />}
         {section === "billing" && <ComingSoonSection title={t("dashboard:settings.nav.billing")} />}
