@@ -18,6 +18,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { apiCall } from "@/lib/api-client";
 import type { AppView } from "@/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,7 +45,7 @@ const T = {
 // ─────────────────────────────────────────────────────────────────────────────
 interface NotifItem {
   id: string;
-  kind: "mention" | "escalation" | "assigned" | "ai" | "reply" | "report" | "system";
+  kind: "mention" | "escalation" | "assigned" | "ai" | "reply" | "report" | "system" | "sla_escalation";
   unread: boolean;
   who: string;
   actor: string;
@@ -56,22 +57,44 @@ interface NotifItem {
   time: string;
 }
 
-const INITIAL_NOTIFS: NotifItem[] = [
-  { id:"n7", kind:"mention",    unread:true,  who:"Diego Tovar",   actor:"DT", actorBg:"linear-gradient(135deg,#A7F3D0,#10B981)",
-    title:"te mencionó en", target:"KAI-T-1246", preview:"@valentina ¿podemos escalar esto a infra? El 503 sigue.", time:"2m" },
-  { id:"n6", kind:"escalation", unread:true,  who:"Sistema",       actor:"!",  actorBg:"#FEE2E2", actorColor:"#B91C1C",
-    title:"Escalación automática", target:"KAI-T-1246", preview:"P1 sin respuesta > 5 min · cliente Scale ($890 MRR).", time:"4m" },
-  { id:"n5", kind:"assigned",   unread:true,  who:"Lucía Mendoza", actor:"LM", actorBg:"linear-gradient(135deg,#FDE68A,#F59E0B)",
-    title:"te asignó", target:"KAI-T-1244", preview:"Lead Scale · 50 agentes. Pasa a tu cola de ventas.", time:"12m" },
-  { id:"n4", kind:"ai",         unread:false, who:"Triage IA",     actor:"✦",  actorBg:"var(--k-accent-subtle)", actorColor:"var(--k-accent)",
-    title:"Clasificó 12 tickets nuevos", target:null, preview:"9 soporte · 2 leads · 1 spam. Revisar bandeja.", time:"32m" },
-  { id:"n3", kind:"reply",      unread:false, who:"Marta Pérez",   actor:"MP", actorBg:"linear-gradient(135deg,#FCA5A5,#F472B6)",
-    title:"respondió en", target:"KAI-T-1247", preview:"Perfecto, esperamos el crédito. Gracias por la rapidez.", time:"1h" },
-  { id:"n2", kind:"report",     unread:false, who:"Insights",      actor:"◴",  actorBg:"var(--k-surface-2)", actorColor:"var(--k-text-secondary)",
-    title:"Reporte semanal listo", target:null, preview:"CSAT 4.7 · FRT 3m 12s · 184 resueltos.", time:"3h" },
-  { id:"n1", kind:"system",     unread:false, who:"Integraciones", actor:"S",  actorBg:"#09090B", actorColor:"white",
-    title:"Slack sincronizado", target:null, preview:"Canal #soporte-latam conectado al cockpit.", time:"ayer" },
-];
+// KAI-168 — API notification row (apps/api/src/routes/v1/notifications.ts).
+interface ApiNotification {
+  id: string;
+  kind: string;
+  ticket_id: string | null;
+  title: string;
+  body: string;
+  read_at: string | null;
+  created_at: string;
+}
+
+function relativeTimeShort(iso: string): string {
+  const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (diffMin < 1) return "ahora";
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `${diffH}h`;
+  return `${Math.floor(diffH / 24)}d`;
+}
+
+// KAI-168's escalation cron is currently the only producer — map every
+// unrecognized/future `kind` to a neutral "system" style rather than throwing.
+function toNotifItem(row: ApiNotification): NotifItem {
+  const isEscalation = row.kind === "sla_escalation";
+  return {
+    id: row.id,
+    kind: isEscalation ? "escalation" : "system",
+    unread: !row.read_at,
+    who: isEscalation ? "Sistema" : row.title,
+    actor: isEscalation ? "!" : "S",
+    actorBg: isEscalation ? "#FEE2E2" : "#09090B",
+    actorColor: isEscalation ? "#B91C1C" : "white",
+    title: isEscalation ? "generó una escalación de ANS" : "",
+    target: null,
+    preview: row.body,
+    time: relativeTimeShort(row.created_at),
+  };
+}
 
 const NOTIF_DOT_COLOR: Record<NotifItem["kind"], string> = {
   escalation: "#EF4444",
@@ -81,6 +104,7 @@ const NOTIF_DOT_COLOR: Record<NotifItem["kind"], string> = {
   reply:      "#10B981",
   report:     "var(--k-text-tertiary)",
   system:     "var(--k-text-tertiary)",
+  sla_escalation: "#EF4444",
 };
 
 function NotifDot({ kind }: { kind: NotifItem["kind"] }) {
@@ -519,13 +543,33 @@ interface HeaderActionsProps {
 
 function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }: HeaderActionsProps) {
   const [open, setOpen] = useState<"notif" | "profile" | null>(null);
-  const [notifs, setNotifs] = useState<NotifItem[]>(INITIAL_NOTIFS);
+  const [notifs, setNotifs] = useState<NotifItem[]>([]);
   const [status, setStatus] = useState<UserStatus>("online");
   const [theme, setTheme] = useState<Theme>("light");
   const ref = useRef<HTMLDivElement>(null);
 
+  // KAI-168 — real in-app notifications (currently: SLA escalation only).
+  useEffect(() => {
+    let cancelled = false;
+    apiCall("/api/v1/notifications")
+      .then((res) => res.json())
+      .then((body: { data: ApiNotification[] }) => {
+        if (!cancelled) setNotifs(body.data.map(toNotifItem));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   const unread = notifs.filter((n) => n.unread).length;
   const curStatusDot = STATUS_DOTS[status];
+
+  function markAllRead() {
+    const unreadIds = notifs.filter((n) => n.unread).map((n) => n.id);
+    setNotifs((ns) => ns.map((n) => ({ ...n, unread: false })));
+    unreadIds.forEach((id) => {
+      apiCall(`/api/v1/notifications/${id}/read`, { method: "PATCH" }).catch(() => {});
+    });
+  }
 
   // Click-outside + Escape
   useEffect(() => {
@@ -574,7 +618,7 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
         {open === "notif" && (
           <NotificationsPopover
             items={notifs}
-            onMarkAll={() => setNotifs((ns) => ns.map((n) => ({ ...n, unread: false })))}
+            onMarkAll={markAllRead}
           />
         )}
       </div>

@@ -11,6 +11,7 @@ import { threadDedupeBackfill } from "./functions/backfill/thread-dedupe.js";
 import { outboundMessageSend } from "./functions/outbound-send/send.js";
 import { gmailPoll } from "./functions/inbound/gmail-poll.js";
 import { gmailPollCron } from "./functions/inbound/gmail-poll-cron.js";
+import { operationalSlaEscalationCron } from "./functions/operational-sla/escalation-check-cron.js";
 import { health } from "./routes/v1/health.js";
 import { tickets } from "./routes/v1/tickets.js";
 import { ticketGroups } from "./routes/v1/ticket-groups.js";
@@ -25,6 +26,7 @@ import { invitations } from "./routes/v1/invitations.js";
 import { channels } from "./routes/v1/channels.js";
 import { classificationProgress } from "./routes/v1/classification-progress.js";
 import { admin } from "./routes/v1/admin.js";
+import { notifications } from "./routes/v1/notifications.js";
 
 const app = new Hono({ strict: false });
 
@@ -43,6 +45,7 @@ v1.route("/invitations", invitations);
 v1.route("/accounts", channels);
 v1.route("/classification", classificationProgress);
 v1.route("/admin", admin);
+v1.route("/notifications", notifications);
 
 app.route("/api/v1", v1);
 
@@ -50,7 +53,7 @@ app.use(
   "/api/inngest",
   serve({
     client: inngest,
-    functions: [tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill, outboundMessageSend, gmailPoll, gmailPollCron],
+    functions: [tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill, outboundMessageSend, gmailPoll, gmailPollCron, operationalSlaEscalationCron],
   })
 );
 

@@ -3,16 +3,36 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/auth-context";
 import { useTriageStore } from "@/stores/triage-store";
 import { useRealtimeTickets } from "@/hooks/use-realtime-tickets";
+import { apiCall } from "@/lib/api-client";
 import { TicketList } from "./ticket-list";
 import { TicketDetail } from "./ticket-detail";
 import { AiAssistant } from "./ai-assistant";
-import type { Ticket } from "@kairo/types";
+import type { Ticket, TicketPriority, PrioritySlaConfig } from "@kairo/types";
 
 export function Inbox() {
   const { user, accountId } = useAuth();
-  const { tickets, selectedTicketId, setTickets, setScanning } = useTriageStore();
+  const { tickets, selectedTicketId, setTickets, setScanning, setOperationalSlaConfig } = useTriageStore();
 
   useRealtimeTickets();
+
+  // KAI-168 — fetch the account's operational SLA config once per session.
+  // Tickets themselves are fetched directly from Supabase below (not via the
+  // API), so this is the only round-trip needed to compute operational_sla
+  // client-side for every ticket, regardless of where its row came from.
+  useEffect(() => {
+    if (!user) return;
+    apiCall("/api/v1/tenants/operational-sla-config")
+      .then((res) => res.json())
+      .then((body: { config: (PrioritySlaConfig & { priority: TicketPriority })[] }) => {
+        const byPriority = {} as Record<TicketPriority, PrioritySlaConfig>;
+        for (const row of body.config) {
+          const { priority, ...config } = row;
+          byPriority[priority] = config;
+        }
+        setOperationalSlaConfig(byPriority);
+      })
+      .catch(() => {}); // keep defaults on failure
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;

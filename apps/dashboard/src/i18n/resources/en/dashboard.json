@@ -36,6 +36,17 @@
     "similares": "similar grouped",
     "priorityScoreTooltip": "Priority weight"
   },
+  "prioritySla": {
+    "remainingHours": "{{count}}h remaining",
+    "remainingMinutes": "{{count}}m remaining",
+    "dueInHours": "Due in {{count}}h",
+    "dueInMinutes": "Due in {{count}}m",
+    "overdueHours": "Overdue +{{count}}h",
+    "overdueDays": "Overdue +{{count}}d",
+    "detailRemaining": "SLA: {{count}}h {{minutes}}m remaining for first response",
+    "detailDueSoon": "SLA: due in {{count}}h {{minutes}}m for first response",
+    "detailOverdue": "SLA overdue by {{count}}h {{minutes}}m with no first response"
+  },
   "ticketList": {
     "header": "Tickets",
     "classifyAll": "Classify All",
@@ -146,10 +157,22 @@
       "team": "Team",
       "integrations": "Integrations",
       "triage": "Triage Engine",
+      "sla": "SLA by priority",
       "kb": "Knowledge Base",
       "billing": "Billing",
       "security": "Security",
       "api": "API & Webhooks"
+    },
+    "sla": {
+      "subtitle": "Configurable response times by ticket priority (P1/P2/P3). In minutes. Runs on 24/7 calendar time.",
+      "priorityP1": "P1 — Urgent",
+      "priorityP2": "P2 — High",
+      "priorityP3": "P3 — Normal",
+      "fieldMax": "Maximum response time",
+      "fieldMin": "Minimum response time",
+      "fieldRisk": "Risk alert",
+      "fieldEscalation": "Automatic escalation",
+      "unitMinutes": "min"
     },
     "workspace": {
       "title": "Workspace",
@@ -322,7 +345,8 @@
     "recurrentTooltip": "{{count}} tickets in the last 30 days",
     "ticketsTotal": "tickets total",
     "ticketsThisMonth": "this month",
-    "recentTickets": "Recent tickets"
+    "recentTickets": "Recent tickets",
+    "slaHistory": "{{breached}} of {{total}} tickets breached SLA"
   },
   "ai": {
     "title": "AI Assistant",

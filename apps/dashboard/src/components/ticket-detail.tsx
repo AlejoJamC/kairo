@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Mail, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
@@ -5,6 +6,67 @@ import { TicketHeader } from "./ticket-header";
 import { useTriageStore } from "@/stores/triage-store";
 import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
 import { getLandingUrl } from "@/lib/api-client";
+import type { Ticket } from "@kairo/types";
+import { computeTicketOperationalSla } from "@kairo/types";
+
+// ---------------------------------------------------------------------------
+// KAI-168 — operational SLA (by ticket priority) progress bar. Shown below
+// the subject, above the AI reasoning banner. Own domain — computed
+// client-side from the ticket's own priority/received_at/first_response_at
+// plus the account's SLA config (tickets arrive raw from Supabase, so this
+// can't be a pre-computed field on the wire — see computeTicketOperationalSla).
+// ---------------------------------------------------------------------------
+
+// Smallest comfortable width for this column — same constant already used as
+// `centerMin` by useResizablePanel (apps/dashboard/src/hooks/use-resizable-panel.ts)
+// to keep this exact column readable when the right panel is dragged wider.
+// That value was only ever enforced against the right panel's own max width;
+// this applies it as a real min-width on the center column itself, so it no
+// longer collapses when the window is narrowed (unlike the ticket-list
+// column, fixed at 360px, and the right panel, floored at 340px).
+const CENTER_PANEL_MIN_WIDTH = 520;
+
+const PRIORITY_SLA_BAR_COLOR: Record<"ok" | "at_risk" | "breached", string> = {
+  ok: "#10B981",
+  at_risk: "#F97316",
+  breached: "#EF4444",
+};
+
+function PrioritySlaBar({ ticket }: { ticket: Ticket }) {
+  const { t } = useTranslation("dashboard");
+  const config = useTriageStore((s) => s.operationalSlaConfig);
+  const sla = useMemo(() => computeTicketOperationalSla(ticket, config), [ticket, config]);
+  if (!sla) return null;
+
+  const hours = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 3600);
+  const minutes = Math.floor(((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) % 3600) / 60);
+
+  const detail =
+    sla.status === "ok"
+      ? t("prioritySla.detailRemaining", { count: hours, minutes })
+      : sla.status === "at_risk"
+        ? t("prioritySla.detailDueSoon", { count: hours, minutes })
+        : t("prioritySla.detailOverdue", { count: hours, minutes });
+
+  const barWidth = Math.min(100, sla.percentUsed);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ height: 6, borderRadius: 3, background: "var(--k-border-subtle)", overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${barWidth}%`,
+            background: PRIORITY_SLA_BAR_COLOR[sla.status],
+            borderRadius: 3,
+            transition: "width 0.2s ease",
+          }}
+        />
+      </div>
+      <span style={{ fontSize: 12, color: PRIORITY_SLA_BAR_COLOR[sla.status], fontWeight: 500 }}>{detail}</span>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Sender avatar (initials circle)
@@ -310,7 +372,7 @@ export function TicketDetail() {
       <div
         style={{
           flex: 1,
-          minWidth: 0,
+          minWidth: CENTER_PANEL_MIN_WIDTH,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -335,7 +397,7 @@ export function TicketDetail() {
     <div
       style={{
         flex: 1,
-        minWidth: 0,
+        minWidth: CENTER_PANEL_MIN_WIDTH,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -369,6 +431,8 @@ export function TicketDetail() {
         >
           {ticket.subject ?? t("ticketDetail.noSubject", "(Sin asunto)")}
         </h1>
+
+        <PrioritySlaBar ticket={ticket} />
 
         {/* AI reasoning banner */}
         {ticket.ai_reasoning && (

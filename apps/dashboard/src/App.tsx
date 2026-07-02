@@ -97,7 +97,12 @@ function AppContent() {
           activeView={activeView}
           onViewChange={setActiveView}
         />
-        <main style={{ flex: 1, overflow: "hidden", display: "flex" }}>
+        {/* overflowX: auto (not hidden) so the combined min-widths of the ticket
+            list (360px fixed), center panel (520px min — see ticket-detail.tsx),
+            and right panel (340px floor — see use-resizable-panel.ts) become a
+            real supported minimum: below that sum the row scrolls horizontally
+            instead of clipping/squishing the center column. */}
+        <main style={{ flex: 1, overflowY: "hidden", overflowX: "auto", display: "flex" }}>
           {renderView()}
         </main>
       </div>

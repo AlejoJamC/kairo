@@ -136,6 +136,29 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
         </button>
       )}
 
+      {/* KAI-168 — operational SLA history for this client (own domain, separate
+          from tenant_sla_rules). Only shown once we have a total ticket count. */}
+      {!isDraft && clientProfile.totalTickets > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12,
+            fontWeight: 500,
+            padding: "6px 8px",
+            borderRadius: 6,
+            background: clientProfile.slaBreachedCount > 0 ? "#FEF2F2" : "var(--k-surface-2)",
+            color: clientProfile.slaBreachedCount > 0 ? "#DC2626" : "var(--k-text-secondary)",
+          }}
+        >
+          {t("clientProfile.slaHistory", {
+            breached: clientProfile.slaBreachedCount,
+            total: clientProfile.totalTickets,
+          })}
+        </div>
+      )}
+
       {/* KAI-228 placeholder — confirm / reject / edit actions for drafts go here.
           Rendered only for drafts so the CRM card UI is untouched. */}
       {isDraft && (

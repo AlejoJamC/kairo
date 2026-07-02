@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Users, ArrowUp } from "lucide-react";
 import type { Ticket } from "@kairo/types";
+import { computeTicketOperationalSla } from "@kairo/types";
 import { getEmotionTokens } from "@kairo/ui";
+import { useTriageStore } from "@/stores/triage-store";
 
 // ---------------------------------------------------------------------------
 // Sentiment helpers — sourced from @kairo/ui triage-tokens
@@ -112,6 +114,56 @@ function SlaBadge({ slaDate }: SlaBadgeProps) {
       }}
     >
       {label.text}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// KAI-168 — operational SLA (by ticket priority) badge.
+// Own domain from the contractual SlaBadge above (sla_due_at/plan-tier) — this
+// one is computed client-side (computeTicketOperationalSla) from the ticket's
+// own priority (P1/P2/P3) + received_at, since tickets arrive raw from
+// Supabase (direct fetch + realtime), never pre-enriched by the API. Only
+// this badge's background/text color changes per state; no stripe or other
+// existing element is touched.
+// ---------------------------------------------------------------------------
+
+const PRIORITY_SLA_STYLE: Record<"ok" | "at_risk" | "breached", React.CSSProperties> = {
+  ok:       { background: "#ECFDF5", color: "#047857" },
+  at_risk:  { background: "#FFF7ED", color: "#C2410C" },
+  breached: { background: "#FEF2F2", color: "#DC2626" },
+};
+
+function PrioritySlaBadge({ ticket }: { ticket: Ticket }) {
+  const { t } = useTranslation("dashboard");
+  const config = useTriageStore((s) => s.operationalSlaConfig);
+  const sla = useMemo(() => computeTicketOperationalSla(ticket, config), [ticket, config]);
+  if (!sla) return null;
+
+  const hours = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 3600);
+  const minutes = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 60);
+  const days = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 86400);
+
+  let label: string;
+  if (sla.status === "ok") {
+    label = hours > 0 ? t("prioritySla.remainingHours", { count: hours }) : t("prioritySla.remainingMinutes", { count: minutes });
+  } else if (sla.status === "at_risk") {
+    label = hours > 0 ? t("prioritySla.dueInHours", { count: hours }) : t("prioritySla.dueInMinutes", { count: minutes });
+  } else {
+    label = days > 0 ? t("prioritySla.overdueDays", { count: days }) : t("prioritySla.overdueHours", { count: hours });
+  }
+
+  return (
+    <span
+      style={{
+        ...PRIORITY_SLA_STYLE[sla.status],
+        fontSize: 10,
+        fontWeight: 600,
+        padding: "2px 6px",
+        borderRadius: 4,
+      }}
+    >
+      {label}
     </span>
   );
 }
@@ -316,8 +368,44 @@ export function TicketCard({
         >
           {ticket.from_name ?? ticket.from_email ?? "Unknown"}
         </span>
+      </div>
 
-        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+      {/* Row 4: SLA + grouped badge + priority score/confidence (ticket number moved to Row 1) */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          marginTop: 6,
+        }}
+      >
+        <SlaBadge slaDate={ticket.sla_due_at} />
+        <PrioritySlaBadge ticket={ticket} />
+        {ticket.group_id && groupCount > 1 && (
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 10,
+              color: "var(--k-text-tertiary)",
+              padding: "2px 7px",
+              borderRadius: 4,
+              border: "1px dashed var(--k-border)",
+              fontFamily: "var(--k-font-mono)",
+            }}
+          >
+            <Users style={{ width: 10, height: 10, flexShrink: 0 }} />
+            + {groupCount - 1} {t("ticketCard.similares", "similares agrupados")}
+          </span>
+        )}
+        {ticket.group_id && groupCount <= 1 && (
+          <Users
+            style={{ width: 12, height: 12, color: "var(--k-text-tertiary)", flexShrink: 0 }}
+          />
+        )}
+
+        <div style={{ marginLeft: "auto", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
           {ticket.priority_score !== null && ticket.priority_score !== undefined && (
             <span
               style={{
@@ -347,41 +435,6 @@ export function TicketCard({
               </span>
             )}
         </div>
-      </div>
-
-      {/* Row 4: SLA + grouped badge (ticket number moved to Row 1) */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          marginTop: 6,
-        }}
-      >
-        <SlaBadge slaDate={ticket.sla_due_at} />
-        {ticket.group_id && groupCount > 1 && (
-          <span
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              fontSize: 10,
-              color: "var(--k-text-tertiary)",
-              padding: "2px 7px",
-              borderRadius: 4,
-              border: "1px dashed var(--k-border)",
-              fontFamily: "var(--k-font-mono)",
-            }}
-          >
-            <Users style={{ width: 10, height: 10, flexShrink: 0 }} />
-            + {groupCount - 1} {t("ticketCard.similares", "similares agrupados")}
-          </span>
-        )}
-        {ticket.group_id && groupCount <= 1 && (
-          <Users
-            style={{ width: 12, height: 12, color: "var(--k-text-tertiary)", flexShrink: 0 }}
-          />
-        )}
       </div>
 
       {/* Hover quick actions */}

@@ -36,6 +36,17 @@
     "similares": "similares agrupados",
     "priorityScoreTooltip": "Peso de prioridad"
   },
+  "prioritySla": {
+    "remainingHours": "{{count}}h restantes",
+    "remainingMinutes": "{{count}}m restantes",
+    "dueInHours": "Vence en {{count}}h",
+    "dueInMinutes": "Vence en {{count}}m",
+    "overdueHours": "Vencido +{{count}}h",
+    "overdueDays": "Vencido +{{count}}d",
+    "detailRemaining": "ANS: {{count}}h {{minutes}}m restantes para primera respuesta",
+    "detailDueSoon": "ANS: vence en {{count}}h {{minutes}}m para primera respuesta",
+    "detailOverdue": "ANS vencido hace {{count}}h {{minutes}}m sin primera respuesta"
+  },
   "ticketList": {
     "header": "Tickets",
     "classifyAll": "Clasificar todo",
@@ -146,10 +157,22 @@
       "team": "Equipo",
       "integrations": "Integraciones",
       "triage": "Triage Engine",
+      "sla": "ANS por prioridad",
       "kb": "Base de Conocimiento",
       "billing": "Facturación",
       "security": "Seguridad",
       "api": "API & Webhooks"
+    },
+    "sla": {
+      "subtitle": "Tiempos de respuesta configurables por prioridad de ticket (P1/P2/P3). En minutos. Corre en tiempo de calendario 24/7.",
+      "priorityP1": "P1 — Urgente",
+      "priorityP2": "P2 — Alto",
+      "priorityP3": "P3 — Normal",
+      "fieldMax": "Tiempo máximo de respuesta",
+      "fieldMin": "Tiempo mínimo de respuesta",
+      "fieldRisk": "Alerta de riesgo",
+      "fieldEscalation": "Escalamiento automático",
+      "unitMinutes": "min"
     },
     "workspace": {
       "title": "Workspace",
@@ -322,7 +345,8 @@
     "recurrentTooltip": "{{count}} tickets en los últimos 30 días",
     "ticketsTotal": "tickets en total",
     "ticketsThisMonth": "este mes",
-    "recentTickets": "Tickets recientes"
+    "recentTickets": "Tickets recientes",
+    "slaHistory": "{{breached}} de {{total}} tickets con ANS incumplido"
   },
   "ai": {
     "title": "Asistente IA",
