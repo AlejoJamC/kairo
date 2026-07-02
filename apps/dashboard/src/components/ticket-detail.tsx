@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Mail, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
@@ -6,11 +7,14 @@ import { useTriageStore } from "@/stores/triage-store";
 import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
 import { getLandingUrl } from "@/lib/api-client";
 import type { Ticket } from "@kairo/types";
+import { computeTicketOperationalSla } from "@kairo/types";
 
 // ---------------------------------------------------------------------------
 // KAI-168 — operational SLA (by ticket priority) progress bar. Shown below
-// the subject, above the AI reasoning banner. Own domain — driven entirely by
-// ticket.operational_sla (server-computed from the ticket's own priority).
+// the subject, above the AI reasoning banner. Own domain — computed
+// client-side from the ticket's own priority/received_at/first_response_at
+// plus the account's SLA config (tickets arrive raw from Supabase, so this
+// can't be a pre-computed field on the wire — see computeTicketOperationalSla).
 // ---------------------------------------------------------------------------
 
 const PRIORITY_SLA_BAR_COLOR: Record<"ok" | "at_risk" | "breached", string> = {
@@ -21,7 +25,8 @@ const PRIORITY_SLA_BAR_COLOR: Record<"ok" | "at_risk" | "breached", string> = {
 
 function PrioritySlaBar({ ticket }: { ticket: Ticket }) {
   const { t } = useTranslation("dashboard");
-  const sla = ticket.operational_sla;
+  const config = useTriageStore((s) => s.operationalSlaConfig);
+  const sla = useMemo(() => computeTicketOperationalSla(ticket, config), [ticket, config]);
   if (!sla) return null;
 
   const hours = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 3600);

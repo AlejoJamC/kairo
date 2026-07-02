@@ -6,6 +6,9 @@ import type { Ticket } from "@kairo/types";
 
 // ---------------------------------------------------------------------------
 // KAI-168: PrioritySlaBadge — badge color/label per operational SLA state.
+// Computed client-side from the ticket's own priority/received_at (tickets
+// arrive raw from Supabase direct-fetch + realtime, never pre-enriched), so
+// these tests drive state via real timestamps rather than a mocked field.
 // Own domain from the existing SlaBadge (tenant/plan contractual SLA) —
 // only this badge's own background/text changes; the sentiment stripe and
 // SlaBadge are untouched (confirmed by not asserting on them here).
@@ -19,6 +22,11 @@ vi.mock("react-i18next", () => ({
 
 const { TicketCard } = await import("./ticket-card");
 
+// Default P1 config: max_response_seconds=3600 (1h)
+function minutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
 function baseTicket(overrides: Partial<Ticket> = {}): Ticket {
   return {
     id: "t-1",
@@ -29,65 +37,47 @@ function baseTicket(overrides: Partial<Ticket> = {}): Ticket {
     sentiment: "neutral",
     from_name: "Alice",
     from_email: "alice@example.com",
-    received_at: "2026-05-04T10:00:00Z",
-    created_at: "2026-05-04T10:00:00Z",
+    received_at: minutesAgo(5),
+    created_at: minutesAgo(5),
+    first_response_at: null,
     sla_due_at: null,
     priority_score: null,
     classification_confidence: null,
     group_id: null,
-    operational_sla: null,
     ...overrides,
   } as unknown as Ticket;
 }
 
 describe("PrioritySlaBadge (via TicketCard)", () => {
-  it("renders nothing when operational_sla is null", () => {
-    const ticket = baseTicket({ operational_sla: null });
+  it("renders nothing when the ticket has no priority", () => {
+    const ticket = baseTicket({ priority: null });
     renderWithProviders(
       React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
     );
     expect(screen.queryByText(/prioritySla\./)).not.toBeInTheDocument();
   });
 
-  it("shows a remaining-time label when status is 'ok'", () => {
-    const ticket = baseTicket({
-      operational_sla: {
-        status: "ok",
-        percentUsed: 20,
-        remainingSeconds: 2880,
-        overdueSeconds: 0,
-      } as never,
-    });
+  it("shows a remaining-time label when under 50% of the priority's max response time", () => {
+    // P1 max is 1h — 5 min elapsed is well under 50%.
+    const ticket = baseTicket({ priority: "P1", received_at: minutesAgo(5) });
     renderWithProviders(
       React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
     );
     expect(screen.getByText(/prioritySla\.remainingMinutes/)).toBeInTheDocument();
   });
 
-  it("shows a due-soon label when status is 'at_risk'", () => {
-    const ticket = baseTicket({
-      operational_sla: {
-        status: "at_risk",
-        percentUsed: 75,
-        remainingSeconds: 900,
-        overdueSeconds: 0,
-      } as never,
-    });
+  it("shows a due-soon label when between 50% and 100% of the priority's max response time", () => {
+    // P1 max is 1h — 45 min elapsed is 75%.
+    const ticket = baseTicket({ priority: "P1", received_at: minutesAgo(45) });
     renderWithProviders(
       React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
     );
     expect(screen.getByText(/prioritySla\.dueInMinutes/)).toBeInTheDocument();
   });
 
-  it("shows an overdue label when status is 'breached'", () => {
-    const ticket = baseTicket({
-      operational_sla: {
-        status: "breached",
-        percentUsed: 150,
-        remainingSeconds: 0,
-        overdueSeconds: 3600,
-      } as never,
-    });
+  it("shows an overdue label when past 100% of the priority's max response time", () => {
+    // P1 max is 1h — 2h elapsed is 200%.
+    const ticket = baseTicket({ priority: "P1", received_at: minutesAgo(120) });
     renderWithProviders(
       React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
     );

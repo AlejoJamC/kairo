@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Users, ArrowUp } from "lucide-react";
 import type { Ticket } from "@kairo/types";
+import { computeTicketOperationalSla } from "@kairo/types";
 import { getEmotionTokens } from "@kairo/ui";
+import { useTriageStore } from "@/stores/triage-store";
 
 // ---------------------------------------------------------------------------
 // Sentiment helpers — sourced from @kairo/ui triage-tokens
@@ -119,9 +121,11 @@ function SlaBadge({ slaDate }: SlaBadgeProps) {
 // ---------------------------------------------------------------------------
 // KAI-168 — operational SLA (by ticket priority) badge.
 // Own domain from the contractual SlaBadge above (sla_due_at/plan-tier) — this
-// one is driven by ticket.operational_sla, computed server-side from the
-// ticket's own priority (P1/P2/P3). Only this badge's background/text color
-// changes per state; no stripe or other existing element is touched.
+// one is computed client-side (computeTicketOperationalSla) from the ticket's
+// own priority (P1/P2/P3) + received_at, since tickets arrive raw from
+// Supabase (direct fetch + realtime), never pre-enriched by the API. Only
+// this badge's background/text color changes per state; no stripe or other
+// existing element is touched.
 // ---------------------------------------------------------------------------
 
 const PRIORITY_SLA_STYLE: Record<"ok" | "at_risk" | "breached", React.CSSProperties> = {
@@ -132,7 +136,8 @@ const PRIORITY_SLA_STYLE: Record<"ok" | "at_risk" | "breached", React.CSSPropert
 
 function PrioritySlaBadge({ ticket }: { ticket: Ticket }) {
   const { t } = useTranslation("dashboard");
-  const sla = ticket.operational_sla;
+  const config = useTriageStore((s) => s.operationalSlaConfig);
+  const sla = useMemo(() => computeTicketOperationalSla(ticket, config), [ticket, config]);
   if (!sla) return null;
 
   const hours = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 3600);
@@ -363,40 +368,9 @@ export function TicketCard({
         >
           {ticket.from_name ?? ticket.from_email ?? "Unknown"}
         </span>
-
-        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
-          {ticket.priority_score !== null && ticket.priority_score !== undefined && (
-            <span
-              style={{
-                fontFamily: "var(--k-font-mono)",
-                fontSize: 10,
-                fontWeight: 600,
-                padding: "1px 5px",
-                borderRadius: 4,
-                background: "var(--k-surface-2)",
-                color: "var(--k-text-tertiary)",
-              }}
-              title={t("ticketCard.priorityScoreTooltip", "Peso de prioridad")}
-            >
-              {Math.round(ticket.priority_score)}
-            </span>
-          )}
-          {ticket.classification_confidence !== null &&
-            ticket.classification_confidence !== undefined && (
-              <span
-                style={{
-                  fontFamily: "var(--k-font-mono)",
-                  fontSize: 11,
-                  color: "var(--k-text-tertiary)",
-                }}
-              >
-                {ticket.classification_confidence.toFixed(2)}
-              </span>
-            )}
-        </div>
       </div>
 
-      {/* Row 4: SLA + grouped badge (ticket number moved to Row 1) */}
+      {/* Row 4: SLA + grouped badge + priority score/confidence (ticket number moved to Row 1) */}
       <div
         style={{
           display: "flex",
@@ -430,6 +404,37 @@ export function TicketCard({
             style={{ width: 12, height: 12, color: "var(--k-text-tertiary)", flexShrink: 0 }}
           />
         )}
+
+        <div style={{ marginLeft: "auto", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+          {ticket.priority_score !== null && ticket.priority_score !== undefined && (
+            <span
+              style={{
+                fontFamily: "var(--k-font-mono)",
+                fontSize: 10,
+                fontWeight: 600,
+                padding: "1px 5px",
+                borderRadius: 4,
+                background: "var(--k-surface-2)",
+                color: "var(--k-text-tertiary)",
+              }}
+              title={t("ticketCard.priorityScoreTooltip", "Peso de prioridad")}
+            >
+              {Math.round(ticket.priority_score)}
+            </span>
+          )}
+          {ticket.classification_confidence !== null &&
+            ticket.classification_confidence !== undefined && (
+              <span
+                style={{
+                  fontFamily: "var(--k-font-mono)",
+                  fontSize: 11,
+                  color: "var(--k-text-tertiary)",
+                }}
+              >
+                {ticket.classification_confidence.toFixed(2)}
+              </span>
+            )}
+        </div>
       </div>
 
       {/* Hover quick actions */}

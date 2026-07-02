@@ -16,6 +16,7 @@
     "@kairo/feature-flags": "workspace:*",
     "@kairo/identity": "workspace:*",
     "@kairo/intelligence": "workspace:*",
+    "@kairo/types": "workspace:*",
     "inngest": "^4.3.0",
     "@supabase/supabase-js": "^2.105.3",
     "@t3-oss/env-core": "^0.13.11",

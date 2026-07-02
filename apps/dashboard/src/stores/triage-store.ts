@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { Ticket } from "@kairo/types";
+import type { Ticket, TicketPriority, PrioritySlaConfig } from "@kairo/types";
+import { DEFAULT_PRIORITY_SLA_SECONDS } from "@kairo/types";
 
 const PRIORITY_RANK: Record<string, number> = { P1: 3, P2: 2, P3: 1 };
 
@@ -65,6 +66,12 @@ interface TriageStore {
   pendingEscalation: string | null;
   clientProfile: ClientProfile | null;
   correctedTicketIds: Set<string>;
+  // KAI-168 — operational SLA config by priority, fetched once per session.
+  // Tickets arrive raw from Supabase (direct fetch + realtime), never
+  // pre-enriched, so every consumer computes operational_sla client-side
+  // using this config (see computeTicketOperationalSla in @kairo/types).
+  operationalSlaConfig: Record<TicketPriority, PrioritySlaConfig>;
+  setOperationalSlaConfig: (config: Record<TicketPriority, PrioritySlaConfig>) => void;
   // Bulk-load on initial fetch
   setTickets: (tickets: Ticket[]) => void;
   // Realtime INSERT: insert at top, auto-select first arrival
@@ -93,6 +100,8 @@ export const useTriageStore = create<TriageStore>((set) => ({
   pendingEscalation: null,
   clientProfile: null,
   correctedTicketIds: new Set<string>(),
+  operationalSlaConfig: DEFAULT_PRIORITY_SLA_SECONDS,
+  setOperationalSlaConfig: (config) => set({ operationalSlaConfig: config }),
 
   setTickets: (tickets) =>
     set((state) => {

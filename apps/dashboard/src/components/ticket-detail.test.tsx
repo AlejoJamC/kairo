@@ -67,11 +67,27 @@ let mockTicket: Record<string, unknown> = {
   priority: null,
 };
 
+// KAI-168 defaults (P1 max_response_seconds=3600, etc.) — mirrors
+// DEFAULT_PRIORITY_SLA_SECONDS in @kairo/types, needed since this mock
+// ignores the zustand selector and always returns the whole state object.
+const mockOperationalSlaConfig = {
+  P1: { maxResponseSeconds: 3600, minResponseSeconds: 900, riskAlertSeconds: 1800, escalationSeconds: 2700 },
+  P2: { maxResponseSeconds: 14400, minResponseSeconds: 1800, riskAlertSeconds: 10800, escalationSeconds: 12600 },
+  P3: { maxResponseSeconds: 86400, minResponseSeconds: 3600, riskAlertSeconds: 64800, escalationSeconds: 79200 },
+};
+
 vi.mock("@/stores/triage-store", () => ({
-  useTriageStore: () => ({
-    tickets: [mockTicket],
-    selectedTicketId: "ticket-1",
-  }),
+  // Mirrors zustand's real selector API — PrioritySlaBar calls this with a
+  // selector (`useTriageStore((s) => s.operationalSlaConfig)`) while
+  // TicketDetail calls it with no args, so the mock must support both.
+  useTriageStore: (selector?: (state: Record<string, unknown>) => unknown) => {
+    const state = {
+      tickets: [mockTicket],
+      selectedTicketId: "ticket-1",
+      operationalSlaConfig: mockOperationalSlaConfig,
+    };
+    return selector ? selector(state) : state;
+  },
 }));
 
 vi.mock("./reply-bar", () => ({
@@ -157,41 +173,33 @@ describe("TicketDetail", () => {
 // KAI-168: operational SLA progress bar below the subject
 // ---------------------------------------------------------------------------
 
+// Computed client-side from priority/received_at (tickets arrive raw from
+// Supabase, never pre-enriched) — see computeTicketOperationalSla.
+function minutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
 describe("TicketDetail — priority SLA bar (KAI-168)", () => {
   beforeEach(() => {
     mockThreadResult = { messages: [], loading: false, error: null };
   });
 
-  it("renders nothing when the ticket has no operational_sla", () => {
-    mockTicket = { ...mockTicket, operational_sla: null };
+  it("renders nothing when the ticket has no priority", () => {
+    mockTicket = { ...mockTicket, priority: null };
     renderWithProviders(React.createElement(TicketDetail));
     expect(screen.queryByText(/restantes|remaining/i)).not.toBeInTheDocument();
   });
 
-  it("shows remaining time text when status is 'ok'", () => {
-    mockTicket = {
-      ...mockTicket,
-      operational_sla: {
-        status: "ok",
-        percentUsed: 20,
-        remainingSeconds: 2880,
-        overdueSeconds: 0,
-      },
-    };
+  it("shows remaining time text when under 50% of the priority's max response time", () => {
+    // P1 max is 1h — 5 min elapsed is well under 50%.
+    mockTicket = { ...mockTicket, priority: "P1", received_at: minutesAgo(5), first_response_at: null };
     renderWithProviders(React.createElement(TicketDetail));
     expect(screen.getByText(/prioritySla.detailRemaining/i)).toBeInTheDocument();
   });
 
-  it("shows overdue text when status is 'breached'", () => {
-    mockTicket = {
-      ...mockTicket,
-      operational_sla: {
-        status: "breached",
-        percentUsed: 150,
-        remainingSeconds: 0,
-        overdueSeconds: 3600,
-      },
-    };
+  it("shows overdue text when past 100% of the priority's max response time", () => {
+    // P1 max is 1h — 2h elapsed is 200%.
+    mockTicket = { ...mockTicket, priority: "P1", received_at: minutesAgo(120), first_response_at: null };
     renderWithProviders(React.createElement(TicketDetail));
     expect(screen.getByText(/prioritySla.detailOverdue/i)).toBeInTheDocument();
   });
