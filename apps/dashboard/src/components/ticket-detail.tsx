@@ -17,6 +17,15 @@ import { computeTicketOperationalSla } from "@kairo/types";
 // can't be a pre-computed field on the wire — see computeTicketOperationalSla).
 // ---------------------------------------------------------------------------
 
+// Smallest comfortable width for this column — same constant already used as
+// `centerMin` by useResizablePanel (apps/dashboard/src/hooks/use-resizable-panel.ts)
+// to keep this exact column readable when the right panel is dragged wider.
+// That value was only ever enforced against the right panel's own max width;
+// this applies it as a real min-width on the center column itself, so it no
+// longer collapses when the window is narrowed (unlike the ticket-list
+// column, fixed at 360px, and the right panel, floored at 340px).
+const CENTER_PANEL_MIN_WIDTH = 520;
+
 const PRIORITY_SLA_BAR_COLOR: Record<"ok" | "at_risk" | "breached", string> = {
   ok: "#10B981",
   at_risk: "#F97316",
@@ -363,7 +372,7 @@ export function TicketDetail() {
       <div
         style={{
           flex: 1,
-          minWidth: 0,
+          minWidth: CENTER_PANEL_MIN_WIDTH,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -388,7 +397,7 @@ export function TicketDetail() {
     <div
       style={{
         flex: 1,
-        minWidth: 0,
+        minWidth: CENTER_PANEL_MIN_WIDTH,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
