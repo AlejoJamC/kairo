@@ -519,14 +519,44 @@ function OperationalSlaSection() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
               {SLA_FIELDS.map((field) => (
                 <div key={field.key}>
-                  <label style={styles.label}>{t(field.labelKey)}</label>
-                  <input
-                    type="number"
-                    min={1}
-                    style={styles.input}
-                    value={secondsToMinutes(row[field.key])}
-                    onChange={(e) => updateField(priority, field.key, Number(e.target.value))}
-                  />
+                  {/* Fixed height (not minHeight) fits 2 lines so every column in the
+                      row has the exact same label height regardless of whether its
+                      own text wraps to 1 or 2 lines (ES labels are longer than EN) —
+                      a minHeight only floors the shortest column, it doesn't force
+                      the 1-line and 2-line columns to match each other. */}
+                  <label
+                    style={{
+                      ...styles.label,
+                      height: 32,
+                      lineHeight: "16px",
+                      display: "flex",
+                      alignItems: "flex-end",
+                    }}
+                  >
+                    {t(field.labelKey)}
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="number"
+                      min={1}
+                      style={{ ...styles.input, paddingRight: 40 }}
+                      value={secondsToMinutes(row[field.key])}
+                      onChange={(e) => updateField(priority, field.key, Number(e.target.value))}
+                    />
+                    <span
+                      style={{
+                        position: "absolute",
+                        right: 10,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        fontSize: 12,
+                        color: "var(--k-text-tertiary)",
+                        pointerEvents: "none",
+                      }}
+                    >
+                      {t("dashboard:settings.sla.unitMinutes")}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>

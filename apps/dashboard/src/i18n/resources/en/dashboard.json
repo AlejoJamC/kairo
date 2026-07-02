@@ -171,7 +171,8 @@
       "fieldMax": "Maximum response time",
       "fieldMin": "Minimum response time",
       "fieldRisk": "Risk alert",
-      "fieldEscalation": "Automatic escalation"
+      "fieldEscalation": "Automatic escalation",
+      "unitMinutes": "min"
     },
     "workspace": {
       "title": "Workspace",
