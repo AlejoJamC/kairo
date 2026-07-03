@@ -649,11 +649,8 @@ export function AiAssistant({ customer }: AiAssistantProps) {
         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
       />
 
-      {/* Header + tab bar */}
+      {/* Tab bar */}
       <div style={{ padding: "12px 14px 0", flexShrink: 0 }}>
-        <p style={{ fontSize: 11, fontWeight: 500, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 10px", fontFamily: "var(--k-font-mono)" }}>
-          {t("ai.panelTitle")}
-        </p>
         <div style={{ display: "flex", borderBottom: "1px solid var(--k-border)" }}>
           {tabs.map(({ id, label, disabled, ai }) => (
             <button

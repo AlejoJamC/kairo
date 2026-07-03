@@ -391,7 +391,6 @@
     "similarity": "Similitud",
     "resolvedOn": "Resuelto el",
     "ticketNumber": "Caso #{{number}}",
-    "panelTitle": "Contexto del Cliente",
     "tabClient": "Cliente",
     "tabSimilar": "Similares",
     "tabArticles": "Artículos",
