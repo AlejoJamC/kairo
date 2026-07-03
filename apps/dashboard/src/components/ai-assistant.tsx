@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   CheckCircle2, Loader2, BookOpen, MessageSquarePlus,
@@ -18,6 +18,12 @@ import { AssistantPanel } from "@/components/triage/AssistantPanel";
 // ═══════════════════════════════════════════════════════════════════════════
 // Each tab can be enabled/disabled via VITE_FF_ENABLE_<TAB_NAME> in .env
 // Default: false (disabled) — only renders if explicitly enabled
+//
+// Order: VITE_FF_RIGHT_PANEL_TAB_ORDER="client,escalate,assistant" (optional,
+// comma-separated tab ids). Purely additive — does not touch the enable/
+// disable flags above. Unset → order stays exactly as coded below (today's
+// behavior). Any enabled tab not named in the list is appended at the end,
+// in the order it appears below.
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function isFlagEnabled(value: string | undefined): boolean {
@@ -29,6 +35,24 @@ const clientTabEnabled    = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_CLIENT_
 const similarTabEnabled   = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_SIMILAR_TAB);
 const articlesTabEnabled  = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ARTICLES_TAB);
 const escalateTabEnabled  = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB);
+
+const tabOrder: string[] = (import.meta.env.VITE_FF_RIGHT_PANEL_TAB_ORDER ?? "")
+  .split(",")
+  .map((id: string) => id.trim())
+  .filter(Boolean);
+
+/** Sorts enabled tabs by tabOrder; unlisted tabs keep their relative (coded) order at the end. */
+function sortByTabOrder<T extends { id: string }>(tabs: T[]): T[] {
+  if (tabOrder.length === 0) return tabs;
+  return [...tabs].sort((a, b) => {
+    const ia = tabOrder.indexOf(a.id);
+    const ib = tabOrder.indexOf(b.id);
+    if (ia === -1 && ib === -1) return 0; // preserve relative order (stable sort)
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -596,7 +620,25 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   const { selectedTicketId, tickets, setClientProfile } = useTriageStore();
   const selectedTicket = tickets.find((tk) => tk.id === selectedTicketId) ?? null;
 
-  const [activeTab,      setActiveTab]      = useState<TabId>("assistant");
+  // KAI — the default/active tab must follow whatever VITE_FF_RIGHT_PANEL_TAB_ORDER
+  // put first, not a hardcoded "assistant". Memoized so its reference is stable
+  // across renders (only recomputes if the translation function changes, e.g.
+  // language switch) — the effect below depends on it and must not fire on
+  // every render.
+  const tabs = useMemo(
+    () =>
+      sortByTabOrder<{ id: TabId; label: string; disabled?: boolean; ai?: boolean }>([
+        ...(assistantTabEnabled ? [{ id: "assistant" as const, label: t("ai.tabAssistant"), ai: true }] : []),
+        ...(clientTabEnabled ? [{ id: "client" as const, label: t("ai.tabClient") }] : []),
+        ...(similarTabEnabled ? [{ id: "similar" as const, label: t("ai.tabSimilar") }] : []),
+        ...(articlesTabEnabled ? [{ id: "articles" as const, label: t("ai.tabArticles") }] : []),
+        ...(escalateTabEnabled ? [{ id: "escalate" as const, label: t("ai.tabEscalate") }] : []),
+      ]),
+    [t]
+  );
+  const defaultTabId: TabId = tabs[0]?.id ?? "assistant";
+
+  const [activeTab,      setActiveTab]      = useState<TabId>(defaultTabId);
   const [profileLoading, setProfileLoading] = useState(false);
 
   // Single fetch owned here — runs on ticket change regardless of active tab.
@@ -614,16 +656,8 @@ export function AiAssistant({ customer }: AiAssistantProps) {
       .finally(() => setProfileLoading(false));
   }, [selectedTicketId]);
 
-  // Reset to "assistant" tab when ticket changes
-  useEffect(() => { setActiveTab("assistant"); }, [selectedTicketId]);
-
-  const tabs: { id: TabId; label: string; disabled?: boolean; ai?: boolean }[] = [
-    ...(assistantTabEnabled ? [{ id: "assistant" as const, label: t("ai.tabAssistant"), ai: true }] : []),
-    ...(clientTabEnabled ? [{ id: "client" as const, label: t("ai.tabClient") }] : []),
-    ...(similarTabEnabled ? [{ id: "similar" as const, label: t("ai.tabSimilar") }] : []),
-    ...(articlesTabEnabled ? [{ id: "articles" as const, label: t("ai.tabArticles") }] : []),
-    ...(escalateTabEnabled ? [{ id: "escalate" as const, label: t("ai.tabEscalate") }] : []),
-  ];
+  // Reset to the first tab (per VITE_FF_RIGHT_PANEL_TAB_ORDER) when ticket changes.
+  useEffect(() => { setActiveTab(defaultTabId); }, [selectedTicketId, defaultTabId]);
 
   // Drag-to-resize. Floor = the current fixed width (340). Ceiling is computed
   // so the center column keeps a usable width; the left rail + ticket list
@@ -652,7 +686,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
       {/* Tab bar */}
       <div style={{ padding: "12px 14px 0", flexShrink: 0 }}>
         <div style={{ display: "flex", borderBottom: "1px solid var(--k-border)" }}>
-          {tabs.map(({ id, label, disabled, ai }) => (
+          {tabs.map(({ id, label, disabled }) => (
             <button
               key={id}
               type="button"
@@ -679,9 +713,13 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                 opacity: disabled ? 0.5 : 1,
               }}
             >
-              {ai && (
+              {/* `ai` dot commented out — only ever set on the assistant tab, no
+                  tooltip/label explaining what it means, no clear value as-is.
+                  Pending: reuse this visual for an actual "in testing"/special-tab
+                  indicator if that's ever a real need, instead of an unexplained dot. */}
+              {/* {ai && (
                 <span style={{ width: 5, height: 5, borderRadius: 999, flexShrink: 0, background: "var(--k-gradient-ai)" }} />
-              )}
+              )} */}
               {label}
             </button>
           ))}
