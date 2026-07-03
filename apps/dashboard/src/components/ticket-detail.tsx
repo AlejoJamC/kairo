@@ -32,21 +32,33 @@ const PRIORITY_SLA_BAR_COLOR: Record<"ok" | "at_risk" | "breached", string> = {
   breached: "#EF4444",
 };
 
+// "Xd Xh Xm" — always shows the largest unit down to minutes so nothing
+// renders as an unreadable "1171h 25m"; drops leading zero units instead of
+// always printing all three (e.g. "19h 25m" under a day, "25m" under an hour).
+function formatDurationParts(totalSeconds: number): string {
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 function PrioritySlaBar({ ticket }: { ticket: Ticket }) {
   const { t } = useTranslation("dashboard");
   const config = useTriageStore((s) => s.operationalSlaConfig);
   const sla = useMemo(() => computeTicketOperationalSla(ticket, config), [ticket, config]);
   if (!sla) return null;
 
-  const hours = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 3600);
-  const minutes = Math.floor(((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) % 3600) / 60);
+  const duration = formatDurationParts(sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds);
 
   const detail =
     sla.status === "ok"
-      ? t("prioritySla.detailRemaining", { count: hours, minutes })
+      ? t("prioritySla.detailRemaining", { duration })
       : sla.status === "at_risk"
-        ? t("prioritySla.detailDueSoon", { count: hours, minutes })
-        : t("prioritySla.detailOverdue", { count: hours, minutes });
+        ? t("prioritySla.detailDueSoon", { duration })
+        : t("prioritySla.detailOverdue", { duration });
 
   const barWidth = Math.min(100, sla.percentUsed);
 

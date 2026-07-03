@@ -43,9 +43,9 @@
     "dueInMinutes": "Due in {{count}}m",
     "overdueHours": "Overdue +{{count}}h",
     "overdueDays": "Overdue +{{count}}d",
-    "detailRemaining": "SLA: {{count}}h {{minutes}}m remaining for first response",
-    "detailDueSoon": "SLA: due in {{count}}h {{minutes}}m for first response",
-    "detailOverdue": "SLA overdue by {{count}}h {{minutes}}m with no first response"
+    "detailRemaining": "SLA: {{duration}} remaining for first response",
+    "detailDueSoon": "SLA: due in {{duration}} for first response",
+    "detailOverdue": "SLA overdue by {{duration}} with no first response"
   },
   "ticketList": {
     "header": "Tickets",

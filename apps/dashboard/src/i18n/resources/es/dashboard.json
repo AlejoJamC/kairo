@@ -43,9 +43,9 @@
     "dueInMinutes": "Vence en {{count}}m",
     "overdueHours": "Vencido +{{count}}h",
     "overdueDays": "Vencido +{{count}}d",
-    "detailRemaining": "ANS: {{count}}h {{minutes}}m restantes para primera respuesta",
-    "detailDueSoon": "ANS: vence en {{count}}h {{minutes}}m para primera respuesta",
-    "detailOverdue": "ANS vencido hace {{count}}h {{minutes}}m sin primera respuesta"
+    "detailRemaining": "ANS: {{duration}} restantes para primera respuesta",
+    "detailDueSoon": "ANS: vence en {{duration}} para primera respuesta",
+    "detailOverdue": "ANS vencido hace {{duration}} sin primera respuesta"
   },
   "ticketList": {
     "header": "Tickets",
