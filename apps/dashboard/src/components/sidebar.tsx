@@ -108,10 +108,10 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
   const counts = useSidebarCounts();
 
   const mainNavItems: NavItem[] = [
-    { icon: Inbox,         label: t("dashboard:sidebar.inbox"),          view: "inbox" },
-    { icon: Activity,      label: t("dashboard:sidebar.panel"),          view: "panel" },
+    { icon: Inbox,         label: t("dashboard:sidebar.triage"),         view: "triage" },
     { icon: Clock,         label: t("dashboard:sidebar.pendingClient"),  view: "awaiting" },
-    { icon: CircleCheck,   label: t("dashboard:sidebar.autoResolvable"), view: "auto-resolved" },
+    { icon: Activity,      label: t("dashboard:sidebar.inProgress"),    view: "in-progress" },
+    { icon: CircleCheck,   label: t("dashboard:sidebar.resolved"),       view: "resolved" },
     { icon: ArrowUpCircle, label: t("dashboard:sidebar.escalation"),     view: "escalated" },
   ];
 

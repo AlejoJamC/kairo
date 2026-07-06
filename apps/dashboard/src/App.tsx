@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { TopChrome } from "@/components/top-chrome";
 import { Sidebar } from "@/components/sidebar";
@@ -10,21 +11,31 @@ import { AwaitingCustomerView } from "@/components/awaiting-customer-view";
 import { ChannelsSettings } from "@/components/channels-settings";
 import type { AppView } from "@/types";
 
-const COMING_SOON_VIEWS: AppView[] = ["panel", "auto-resolved", "escalated"];
+const COMING_SOON_VIEWS: AppView[] = ["in-progress", "resolved", "escalated"];
 
 function ComingSoon({ view }: { view: AppView }) {
+  const { t } = useTranslation(["dashboard"]);
+  const titleKey =
+    view === "in-progress" ? "dashboard:sidebar.inProgress" :
+    view === "resolved" ? "dashboard:sidebar.resolved" :
+    "dashboard:sidebar.escalation";
   return (
     <div
       style={{
         display: "flex",
         flex: 1,
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
+        gap: 8,
         background: "var(--k-bg)",
       }}
     >
-      <p style={{ color: "var(--k-text-tertiary)", fontSize: 13, textTransform: "capitalize" }}>
-        {view} — coming soon
+      <p style={{ color: "var(--k-text-primary)", fontSize: 15, fontWeight: 600 }}>
+        {t(titleKey)}
+      </p>
+      <p style={{ color: "var(--k-text-tertiary)", fontSize: 13 }}>
+        {t("dashboard:settings.comingSoon")}
       </p>
     </div>
   );
@@ -35,7 +46,7 @@ function AppContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("sidebar-collapsed") === "true"
   );
-  const [activeView, setActiveView] = useState<AppView>("inbox");
+  const [activeView, setActiveView] = useState<AppView>("triage");
 
   const handleToggle = () => {
     setSidebarCollapsed((c) => {
@@ -66,7 +77,7 @@ function AppContent() {
   }
 
   const renderView = () => {
-    if (activeView === "inbox") return <Inbox />;
+    if (activeView === "triage") return <Inbox />;
     if (activeView === "awaiting") return <AwaitingCustomerView onViewChange={setActiveView} />;
     if (activeView === "settings") return <ProfileSettings onViewChange={setActiveView} />;
     if (activeView === "change-password") return <ChangePasswordSettings onViewChange={setActiveView} />;

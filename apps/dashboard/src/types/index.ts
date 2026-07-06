@@ -62,10 +62,10 @@ export interface GmailTicket {
 // --- Client Directory ---
 
 export type AppView =
-  | "inbox"
-  | "panel"
+  | "triage"
+  | "in-progress"
   | "awaiting"
-  | "auto-resolved"
+  | "resolved"
   | "escalated"
   | "clients"
   | "settings"

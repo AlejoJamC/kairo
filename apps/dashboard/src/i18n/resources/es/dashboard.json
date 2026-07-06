@@ -75,15 +75,15 @@
     "all": "Todos los tickets"
   },
   "sidebar": {
-    "inbox": "Triage",
-    "panel": "En Progreso",
+    "triage": "Triage",
+    "inProgress": "En Progreso",
     "pendingClient": "En espera del cliente",
     "myTickets": "Mis Tickets",
     "unassigned": "Sin asignar",
     "allTickets": "Todos los Tickets",
     "settings": "Configuración",
     "escalation": "Escalado",
-    "autoResolvable": "Resuelto",
+    "resolved": "Resuelto",
     "clients": "Clientes"
   },
   "topChrome": {

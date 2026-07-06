@@ -6,12 +6,12 @@ import type { AppView } from "@/types";
 export type SidebarCounts = Partial<Record<TicketStatus, number>>;
 
 // Maps each sidebar AppView to the ticket status bucket returned by the API.
-// Views without a status mapping (panel, clients, settings, change-password) show no badge.
+// Views without a status mapping (in-progress, clients, settings, change-password) show no badge.
 export const VIEW_TO_STATUS: Partial<Record<AppView, TicketStatus>> = {
-  inbox:           "open",
-  awaiting:        "awaiting_customer",
-  "auto-resolved": "auto_resolved",
-  escalated:       "escalated",
+  triage:      "open",
+  awaiting:    "awaiting_customer",
+  resolved:    "auto_resolved",
+  escalated:   "escalated",
 };
 
 export function useSidebarCounts(): SidebarCounts | null {
