@@ -75,15 +75,15 @@
     "all": "All tickets"
   },
   "sidebar": {
-    "inbox": "Inbox",
-    "panel": "Panel",
+    "inbox": "Triage",
+    "panel": "In Progress",
     "pendingClient": "Awaiting Reply",
     "myTickets": "My Tickets",
     "unassigned": "Unassigned",
     "allTickets": "All Tickets",
     "settings": "Settings",
     "escalation": "Escalated",
-    "autoResolvable": "Auto Resolved",
+    "autoResolvable": "Resolved",
     "clients": "Clients"
   },
   "topChrome": {
