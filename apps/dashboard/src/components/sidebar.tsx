@@ -8,7 +8,6 @@ import {
   Activity,
   Clock,
   CircleCheck,
-  Compass,
   ArrowUpCircle,
   Users,
   Settings,
@@ -113,7 +112,6 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
     { icon: Activity,      label: t("dashboard:sidebar.panel"),          view: "panel" },
     { icon: Clock,         label: t("dashboard:sidebar.pendingClient"),  view: "awaiting" },
     { icon: CircleCheck,   label: t("dashboard:sidebar.autoResolvable"), view: "auto-resolved" },
-    { icon: Compass,       label: t("dashboard:sidebar.guided"),         view: "guided" },
     { icon: ArrowUpCircle, label: t("dashboard:sidebar.escalation"),     view: "escalated" },
   ];
 

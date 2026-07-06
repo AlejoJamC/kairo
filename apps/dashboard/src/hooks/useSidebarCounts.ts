@@ -11,7 +11,6 @@ export const VIEW_TO_STATUS: Partial<Record<AppView, TicketStatus>> = {
   inbox:           "open",
   awaiting:        "awaiting_customer",
   "auto-resolved": "auto_resolved",
-  guided:          "guided",
   escalated:       "escalated",
 };
 

@@ -10,7 +10,7 @@ import { AwaitingCustomerView } from "@/components/awaiting-customer-view";
 import { ChannelsSettings } from "@/components/channels-settings";
 import type { AppView } from "@/types";
 
-const COMING_SOON_VIEWS: AppView[] = ["panel", "auto-resolved", "guided", "escalated"];
+const COMING_SOON_VIEWS: AppView[] = ["panel", "auto-resolved", "escalated"];
 
 function ComingSoon({ view }: { view: AppView }) {
   return (

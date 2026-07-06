@@ -66,7 +66,6 @@ export type AppView =
   | "panel"
   | "awaiting"
   | "auto-resolved"
-  | "guided"
   | "escalated"
   | "clients"
   | "settings"
