@@ -1,4 +1,5 @@
-import { classifyEmail } from "@kairo/intelligence";
+import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { getFreshGmailToken, getGmailEmailByAccount } from "../../lib/gmail-token.js";
@@ -222,8 +223,22 @@ async function classifyWindow(
     const messageId = message.id;
     const snippet = message.snippet ?? "";
 
-    const promise = classifyEmail({ subject, body: snippet, from })
-      .then(async (classification) => {
+    const llmStart = Date.now();
+    const promise = classifyEmailWithMeta({ subject, body: snippet, from })
+      .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+        logLlmCall({
+          feature: "email_classification",
+          model: meta.model,
+          promptVersion,
+          promptText: prompt,
+          responseText: meta.rawText,
+          promptTokens: meta.usage.promptTokens,
+          completionTokens: meta.usage.completionTokens,
+          confidenceScore: classification.confidence,
+          latencyMs: Date.now() - llmStart,
+          triggeredByUserId: userId,
+          accountId,
+        });
         const classified_at = new Date().toISOString();
 
         const priorityScore = computePriorityScore(
@@ -310,6 +325,17 @@ async function classifyWindow(
         console.error(
           `[tier3] Classification failed for ${messageId}: ${detail}`
         );
+
+        logLlmCall({
+          feature: "email_classification",
+          model: resolveModelVersion(),
+          promptText: `${from} | ${subject}`,
+          latencyMs: Date.now() - llmStart,
+          errorCode: "LLM_ERROR",
+          errorDetail: detail,
+          triggeredByUserId: userId,
+          accountId,
+        });
 
         if (channelIntegrationId) {
           await supabase.from("messages").upsert(

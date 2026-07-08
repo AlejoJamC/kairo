@@ -1,6 +1,9 @@
 export {
   classifyEmail,
+  classifyEmailWithMeta,
   buildPrompt,
+  getPromptVersion,
+  extractPromptVersion,
   ClassificationSchema,
   TICKET_TYPE,
   PRIORITY,
@@ -28,6 +31,8 @@ export type {
   CompletionProvider,
   EmbeddingProvider,
   CompletionOptions,
+  CompletionUsage,
+  CompletionMeta,
 } from './providers/base';
 
 export {
