@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Users, ArrowUp } from "lucide-react";
 import type { Ticket } from "@kairo/types";
@@ -195,6 +195,10 @@ function useRelativeTime(iso: string | null | undefined): string {
 // TicketCard
 // ---------------------------------------------------------------------------
 
+// KAI-24 — long-press duration (ms) before a press-and-hold on the card
+// enters multi-select mode by toggling this card's checkbox.
+const LONG_PRESS_MS = 500;
+
 export interface TicketCardProps {
   ticket: Ticket;
   selected: boolean;
@@ -203,6 +207,11 @@ export interface TicketCardProps {
   onEscalate?: (id: string) => void;
   isCorrected?: boolean;
   groupCount?: number;
+  // KAI-24 — manual multi-select for grouping. All optional so existing
+  // single-select callers/tests are unaffected.
+  multiSelectMode?: boolean;
+  isChecked?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 export function TicketCard({
@@ -213,9 +222,30 @@ export function TicketCard({
   onEscalate,
   isCorrected = false,
   groupCount = 0,
+  multiSelectMode = false,
+  isChecked = false,
+  onToggleSelect,
 }: TicketCardProps) {
   const { t } = useTranslation("dashboard");
   const [hovered, setHovered] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  function clearLongPressTimer() {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+
+  function handlePointerDown() {
+    if (!onToggleSelect) return;
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      onToggleSelect(ticket.id);
+    }, LONG_PRESS_MS);
+  }
 
   const isSpam = (ticket.ticket_type ?? "").toLowerCase() === "spam";
   const relativeTime = useRelativeTime(ticket.received_at ?? ticket.created_at);
@@ -223,7 +253,17 @@ export function TicketCard({
 
   return (
     <button
-      onClick={() => onSelect(ticket.id)}
+      onClick={() => {
+        if (longPressFired.current) {
+          longPressFired.current = false;
+          return;
+        }
+        onSelect(ticket.id);
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerUp={clearLongPressTimer}
+      onPointerLeave={clearLongPressTimer}
+      onPointerCancel={clearLongPressTimer}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -271,6 +311,23 @@ export function TicketCard({
           flexWrap: "wrap",
         }}
       >
+        {onToggleSelect && (
+          <span style={{ width: 14, display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
+            {(hovered || multiSelectMode || isChecked) && (
+              <input
+                type="checkbox"
+                checked={isChecked}
+                aria-label={t("ticketCard.selectForGrouping", "Seleccionar para agrupar")}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect(ticket.id);
+                }}
+                style={{ width: 13, height: 13, cursor: "pointer" }}
+              />
+            )}
+          </span>
+        )}
         {ticket.ticket_number && (
           <span
             style={{

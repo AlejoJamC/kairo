@@ -34,7 +34,8 @@
     "slaMinutes_one": "{{count}}m",
     "slaMinutes_other": "{{count}}m",
     "similares": "similar grouped",
-    "priorityScoreTooltip": "Priority weight"
+    "priorityScoreTooltip": "Priority weight",
+    "selectForGrouping": "Select for grouping"
   },
   "prioritySla": {
     "remainingHours": "{{count}}h remaining",
@@ -63,7 +64,17 @@
     "syncGmail": "Sync Gmail",
     "syncing": "Syncing...",
     "syncSuccess": "{{created}} new · {{skipped}} skipped",
-    "syncError": "Sync failed"
+    "syncError": "Sync failed",
+    "selectedCount_one": "{{count}} selected",
+    "selectedCount_other": "{{count}} selected",
+    "groupSelected": "Group selected",
+    "grouping": "Grouping...",
+    "cancelSelection": "Cancel",
+    "groupError": "Couldn't group the tickets. Try again.",
+    "similarSuggestion_one": "{{count}} ticket seems to be about the same issue. Group them?",
+    "similarSuggestion_other": "{{count}} tickets seem to be about the same issue. Group them?",
+    "similarAccept": "Group",
+    "similarDismiss": "Dismiss"
   },
   "tickets": {
     "title": "Open Tickets",

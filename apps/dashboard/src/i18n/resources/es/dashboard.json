@@ -34,7 +34,8 @@
     "slaMinutes_one": "{{count}}m",
     "slaMinutes_other": "{{count}}m",
     "similares": "similares agrupados",
-    "priorityScoreTooltip": "Peso de prioridad"
+    "priorityScoreTooltip": "Peso de prioridad",
+    "selectForGrouping": "Seleccionar para agrupar"
   },
   "prioritySla": {
     "remainingHours": "{{count}}h restantes",
@@ -63,7 +64,17 @@
     "syncGmail": "Sincronizar Gmail",
     "syncing": "Sincronizando...",
     "syncSuccess": "{{created}} nuevos · {{skipped}} omitidos",
-    "syncError": "Error al sincronizar"
+    "syncError": "Error al sincronizar",
+    "selectedCount_one": "{{count}} seleccionado",
+    "selectedCount_other": "{{count}} seleccionados",
+    "groupSelected": "Agrupar seleccionados",
+    "grouping": "Agrupando...",
+    "cancelSelection": "Cancelar",
+    "groupError": "No se pudo agrupar los tickets. Intenta de nuevo.",
+    "similarSuggestion_one": "{{count}} ticket parece referirse al mismo problema. ¿Agruparlos?",
+    "similarSuggestion_other": "{{count}} tickets parecen referirse al mismo problema. ¿Agruparlos?",
+    "similarAccept": "Agrupar",
+    "similarDismiss": "Descartar"
   },
   "tickets": {
     "title": "Tickets Abiertos",

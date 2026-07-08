@@ -66,6 +66,22 @@ interface TriageStore {
   pendingEscalation: string | null;
   clientProfile: ClientProfile | null;
   correctedTicketIds: Set<string>;
+  // KAI-24 — manual multi-select for grouping. Independent of selectedTicketId
+  // (the single ticket open in the detail view): a ticket can be checked for
+  // grouping without changing what's shown in the middle/right panels.
+  selectedTicketIds: Set<string>;
+  toggleTicketSelection: (id: string) => void;
+  clearTicketSelection: () => void;
+  // KAI-24 — group_id assigned to a batch of tickets after a successful
+  // grouping call. Optimistic: the API also emits realtime UPDATEs that
+  // arrive via upsertTicket, but this makes the list reflect grouping
+  // immediately without waiting on the round trip.
+  setTicketsGroup: (ticketIds: string[], groupId: string) => void;
+  // KAI-24 — AI similarity callout dismissals, keyed by ticket id. Session-only
+  // (plain store state, never persisted) so a dismissed suggestion doesn't
+  // reappear while the user keeps working, but resets on reload.
+  dismissedSimilarTicketIds: Set<string>;
+  dismissSimilarSuggestion: (ticketId: string) => void;
   // KAI-168 — operational SLA config by priority, fetched once per session.
   // Tickets arrive raw from Supabase (direct fetch + realtime), never
   // pre-enriched, so every consumer computes operational_sla client-side
@@ -100,6 +116,8 @@ export const useTriageStore = create<TriageStore>((set) => ({
   pendingEscalation: null,
   clientProfile: null,
   correctedTicketIds: new Set<string>(),
+  selectedTicketIds: new Set<string>(),
+  dismissedSimilarTicketIds: new Set<string>(),
   operationalSlaConfig: DEFAULT_PRIORITY_SLA_SECONDS,
   setOperationalSlaConfig: (config) => set({ operationalSlaConfig: config }),
 
@@ -154,6 +172,29 @@ export const useTriageStore = create<TriageStore>((set) => ({
     set((state) => ({
       tickets: state.tickets.map((t) => (t.id === id ? { ...t, ...fields } : t)),
       correctedTicketIds: new Set([...state.correctedTicketIds, id]),
+    })),
+
+  toggleTicketSelection: (id) =>
+    set((state) => {
+      const next = new Set(state.selectedTicketIds);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { selectedTicketIds: next };
+    }),
+
+  clearTicketSelection: () => set({ selectedTicketIds: new Set<string>() }),
+
+  setTicketsGroup: (ticketIds, groupId) =>
+    set((state) => {
+      const idSet = new Set(ticketIds);
+      return {
+        tickets: state.tickets.map((t) => (idSet.has(t.id) ? { ...t, group_id: groupId } : t)),
+      };
+    }),
+
+  dismissSimilarSuggestion: (ticketId) =>
+    set((state) => ({
+      dismissedSimilarTicketIds: new Set([...state.dismissedSimilarTicketIds, ticketId]),
     })),
 
   setScanning: (v) => set({ isScanning: v }),
