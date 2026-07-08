@@ -118,6 +118,42 @@ interface BatchTicketResult {
 }
 
 // ---------------------------------------------------------------------------
+// KAI-24 — AI similarity row (raw find_similar_tickets RPC row, keyed
+// ticket_id, not id). Backend already filters by similarity >= 0.85.
+// ---------------------------------------------------------------------------
+
+interface SimilarTicketRow {
+  ticket_id: string;
+  subject: string | null;
+  similarity: number | null;
+}
+
+// KAI-24 — group name is a backend-only field (not shown anywhere in the
+// dashboard UI today), so it isn't run through i18n like user-facing labels.
+function deriveGroupName(subject: string | null | undefined): string {
+  const trimmed = (subject ?? "").trim();
+  if (trimmed) return trimmed.slice(0, 60);
+  return `Grupo ${new Date().toISOString().slice(0, 10)}`;
+}
+
+async function createGroupAndAssign(ticketIds: string[], name: string): Promise<string> {
+  const createRes = await apiCall("/api/v1/ticket-groups", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  if (!createRes.ok) throw new Error("Failed to create group");
+  const group = (await createRes.json()) as { id: string };
+
+  const assignRes = await apiCall(`/api/v1/ticket-groups/${group.id}/tickets`, {
+    method: "POST",
+    body: JSON.stringify({ ticket_ids: ticketIds }),
+  });
+  if (!assignRes.ok) throw new Error("Failed to assign tickets to group");
+
+  return group.id;
+}
+
+// ---------------------------------------------------------------------------
 // Virtualized ticket list — used when filtered count > 50
 // ---------------------------------------------------------------------------
 
@@ -129,12 +165,16 @@ function VirtualTicketList({
   correctedTicketIds,
   groupCounts,
   onSelect,
+  selectedTicketIds,
+  onToggleSelect,
 }: {
   tickets: Ticket[];
   selectedTicketId: string | null;
   correctedTicketIds: Set<string>;
   groupCounts: Map<string, number>;
   onSelect: (id: string) => void;
+  selectedTicketIds: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -167,6 +207,9 @@ function VirtualTicketList({
                 onSelect={onSelect}
                 isCorrected={correctedTicketIds.has(ticket.id)}
                 groupCount={ticket.group_id ? (groupCounts.get(ticket.group_id) ?? 1) : 0}
+                multiSelectMode={selectedTicketIds.size > 0}
+                isChecked={selectedTicketIds.has(ticket.id)}
+                onToggleSelect={onToggleSelect}
               />
             </div>
           );
@@ -185,8 +228,22 @@ const VIRTUALIZE_THRESHOLD = 50;
 export function TicketList() {
   const { t } = useTranslation("dashboard");
   const { user, accountId } = useAuth();
-  const { tickets, selectedTicketId, isScanning, classifiedCount, selectTicket, updateClassification, correctedTicketIds, setTickets } =
-    useTriageStore();
+  const {
+    tickets,
+    selectedTicketId,
+    isScanning,
+    classifiedCount,
+    selectTicket,
+    updateClassification,
+    correctedTicketIds,
+    setTickets,
+    selectedTicketIds,
+    toggleTicketSelection,
+    clearTicketSelection,
+    setTicketsGroup,
+    dismissedSimilarTicketIds,
+    dismissSimilarSuggestion,
+  } = useTriageStore();
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [classifyingAll, setClassifyingAll] = useState(false);
   const [classifyProgress, setClassifyProgress] = useState<string | null>(null);
@@ -195,6 +252,12 @@ export function TicketList() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // KAI-24 — manual grouping (action bar) + AI similarity callout state.
+  const [grouping, setGrouping] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const [similarTickets, setSimilarTickets] = useState<SimilarTicketRow[] | null>(null);
+  const [groupingSimilar, setGroupingSimilar] = useState(false);
 
   const filtered = applyFilters(tickets, filters);
 
@@ -226,6 +289,76 @@ export function TicketList() {
 
   function toggleFilter<K extends keyof FilterState>(key: K, value: FilterState[K]) {
     setFilters((prev) => ({ ...prev, [key]: prev[key] === value ? null : value }));
+  }
+
+  // -------------------------------------------------------------------------
+  // KAI-24 — AI similarity suggestion: fetch when the opened ticket changes.
+  // Guards against races (a slow response for a previously-open ticket must
+  // not clobber the callout for the one now open) and skips entirely once
+  // the suggestion for that ticket id was dismissed this session.
+  // -------------------------------------------------------------------------
+
+  useEffect(() => {
+    setSimilarTickets(null);
+    if (!selectedTicketId || dismissedSimilarTicketIds.has(selectedTicketId)) return;
+
+    let cancelled = false;
+
+    apiCall(`/api/v1/tickets/${selectedTicketId}/similar`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { data?: SimilarTicketRow[]; degraded?: boolean } | null) => {
+        if (cancelled || !body || body.degraded || !body.data || body.data.length === 0) return;
+        setSimilarTickets(body.data);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTicketId, dismissedSimilarTicketIds]);
+
+  // -------------------------------------------------------------------------
+  // KAI-24 — Manual grouping (action bar) + AI similarity suggestion accept
+  // -------------------------------------------------------------------------
+
+  async function handleGroupSelected() {
+    if (grouping || selectedTicketIds.size < 2) return;
+    setGroupError(null);
+    setGrouping(true);
+    try {
+      const ids = Array.from(selectedTicketIds);
+      const first = tickets.find((t) => t.id === ids[0]);
+      const groupId = await createGroupAndAssign(ids, deriveGroupName(first?.subject));
+      setTicketsGroup(ids, groupId);
+      clearTicketSelection();
+    } catch {
+      setGroupError(t("ticketList.groupError", "No se pudo agrupar los tickets. Intenta de nuevo."));
+    } finally {
+      setGrouping(false);
+    }
+  }
+
+  async function handleAcceptSimilar() {
+    if (!selectedTicketId || !similarTickets || groupingSimilar) return;
+    setGroupError(null);
+    setGroupingSimilar(true);
+    try {
+      const current = tickets.find((t) => t.id === selectedTicketId);
+      const ids = [selectedTicketId, ...similarTickets.map((s) => s.ticket_id)];
+      const groupId = await createGroupAndAssign(ids, deriveGroupName(current?.subject));
+      setTicketsGroup(ids, groupId);
+      setSimilarTickets(null);
+    } catch {
+      setGroupError(t("ticketList.groupError", "No se pudo agrupar los tickets. Intenta de nuevo."));
+    } finally {
+      setGroupingSimilar(false);
+    }
+  }
+
+  function handleDismissSimilar() {
+    if (!selectedTicketId) return;
+    dismissSimilarSuggestion(selectedTicketId);
+    setSimilarTickets(null);
   }
 
   // -------------------------------------------------------------------------
@@ -491,6 +624,123 @@ export function TicketList() {
         </div>
       </div>
 
+      {/* KAI-24 — multi-select action bar */}
+      {selectedTicketIds.size >= 2 && (
+        <div style={{
+          borderBottom: "1px solid var(--k-border-subtle)",
+          background: "var(--k-accent-subtle)",
+          padding: "6px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}>
+          <span style={{ fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-accent)" }}>
+            {t("ticketList.selectedCount", { count: selectedTicketIds.size })}
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              onClick={handleGroupSelected}
+              disabled={grouping}
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                padding: "3px 8px",
+                borderRadius: 4,
+                background: "var(--k-accent)",
+                color: "white",
+                border: "none",
+                cursor: grouping ? "not-allowed" : "pointer",
+                opacity: grouping ? 0.6 : 1,
+              }}
+            >
+              {grouping ? t("ticketList.grouping", "Agrupando...") : t("ticketList.groupSelected")}
+            </button>
+            <button
+              onClick={clearTicketSelection}
+              disabled={grouping}
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                padding: "3px 8px",
+                borderRadius: 4,
+                background: "transparent",
+                color: "var(--k-text-secondary)",
+                border: "1px solid var(--k-border)",
+                cursor: grouping ? "not-allowed" : "pointer",
+              }}
+            >
+              {t("ticketList.cancelSelection")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* KAI-24 — grouping error banner (manual selection or AI-suggested) */}
+      {groupError && (
+        <div style={{
+          borderBottom: "1px solid var(--k-border-subtle)",
+          background: "#FEF2F2",
+          padding: "5px 14px",
+          fontSize: 11,
+          fontFamily: "var(--k-font-mono)",
+          color: "#991B1B",
+        }}>
+          {groupError}
+        </div>
+      )}
+
+      {/* KAI-24 — AI similarity suggestion callout */}
+      {similarTickets && similarTickets.length > 0 && (
+        <div style={{
+          borderBottom: "1px solid var(--k-border-subtle)",
+          background: "var(--k-accent-subtle)",
+          padding: "8px 14px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}>
+          <span style={{ fontSize: 12, color: "var(--k-accent)" }}>
+            {t("ticketList.similarSuggestion", { count: similarTickets.length })}
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              onClick={handleAcceptSimilar}
+              disabled={groupingSimilar}
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                padding: "3px 8px",
+                borderRadius: 4,
+                background: "var(--k-accent)",
+                color: "white",
+                border: "none",
+                cursor: groupingSimilar ? "not-allowed" : "pointer",
+                opacity: groupingSimilar ? 0.6 : 1,
+              }}
+            >
+              {groupingSimilar ? t("ticketList.grouping", "Agrupando...") : t("ticketList.similarAccept")}
+            </button>
+            <button
+              onClick={handleDismissSimilar}
+              disabled={groupingSimilar}
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                padding: "3px 8px",
+                borderRadius: 4,
+                background: "transparent",
+                color: "var(--k-text-secondary)",
+                border: "1px solid var(--k-border)",
+                cursor: groupingSimilar ? "not-allowed" : "pointer",
+              }}
+            >
+              {t("ticketList.similarDismiss")}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Sync result / error banner */}
       {syncResult && (
         <div style={{
@@ -563,6 +813,8 @@ export function TicketList() {
           correctedTicketIds={correctedTicketIds}
           groupCounts={groupCounts}
           onSelect={selectTicket}
+          selectedTicketIds={selectedTicketIds}
+          onToggleSelect={toggleTicketSelection}
         />
       ) : (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: 8 }}>
@@ -574,6 +826,9 @@ export function TicketList() {
               onSelect={selectTicket}
               isCorrected={correctedTicketIds.has(ticket.id)}
               groupCount={ticket.group_id ? (groupCounts.get(ticket.group_id) ?? 1) : 0}
+              multiSelectMode={selectedTicketIds.size > 0}
+              isChecked={selectedTicketIds.has(ticket.id)}
+              onToggleSelect={toggleTicketSelection}
             />
           ))}
         </div>
