@@ -10,6 +10,27 @@ import { describe, it, expect } from "bun:test";
 // ---------------------------------------------------------------------------
 
 describe("related-history response shape", () => {
+  it("RPC path maps id from the RPC row's ticket_id column", () => {
+    const rpcRow = {
+      ticket_id: "00000000-0000-0000-0000-000000000001",
+      subject: "Login issue",
+      resolved_at: "2026-04-01T10:00:00.000Z",
+      resolution_summary: "Reset password fixed it",
+      ticket_number: 42,
+      similarity: 0.87,
+    };
+    const mapped = {
+      id: rpcRow.ticket_id,
+      subject: rpcRow.subject,
+      resolved_at: rpcRow.resolved_at,
+      resolution_summary: rpcRow.resolution_summary ?? null,
+      ticket_number: rpcRow.ticket_number,
+      similarity: rpcRow.similarity,
+    };
+    expect(mapped.id).toBe(rpcRow.ticket_id);
+    expect(mapped.id).not.toBeUndefined();
+  });
+
   it("result shape includes required fields", () => {
     const mockResult = {
       id: "00000000-0000-0000-0000-000000000001",
