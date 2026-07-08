@@ -238,7 +238,7 @@ tickets.get("/:id/related-history", async (c) => {
 
   if (!rpcError && rpcData && rpcData.length > 0) {
     const results = (rpcData ?? []).map((r: Record<string, unknown>) => ({
-      id: r.id,
+      id: r.ticket_id,
       subject: r.subject,
       resolved_at: r.resolved_at,
       resolution_summary: r.resolution_summary ?? null,
@@ -287,6 +287,8 @@ tickets.get("/:id/related-history", async (c) => {
 // Gracefully returns [] when pgvector RPC is unavailable
 // ---------------------------------------------------------------------------
 
+const SIMILAR_TICKETS_THRESHOLD = 0.85;
+
 tickets.get("/:id/similar", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
   if (!ctx) return c.json({ error: "Unauthorized" }, 401);
@@ -309,6 +311,7 @@ tickets.get("/:id/similar", async (c) => {
     p_ticket_id: id,
     p_account_id: ctx.accountId,
     p_limit: limit,
+    p_threshold: SIMILAR_TICKETS_THRESHOLD,
   });
 
   if (error) {
