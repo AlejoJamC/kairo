@@ -212,6 +212,11 @@ export interface TicketCardProps {
   multiSelectMode?: boolean;
   isChecked?: boolean;
   onToggleSelect?: (id: string) => void;
+  // KAI-25 — historical context trigger. The parent list fetches related
+  // history once per selected ticket and only tells the SELECTED card
+  // whether it has any, so no per-card fetch (no N+1) ever happens here.
+  hasRelatedHistory?: boolean;
+  onOpenHistory?: (id: string) => void;
 }
 
 export function TicketCard({
@@ -225,6 +230,8 @@ export function TicketCard({
   multiSelectMode = false,
   isChecked = false,
   onToggleSelect,
+  hasRelatedHistory = false,
+  onOpenHistory,
 }: TicketCardProps) {
   const { t } = useTranslation("dashboard");
   const [hovered, setHovered] = useState(false);
@@ -493,6 +500,32 @@ export function TicketCard({
             )}
         </div>
       </div>
+
+      {/* KAI-25 — historical context trigger (selected card only, when related history exists) */}
+      {selected && hasRelatedHistory && onOpenHistory && (
+        <div style={{ marginTop: 6 }}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenHistory(ticket.id);
+            }}
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: "var(--k-accent)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              textAlign: "left",
+              textDecoration: "underline",
+              textUnderlineOffset: 2,
+            }}
+          >
+            {t("ticketCard.viewRelatedHistory")}
+          </button>
+        </div>
+      )}
 
       {/* Hover quick actions */}
       {hovered && (onGroup || onEscalate) && (

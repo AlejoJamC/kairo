@@ -35,7 +35,8 @@
     "slaMinutes_other": "{{count}}m",
     "similares": "similares agrupados",
     "priorityScoreTooltip": "Peso de prioridad",
-    "selectForGrouping": "Seleccionar para agrupar"
+    "selectForGrouping": "Seleccionar para agrupar",
+    "viewRelatedHistory": "Ver historial relacionado"
   },
   "prioritySla": {
     "remainingHours": "{{count}}h restantes",
@@ -295,12 +296,14 @@
     "deliveryFailed": "Error al enviar",
     "reconnectGmail": "Reconecta Gmail para reintentar",
     "internalNote": "Nota interna",
-    "statusReopened": "Reabierto"
+    "statusReopened": "Reabierto",
+    "readOnlyBanner": "Este ticket está resuelto. Se muestra en modo solo lectura."
   },
   "ticketHeader": {
     "assignToMe": "Asignar a mí",
     "assigning": "Asignando…",
-    "assigned": "Asignado"
+    "assigned": "Asignado",
+    "readOnlyBadge": "Solo lectura"
   },
   "replyBar": {
     "sending": "Enviando...",
@@ -440,5 +443,12 @@
     "assistantNoTicketBody": "Elige un ticket de la bandeja para conversar sobre él con el copiloto.",
     "assistantUnknownSender": "el cliente",
     "resizeHint": "Arrastra para redimensionar · doble clic para restablecer"
+  },
+  "relatedHistory": {
+    "title": "Historial relacionado",
+    "close": "Cerrar",
+    "empty": "No se encontraron casos similares previos",
+    "resolvedOn": "Resuelto el",
+    "ticketNumber": "Ticket #{{number}}"
   }
 }

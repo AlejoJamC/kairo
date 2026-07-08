@@ -84,3 +84,44 @@ describe("PrioritySlaBadge (via TicketCard)", () => {
     expect(screen.getByText(/prioritySla\.overdueHours/)).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// KAI-25: historical context trigger — shown only on the SELECTED card when
+// the parent list found related history for it (no per-card fetch here).
+// ---------------------------------------------------------------------------
+
+describe("TicketCard — related-history trigger (KAI-25)", () => {
+  it("does not render the trigger when the card is not selected, even if hasRelatedHistory is true", () => {
+    const ticket = baseTicket();
+    renderWithProviders(
+      React.createElement(TicketCard, {
+        ticket, selected: false, onSelect: () => {}, hasRelatedHistory: true, onOpenHistory: () => {},
+      })
+    );
+    expect(screen.queryByText(/ticketCard\.viewRelatedHistory/)).not.toBeInTheDocument();
+  });
+
+  it("does not render the trigger when selected but hasRelatedHistory is false", () => {
+    const ticket = baseTicket();
+    renderWithProviders(
+      React.createElement(TicketCard, {
+        ticket, selected: true, onSelect: () => {}, hasRelatedHistory: false, onOpenHistory: () => {},
+      })
+    );
+    expect(screen.queryByText(/ticketCard\.viewRelatedHistory/)).not.toBeInTheDocument();
+  });
+
+  it("renders the trigger and calls onOpenHistory with the ticket id when selected and hasRelatedHistory", () => {
+    const ticket = baseTicket();
+    const onOpenHistory = vi.fn();
+    renderWithProviders(
+      React.createElement(TicketCard, {
+        ticket, selected: true, onSelect: () => {}, hasRelatedHistory: true, onOpenHistory,
+      })
+    );
+    const trigger = screen.getByText(/ticketCard\.viewRelatedHistory/);
+    expect(trigger).toBeInTheDocument();
+    trigger.click();
+    expect(onOpenHistory).toHaveBeenCalledWith("t-1");
+  });
+});

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { MoreHorizontal, RefreshCw } from "lucide-react";
 import { useTriageStore, type Ticket } from "@/stores/triage-store";
 import { TicketCard } from "@/components/ticket-card";
+import { RelatedHistoryDrawer, type RelatedHistoryItem } from "@/components/related-history-drawer";
 import { apiCall } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/auth-context";
@@ -167,6 +168,8 @@ function VirtualTicketList({
   onSelect,
   selectedTicketIds,
   onToggleSelect,
+  hasRelatedHistory,
+  onOpenHistory,
 }: {
   tickets: Ticket[];
   selectedTicketId: string | null;
@@ -175,6 +178,8 @@ function VirtualTicketList({
   onSelect: (id: string) => void;
   selectedTicketIds: Set<string>;
   onToggleSelect: (id: string) => void;
+  hasRelatedHistory: boolean;
+  onOpenHistory: (id: string) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -210,6 +215,8 @@ function VirtualTicketList({
                 multiSelectMode={selectedTicketIds.size > 0}
                 isChecked={selectedTicketIds.has(ticket.id)}
                 onToggleSelect={onToggleSelect}
+                hasRelatedHistory={selectedTicketId === ticket.id && hasRelatedHistory}
+                onOpenHistory={onOpenHistory}
               />
             </div>
           );
@@ -226,7 +233,7 @@ function VirtualTicketList({
 const VIRTUALIZE_THRESHOLD = 50;
 
 export function TicketList() {
-  const { t } = useTranslation("dashboard");
+  const { t, i18n } = useTranslation("dashboard");
   const { user, accountId } = useAuth();
   const {
     tickets,
@@ -243,6 +250,7 @@ export function TicketList() {
     setTicketsGroup,
     dismissedSimilarTicketIds,
     dismissSimilarSuggestion,
+    upsertTicket,
   } = useTriageStore();
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [classifyingAll, setClassifyingAll] = useState(false);
@@ -258,6 +266,12 @@ export function TicketList() {
   const [groupError, setGroupError] = useState<string | null>(null);
   const [similarTickets, setSimilarTickets] = useState<SimilarTicketRow[] | null>(null);
   const [groupingSimilar, setGroupingSimilar] = useState(false);
+
+  // KAI-25 — historical context drawer: up to 3 past resolved tickets related
+  // to the currently selected ticket.
+  const [relatedHistory, setRelatedHistory] = useState<RelatedHistoryItem[]>([]);
+  const [relatedHistoryLoading, setRelatedHistoryLoading] = useState(false);
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
 
   const filtered = applyFilters(tickets, filters);
 
@@ -316,6 +330,63 @@ export function TicketList() {
       cancelled = true;
     };
   }, [selectedTicketId, dismissedSimilarTicketIds]);
+
+  // -------------------------------------------------------------------------
+  // KAI-25 — historical context: fetch related (resolved) tickets whenever
+  // the opened ticket changes. Same race-guard pattern as the similarity
+  // effect above — a slow response for a previously-open ticket must not
+  // clobber the drawer content for the one now open. Closes the drawer on
+  // every ticket change so it never shows stale history for a new ticket.
+  // -------------------------------------------------------------------------
+
+  useEffect(() => {
+    setRelatedHistory([]);
+    setHistoryDrawerOpen(false);
+    if (!selectedTicketId) return;
+
+    let cancelled = false;
+    setRelatedHistoryLoading(true);
+
+    apiCall(`/api/v1/tickets/${selectedTicketId}/related-history`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { data?: RelatedHistoryItem[] } | null) => {
+        if (cancelled) return;
+        setRelatedHistory(body?.data ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRelatedHistory([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRelatedHistoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTicketId]);
+
+  function handleOpenHistory() {
+    setHistoryDrawerOpen(true);
+  }
+
+  // Historical tickets are resolved/auto_resolved, so inbox.tsx's initial
+  // fetch never loads them into the store. Fetch the full row directly
+  // (same pattern as inbox.tsx) and upsert it so TicketDetail can render it.
+  // The list itself filters non-active statuses out via isTriageActive, so
+  // this never shows up as a normal triage row.
+  async function handleSelectHistoricalTicket(id: string) {
+    setHistoryDrawerOpen(false);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.from("tickets").select("*").eq("id", id).single();
+      if (!error && data) {
+        upsertTicket(data as Ticket);
+      }
+    } catch {
+      // fall through — selectTicket still runs so at least the id is set
+    }
+    selectTicket(id);
+  }
 
   // -------------------------------------------------------------------------
   // KAI-24 — Manual grouping (action bar) + AI similarity suggestion accept
@@ -815,6 +886,8 @@ export function TicketList() {
           onSelect={selectTicket}
           selectedTicketIds={selectedTicketIds}
           onToggleSelect={toggleTicketSelection}
+          hasRelatedHistory={!relatedHistoryLoading && relatedHistory.length > 0}
+          onOpenHistory={handleOpenHistory}
         />
       ) : (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: 8 }}>
@@ -829,10 +902,21 @@ export function TicketList() {
               multiSelectMode={selectedTicketIds.size > 0}
               isChecked={selectedTicketIds.has(ticket.id)}
               onToggleSelect={toggleTicketSelection}
+              hasRelatedHistory={selectedTicketId === ticket.id && !relatedHistoryLoading && relatedHistory.length > 0}
+              onOpenHistory={handleOpenHistory}
             />
           ))}
         </div>
       )}
+
+      <RelatedHistoryDrawer
+        open={historyDrawerOpen}
+        loading={relatedHistoryLoading}
+        items={relatedHistory}
+        lang={i18n.language}
+        onClose={() => setHistoryDrawerOpen(false)}
+        onSelectTicket={handleSelectHistoricalTicket}
+      />
     </div>
   );
 }

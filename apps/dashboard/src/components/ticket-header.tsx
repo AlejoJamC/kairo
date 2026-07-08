@@ -56,9 +56,13 @@ function TypeBadge({ type }: { type: string | null | undefined }) {
 
 interface TicketHeaderProps {
   ticket: Ticket;
+  // KAI-25 — true for historical tickets opened from the related-history
+  // drawer (resolved/auto_resolved). Hides mutation actions (assign,
+  // correction) so the header matches the read-only detail view.
+  readOnly?: boolean;
 }
 
-export function TicketHeader({ ticket }: TicketHeaderProps) {
+export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
   const { t } = useTranslation("dashboard");
   const { applyCorrection, correctedTicketIds, updateClassification } = useTriageStore();
   const [correctionOpen, setCorrectionOpen] = useState(false);
@@ -151,8 +155,8 @@ export function TicketHeader({ ticket }: TicketHeaderProps) {
         </div>
       )}
 
-      {/* Correction trigger */}
-      {ticket.classified_at && (
+      {/* Correction trigger — hidden in read-only mode */}
+      {!readOnly && ticket.classified_at && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           {isCorrected && (
             <span
@@ -206,39 +210,57 @@ export function TicketHeader({ ticket }: TicketHeaderProps) {
         </span>
       )}
 
-      {/* Asignar a mí button */}
-      <button
-        type="button"
-        disabled={assigning || isAssigned}
-        onClick={handleAssign}
-        style={{
-          fontSize: 12,
-          fontWeight: 500,
-          padding: "5px 12px",
-          borderRadius: 6,
-          border: isAssigned
-            ? "1px solid #A7F3D0"
-            : "1px solid var(--k-accent)",
-          background: isAssigned ? "#ECFDF5" : "var(--k-accent)",
-          color: isAssigned ? "#047857" : "white",
-          cursor: assigning || isAssigned ? "default" : "pointer",
-          flexShrink: 0,
-          transition: "background 0.1s ease, color 0.1s ease",
-        }}
-      >
-        {isAssigned
-          ? t("ticketHeader.assigned", "Asignado")
-          : assigning
-            ? t("ticketHeader.assigning", "Asignando…")
-            : t("ticketHeader.assignToMe", "Asignar a mí")}
-      </button>
+      {/* Asignar a mí button — replaced by a read-only badge for historical tickets */}
+      {readOnly ? (
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            padding: "3px 8px",
+            borderRadius: 4,
+            background: "var(--k-surface-2)",
+            color: "var(--k-text-tertiary)",
+            flexShrink: 0,
+          }}
+        >
+          {t("ticketHeader.readOnlyBadge")}
+        </span>
+      ) : (
+        <button
+          type="button"
+          disabled={assigning || isAssigned}
+          onClick={handleAssign}
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            padding: "5px 12px",
+            borderRadius: 6,
+            border: isAssigned
+              ? "1px solid #A7F3D0"
+              : "1px solid var(--k-accent)",
+            background: isAssigned ? "#ECFDF5" : "var(--k-accent)",
+            color: isAssigned ? "#047857" : "white",
+            cursor: assigning || isAssigned ? "default" : "pointer",
+            flexShrink: 0,
+            transition: "background 0.1s ease, color 0.1s ease",
+          }}
+        >
+          {isAssigned
+            ? t("ticketHeader.assigned", "Asignado")
+            : assigning
+              ? t("ticketHeader.assigning", "Asignando…")
+              : t("ticketHeader.assignToMe", "Asignar a mí")}
+        </button>
+      )}
 
-      <CorrectionDialog
-        ticket={ticket}
-        open={correctionOpen}
-        onOpenChange={setCorrectionOpen}
-        onCorrected={handleCorrected}
-      />
+      {!readOnly && (
+        <CorrectionDialog
+          ticket={ticket}
+          open={correctionOpen}
+          onOpenChange={setCorrectionOpen}
+          onCorrected={handleCorrected}
+        />
+      )}
     </div>
   );
 }

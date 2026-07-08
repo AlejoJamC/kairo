@@ -35,7 +35,8 @@
     "slaMinutes_other": "{{count}}m",
     "similares": "similar grouped",
     "priorityScoreTooltip": "Priority weight",
-    "selectForGrouping": "Select for grouping"
+    "selectForGrouping": "Select for grouping",
+    "viewRelatedHistory": "View related history"
   },
   "prioritySla": {
     "remainingHours": "{{count}}h remaining",
@@ -295,12 +296,14 @@
     "deliveryFailed": "Failed to send",
     "reconnectGmail": "Reconnect Gmail to retry",
     "internalNote": "Internal note",
-    "statusReopened": "Reopened"
+    "statusReopened": "Reopened",
+    "readOnlyBanner": "This ticket is resolved. Showing in read-only mode."
   },
   "ticketHeader": {
     "assignToMe": "Assign to me",
     "assigning": "Assigning…",
-    "assigned": "Assigned"
+    "assigned": "Assigned",
+    "readOnlyBadge": "Read-only"
   },
   "replyBar": {
     "sending": "Sending...",
@@ -440,5 +443,12 @@
     "assistantNoTicketBody": "Pick a ticket from the queue to chat with the copilot about it.",
     "assistantUnknownSender": "the customer",
     "resizeHint": "Drag to resize · double-click to reset"
+  },
+  "relatedHistory": {
+    "title": "Related history",
+    "close": "Close",
+    "empty": "No similar past cases were found",
+    "resolvedOn": "Resolved on",
+    "ticketNumber": "Ticket #{{number}}"
   }
 }

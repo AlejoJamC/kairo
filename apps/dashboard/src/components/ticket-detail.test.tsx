@@ -204,3 +204,35 @@ describe("TicketDetail — priority SLA bar (KAI-168)", () => {
     expect(screen.getByText(/prioritySla.detailOverdue/i)).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// KAI-25: read-only view for historical (resolved) tickets opened from the
+// related-history drawer — no reply/note input for a ticket that's closed.
+// ---------------------------------------------------------------------------
+
+describe("TicketDetail — read-only historical view (KAI-25)", () => {
+  beforeEach(() => {
+    mockThreadResult = { messages: [], loading: false, error: null };
+  });
+
+  it("renders the ReplyBar for an active (open) ticket", () => {
+    mockTicket = { ...mockTicket, status: "open" };
+    renderWithProviders(React.createElement(TicketDetail));
+    expect(screen.getByTestId("reply-bar")).toBeInTheDocument();
+    expect(screen.queryByText("ticketDetail.readOnlyBanner")).not.toBeInTheDocument();
+  });
+
+  it("hides the ReplyBar and shows the read-only banner for a resolved ticket", () => {
+    mockTicket = { ...mockTicket, status: "resolved" };
+    renderWithProviders(React.createElement(TicketDetail));
+    expect(screen.queryByTestId("reply-bar")).not.toBeInTheDocument();
+    expect(screen.getByText("ticketDetail.readOnlyBanner")).toBeInTheDocument();
+  });
+
+  it("hides the ReplyBar and shows the read-only banner for an auto_resolved ticket", () => {
+    mockTicket = { ...mockTicket, status: "auto_resolved" };
+    renderWithProviders(React.createElement(TicketDetail));
+    expect(screen.queryByTestId("reply-bar")).not.toBeInTheDocument();
+    expect(screen.getByText("ticketDetail.readOnlyBanner")).toBeInTheDocument();
+  });
+});
