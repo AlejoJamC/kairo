@@ -5,6 +5,7 @@ import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
 import { getEmotionTokens } from "@kairo/ui";
 import { useTriageStore } from "@/stores/triage-store";
+import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
 
 // ---------------------------------------------------------------------------
 // Sentiment helpers — sourced from @kairo/ui triage-tokens
@@ -21,6 +22,16 @@ const STRIPE_COLOR: Record<string, string> = {
 function stripeColor(sentiment: string | null | undefined): string {
   return STRIPE_COLOR[(sentiment ?? "").toLowerCase()] ?? "#D4D4D8";
 }
+
+// getEmotionTokens (@kairo/ui) hardcodes its ariaLabel in English (used by
+// other, non-i18n consumers of that package) — translate it here instead of
+// showing that raw string as the tooltip/aria-label for this ticket list.
+const EMOTION_LABEL_KEY = {
+  aggressive: "ticketCard.emotionAggressive",
+  frustrated: "ticketCard.emotionFrustrated",
+  neutral:    "ticketCard.emotionNeutral",
+  positive:   "ticketCard.emotionPositive",
+} as const satisfies Record<string, string>;
 
 // ---------------------------------------------------------------------------
 // Priority badge
@@ -112,6 +123,7 @@ function SlaBadge({ slaDate }: SlaBadgeProps) {
         background: label.breached ? "#FEF2F2" : "#F4F4F5",
         color: label.breached ? "#DC2626" : "#71717A",
       }}
+      title={t("ticketCard.slaTooltip", "SLA contractual según el plan del cliente")}
     >
       {label.text}
     </span>
@@ -162,6 +174,7 @@ function PrioritySlaBadge({ ticket }: { ticket: Ticket }) {
         padding: "2px 6px",
         borderRadius: 4,
       }}
+      title={t("prioritySla.tooltip", "ANS operativo según la prioridad del ticket")}
     >
       {label}
     </span>
@@ -212,6 +225,11 @@ export interface TicketCardProps {
   multiSelectMode?: boolean;
   isChecked?: boolean;
   onToggleSelect?: (id: string) => void;
+  // KAI-25 — historical context trigger. The parent list fetches related
+  // history once per selected ticket and only tells the SELECTED card
+  // whether it has any, so no per-card fetch (no N+1) ever happens here.
+  hasRelatedHistory?: boolean;
+  onOpenHistory?: (id: string) => void;
 }
 
 export function TicketCard({
@@ -225,6 +243,8 @@ export function TicketCard({
   multiSelectMode = false,
   isChecked = false,
   onToggleSelect,
+  hasRelatedHistory = false,
+  onOpenHistory,
 }: TicketCardProps) {
   const { t } = useTranslation("dashboard");
   const [hovered, setHovered] = useState(false);
@@ -250,6 +270,8 @@ export function TicketCard({
   const isSpam = (ticket.ticket_type ?? "").toLowerCase() === "spam";
   const relativeTime = useRelativeTime(ticket.received_at ?? ticket.created_at);
   const emotion = getEmotionTokens(ticket.sentiment);
+  const emotionKey = (ticket.sentiment ?? "").toLowerCase() as keyof typeof EMOTION_LABEL_KEY;
+  const emotionLabel = EMOTION_LABEL_KEY[emotionKey] ? t(EMOTION_LABEL_KEY[emotionKey]) : emotion.ariaLabel;
 
   return (
     <button
@@ -410,7 +432,8 @@ export function TicketCard({
         {emotion.emoji && (
           <span
             style={{ fontSize: 13, flexShrink: 0, lineHeight: 1 }}
-            aria-label={emotion.ariaLabel}
+            aria-label={emotionLabel}
+            title={emotionLabel}
           >
             {emotion.emoji}
           </span>
@@ -438,7 +461,7 @@ export function TicketCard({
       >
         <SlaBadge slaDate={ticket.sla_due_at} />
         <PrioritySlaBadge ticket={ticket} />
-        {ticket.group_id && groupCount > 1 && (
+        {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount > 1 && (
           <span
             style={{
               display: "flex",
@@ -451,15 +474,21 @@ export function TicketCard({
               border: "1px dashed var(--k-border)",
               fontFamily: "var(--k-font-mono)",
             }}
+            title={t("ticketCard.groupedTooltip", { count: groupCount - 1 })}
           >
             <Users style={{ width: 10, height: 10, flexShrink: 0 }} />
             + {groupCount - 1} {t("ticketCard.similares", "similares agrupados")}
           </span>
         )}
-        {ticket.group_id && groupCount <= 1 && (
-          <Users
-            style={{ width: 12, height: 12, color: "var(--k-text-tertiary)", flexShrink: 0 }}
-          />
+        {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount <= 1 && (
+          <span
+            style={{ display: "inline-flex", flexShrink: 0 }}
+            title={t("ticketCard.groupedAloneTooltip", "Este ticket pertenece a un grupo")}
+          >
+            <Users
+              style={{ width: 12, height: 12, color: "var(--k-text-tertiary)", flexShrink: 0 }}
+            />
+          </span>
         )}
 
         <div style={{ marginLeft: "auto", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
@@ -487,12 +516,39 @@ export function TicketCard({
                   fontSize: 11,
                   color: "var(--k-text-tertiary)",
                 }}
+                title={t("ticketCard.confidenceTooltip", "Confianza de la clasificación IA (0.00–1.00)")}
               >
                 {ticket.classification_confidence.toFixed(2)}
               </span>
             )}
         </div>
       </div>
+
+      {/* KAI-25 — historical context trigger (selected card only, when related history exists) */}
+      {selected && hasRelatedHistory && onOpenHistory && (
+        <div style={{ marginTop: 6 }}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenHistory(ticket.id);
+            }}
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: "var(--k-accent)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              textAlign: "left",
+              textDecoration: "underline",
+              textUnderlineOffset: 2,
+            }}
+          >
+            {t("ticketCard.viewRelatedHistory")}
+          </button>
+        </div>
+      )}
 
       {/* Hover quick actions */}
       {hovered && (onGroup || onEscalate) && (

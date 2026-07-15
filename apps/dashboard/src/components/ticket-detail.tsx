@@ -405,6 +405,11 @@ export function TicketDetail() {
     ? new Date(ticket.received_at).toLocaleString()
     : null;
 
+  // KAI-25 — historical tickets opened from the related-history drawer are
+  // resolved/auto_resolved and must render read-only: no reply/note input,
+  // no assign/correction actions in the header (see TicketHeader readOnly).
+  const isReadOnly = ticket.status === "resolved" || ticket.status === "auto_resolved";
+
   return (
     <div
       style={{
@@ -416,7 +421,7 @@ export function TicketDetail() {
         background: "var(--k-surface)",
       }}
     >
-      <TicketHeader ticket={ticket} />
+      <TicketHeader ticket={ticket} readOnly={isReadOnly} />
 
       {/* Scrollable body */}
       <div
@@ -595,8 +600,24 @@ export function TicketDetail() {
         )}
       </div>
 
-      {/* Fixed bottom reply bar */}
-      <ReplyBar onReplyQueued={appendOptimisticMessage} />
+      {/* Fixed bottom reply bar — hidden for read-only historical tickets */}
+      {isReadOnly ? (
+        <div
+          style={{
+            borderTop: "1px solid var(--k-border)",
+            padding: "10px 16px",
+            fontSize: 12,
+            color: "var(--k-text-tertiary)",
+            background: "var(--k-surface)",
+            textAlign: "center",
+            flexShrink: 0,
+          }}
+        >
+          {t("ticketDetail.readOnlyBanner")}
+        </div>
+      ) : (
+        <ReplyBar onReplyQueued={appendOptimisticMessage} />
+      )}
     </div>
   );
 }

@@ -35,9 +35,20 @@
     "slaMinutes_other": "{{count}}m",
     "similares": "similares agrupados",
     "priorityScoreTooltip": "Peso de prioridad",
-    "selectForGrouping": "Seleccionar para agrupar"
+    "slaTooltip": "SLA contractual según el plan del cliente",
+    "confidenceTooltip": "Confianza de la clasificación IA (0.00–1.00)",
+    "groupedTooltip_one": "Agrupado con {{count}} ticket similar",
+    "groupedTooltip_other": "Agrupado con {{count}} tickets similares",
+    "groupedAloneTooltip": "Este ticket pertenece a un grupo",
+    "selectForGrouping": "Seleccionar para agrupar",
+    "viewRelatedHistory": "Ver historial relacionado",
+    "emotionAggressive": "Agresivo",
+    "emotionFrustrated": "Frustrado",
+    "emotionNeutral": "Neutral",
+    "emotionPositive": "Positivo"
   },
   "prioritySla": {
+    "tooltip": "ANS operativo según la prioridad del ticket",
     "remainingHours": "{{count}}h restantes",
     "remainingMinutes": "{{count}}m restantes",
     "dueInHours": "Vence en {{count}}h",
@@ -295,12 +306,14 @@
     "deliveryFailed": "Error al enviar",
     "reconnectGmail": "Reconecta Gmail para reintentar",
     "internalNote": "Nota interna",
-    "statusReopened": "Reabierto"
+    "statusReopened": "Reabierto",
+    "readOnlyBanner": "Este ticket está resuelto. Se muestra en modo solo lectura."
   },
   "ticketHeader": {
     "assignToMe": "Asignar a mí",
     "assigning": "Asignando…",
-    "assigned": "Asignado"
+    "assigned": "Asignado",
+    "readOnlyBadge": "Solo lectura"
   },
   "replyBar": {
     "sending": "Enviando...",
@@ -440,5 +453,12 @@
     "assistantNoTicketBody": "Elige un ticket de la bandeja para conversar sobre él con el copiloto.",
     "assistantUnknownSender": "el cliente",
     "resizeHint": "Arrastra para redimensionar · doble clic para restablecer"
+  },
+  "relatedHistory": {
+    "title": "Historial relacionado",
+    "close": "Cerrar",
+    "empty": "No se encontraron casos similares previos",
+    "resolvedOn": "Resuelto el",
+    "ticketNumber": "Ticket #{{number}}"
   }
 }
