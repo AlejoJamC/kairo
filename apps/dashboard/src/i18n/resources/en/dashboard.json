@@ -35,10 +35,20 @@
     "slaMinutes_other": "{{count}}m",
     "similares": "similar grouped",
     "priorityScoreTooltip": "Priority weight",
+    "slaTooltip": "Contractual SLA per the customer's plan",
+    "confidenceTooltip": "AI classification confidence (0.00–1.00)",
+    "groupedTooltip_one": "Grouped with {{count}} similar ticket",
+    "groupedTooltip_other": "Grouped with {{count}} similar tickets",
+    "groupedAloneTooltip": "This ticket belongs to a group",
     "selectForGrouping": "Select for grouping",
-    "viewRelatedHistory": "View related history"
+    "viewRelatedHistory": "View related history",
+    "emotionAggressive": "Aggressive",
+    "emotionFrustrated": "Frustrated",
+    "emotionNeutral": "Neutral",
+    "emotionPositive": "Positive"
   },
   "prioritySla": {
+    "tooltip": "Operational SLA based on ticket priority",
     "remainingHours": "{{count}}h remaining",
     "remainingMinutes": "{{count}}m remaining",
     "dueInHours": "Due in {{count}}h",

@@ -5,6 +5,7 @@ import { MoreHorizontal, RefreshCw } from "lucide-react";
 import { useTriageStore, type Ticket } from "@/stores/triage-store";
 import { TicketCard } from "@/components/ticket-card";
 import { RelatedHistoryDrawer, type RelatedHistoryItem } from "@/components/related-history-drawer";
+import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
 import { apiCall } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/auth-context";
@@ -177,7 +178,7 @@ function VirtualTicketList({
   groupCounts: Map<string, number>;
   onSelect: (id: string) => void;
   selectedTicketIds: Set<string>;
-  onToggleSelect: (id: string) => void;
+  onToggleSelect?: (id: string) => void;
   hasRelatedHistory: boolean;
   onOpenHistory: (id: string) => void;
 }) {
@@ -314,6 +315,7 @@ export function TicketList() {
 
   useEffect(() => {
     setSimilarTickets(null);
+    if (!TICKET_GROUPING_ENABLED) return;
     if (!selectedTicketId || dismissedSimilarTicketIds.has(selectedTicketId)) return;
 
     let cancelled = false;
@@ -695,8 +697,8 @@ export function TicketList() {
         </div>
       </div>
 
-      {/* KAI-24 — multi-select action bar */}
-      {selectedTicketIds.size >= 2 && (
+      {/* KAI-24 — multi-select action bar (behind VITE_FF_ENABLE_TICKET_GROUPING) */}
+      {TICKET_GROUPING_ENABLED && selectedTicketIds.size >= 2 && (
         <div style={{
           borderBottom: "1px solid var(--k-border-subtle)",
           background: "var(--k-accent-subtle)",
@@ -761,8 +763,8 @@ export function TicketList() {
         </div>
       )}
 
-      {/* KAI-24 — AI similarity suggestion callout */}
-      {similarTickets && similarTickets.length > 0 && (
+      {/* KAI-24 — AI similarity suggestion callout (behind VITE_FF_ENABLE_TICKET_GROUPING) */}
+      {TICKET_GROUPING_ENABLED && similarTickets && similarTickets.length > 0 && (
         <div style={{
           borderBottom: "1px solid var(--k-border-subtle)",
           background: "var(--k-accent-subtle)",
@@ -885,7 +887,7 @@ export function TicketList() {
           groupCounts={groupCounts}
           onSelect={selectTicket}
           selectedTicketIds={selectedTicketIds}
-          onToggleSelect={toggleTicketSelection}
+          onToggleSelect={TICKET_GROUPING_ENABLED ? toggleTicketSelection : undefined}
           hasRelatedHistory={!relatedHistoryLoading && relatedHistory.length > 0}
           onOpenHistory={handleOpenHistory}
         />
@@ -901,7 +903,7 @@ export function TicketList() {
               groupCount={ticket.group_id ? (groupCounts.get(ticket.group_id) ?? 1) : 0}
               multiSelectMode={selectedTicketIds.size > 0}
               isChecked={selectedTicketIds.has(ticket.id)}
-              onToggleSelect={toggleTicketSelection}
+              onToggleSelect={TICKET_GROUPING_ENABLED ? toggleTicketSelection : undefined}
               hasRelatedHistory={selectedTicketId === ticket.id && !relatedHistoryLoading && relatedHistory.length > 0}
               onOpenHistory={handleOpenHistory}
             />

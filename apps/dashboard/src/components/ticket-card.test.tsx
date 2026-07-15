@@ -86,6 +86,31 @@ describe("PrioritySlaBadge (via TicketCard)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Sentiment emoji tooltip — must go through i18n, not @kairo/ui's hardcoded
+// English ariaLabel (e.g. "Frustrated" showing up in a Spanish UI).
+// ---------------------------------------------------------------------------
+
+describe("TicketCard — sentiment emoji tooltip i18n", () => {
+  it("uses the translated emotion key as title/aria-label, not the raw English ariaLabel", () => {
+    const ticket = baseTicket({ sentiment: "frustrated" });
+    renderWithProviders(
+      React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
+    );
+    const emoji = screen.getByText("😩");
+    expect(emoji).toHaveAttribute("title", "ticketCard.emotionFrustrated:");
+    expect(emoji).toHaveAttribute("aria-label", "ticketCard.emotionFrustrated:");
+  });
+
+  it("falls back to the raw ariaLabel for an unrecognized sentiment (silent fallback, never throws)", () => {
+    const ticket = baseTicket({ sentiment: "unknown-value" });
+    renderWithProviders(
+      React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
+    );
+    expect(screen.queryByText("😩")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // KAI-25: historical context trigger — shown only on the SELECTED card when
 // the parent list found related history for it (no per-card fetch here).
 // ---------------------------------------------------------------------------
