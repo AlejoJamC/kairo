@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useTriageStore, type Ticket } from "./triage-store";
+import { useTriageStore, pickPreferredGroupId, type Ticket } from "./triage-store";
 
 // ---------------------------------------------------------------------------
 // KAI-24 — manual multi-select + grouping + AI similarity dismissal actions.
@@ -51,5 +51,33 @@ describe("triage-store — KAI-24 multi-select & grouping", () => {
     useTriageStore.getState().dismissSimilarSuggestion("t-1");
     expect(useTriageStore.getState().dismissedSimilarTicketIds.has("t-1")).toBe(true);
     expect(useTriageStore.getState().dismissedSimilarTicketIds.has("t-2")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KAI-108 — pickPreferredGroupId: reuse an existing group instead of always
+// creating a new one when grouping/accepting a similarity suggestion.
+// ---------------------------------------------------------------------------
+
+describe("pickPreferredGroupId", () => {
+  it("returns null when none of the given tickets belong to a group", () => {
+    const tickets = [ticket("t-1"), ticket("t-2"), ticket("t-3")];
+    expect(pickPreferredGroupId(tickets, ["t-1", "t-2"])).toBe(null);
+  });
+
+  it("returns the group_id of the first grouped ticket in list order", () => {
+    const tickets = [
+      ticket("t-1"),
+      ticket("t-2", { group_id: "group-a" }),
+      ticket("t-3", { group_id: "group-b" }),
+    ];
+    // t-2 comes before t-3 in the ids array, so group-a wins even though
+    // both t-2 and t-3 already belong to (different) groups.
+    expect(pickPreferredGroupId(tickets, ["t-1", "t-2", "t-3"])).toBe("group-a");
+  });
+
+  it("ignores tickets not present in the given id list", () => {
+    const tickets = [ticket("t-1", { group_id: "group-a" }), ticket("t-2")];
+    expect(pickPreferredGroupId(tickets, ["t-2"])).toBe(null);
   });
 });

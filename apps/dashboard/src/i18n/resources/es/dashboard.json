@@ -82,6 +82,8 @@
     "grouping": "Agrupando...",
     "cancelSelection": "Cancelar",
     "groupError": "No se pudo agrupar los tickets. Intenta de nuevo.",
+    "groupSuccess_one": "{{count}} ticket agrupado",
+    "groupSuccess_other": "{{count}} tickets agrupados",
     "similarSuggestion_one": "{{count}} ticket parece referirse al mismo problema. ¿Agruparlos?",
     "similarSuggestion_other": "{{count}} tickets parecen referirse al mismo problema. ¿Agruparlos?",
     "similarAccept": "Agrupar",

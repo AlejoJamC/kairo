@@ -21,6 +21,24 @@ function sortTickets(tickets: Ticket[]): Ticket[] {
 
 export type { Ticket };
 
+// ---------------------------------------------------------------------------
+// KAI-108 — pick the group_id to reuse when grouping tickets that might
+// already belong to a group, instead of always creating a brand-new one.
+// Iterates ticketIds in the given (selection/list) order and returns the
+// first non-null group_id found among those tickets; null if none of them
+// belong to a group yet (caller should create a new one in that case).
+// Exported as a small pure function so it's unit-testable without mocking
+// the API layer or rendering any component.
+// ---------------------------------------------------------------------------
+
+export function pickPreferredGroupId(tickets: Ticket[], ticketIds: string[]): string | null {
+  for (const id of ticketIds) {
+    const found = tickets.find((t) => t.id === id);
+    if (found?.group_id) return found.group_id;
+  }
+  return null;
+}
+
 export interface RecentTicket {
   id:            string;
   ticket_number: number;
