@@ -128,6 +128,7 @@ interface SimilarTicketRow {
   ticket_id: string;
   subject: string | null;
   similarity: number | null;
+  group_id?: string | null;
 }
 
 // KAI-24 — group name is a backend-only field (not shown anywhere in the

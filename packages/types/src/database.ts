@@ -2097,12 +2097,14 @@ export type Database = {
       find_similar_tickets: {
         Args: {
           p_account_id: string
+          p_exclude_same_group?: boolean
           p_limit?: number
           p_status_filter?: string
           p_threshold?: number
           p_ticket_id: string
         }
         Returns: {
+          group_id: string
           resolution_summary: string
           resolved_at: string
           similarity: number
