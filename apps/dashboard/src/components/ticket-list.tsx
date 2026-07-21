@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import { MoreHorizontal, RefreshCw } from "lucide-react";
-import { useTriageStore, type Ticket } from "@/stores/triage-store";
+import { useTriageStore, pickPreferredGroupId, type Ticket } from "@/stores/triage-store";
 import { TicketCard } from "@/components/ticket-card";
 import { RelatedHistoryDrawer, type RelatedHistoryItem } from "@/components/related-history-drawer";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
@@ -128,6 +128,7 @@ interface SimilarTicketRow {
   ticket_id: string;
   subject: string | null;
   similarity: number | null;
+  group_id?: string | null;
 }
 
 // KAI-24 — group name is a backend-only field (not shown anywhere in the
@@ -153,6 +154,32 @@ async function createGroupAndAssign(ticketIds: string[], name: string): Promise<
   if (!assignRes.ok) throw new Error("Failed to assign tickets to group");
 
   return group.id;
+}
+
+// KAI-108 — single entry point for both the manual action bar and the AI
+// similarity callout: when one of the tickets being grouped already belongs
+// to a group (preferredGroupId), reuse it instead of creating a new one —
+// this is what was causing duplicate ticket_groups rows on repeated accepts.
+// ticketIds here must already be filtered down to the tickets that actually
+// need assigning (callers skip ids already sitting in preferredGroupId); an
+// empty list with a preferredGroupId is a no-op success (all tickets were
+// already grouped together).
+async function assignToGroupOrCreate(
+  ticketIds: string[],
+  preferredGroupId: string | null,
+  name: string,
+): Promise<string> {
+  if (preferredGroupId) {
+    if (ticketIds.length > 0) {
+      const assignRes = await apiCall(`/api/v1/ticket-groups/${preferredGroupId}/tickets`, {
+        method: "POST",
+        body: JSON.stringify({ ticket_ids: ticketIds }),
+      });
+      if (!assignRes.ok) throw new Error("Failed to assign tickets to group");
+    }
+    return preferredGroupId;
+  }
+  return createGroupAndAssign(ticketIds, name);
 }
 
 // ---------------------------------------------------------------------------
@@ -268,6 +295,38 @@ export function TicketList() {
   const [similarTickets, setSimilarTickets] = useState<SimilarTicketRow[] | null>(null);
   const [groupingSimilar, setGroupingSimilar] = useState(false);
 
+  // KAI-108 — transient success feedback after any successful grouping
+  // action (manual bar or callout accept). Auto-hides after ~4s; also
+  // cleared when a new grouping action starts or the open ticket changes.
+  const [groupSuccessCount, setGroupSuccessCount] = useState<number | null>(null);
+  const groupSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearGroupSuccess() {
+    if (groupSuccessTimeoutRef.current) {
+      clearTimeout(groupSuccessTimeoutRef.current);
+      groupSuccessTimeoutRef.current = null;
+    }
+    setGroupSuccessCount(null);
+  }
+
+  function showGroupSuccess(count: number) {
+    if (groupSuccessTimeoutRef.current) clearTimeout(groupSuccessTimeoutRef.current);
+    setGroupSuccessCount(count);
+    groupSuccessTimeoutRef.current = setTimeout(() => {
+      setGroupSuccessCount(null);
+      groupSuccessTimeoutRef.current = null;
+    }, 4000);
+  }
+
+  // Clear the success banner when the open ticket changes, and on unmount.
+  useEffect(() => {
+    clearGroupSuccess();
+    return () => {
+      if (groupSuccessTimeoutRef.current) clearTimeout(groupSuccessTimeoutRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTicketId]);
+
   // KAI-25 — historical context drawer: up to 3 past resolved tickets related
   // to the currently selected ticket.
   const [relatedHistory, setRelatedHistory] = useState<RelatedHistoryItem[]>([]);
@@ -324,7 +383,26 @@ export function TicketList() {
       .then((res) => (res.ok ? res.json() : null))
       .then((body: { data?: SimilarTicketRow[]; degraded?: boolean } | null) => {
         if (cancelled || !body || body.degraded || !body.data || body.data.length === 0) return;
-        setSimilarTickets(body.data);
+
+        // KAI-108 GAP 2 — the /similar endpoint doesn't exclude tickets that
+        // are already in the same group as the one currently open, so filter
+        // those out client-side. Read fresh state via getState() (not the
+        // `tickets` closure) so this effect doesn't need `tickets` in its
+        // deps — that would refetch on every realtime ticket update — and
+        // so the check always uses the group_id as of response time, not a
+        // stale value captured when the fetch started.
+        const state = useTriageStore.getState();
+        const currentTicket = state.tickets.find((t) => t.id === selectedTicketId);
+        const currentGroupId = currentTicket?.group_id ?? null;
+
+        const filtered = currentGroupId
+          ? body.data.filter((row) => {
+              const t = state.tickets.find((x) => x.id === row.ticket_id);
+              return !(t && t.group_id === currentGroupId);
+            })
+          : body.data;
+
+        setSimilarTickets(filtered.length > 0 ? filtered : null);
       })
       .catch(() => {});
 
@@ -397,13 +475,23 @@ export function TicketList() {
   async function handleGroupSelected() {
     if (grouping || selectedTicketIds.size < 2) return;
     setGroupError(null);
+    clearGroupSuccess();
     setGrouping(true);
     try {
+      // Insertion order == list order for a Set built via toggleTicketSelection.
       const ids = Array.from(selectedTicketIds);
+      const preferredGroupId = pickPreferredGroupId(tickets, ids);
+      // KAI-108 GAP 1 — reuse an existing group instead of always creating a
+      // new one. When some of the selected tickets already share a group,
+      // only assign the ones that aren't in it yet (no redundant re-assign).
+      const idsToAssign = preferredGroupId
+        ? ids.filter((id) => tickets.find((t) => t.id === id)?.group_id !== preferredGroupId)
+        : ids;
       const first = tickets.find((t) => t.id === ids[0]);
-      const groupId = await createGroupAndAssign(ids, deriveGroupName(first?.subject));
+      const groupId = await assignToGroupOrCreate(idsToAssign, preferredGroupId, deriveGroupName(first?.subject));
       setTicketsGroup(ids, groupId);
       clearTicketSelection();
+      showGroupSuccess(ids.length);
     } catch {
       setGroupError(t("ticketList.groupError", "No se pudo agrupar los tickets. Intenta de nuevo."));
     } finally {
@@ -414,13 +502,27 @@ export function TicketList() {
   async function handleAcceptSimilar() {
     if (!selectedTicketId || !similarTickets || groupingSimilar) return;
     setGroupError(null);
+    clearGroupSuccess();
     setGroupingSimilar(true);
     try {
       const current = tickets.find((t) => t.id === selectedTicketId);
+      // KAI-108 GAP 1 — reuse the current ticket's existing group (if any)
+      // instead of always creating a new one; this was the root cause of the
+      // duplicate-group bug (repeated accepts kept spinning up fresh groups).
+      const preferredGroupId = current?.group_id ?? null;
       const ids = [selectedTicketId, ...similarTickets.map((s) => s.ticket_id)];
-      const groupId = await createGroupAndAssign(ids, deriveGroupName(current?.subject));
+      const idsToAssign = preferredGroupId
+        ? ids.filter((id) => tickets.find((t) => t.id === id)?.group_id !== preferredGroupId)
+        : ids;
+      const groupId = await assignToGroupOrCreate(idsToAssign, preferredGroupId, deriveGroupName(current?.subject));
       setTicketsGroup(ids, groupId);
       setSimilarTickets(null);
+      // KAI-108 GAP 5 — mark this ticket's suggestion as handled for the
+      // session immediately, so the callout can't reappear before realtime
+      // propagation catches up (the /similar backend doesn't exclude
+      // same-group tickets yet).
+      dismissSimilarSuggestion(selectedTicketId);
+      showGroupSuccess(ids.length);
     } catch {
       setGroupError(t("ticketList.groupError", "No se pudo agrupar los tickets. Intenta de nuevo."));
     } finally {
@@ -746,6 +848,20 @@ export function TicketList() {
               {t("ticketList.cancelSelection")}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* KAI-108 — grouping success banner (manual selection or AI-suggested accept) */}
+      {groupSuccessCount !== null && (
+        <div style={{
+          borderBottom: "1px solid var(--k-border-subtle)",
+          background: "#ECFDF5",
+          padding: "5px 14px",
+          fontSize: 11,
+          fontFamily: "var(--k-font-mono)",
+          color: "#065F46",
+        }}>
+          {t("ticketList.groupSuccess", { count: groupSuccessCount })}
         </div>
       )}
 

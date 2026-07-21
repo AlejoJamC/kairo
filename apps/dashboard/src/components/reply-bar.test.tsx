@@ -1,6 +1,6 @@
 import * as React from "react";
 import { JSDOM } from "jsdom";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReplyBar } from "./reply-bar";
@@ -150,7 +150,10 @@ describe("ReplyBar", () => {
 
     const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
     await userEvent.type(composer, "All set, this is now resolved!");
-    await userEvent.click(screen.getByRole("button", { name: "replyBar.sendAndResolve" }));
+    // "Send & Resolve" lives inside the send split-button's dropdown now.
+    await userEvent.click(screen.getByRole("button", { name: "replyBar.sendOptionsLabel" }));
+    const sendMenu = within(await screen.findByTestId("send-split-menu"));
+    await userEvent.click(sendMenu.getByRole("button", { name: "replyBar.sendAndResolve" }));
 
     await waitFor(() => expect(apiCallMock).toHaveBeenCalledTimes(1));
     const [, options] = apiCallMock.mock.calls[0] as [string, { body: string }];
@@ -159,6 +162,28 @@ describe("ReplyBar", () => {
     expect(await screen.findByText("replyBar.sendSuccess")).toBeInTheDocument();
     // No separate PATCH /status round-trip — a single reply call carries the result.
     expect(apiCallMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("'Resolver' in the send split-button PATCHes status only — never calls /reply", async () => {
+    apiCallMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ticket: { status: "resolved" } }),
+    });
+
+    renderWithProviders(<ReplyBar />);
+    useTriageStore.getState().selectTicket("ticket-1");
+
+    const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
+    await userEvent.type(composer, "Draft not sent");
+    await userEvent.click(screen.getByRole("button", { name: "replyBar.sendOptionsLabel" }));
+    const sendMenu = within(await screen.findByTestId("send-split-menu"));
+    await userEvent.click(sendMenu.getByRole("button", { name: "replyBar.actionResolver" }));
+
+    await waitFor(() => expect(apiCallMock).toHaveBeenCalledTimes(1));
+    const [url, options] = apiCallMock.mock.calls[0] as [string, { method: string; body: string }];
+    expect(url).toContain("/status");
+    expect(options.method).toBe("PATCH");
+    expect(JSON.parse(options.body)).toEqual({ status: "resolved" });
   });
 
   it("shows the no-Gmail-integration error using the response error code", async () => {

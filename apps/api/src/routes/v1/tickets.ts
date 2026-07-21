@@ -306,12 +306,15 @@ tickets.get("/:id/similar", async (c) => {
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
-  // Call pgvector RPC — degrade gracefully if extension/function not yet deployed
+  // Call pgvector RPC — degrade gracefully if extension/function not yet deployed.
+  // p_exclude_same_group: suggestions are for grouping, so tickets already in
+  // the caller's group must never come back (KAI-108).
   const { data, error } = await supabase.rpc("find_similar_tickets", {
     p_ticket_id: id,
     p_account_id: ctx.accountId,
     p_limit: limit,
     p_threshold: SIMILAR_TICKETS_THRESHOLD,
+    p_exclude_same_group: true,
   });
 
   if (error) {

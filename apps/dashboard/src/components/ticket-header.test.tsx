@@ -1,6 +1,6 @@
 import * as React from "react";
 import { screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderWithProviders } from "@/test/render-with-providers";
 import type { Ticket } from "@kairo/types";
 
@@ -8,6 +8,11 @@ import type { Ticket } from "@kairo/types";
 // KAI-25: TicketHeader readOnly mode — hides mutation actions (assign,
 // correction) for historical tickets opened from the related-history
 // drawer, replacing the "Asignar a mí" button with a read-only badge.
+//
+// The "Asignar a mí" button is also gated by the build-time
+// VITE_FF_ENABLE_ASSIGN_TO_ME flag (default OFF) — the flag is read once at
+// module load, so each case that needs a specific value calls
+// vi.resetModules() and re-imports after stubbing the env var.
 // ---------------------------------------------------------------------------
 
 vi.mock("react-i18next", () => ({
@@ -34,8 +39,6 @@ vi.mock("./correction-dialog", () => ({
     open ? React.createElement("div", { "data-testid": "correction-dialog" }) : null,
 }));
 
-const { TicketHeader } = await import("./ticket-header");
-
 function baseTicket(overrides: Partial<Ticket> = {}): Ticket {
   return {
     id: "t-1",
@@ -50,18 +53,42 @@ function baseTicket(overrides: Partial<Ticket> = {}): Ticket {
   } as unknown as Ticket;
 }
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("TicketHeader — read-only mode (KAI-25)", () => {
-  it("shows assign button and correction trigger by default", () => {
+  it("hides assign button by default (VITE_FF_ENABLE_ASSIGN_TO_ME unset), still shows correction trigger", async () => {
+    vi.resetModules();
+    const { TicketHeader } = await import("./ticket-header");
     renderWithProviders(React.createElement(TicketHeader, { ticket: baseTicket() }));
-    expect(screen.getByText("Asignar a mí")).toBeInTheDocument();
+    expect(screen.queryByText("Asignar a mí")).not.toBeInTheDocument();
     expect(screen.getByText("correction.triggerLabel")).toBeInTheDocument();
     expect(screen.queryByText("ticketHeader.readOnlyBadge")).not.toBeInTheDocument();
   });
 
-  it("hides assign button and correction trigger, shows read-only badge, when readOnly", () => {
+  it("shows the assign button when VITE_FF_ENABLE_ASSIGN_TO_ME=true", async () => {
+    vi.stubEnv("VITE_FF_ENABLE_ASSIGN_TO_ME", "true");
+    vi.resetModules();
+    const { TicketHeader } = await import("./ticket-header");
+    renderWithProviders(React.createElement(TicketHeader, { ticket: baseTicket() }));
+    expect(screen.getByText("Asignar a mí")).toBeInTheDocument();
+  });
+
+  it("hides assign button and correction trigger, shows read-only badge, when readOnly (flag on or off)", async () => {
+    vi.stubEnv("VITE_FF_ENABLE_ASSIGN_TO_ME", "true");
+    vi.resetModules();
+    const { TicketHeader } = await import("./ticket-header");
     renderWithProviders(React.createElement(TicketHeader, { ticket: baseTicket(), readOnly: true }));
     expect(screen.queryByText("Asignar a mí")).not.toBeInTheDocument();
     expect(screen.queryByText("correction.triggerLabel")).not.toBeInTheDocument();
     expect(screen.getByText("ticketHeader.readOnlyBadge")).toBeInTheDocument();
+  });
+
+  it("still shows the 'Asignado' badge for an already-assigned ticket even when the flag is off", async () => {
+    vi.resetModules();
+    const { TicketHeader } = await import("./ticket-header");
+    renderWithProviders(React.createElement(TicketHeader, { ticket: baseTicket({ assigned_to: "user-1" }) }));
+    expect(screen.getByText("Asignado")).toBeInTheDocument();
   });
 });

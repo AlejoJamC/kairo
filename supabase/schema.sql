@@ -401,7 +401,7 @@ $$;
 ALTER FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extensions"."vector", "p_account_id" "uuid", "p_limit" integer) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer DEFAULT 5, "p_threshold" double precision DEFAULT 0.75, "p_status_filter" "text" DEFAULT NULL::"text") RETURNS TABLE("ticket_id" "uuid", "subject" "text", "resolved_at" timestamp with time zone, "resolution_summary" "text", "ticket_number" bigint, "similarity" double precision)
+CREATE OR REPLACE FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer DEFAULT 5, "p_threshold" double precision DEFAULT 0.75, "p_status_filter" "text" DEFAULT NULL::"text", "p_exclude_same_group" boolean DEFAULT false) RETURNS TABLE("ticket_id" "uuid", "subject" "text", "resolved_at" timestamp with time zone, "resolution_summary" "text", "ticket_number" bigint, "similarity" double precision, "group_id" "uuid")
     LANGUAGE "sql" STABLE
     SET "search_path" TO 'public', 'extensions'
     AS $$
@@ -411,19 +411,25 @@ CREATE OR REPLACE FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid",
     t.resolved_at,
     t.resolution_summary,
     t.ticket_number,
-    1 - (t.embedding <=> (SELECT embedding FROM public.tickets WHERE id = p_ticket_id)) AS similarity
+    1 - (t.embedding <=> (SELECT embedding FROM public.tickets WHERE id = p_ticket_id)) AS similarity,
+    t.group_id
   FROM public.tickets t
   WHERE t.account_id = p_account_id
     AND t.id         <> p_ticket_id
     AND t.embedding  IS NOT NULL
     AND (p_status_filter IS NULL OR t.status = p_status_filter)
+    AND (
+      NOT p_exclude_same_group
+      OR (SELECT group_id FROM public.tickets WHERE id = p_ticket_id) IS NULL
+      OR t.group_id IS DISTINCT FROM (SELECT group_id FROM public.tickets WHERE id = p_ticket_id)
+    )
     AND 1 - (t.embedding <=> (SELECT embedding FROM public.tickets WHERE id = p_ticket_id)) >= p_threshold
   ORDER BY similarity DESC
   LIMIT p_limit;
 $$;
 
 
-ALTER FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text", "p_exclude_same_group" boolean) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_classification_accuracy"("p_account_id" "uuid", "p_window" "text" DEFAULT '30d'::"text") RETURNS "jsonb"
@@ -3064,9 +3070,9 @@ GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extension
 
 
 
-GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text", "p_exclude_same_group" boolean) TO "anon";
+GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text", "p_exclude_same_group" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text", "p_exclude_same_group" boolean) TO "service_role";
 
 
 
