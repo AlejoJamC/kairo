@@ -6,6 +6,13 @@ import { CorrectionDialog } from "@/components/correction-dialog";
 import type { CorrectionFields } from "@/components/correction-dialog";
 import { apiCall } from "@/lib/api-client";
 
+// VITE_FF_ENABLE_ASSIGN_TO_ME — OFF unless exactly "true"; safe unset.
+function isFlagEnabled(value: string | undefined): boolean {
+  return value === "true";
+}
+
+const assignToMeEnabled = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ASSIGN_TO_ME);
+
 // ---------------------------------------------------------------------------
 // Priority badge
 // ---------------------------------------------------------------------------
@@ -225,7 +232,7 @@ export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
         >
           {t("ticketHeader.readOnlyBadge")}
         </span>
-      ) : (
+      ) : !isAssigned && !assignToMeEnabled ? null : (
         <button
           type="button"
           disabled={assigning || isAssigned}
