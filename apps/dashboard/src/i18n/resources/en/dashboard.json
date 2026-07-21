@@ -325,6 +325,7 @@
     "errorGeneric": "Failed to send. Please try again.",
     "errorTokenExpired": "Your Gmail session expired. Reconnect your account in Settings.",
     "errorNoGmail": "No active Gmail integration found for this ticket.",
+    "sendOptionsLabel": "More send options",
     "aiBadge": "AI DRAFT",
     "aiDraftSource": "generated from similar cases + KB",
     "regenerate": "Regenerate",

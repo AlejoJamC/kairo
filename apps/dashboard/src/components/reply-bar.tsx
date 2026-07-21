@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Paperclip, Send, X, Zap, RefreshCw, Lock, AlertTriangle } from "lucide-react";
+import { Paperclip, Send, X, Zap, RefreshCw, Lock, AlertTriangle, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
 import { useTriageStore } from "@/stores/triage-store";
@@ -84,6 +84,9 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const [actionLoading, setActionLoading] = React.useState<TicketAction | null>(null);
   const [textareaHeight, setTextareaHeight] = React.useState(80);
   const dragRef = React.useRef<{ startY: number; startHeight: number } | null>(null);
+  const [sendMenuOpen, setSendMenuOpen] = React.useState(false);
+  const [resolving, setResolving] = React.useState(false);
+  const sendMenuRef = React.useRef<HTMLDivElement>(null);
 
   // After a reply moves the ticket out of triage, clear the center view back to
   // the empty "select a ticket" state after a short, deliberate delay — long
@@ -99,6 +102,21 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       if (deselectTimerRef.current) clearTimeout(deselectTimerRef.current);
     };
   }, [selectedTicketId]);
+
+  // Send split-button menu — click-outside / Escape to close.
+  React.useEffect(() => {
+    if (!sendMenuOpen) return;
+    function onDown(e: MouseEvent) {
+      if (sendMenuRef.current && !sendMenuRef.current.contains(e.target as Node)) setSendMenuOpen(false);
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setSendMenuOpen(false); }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [sendMenuOpen]);
 
   // ---------------------------------------------------------------------------
   // Escalation inline flow (KAI-221)
@@ -277,6 +295,17 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     setActionLoading(action);
     await patchStatus(ACTION_CONFIG[action].status);
     setActionLoading(null);
+  }
+
+  // "Resolver" option in the send split-button — same status-only resolve as
+  // the Resolver lifecycle action (patchStatus), just reached from the send
+  // menu instead of the row above the composer. Never sends an email.
+  async function handleResolveOnly() {
+    if (!selectedTicketId || resolving) return;
+    setSendMenuOpen(false);
+    setResolving(true);
+    await patchStatus("resolved");
+    setResolving(false);
   }
 
   // ---------------------------------------------------------------------------
@@ -874,8 +903,9 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             {sending ? t("replyBar.sendingNote", "Saving…") : t("replyBar.sendNote", "Add note")}
           </button>
         ) : (
-          /* Reply mode: plain send + send & resolve */
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          /* Reply mode: send split-button — primary "Enviar", dropdown has
+             "Enviar y resolver" and "Resolver" (status-only, no email). */
+          <div ref={sendMenuRef} style={{ position: "relative", display: "flex" }}>
             <button
               type="button"
               disabled={!canSend}
@@ -886,12 +916,13 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
                 gap: 5,
                 fontSize: 12,
                 fontWeight: 500,
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid var(--k-border)",
-                background: "white",
-                color: canSend ? "var(--k-text-secondary)" : "var(--k-text-tertiary)",
+                padding: "6px 14px",
+                borderRadius: "6px 0 0 6px",
+                border: "none",
+                background: canSend ? "var(--k-accent)" : "var(--k-border)",
+                color: canSend ? "white" : "var(--k-text-tertiary)",
                 cursor: canSend ? "pointer" : "not-allowed",
+                transition: "background 0.1s ease",
               }}
             >
               <Send style={{ width: 12, height: 12 }} />
@@ -901,25 +932,92 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             <button
               type="button"
               disabled={!canSend}
-              onClick={() => handleSend(true)}
-              aria-label={t("replyBar.sendAndResolve", "Send & Resolve")}
+              onClick={() => setSendMenuOpen((v) => !v)}
+              aria-label={t("replyBar.sendOptionsLabel", "More send options")}
+              aria-expanded={sendMenuOpen}
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 5,
-                fontSize: 12,
-                fontWeight: 500,
-                padding: "6px 14px",
-                borderRadius: 6,
-                border: "none",
+                justifyContent: "center",
+                width: 26,
+                padding: 0,
+                borderRadius: "0 6px 6px 0",
+                borderLeft: canSend ? "1px solid rgba(255,255,255,0.3)" : "1px solid var(--k-border)",
+                borderTop: "none",
+                borderRight: "none",
+                borderBottom: "none",
                 background: canSend ? "var(--k-accent)" : "var(--k-border)",
                 color: canSend ? "white" : "var(--k-text-tertiary)",
                 cursor: canSend ? "pointer" : "not-allowed",
                 transition: "background 0.1s ease",
               }}
             >
-              {sending ? t("replyBar.sending") : t("replyBar.sendAndResolve", "Send & Resolve")}
+              <ChevronDown style={{ width: 13, height: 13 }} />
             </button>
+
+            {sendMenuOpen && (
+              <div
+                data-testid="send-split-menu"
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 6px)",
+                  right: 0,
+                  minWidth: 180,
+                  background: "white",
+                  border: "1px solid var(--k-border)",
+                  borderRadius: 8,
+                  boxShadow: "0 4px 16px rgba(9,9,11,0.12)",
+                  overflow: "hidden",
+                  zIndex: 20,
+                }}
+              >
+                <button
+                  type="button"
+                  disabled={!canSend}
+                  onClick={() => { setSendMenuOpen(false); handleSend(true); }}
+                  style={{
+                    display: "flex",
+                    width: "100%",
+                    alignItems: "center",
+                    padding: "8px 12px",
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: canSend ? "var(--k-text-primary)" : "var(--k-text-tertiary)",
+                    background: "none",
+                    border: "none",
+                    borderBottom: "1px solid var(--k-border-subtle)",
+                    cursor: canSend ? "pointer" : "not-allowed",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-surface-2)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                >
+                  {t("replyBar.sendAndResolve", "Send & Resolve")}
+                </button>
+                <button
+                  type="button"
+                  disabled={resolving}
+                  onClick={handleResolveOnly}
+                  style={{
+                    display: "flex",
+                    width: "100%",
+                    alignItems: "center",
+                    padding: "8px 12px",
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: resolving ? "var(--k-text-tertiary)" : "var(--k-text-primary)",
+                    background: "none",
+                    border: "none",
+                    cursor: resolving ? "wait" : "pointer",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => { if (!resolving) e.currentTarget.style.background = "var(--k-surface-2)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                >
+                  {resolving ? "…" : t(ACTION_CONFIG.resolver.labelKey, ACTION_CONFIG.resolver.defaultLabel)}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
