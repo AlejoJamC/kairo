@@ -1,13 +1,17 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Mail, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
 import { TicketHeader } from "./ticket-header";
+import { isTriageActive } from "./ticket-list";
 import { useTriageStore } from "@/stores/triage-store";
 import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
 import { getLandingUrl } from "@/lib/api-client";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
+
+// Delay before clearing the selection once the open ticket leaves the active queue.
+const CLEAR_AFTER_LEAVING_ACTIVE_MS = 2500;
 
 // ---------------------------------------------------------------------------
 // KAI-168 — operational SLA (by ticket priority) progress bar. Shown below
@@ -374,10 +378,45 @@ function MessageCard({ message }: { message: ThreadMessage }) {
 
 export function TicketDetail() {
   const { t } = useTranslation("dashboard");
-  const { tickets, selectedTicketId } = useTriageStore();
+  const { tickets, selectedTicketId, selectTicket } = useTriageStore();
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
 
   const { messages, loading: threadLoading, appendOptimisticMessage } = useTicketThread(ticket?.id ?? null);
+
+  // KAI-25 — resolved/auto_resolved tickets render read-only (no reply/note input).
+  const isReadOnly = ticket ? ticket.status === "resolved" || ticket.status === "auto_resolved" : false;
+
+  // Auto-clear the selection on an active->inactive transition for this same
+  // ticket (not on tickets already inactive when opened, e.g. browsing Resuelto).
+  // Lives here, not in ReplyBar, because ReplyBar unmounts the instant isReadOnly
+  // flips true, which would cancel a timer scheduled from inside it.
+  const prevActiveRef = useRef<{ ticketId: string | null; active: boolean }>({ ticketId: null, active: false });
+  const deselectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const prev = prevActiveRef.current;
+    const active = ticket ? isTriageActive(ticket.status) : false;
+    const justLeftActiveView = ticket !== null && prev.ticketId === ticket.id && prev.active && !active;
+
+    if (justLeftActiveView && ticket) {
+      const ticketId = ticket.id;
+      if (deselectTimerRef.current) clearTimeout(deselectTimerRef.current);
+      deselectTimerRef.current = setTimeout(() => {
+        if (useTriageStore.getState().selectedTicketId === ticketId) {
+          selectTicket(null);
+        }
+      }, CLEAR_AFTER_LEAVING_ACTIVE_MS);
+    }
+
+    prevActiveRef.current = { ticketId: ticket?.id ?? null, active };
+  }, [ticket, selectTicket]);
+
+  // Cancel a pending auto-clear when navigating away from this ticket, or on unmount.
+  useEffect(() => {
+    return () => {
+      if (deselectTimerRef.current) clearTimeout(deselectTimerRef.current);
+    };
+  }, [ticket?.id]);
 
   if (!ticket) {
     return (
@@ -404,11 +443,6 @@ export function TicketDetail() {
   const receivedDate = ticket.received_at
     ? new Date(ticket.received_at).toLocaleString()
     : null;
-
-  // KAI-25 — historical tickets opened from the related-history drawer are
-  // resolved/auto_resolved and must render read-only: no reply/note input,
-  // no assign/correction actions in the header (see TicketHeader readOnly).
-  const isReadOnly = ticket.status === "resolved" || ticket.status === "auto_resolved";
 
   return (
     <div

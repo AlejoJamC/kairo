@@ -1,5 +1,5 @@
 import * as React from "react";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderWithProviders } from "@/test/render-with-providers";
 
@@ -76,19 +76,26 @@ const mockOperationalSlaConfig = {
   P3: { maxResponseSeconds: 86400, minResponseSeconds: 3600, riskAlertSeconds: 64800, escalationSeconds: 79200 },
 };
 
-vi.mock("@/stores/triage-store", () => ({
+const mockSelectTicket = vi.fn();
+
+vi.mock("@/stores/triage-store", () => {
   // Mirrors zustand's real selector API — PrioritySlaBar calls this with a
   // selector (`useTriageStore((s) => s.operationalSlaConfig)`) while
   // TicketDetail calls it with no args, so the mock must support both.
-  useTriageStore: (selector?: (state: Record<string, unknown>) => unknown) => {
+  // Also exposes `.getState()` as a static property (like the real zustand
+  // hook) since TicketDetail's KAI-177 auto-clear timer reads it directly.
+  const useTriageStore = (selector?: (state: Record<string, unknown>) => unknown) => {
     const state = {
       tickets: [mockTicket],
       selectedTicketId: "ticket-1",
       operationalSlaConfig: mockOperationalSlaConfig,
+      selectTicket: mockSelectTicket,
     };
     return selector ? selector(state) : state;
-  },
-}));
+  };
+  useTriageStore.getState = () => ({ selectedTicketId: "ticket-1" });
+  return { useTriageStore };
+});
 
 vi.mock("./reply-bar", () => ({
   ReplyBar: () => React.createElement("div", { "data-testid": "reply-bar" }),
@@ -234,5 +241,36 @@ describe("TicketDetail — read-only historical view (KAI-25)", () => {
     renderWithProviders(React.createElement(TicketDetail));
     expect(screen.queryByTestId("reply-bar")).not.toBeInTheDocument();
     expect(screen.getByText("ticketDetail.readOnlyBanner")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KAI-177: auto-clear the selection once the open ticket leaves the active
+// queue (resolved/awaiting_customer/auto_resolved), same delay as replying.
+// ---------------------------------------------------------------------------
+
+describe("TicketDetail — auto-clear after leaving the active view (KAI-177)", () => {
+  beforeEach(() => {
+    mockThreadResult = { messages: [], loading: false, error: null };
+    mockSelectTicket.mockClear();
+  });
+
+  it("clears the selection after the delay once an open ticket resolves", async () => {
+    mockTicket = { ...mockTicket, status: "open" };
+    const { rerender } = renderWithProviders(React.createElement(TicketDetail));
+
+    mockTicket = { ...mockTicket, status: "resolved" };
+    rerender(React.createElement(TicketDetail));
+
+    expect(mockSelectTicket).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockSelectTicket).toHaveBeenCalledWith(null), { timeout: 3000 });
+  });
+
+  it("does not auto-clear a ticket that was already resolved when opened", async () => {
+    mockTicket = { ...mockTicket, status: "resolved" };
+    renderWithProviders(React.createElement(TicketDetail));
+
+    await new Promise((resolve) => setTimeout(resolve, 2600));
+    expect(mockSelectTicket).not.toHaveBeenCalled();
   });
 });
