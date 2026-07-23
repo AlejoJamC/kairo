@@ -5,12 +5,9 @@ import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
 import { useTriageStore } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
 import { isFlagEnabled } from "@/lib/feature-flags";
-import { isTriageActive } from "@/components/ticket-list";
 import type { ThreadMessage } from "@/hooks/use-ticket-thread";
 
-// Same flag that gates the right-panel Escalation tab (ai-assistant.tsx) —
-// the quick "Escalar" action below must follow it too, so the two escalation
-// entry points can't disagree (button visible with the tab OFF, or vice versa).
+// Same flag that gates the right-panel Escalation tab (ai-assistant.tsx).
 const escalateTabEnabled = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB);
 
 // ---------------------------------------------------------------------------
@@ -67,7 +64,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const aiSuggestedReply = useTriageStore((s) => s.aiSuggestedReply);
   const clearSuggestedReply = useTriageStore((s) => s.clearSuggestedReply);
   const updateClassification = useTriageStore((s) => s.updateClassification);
-  const selectTicket = useTriageStore((s) => s.selectTicket);
 
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
   const currentStatus = ticket?.status ?? "open";
@@ -94,32 +90,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const [sendMenuOpen, setSendMenuOpen] = React.useState(false);
   const [resolving, setResolving] = React.useState(false);
   const sendMenuRef = React.useRef<HTMLDivElement>(null);
-
-  // After an action moves the ticket out of the active view (reply, resolve,
-  // ...), clear the center view back to the empty "select a ticket" state
-  // after a short, deliberate delay — long enough to register the success
-  // feedback, short enough to invite the next ticket instead of leaving a
-  // stale, already-closed thread on screen.
-  const CLEAR_AFTER_SEND_MS = 2500;
-  const deselectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function scheduleDeselect(ticketId: string) {
-    if (deselectTimerRef.current) clearTimeout(deselectTimerRef.current);
-    deselectTimerRef.current = setTimeout(() => {
-      // Only clear if we're still on the ticket that triggered this.
-      if (useTriageStore.getState().selectedTicketId === ticketId) {
-        selectTicket(null);
-      }
-    }, CLEAR_AFTER_SEND_MS);
-  }
-
-  // Cancel a pending auto-clear if the agent navigates to another ticket first,
-  // and on unmount — so we never yank them out of a freshly selected ticket.
-  React.useEffect(() => {
-    return () => {
-      if (deselectTimerRef.current) clearTimeout(deselectTimerRef.current);
-    };
-  }, [selectedTicketId]);
 
   // Send split-button menu — click-outside / Escape to close.
   React.useEffect(() => {
@@ -234,11 +204,8 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       setSendSuccess(true);
       setShowAiBanner(false);
       clearSuggestedReply();
-
-      // The ticket has left the triage queue (awaiting_customer / resolved).
-      // Clear the center view shortly after so the agent isn't left staring at
-      // a thread they already answered — invite the next ticket instead.
-      scheduleDeselect(selectedTicketId);
+      // The ticket has left the triage queue (awaiting_customer / resolved);
+      // TicketDetail clears the selection after a short delay once it notices.
     } catch {
       setSendError(t("replyBar.errorGeneric"));
     } finally {
@@ -291,18 +258,10 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         body: JSON.stringify({ status }),
       });
       if (res.ok) {
+        // Deselect-after-delay lives in TicketDetail, not here — this
+        // component unmounts the instant status goes read-only.
         const body = await res.json() as { ticket?: { status?: string } };
         if (body.ticket?.status) updateClassification(ticketId, body.ticket as never);
-
-        // Same as sending a reply: once the ticket leaves the active view
-        // (resolved/awaiting_customer/auto_resolved — see isTriageActive), it
-        // already disappears from the left panel; also clear the center/right
-        // panels after the same delay so a closed ticket isn't left pinned in
-        // the detail pane. Statuses that stay active (e.g. "in_progress" from
-        // Reconocer) don't trigger this — the ticket is still being worked.
-        if (body.ticket?.status && !isTriageActive(body.ticket.status)) {
-          scheduleDeselect(ticketId);
-        }
       }
     } catch {
       // silent — status is best-effort

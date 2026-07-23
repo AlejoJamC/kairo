@@ -186,33 +186,6 @@ describe("ReplyBar", () => {
     expect(JSON.parse(options.body)).toEqual({ status: "resolved" });
   });
 
-  it("resolving via the quick action clears the selected ticket after the same delay as replying", async () => {
-    apiCallMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ ticket: { status: "resolved" } }),
-    });
-
-    renderWithProviders(<ReplyBar />);
-    useTriageStore.getState().selectTicket("ticket-1");
-
-    const resolveButton = await screen.findByRole("button", { name: "replyBar.actionResolver" });
-    await userEvent.click(resolveButton);
-
-    await waitFor(() => expect(apiCallMock).toHaveBeenCalledTimes(1));
-    const [url, options] = apiCallMock.mock.calls[0] as [string, { method: string; body: string }];
-    expect(url).toContain("/status");
-    expect(options.method).toBe("PATCH");
-    expect(JSON.parse(options.body)).toEqual({ status: "resolved" });
-
-    // Resolving leaves the ticket selected right away — it clears only after
-    // the same deliberate delay used when a reply moves the ticket out of view.
-    expect(useTriageStore.getState().selectedTicketId).toBe("ticket-1");
-    await waitFor(
-      () => expect(useTriageStore.getState().selectedTicketId).toBeNull(),
-      { timeout: 3000 }
-    );
-  });
-
   it("shows the no-Gmail-integration error using the response error code", async () => {
     apiCallMock.mockResolvedValue({
       ok: false,
