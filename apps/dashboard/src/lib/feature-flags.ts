@@ -16,3 +16,14 @@ export function isFlagEnabled(value: string | undefined): boolean {
 export const TICKET_GROUPING_ENABLED = isFlagEnabled(
   import.meta.env.VITE_FF_ENABLE_TICKET_GROUPING
 );
+
+// A numeric flag falls back to defaultValue when unset, empty, or not a
+// positive integer. Never throws. Caller owns the env var and the default —
+// same division of labor as isFlagEnabled above.
+export function getNumericFlag(value: string | undefined, defaultValue: number): number {
+  const parsed = Number(value);
+  if (value === undefined || value === "" || !Number.isInteger(parsed) || parsed <= 0) {
+    return defaultValue;
+  }
+  return parsed;
+}
