@@ -8,10 +8,11 @@ import { ClientDirectory } from "@/components/client-directory";
 import { ProfileSettings } from "@/components/profile-settings";
 import { ChangePasswordSettings } from "@/components/change-password-settings";
 import { AwaitingCustomerView } from "@/components/awaiting-customer-view";
+import { ResolvedView } from "@/components/resolved-view";
 import { ChannelsSettings } from "@/components/channels-settings";
 import type { AppView } from "@/types";
 
-const COMING_SOON_VIEWS: AppView[] = ["in-progress", "resolved", "escalated"];
+const COMING_SOON_VIEWS: AppView[] = ["in-progress", "escalated"];
 
 function ComingSoon({ view }: { view: AppView }) {
   const { t } = useTranslation(["dashboard"]);
@@ -79,6 +80,7 @@ function AppContent() {
   const renderView = () => {
     if (activeView === "triage") return <Inbox />;
     if (activeView === "awaiting") return <AwaitingCustomerView onViewChange={setActiveView} />;
+    if (activeView === "resolved") return <ResolvedView onViewChange={setActiveView} />;
     if (activeView === "settings") return <ProfileSettings onViewChange={setActiveView} />;
     if (activeView === "change-password") return <ChangePasswordSettings onViewChange={setActiveView} />;
     if (activeView === "channels") return <ChannelsSettings onViewChange={setActiveView} />;

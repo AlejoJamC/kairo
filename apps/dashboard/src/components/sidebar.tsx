@@ -121,9 +121,9 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
   ];
 
   const getCount = (view: AppView): number => {
-    const status = VIEW_TO_STATUS[view];
-    if (!status || !counts) return 0;
-    return counts[status] ?? 0;
+    const statuses = VIEW_TO_STATUS[view];
+    if (!statuses || !counts) return 0;
+    return statuses.reduce((sum, status) => sum + (counts[status] ?? 0), 0);
   };
 
   const renderItem = (item: NavItem) => {

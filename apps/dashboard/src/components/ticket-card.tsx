@@ -122,6 +122,8 @@ function SlaBadge({ slaDate }: SlaBadgeProps) {
         borderRadius: 4,
         background: label.breached ? "#FEF2F2" : "#F4F4F5",
         color: label.breached ? "#DC2626" : "#71717A",
+        whiteSpace: "nowrap",
+        flexShrink: 0,
       }}
       title={t("ticketCard.slaTooltip", "SLA contractual según el plan del cliente")}
     >
@@ -173,6 +175,8 @@ function PrioritySlaBadge({ ticket }: { ticket: Ticket }) {
         fontWeight: 600,
         padding: "2px 6px",
         borderRadius: 4,
+        whiteSpace: "nowrap",
+        flexShrink: 0,
       }}
       title={t("prioritySla.tooltip", "ANS operativo según la prioridad del ticket")}
     >
@@ -473,11 +477,12 @@ export function TicketCard({
               borderRadius: 4,
               border: "1px dashed var(--k-border)",
               fontFamily: "var(--k-font-mono)",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
             }}
             title={t("ticketCard.groupedTooltip", { count: groupCount - 1 })}
           >
-            <Users style={{ width: 10, height: 10, flexShrink: 0 }} />
-            + {groupCount - 1} {t("ticketCard.similares", "similares agrupados")}
+            <Users style={{ width: 10, height: 10, flexShrink: 0 }} />+ {groupCount - 1}
           </span>
         )}
         {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount <= 1 && (

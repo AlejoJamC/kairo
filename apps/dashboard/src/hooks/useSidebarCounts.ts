@@ -1,17 +1,27 @@
 import { useState, useEffect } from "react";
 import { apiCall } from "@/lib/api-client";
+import { getNumericFlag } from "@/lib/feature-flags";
 import type { TicketStatus } from "@kairo/types";
 import type { AppView } from "@/types";
 
 export type SidebarCounts = Partial<Record<TicketStatus, number>>;
 
-// Maps each sidebar AppView to the ticket status bucket returned by the API.
+// KAI-177 — poll interval for the nav badge counts, in seconds. Default: 20
+// (unchanged from the previous hardcoded value). Override at build time with
+// VITE_FF_SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS.
+const SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS = getNumericFlag(
+  import.meta.env.VITE_FF_SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS,
+  20
+);
+
+// Maps each sidebar AppView to the ticket status bucket(s) returned by the API.
 // Views without a status mapping (in-progress, clients, settings, change-password) show no badge.
-export const VIEW_TO_STATUS: Partial<Record<AppView, TicketStatus>> = {
-  triage:      "open",
-  awaiting:    "awaiting_customer",
-  resolved:    "auto_resolved",
-  escalated:   "escalated",
+// "resolved" sums both terminal statuses shown in the Resuelto view (resolved + auto_resolved).
+export const VIEW_TO_STATUS: Partial<Record<AppView, TicketStatus[]>> = {
+  triage:      ["open"],
+  awaiting:    ["awaiting_customer"],
+  resolved:    ["resolved", "auto_resolved"],
+  escalated:   ["escalated"],
 };
 
 export function useSidebarCounts(): SidebarCounts | null {
@@ -32,7 +42,7 @@ export function useSidebarCounts(): SidebarCounts | null {
     };
 
     fetchCounts();
-    const interval = setInterval(fetchCounts, 20_000);
+    const interval = setInterval(fetchCounts, SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS * 1000);
 
     return () => {
       cancelled = true;
