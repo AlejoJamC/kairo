@@ -4,7 +4,13 @@ import { useTranslation } from "react-i18next";
 import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
 import { useTriageStore } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
+import { isFlagEnabled } from "@/lib/feature-flags";
 import type { ThreadMessage } from "@/hooks/use-ticket-thread";
+
+// Same flag that gates the right-panel Escalation tab (ai-assistant.tsx) —
+// the quick "Escalar" action below must follow it too, so the two escalation
+// entry points can't disagree (button visible with the tab OFF, or vice versa).
+const escalateTabEnabled = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB);
 
 // ---------------------------------------------------------------------------
 // Compose mode — "reply" sends to customer; "note" = internal-only
@@ -382,7 +388,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     : [];
 
   // Show escalate button only for statuses where escalation is valid
-  const canEscalate = !isNote && ["open", "in_progress", "reopened", "awaiting_customer"].includes(currentStatus);
+  const canEscalate = escalateTabEnabled && !isNote && ["open", "in_progress", "reopened", "awaiting_customer"].includes(currentStatus);
 
   // Accent / left stripe based on mode
   const modeAccentGradient = isNote
