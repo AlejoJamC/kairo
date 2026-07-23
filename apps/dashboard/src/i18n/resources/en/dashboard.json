@@ -154,6 +154,12 @@
     "openTicket": "View ticket",
     "ticketNumber": "#{{number}}"
   },
+  "resolvedView": {
+    "title": "Resolved",
+    "subtitle": "Closed tickets, shown in read-only mode.",
+    "empty": "No resolved tickets yet.",
+    "ticketNumber": "#{{number}}"
+  },
   "settings": {
     "title": "Profile Settings",
     "subtitle": "Manage your account information",
