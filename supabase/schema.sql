@@ -417,7 +417,10 @@ CREATE OR REPLACE FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid",
   WHERE t.account_id = p_account_id
     AND t.id         <> p_ticket_id
     AND t.embedding  IS NOT NULL
-    AND (p_status_filter IS NULL OR t.status = p_status_filter)
+    AND (
+      p_status_filter IS NULL
+      OR t.status = ANY(string_to_array(p_status_filter, ','))
+    )
     AND (
       NOT p_exclude_same_group
       OR (SELECT group_id FROM public.tickets WHERE id = p_ticket_id) IS NULL
