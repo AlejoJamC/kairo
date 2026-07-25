@@ -208,9 +208,16 @@ tickets.post("/:id/recalculate-score", async (c) => {
 
 // ---------------------------------------------------------------------------
 // GET /v1/tickets/:id/related-history — historically resolved similar tickets (KAI-21)
-// Primary: pgvector RPC find_similar_tickets filtered to status='resolved'
+// Primary: pgvector RPC find_similar_tickets filtered to final statuses
 // Fallback: full-text match on from_email or subject keywords when RPC unavailable
+//
+// KAI-108 — "resolved" and "auto_resolved" are both final states (the dashboard
+// unified them under the "Resuelto" aside entry and excludes both from triage),
+// so historical context must consider both. The RPC takes the list as a
+// comma-separated p_status_filter.
 // ---------------------------------------------------------------------------
+
+const RESOLVED_STATUSES = ["resolved", "auto_resolved"] as const;
 
 tickets.get("/:id/related-history", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
@@ -233,7 +240,7 @@ tickets.get("/:id/related-history", async (c) => {
     p_ticket_id: id,
     p_account_id: ctx.accountId,
     p_limit: 3,
-    p_status_filter: "resolved",
+    p_status_filter: RESOLVED_STATUSES.join(","),
   });
 
   if (!rpcError && rpcData && rpcData.length > 0) {
@@ -248,7 +255,7 @@ tickets.get("/:id/related-history", async (c) => {
     return c.json({ data: results });
   }
 
-  // Fallback: full-text — same sender OR shared subject words, resolved tickets only
+  // Fallback: full-text — same sender OR shared subject words, final-state tickets only
   const keywords = (ticket.subject ?? "")
     .split(/\s+/)
     .filter((w: string) => w.length > 3)
@@ -258,7 +265,7 @@ tickets.get("/:id/related-history", async (c) => {
     .from("tickets")
     .select("id, subject, resolved_at, resolution_summary, ticket_number")
     .eq("account_id", ctx.accountId)
-    .eq("status", "resolved")
+    .in("status", [...RESOLVED_STATUSES])
     .neq("id", id)
     .limit(3);
 

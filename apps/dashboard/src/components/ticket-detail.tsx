@@ -3,7 +3,7 @@ import { Mail, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
 import { TicketHeader } from "./ticket-header";
-import { isTriageActive } from "./ticket-list";
+import { isTriageActive } from "@/lib/triage-status";
 import { useTriageStore } from "@/stores/triage-store";
 import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
 import { getLandingUrl } from "@/lib/api-client";

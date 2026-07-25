@@ -67,6 +67,36 @@ describe("related-history response shape", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// KAI-108 — historical context must consider every final state, not just
+// 'resolved'. The route passes the list to the RPC as a comma-separated
+// p_status_filter (matched with string_to_array) and to the fallback query as
+// an .in() list. Same shape-mirror style as the tests above: these pin the
+// contract, they don't exercise the route.
+// ---------------------------------------------------------------------------
+
+describe("related-history final-state filter (KAI-108)", () => {
+  const RESOLVED_STATUSES = ["resolved", "auto_resolved"] as const;
+
+  it("passes both final states to the RPC as a comma-separated filter", () => {
+    expect(RESOLVED_STATUSES.join(",")).toBe("resolved,auto_resolved");
+  });
+
+  it("the comma-list predicate matches auto_resolved, not just resolved", () => {
+    // Mirrors: t.status = ANY(string_to_array(p_status_filter, ','))
+    const allowed = RESOLVED_STATUSES.join(",").split(",");
+    expect(allowed.includes("resolved")).toBe(true);
+    expect(allowed.includes("auto_resolved")).toBe(true);
+  });
+
+  it("does not let non-final statuses through", () => {
+    const allowed = RESOLVED_STATUSES.join(",").split(",");
+    for (const status of ["new", "in_progress", "awaiting_customer", "escalated"]) {
+      expect(allowed.includes(status)).toBe(false);
+    }
+  });
+});
+
 describe("related-history graceful degradation", () => {
   it("fallback returns empty array on RPC error, not a thrown exception", () => {
     const rpcError = { code: "42883", message: "function find_similar_tickets does not exist" };
