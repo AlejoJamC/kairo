@@ -5,7 +5,6 @@
 import { useRef, useState, useEffect } from "react";
 import {
   Inbox,
-  Activity,
   Clock,
   CircleCheck,
   ArrowUpCircle,
@@ -110,7 +109,6 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
   const mainNavItems: NavItem[] = [
     { icon: Inbox,         label: t("dashboard:sidebar.triage"),         view: "triage" },
     { icon: Clock,         label: t("dashboard:sidebar.pendingClient"),  view: "awaiting" },
-    { icon: Activity,      label: t("dashboard:sidebar.inProgress"),    view: "in-progress" },
     { icon: CircleCheck,   label: t("dashboard:sidebar.resolved"),       view: "resolved" },
     { icon: ArrowUpCircle, label: t("dashboard:sidebar.escalation"),     view: "escalated" },
   ];

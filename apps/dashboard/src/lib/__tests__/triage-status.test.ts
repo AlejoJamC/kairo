@@ -21,8 +21,8 @@ describe("isTriageActive", () => {
     }
   });
 
-  it("still shows escalated in the list (no view of its own yet)", () => {
-    expect(isTriageActive("escalated")).toBe(true);
+  it("drops escalated out of the queue — it has its own view (Escalado)", () => {
+    expect(isTriageActive("escalated")).toBe(false);
   });
 
   it("treats an unknown or missing status as active, never hiding a ticket", () => {
