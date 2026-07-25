@@ -1,7 +1,7 @@
-# Kairo — AI Support Cockpit for n8n Companies
+# Kairo — AI Support Cockpit for Support Teams
 
 ## What is Kairo
-Kairo is an AI-powered support cockpit that helps companies using n8n manage
+Kairo is an AI-powered support cockpit that helps support teams manage
 customer support more intelligently. It connects to Gmail, classifies incoming
 emails, and routes/responds based on learned behavior per client.
 

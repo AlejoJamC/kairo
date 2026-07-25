@@ -1,6 +1,6 @@
 # Kairo
 
-AI-powered support cockpit for n8n companies — classifies emails, routes tickets, and learns per-client behavior.
+AI-powered support cockpit for support teams — classifies emails, routes tickets, and learns per-client behavior.
 
 🇨🇴 [Versión en español](docs/README.es.md)
 

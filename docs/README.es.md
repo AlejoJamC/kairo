@@ -1,6 +1,6 @@
 # Kairo
 
-Cockpit de soporte con IA para empresas que usan n8n — clasifica correos, enruta tickets y aprende el comportamiento por cliente.
+Cockpit de soporte con IA para equipos de soporte — clasifica correos, enruta tickets y aprende el comportamiento por cliente.
 
 ## Stack
 

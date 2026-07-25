@@ -24,7 +24,7 @@ BEGIN
 
   -- Resolved ticket 1 — nodo HTTP
   UPDATE public.tickets
-  SET body_plain = E'Hola equipo de soporte,\n\nEstoy teniendo problemas con un flujo de n8n que deja de funcionar cada vez que intento conectar un nodo HTTP a nuestra API interna. El error que aparece en la consola es:\n\n  "Error: Request failed with status code 405 - Method Not Allowed"\n\nRevisé la URL y parece correcta, pero el nodo sigue fallando. ¿Pueden ayudarme a identificar qué está mal?\n\nGracias,\nEquipo Acme'
+  SET body_plain = E'Hola equipo de soporte,\n\nEstoy teniendo problemas con un flujo de automatización que deja de funcionar cada vez que intento conectar un nodo HTTP a nuestra API interna. El error que aparece en la consola es:\n\n  "Error: Request failed with status code 405 - Method Not Allowed"\n\nRevisé la URL y parece correcta, pero el nodo sigue fallando. ¿Pueden ayudarme a identificar qué está mal?\n\nGracias,\nEquipo Acme'
   WHERE user_id = v_user_id
     AND subject  = 'Error al conectar flujo con nodo HTTP'
     AND status   = 'resolved'

@@ -118,7 +118,7 @@ export const en = {
     testimonialQuote:
       '"We went from 40 minutes per ticket to 8. The workbench is the first time an AI in support feels useful instead of in the way."',
     testimonialName: "Valentina Castro",
-    testimonialRole: "Head of Support · n8n LATAM",
+    testimonialRole: "Head of Support · LATAM",
   },
   wizard: {
     title: "Welcome to Kairo",

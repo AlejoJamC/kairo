@@ -135,9 +135,9 @@ BEGIN
   ),
   (
     gen_random_uuid(), v_user_id,
-    'Resolución de errores en nodos HTTP de n8n',
-    E'## Errores comunes\n- **401 Unauthorized**: Revisar headers de autorización (Bearer token o API key).\n- **400 Bad Request**: Verificar que el método HTTP coincide (GET vs POST) y que el body está en formato JSON válido.\n- **Connection timeout**: Revisar URL del endpoint y si el servicio destino está activo.\n\n## Pasos de diagnóstico\n1. Abrir el nodo HTTP en n8n y hacer clic en **Test step**.\n2. Revisar la pestaña **Output** para ver el error exacto.\n3. Usar **curl** o Postman para descartar problemas de red.\n\n## Tips\n- Activar **Always Output Data** para ver errores aunque el nodo falle.\n- Usar el nodo **IF** para manejar respuestas de error de forma explícita.',
-    ARRAY['n8n', 'http', 'técnico', 'debugging'],
+    'Resolución de errores en nodos HTTP',
+    E'## Errores comunes\n- **401 Unauthorized**: Revisar headers de autorización (Bearer token o API key).\n- **400 Bad Request**: Verificar que el método HTTP coincide (GET vs POST) y que el body está en formato JSON válido.\n- **Connection timeout**: Revisar URL del endpoint y si el servicio destino está activo.\n\n## Pasos de diagnóstico\n1. Abrir el nodo HTTP en la herramienta de automatización y hacer clic en **Test step**.\n2. Revisar la pestaña **Output** para ver el error exacto.\n3. Usar **curl** o Postman para descartar problemas de red.\n\n## Tips\n- Activar **Always Output Data** para ver errores aunque el nodo falle.\n- Usar el nodo **IF** para manejar respuestas de error de forma explícita.',
+    ARRAY['automatización', 'http', 'técnico', 'debugging'],
     true
   ),
   (

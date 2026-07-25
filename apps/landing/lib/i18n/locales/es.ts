@@ -120,7 +120,7 @@ export const es: Translations = {
     testimonialQuote:
       '"Pasamos de 40 minutos por ticket a 8. La pizarra de trabajo es la primera vez que una IA en soporte se siente útil en lugar de un obstáculo."',
     testimonialName: "Valentina Castro",
-    testimonialRole: "Head of Support · n8n LATAM",
+    testimonialRole: "Head of Support · LATAM",
   },
   wizard: {
     title: "Bienvenido a Kairo",
