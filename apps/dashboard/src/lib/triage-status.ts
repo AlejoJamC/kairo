@@ -16,8 +16,8 @@ import type { TicketStatus } from "@kairo/types";
 type StatusBucket =
   // Worked from the triage list, and counted by the Triage badge.
   | "triage"
-  // Shown in the triage list (no view of its own yet) but counted by the
-  // Escalado badge, not by Triage. Deliberate exception, own domain.
+  // Has its own view (Escalado) and its own badge; out of the triage queue,
+  // same as "awaiting" below.
   | "escalated"
   // Has its own view and its own badge; out of the triage queue.
   | "awaiting"
@@ -44,7 +44,7 @@ const STATUS_BUCKET: Record<TicketStatus, StatusBucket> = {
 // toward hiding it.
 export function isTriageActive(status: string | null | undefined): boolean {
   const bucket = STATUS_BUCKET[status as TicketStatus] as StatusBucket | undefined;
-  return bucket !== "awaiting" && bucket !== "final";
+  return bucket !== "awaiting" && bucket !== "final" && bucket !== "escalated";
 }
 
 // Statuses the Triage badge counts. Excludes 'escalated' on purpose: it is a

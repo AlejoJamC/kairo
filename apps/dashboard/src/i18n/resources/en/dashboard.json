@@ -160,6 +160,12 @@
     "empty": "No resolved tickets yet.",
     "ticketNumber": "#{{number}}"
   },
+  "escalatedView": {
+    "title": "Escalated",
+    "subtitle": "Tickets that were escalated and need priority attention.",
+    "empty": "No escalated tickets right now.",
+    "ticketNumber": "#{{number}}"
+  },
   "settings": {
     "title": "Profile Settings",
     "subtitle": "Manage your account information",

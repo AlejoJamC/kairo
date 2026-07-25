@@ -160,6 +160,12 @@
     "empty": "Todavía no hay tickets resueltos.",
     "ticketNumber": "#{{number}}"
   },
+  "escalatedView": {
+    "title": "Escalados",
+    "subtitle": "Tickets que fueron escalados y requieren atención prioritaria.",
+    "empty": "No hay tickets escalados por ahora.",
+    "ticketNumber": "#{{number}}"
+  },
   "settings": {
     "title": "Configuración de Perfil",
     "subtitle": "Administra la información de tu cuenta",

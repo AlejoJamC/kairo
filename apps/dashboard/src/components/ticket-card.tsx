@@ -357,10 +357,10 @@ export function TicketCard({
         {ticket.ticket_number && (
           <span
             style={{
-              fontSize: 10,
+              fontSize: 11,
               fontFamily: "var(--k-font-mono)",
-              color: "var(--k-text-tertiary)",
-              fontWeight: 500,
+              color: "var(--k-text-primary)",
+              fontWeight: 700,
               letterSpacing: "0.02em",
             }}
           >
@@ -372,7 +372,7 @@ export function TicketCard({
           <span
             style={{
               ...typeBadgeStyle(ticket.ticket_type),
-              fontSize: 11,
+              fontSize: 10,
               fontFamily: "var(--k-font-mono)",
               padding: "2px 6px",
               borderRadius: 4,
@@ -398,7 +398,7 @@ export function TicketCard({
         <span
           style={{
             marginLeft: "auto",
-            fontSize: 11,
+            fontSize: 10,
             fontFamily: "var(--k-font-mono)",
             color: "var(--k-text-tertiary)",
           }}
@@ -410,7 +410,7 @@ export function TicketCard({
       {/* Row 2: subject */}
       <div
         style={{
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: 500,
           color: "var(--k-text-primary)",
           marginBottom: 8,
@@ -464,7 +464,6 @@ export function TicketCard({
         }}
       >
         <SlaBadge slaDate={ticket.sla_due_at} />
-        <PrioritySlaBadge ticket={ticket} />
         {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount > 1 && (
           <span
             style={{
@@ -497,6 +496,7 @@ export function TicketCard({
         )}
 
         <div style={{ marginLeft: "auto", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+          <PrioritySlaBadge ticket={ticket} />
           {ticket.priority_score !== null && ticket.priority_score !== undefined && (
             <span
               style={{
@@ -518,7 +518,7 @@ export function TicketCard({
               <span
                 style={{
                   fontFamily: "var(--k-font-mono)",
-                  fontSize: 11,
+                  fontSize: 10,
                   color: "var(--k-text-tertiary)",
                 }}
                 title={t("ticketCard.confidenceTooltip", "Confianza de la clasificación IA (0.00–1.00)")}
