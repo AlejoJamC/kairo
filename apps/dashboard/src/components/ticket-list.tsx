@@ -6,6 +6,7 @@ import { useTriageStore, pickPreferredGroupId, type Ticket } from "@/stores/tria
 import { TicketCard } from "@/components/ticket-card";
 import { RelatedHistoryDrawer, type RelatedHistoryItem } from "@/components/related-history-drawer";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
+import { isTriageActive } from "@/lib/triage-status";
 import { apiCall } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/auth-context";
@@ -44,15 +45,6 @@ const INITIAL_FILTERS: FilterState = {
   category: null,
   status: null,
 };
-
-// Statuses that are NOT part of the active triage queue: awaiting the customer,
-// or closed. They live in their own views, so they must leave the main triage
-// list (and its count) the moment a reply/resolve updates the store.
-const NON_TRIAGE_STATUSES = new Set(["awaiting_customer", "resolved", "auto_resolved"]);
-
-export function isTriageActive(status: string | null | undefined): boolean {
-  return !NON_TRIAGE_STATUSES.has(status ?? "");
-}
 
 function applyFilters(tickets: Ticket[], f: FilterState): Ticket[] {
   return tickets.filter((t) => {
