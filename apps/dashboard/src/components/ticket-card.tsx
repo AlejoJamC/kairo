@@ -464,7 +464,6 @@ export function TicketCard({
         }}
       >
         <SlaBadge slaDate={ticket.sla_due_at} />
-        <PrioritySlaBadge ticket={ticket} />
         {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount > 1 && (
           <span
             style={{
@@ -497,6 +496,7 @@ export function TicketCard({
         )}
 
         <div style={{ marginLeft: "auto", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+          <PrioritySlaBadge ticket={ticket} />
           {ticket.priority_score !== null && ticket.priority_score !== undefined && (
             <span
               style={{
