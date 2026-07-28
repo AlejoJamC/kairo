@@ -26,6 +26,12 @@ vi.mock("@/lib/api-client", () => ({
   apiCall: (...args: unknown[]) => apiCallMock(...args),
 }));
 
+// KAI-232: ReplyBar reads the current user to exclude self from the @mention
+// dropdown. These tests render it outside an AuthProvider.
+vi.mock("@/contexts/auth-context", () => ({
+  useAuth: () => ({ user: { id: "user-1" } }),
+}));
+
 vi.mock("./template-picker", () => ({
   TemplatePicker: ({
     children,
@@ -45,6 +51,25 @@ describe("ReplyBar", () => {
       isScanning: false,
       classifiedCount: 0,
     });
+  });
+
+  // KAI-232 / ADR-025 §8 — VITE_FF_ENABLE_INTERNAL_NOTES is unset in the test
+  // env, so this pins the kill-switch: with the flag OFF the composer shows no
+  // internal-notes surface at all, including the parts KAI-221 shipped
+  // unflagged (the reply/note segmented control and every note-mode control).
+  it("renders no internal-notes UI when the internal-notes flag is off", async () => {
+    renderWithProviders(<ReplyBar />);
+    useTriageStore.getState().selectTicket("ticket-1");
+
+    // The mode selector is gone entirely — no way to reach note mode.
+    expect(screen.queryByText(/replyBar\.modeNote/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/replyBar\.modeReply/i)).not.toBeInTheDocument();
+    // ...and none of the note-mode affordances render.
+    expect(screen.queryByText(/replyBar\.noteVisibilityHint/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/replyBar\.sendNote/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("mention-dropdown")).not.toBeInTheDocument();
+    // The reply composer itself is untouched.
+    expect(screen.getByPlaceholderText(/ticketDetail\.replyPlaceholder/i)).toBeInTheDocument();
   });
 
   it("auto-populates draft from aiSuggestedReply and clears store value", async () => {

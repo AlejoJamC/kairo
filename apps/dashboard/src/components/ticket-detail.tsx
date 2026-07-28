@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Mail, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
@@ -6,12 +6,17 @@ import { TicketHeader } from "./ticket-header";
 import { isTriageActive } from "@/lib/triage-status";
 import { useTriageStore } from "@/stores/triage-store";
 import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
+import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
+import { NoteBody } from "./triage/note-body";
 import { getLandingUrl } from "@/lib/api-client";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
 
 // Delay before clearing the selection once the open ticket leaves the active queue.
 const CLEAR_AFTER_LEAVING_ACTIVE_MS = 2500;
+
+// KAI-232 — how long a message stays ring-highlighted after being scrolled to.
+const HIGHLIGHT_DURATION_MS = 2000;
 
 // ---------------------------------------------------------------------------
 // KAI-168 — operational SLA (by ticket priority) progress bar. Shown below
@@ -191,22 +196,8 @@ function MessageCard({ message }: { message: ThreadMessage }) {
             {timestamp}
           </span>
         </div>
-        {bodyText ? (
-          <pre
-            style={{
-              fontFamily: "inherit",
-              fontSize: 13,
-              lineHeight: 1.65,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              overflowX: "hidden",
-              color: "#78350F",
-              margin: 0,
-            }}
-          >
-            {bodyText}
-          </pre>
-        ) : null}
+        {/* KAI-232: mention tokens render as chips, never as raw @[user:…]. */}
+        <NoteBody body={bodyText} mentions={message.mentions} style={{ color: "#78350F" }} />
       </div>
     );
   }
@@ -381,7 +372,36 @@ export function TicketDetail() {
   const { tickets, selectedTicketId, selectTicket } = useTriageStore();
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
 
-  const { messages, loading: threadLoading, appendOptimisticMessage } = useTicketThread(ticket?.id ?? null);
+  const { messages: allMessages, loading: threadLoading, appendOptimisticMessage } = useTicketThread(ticket?.id ?? null);
+
+  // KAI-232: with the internal-notes flag OFF the thread is customer-only —
+  // notes are never rendered, restoring the pre-KAI-221 surface.
+  const messages = useMemo(
+    () => (INTERNAL_NOTES_ENABLED ? allMessages : allMessages.filter((m) => m.direction !== "internal")),
+    [allMessages],
+  );
+
+  // KAI-232 — cross-panel scroll target (ADR-011): the Notes tab and mention
+  // notifications ask the thread to reveal one specific message.
+  const scrollToMessageId = useTriageStore((s) => s.scrollToMessageId);
+  const clearScrollToMessage = useTriageStore((s) => s.clearScrollToMessage);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!scrollToMessageId) return;
+    const el = messageRefs.current.get(scrollToMessageId);
+    // The thread may still be loading when the request arrives; the effect
+    // re-runs once `messages` lands and the ref exists.
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedMessageId(scrollToMessageId);
+    clearScrollToMessage();
+
+    const timer = setTimeout(() => setHighlightedMessageId(null), HIGHLIGHT_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [scrollToMessageId, messages, clearScrollToMessage]);
 
   // KAI-25 — resolved/auto_resolved tickets render read-only (no reply/note input).
   const isReadOnly = ticket ? ticket.status === "resolved" || ticket.status === "auto_resolved" : false;
@@ -544,7 +564,23 @@ export function TicketDetail() {
           /* Thread view — N message cards in chronological order */
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {messages.map((msg) => (
-              <MessageCard key={msg.id} message={msg} />
+              <div
+                key={msg.id}
+                ref={(el) => {
+                  if (el) messageRefs.current.set(msg.id, el);
+                  else messageRefs.current.delete(msg.id);
+                }}
+                style={{
+                  borderRadius: 10,
+                  transition: "box-shadow 0.3s ease, background 0.3s ease",
+                  boxShadow:
+                    highlightedMessageId === msg.id
+                      ? "0 0 0 3px var(--k-accent-subtle), 0 0 0 4px var(--k-accent)"
+                      : "none",
+                }}
+              >
+                <MessageCard message={msg} />
+              </div>
             ))}
           </div>
         ) : (

@@ -19,7 +19,19 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { apiCall } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
+import { getNumericFlag } from "@/lib/feature-flags";
+import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
+import { useTriageStore } from "@/stores/triage-store";
+import type { Ticket } from "@kairo/types";
 import type { AppView } from "@/types";
+
+// KAI-232 — how often the bell re-fetches /api/v1/notifications, in seconds.
+// ADR-025 §4 chose polling (ADR-010 Tier 2) over Realtime for the bell.
+const NOTIFICATIONS_POLL_INTERVAL_SECONDS = getNumericFlag(
+  import.meta.env.VITE_FF_NOTIFICATIONS_POLL_INTERVAL_SECONDS,
+  30
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Token shortcuts (keeps inline styles terse)
@@ -55,6 +67,10 @@ interface NotifItem {
   target: string | null;
   preview: string;
   time: string;
+  // KAI-232 — deep-link target for mention rows: open this ticket and scroll
+  // the thread to this note. Null on every other kind.
+  ticketId: string | null;
+  ticketEventId: string | null;
 }
 
 // KAI-168 — API notification row (apps/api/src/routes/v1/notifications.ts).
@@ -62,6 +78,8 @@ interface ApiNotification {
   id: string;
   kind: string;
   ticket_id: string | null;
+  /** KAI-232 — note-level deep-link (nullable; only mention rows carry it). */
+  ticket_event_id: string | null;
   title: string;
   body: string;
   read_at: string | null;
@@ -77,10 +95,36 @@ function relativeTimeShort(iso: string): string {
   return `${Math.floor(diffH / 24)}d`;
 }
 
-// KAI-168's escalation cron is currently the only producer — map every
-// unrecognized/future `kind` to a neutral "system" style rather than throwing.
+// Producers: the SLA escalation cron (KAI-168) and the internal-note mention
+// fan-out (KAI-232). Every unrecognized/future `kind` still maps to a neutral
+// "system" style rather than throwing.
+//
+// KAI-232: with the internal-notes flag OFF, a mention row is deliberately
+// degraded to a plain "system" item — visible but not labelled as a mention
+// and not clickable — so no internal-notes surface leaks through the bell.
 function toNotifItem(row: ApiNotification): NotifItem {
   const isEscalation = row.kind === "sla_escalation";
+  const isMention = INTERNAL_NOTES_ENABLED && row.kind === "mention";
+
+  if (isMention) {
+    return {
+      id: row.id,
+      kind: "mention",
+      unread: !row.read_at,
+      // The API pre-renders "<Author> te mencionó en <ticket>" into `title`.
+      who: row.title,
+      actor: "@",
+      actorBg: "var(--k-accent-subtle)",
+      actorColor: "var(--k-accent)",
+      title: "",
+      target: null,
+      preview: row.body,
+      time: relativeTimeShort(row.created_at),
+      ticketId: row.ticket_id,
+      ticketEventId: row.ticket_event_id,
+    };
+  }
+
   return {
     id: row.id,
     kind: isEscalation ? "escalation" : "system",
@@ -93,6 +137,8 @@ function toNotifItem(row: ApiNotification): NotifItem {
     target: null,
     preview: row.body,
     time: relativeTimeShort(row.created_at),
+    ticketId: null,
+    ticketEventId: null,
   };
 }
 
@@ -123,9 +169,10 @@ function NotifDot({ kind }: { kind: NotifItem["kind"] }) {
 interface NotifPopoverProps {
   items: NotifItem[];
   onMarkAll: () => void;
+  onSelect: (item: NotifItem) => void;
 }
 
-function NotificationsPopover({ items, onMarkAll }: NotifPopoverProps) {
+function NotificationsPopover({ items, onMarkAll, onSelect }: NotifPopoverProps) {
   const { t } = useTranslation(["dashboard"]);
   const [tab, setTab] = useState<"todas" | "no-leidas" | "menciones">("todas");
 
@@ -136,10 +183,14 @@ function NotificationsPopover({ items, onMarkAll }: NotifPopoverProps) {
 
   const unread = items.filter((n) => n.unread).length;
 
+  // KAI-232: the "@menciones" tab only exists when internal notes are on —
+  // otherwise it could never hold anything but would still advertise the feature.
   const TABS: [string, string][] = [
     ["todas",      t("dashboard:topChrome.notifications.tabAll")],
     ["no-leidas",  t("dashboard:topChrome.notifications.tabUnread")],
-    ["menciones",  t("dashboard:topChrome.notifications.tabMentions")],
+    ...(INTERNAL_NOTES_ENABLED
+      ? ([["menciones", t("dashboard:topChrome.notifications.tabMentions")]] as [string, string][])
+      : []),
   ];
 
   return (
@@ -197,7 +248,7 @@ function NotificationsPopover({ items, onMarkAll }: NotifPopoverProps) {
           </div>
         )}
         {filtered.map((n) => (
-          <NotifRow key={n.id} n={n} />
+          <NotifRow key={n.id} n={n} onSelect={onSelect} />
         ))}
       </div>
 
@@ -218,16 +269,31 @@ function NotificationsPopover({ items, onMarkAll }: NotifPopoverProps) {
   );
 }
 
-function NotifRow({ n }: { n: NotifItem }) {
+function NotifRow({ n, onSelect }: { n: NotifItem; onSelect: (item: NotifItem) => void }) {
   const [hovered, setHovered] = useState(false);
+  // Only mention rows lead somewhere today (KAI-232); the rest stay inert.
+  const clickable = n.kind === "mention" && !!n.ticketId;
   return (
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={clickable ? () => onSelect(n) : undefined}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(n);
+              }
+            }
+          : undefined
+      }
       style={{
         padding: "11px 14px", borderBottom: `1px solid ${T.borderSubtle}`,
         background: hovered ? T.surface2 : n.unread ? "#FAFBFF" : T.bg,
-        display: "flex", gap: 10, cursor: "pointer", position: "relative",
+        display: "flex", gap: 10, cursor: clickable ? "pointer" : "default", position: "relative",
       }}
     >
       {n.unread && (
@@ -548,20 +614,37 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
   const [theme, setTheme] = useState<Theme>("light");
   const ref = useRef<HTMLDivElement>(null);
 
-  // KAI-168 — real in-app notifications (currently: SLA escalation only).
+  // KAI-168 — real in-app notifications (SLA escalations + KAI-232 mentions).
+  // KAI-232: polled rather than fetched once, so a mention reaches the bell
+  // within the interval (ADR-025 §4 — polling, not Realtime).
   useEffect(() => {
     let cancelled = false;
-    apiCall("/api/v1/notifications")
-      .then((res) => res.json())
-      .then((body: { data: ApiNotification[] }) => {
-        if (!cancelled) setNotifs(body.data.map(toNotifItem));
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
+
+    function load() {
+      apiCall("/api/v1/notifications")
+        .then((res) => res.json())
+        .then((body: { data: ApiNotification[] }) => {
+          if (!cancelled) setNotifs(body.data.map(toNotifItem));
+        })
+        .catch(() => {});
+    }
+
+    load();
+    const timer = setInterval(load, NOTIFICATIONS_POLL_INTERVAL_SECONDS * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, []);
 
   const unread = notifs.filter((n) => n.unread).length;
   const curStatusDot = STATUS_DOTS[status];
+
+  function markRead(id: string) {
+    setNotifs((ns) => ns.map((n) => (n.id === id ? { ...n, unread: false } : n)));
+    // Also stamps ticket_note_mentions.read_at server-side for mentions.
+    apiCall(`/api/v1/notifications/${id}/read`, { method: "PATCH" }).catch(() => {});
+  }
 
   function markAllRead() {
     const unreadIds = notifs.filter((n) => n.unread).map((n) => n.id);
@@ -569,6 +652,32 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
     unreadIds.forEach((id) => {
       apiCall(`/api/v1/notifications/${id}/read`, { method: "PATCH" }).catch(() => {});
     });
+  }
+
+  // KAI-232 — mention deep-link: mark read, open triage on that ticket, and
+  // ask the center thread to scroll to the exact note (ADR-011 cross-panel
+  // signal). The ticket may not be in the triage list (the list excludes
+  // awaiting_customer/resolved), so fetch and upsert it before selecting.
+  async function handleNotifSelect(item: NotifItem) {
+    setOpen(null);
+    markRead(item.id);
+    if (!item.ticketId) return;
+
+    const { selectTicket, requestScrollToMessage, upsertTicket, tickets } =
+      useTriageStore.getState();
+
+    if (!tickets.some((t) => t.id === item.ticketId)) {
+      const { data } = await createClient()
+        .from("tickets")
+        .select("*")
+        .eq("id", item.ticketId)
+        .maybeSingle();
+      if (data) upsertTicket(data as Ticket);
+    }
+
+    onViewChange("triage");
+    selectTicket(item.ticketId);
+    if (item.ticketEventId) requestScrollToMessage(item.ticketEventId);
   }
 
   // Click-outside + Escape
@@ -619,6 +728,7 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
           <NotificationsPopover
             items={notifs}
             onMarkAll={markAllRead}
+            onSelect={handleNotifSelect}
           />
         )}
       </div>

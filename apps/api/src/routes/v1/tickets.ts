@@ -19,6 +19,8 @@ import {
 import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
 import { attachOperationalSla, buildConfigByPriority } from "../../lib/operational-sla.js";
 import { emitTicketEvent } from "../../lib/ticket-events.js";
+import { fanOutNoteMentions, resolveMentionNames } from "../../lib/note-mention-fanout.js";
+import { extractMentionUserIds } from "../../lib/note-mentions.js";
 import { createCompletionProvider, detectEscalationTriggers } from "@kairo/intelligence";
 import type { EscalationContext } from "@kairo/intelligence";
 import { resolveModelVersion } from "../../lib/model-version.js";
@@ -901,15 +903,17 @@ tickets.post("/:id/notes", async (c) => {
 
   if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
-  // Fetch agent display name for the synthetic message
+  // Fetch agent display name for the synthetic message.
+  // KAI-232: was querying the non-existent `user_profiles` table, so author
+  // names were always null. The real table is `profiles` (column `name`).
   const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("full_name, email")
+    .from("profiles")
+    .select("name, email")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
-  const agentName = (profile as { full_name?: string; email?: string } | null)?.full_name ?? null;
-  const agentEmail = (profile as { full_name?: string; email?: string } | null)?.email ?? null;
+  const agentName = (profile as { name?: string; email?: string } | null)?.name ?? null;
+  const agentEmail = (profile as { name?: string; email?: string } | null)?.email ?? null;
 
   const now = new Date().toISOString();
 
@@ -930,20 +934,33 @@ tickets.post("/:id/notes", async (c) => {
     return c.json({ error: insertErr?.message ?? "Failed to insert note" }, 500);
   }
 
+  const createdEvent = eventRow as { id: string; created_at: string };
+
+  // KAI-232: mention fan-out. Non-fatal by contract — a failed notification
+  // must never fail the note the agent just wrote.
+  const mentions = await fanOutNoteMentions({
+    accountId: ctx.accountId,
+    ticketId: id,
+    ticketEventId: createdEvent.id,
+    authorId: user.id,
+    body: parsed.data.body,
+  });
+
   // Return a ThreadMessage-shaped object (direction="internal") so the UI
   // can append it to the thread without a full reload.
   const note = {
-    id: (eventRow as { id: string; created_at: string }).id,
+    id: createdEvent.id,
     direction: "internal" as const,
     sender_external_id: agentEmail,
     sender_display_name: agentName,
     body_plain: parsed.data.body,
     body_html: null,
     snippet: parsed.data.body.substring(0, 120),
-    received_at: (eventRow as { id: string; created_at: string }).created_at ?? now,
+    received_at: createdEvent.created_at ?? now,
     is_origin: false,
     delivery_status: null,
     send_error: null,
+    mentions,
   };
 
   return c.json({ success: true, note }, 201);
@@ -1360,20 +1377,35 @@ tickets.get("/:id/messages", async (c) => {
   if (noteEvents && noteEvents.length > 0) {
     // Resolve author names in one query
     const authorIds = [...new Set((noteEvents as { author_id: string | null }[]).map((e) => e.author_id).filter(Boolean))] as string[];
+    // KAI-232: `user_profiles` does not exist — the real table is `profiles`
+    // with a `name` column, so author names used to resolve to null here.
     const { data: profiles } = authorIds.length
-      ? await supabase.from("user_profiles").select("id, full_name, email").in("id", authorIds)
+      ? await supabase.from("profiles").select("id, name, email").in("id", authorIds)
       : { data: [] };
     const profileMap = Object.fromEntries(
-      ((profiles ?? []) as { id: string; full_name?: string; email?: string }[]).map((p) => [p.id, p])
+      ((profiles ?? []) as { id: string; name?: string; email?: string }[]).map((p) => [p.id, p])
     );
 
-    for (const evt of noteEvents as { id: string; author_id: string | null; body: string | null; created_at: string }[]) {
+    // KAI-232: resolve every mention token in one batch so the client can
+    // render chips without ever persisting display names (ADR-025 §3).
+    const typedNotes = noteEvents as {
+      id: string;
+      author_id: string | null;
+      body: string | null;
+      created_at: string;
+    }[];
+    const mentionedIds = [
+      ...new Set(typedNotes.flatMap((evt) => extractMentionUserIds(evt.body ?? ""))),
+    ];
+    const mentionNames = await resolveMentionNames(mentionedIds);
+
+    for (const evt of typedNotes) {
       const profile = evt.author_id ? profileMap[evt.author_id] : null;
       messages.push({
         id: evt.id,
         direction: "internal",
         sender_external_id: profile?.email ?? null,
-        sender_display_name: profile?.full_name ?? null,
+        sender_display_name: profile?.name ?? null,
         body_plain: evt.body,
         body_html: null,
         snippet: evt.body?.substring(0, 120) ?? null,
@@ -1381,6 +1413,10 @@ tickets.get("/:id/messages", async (c) => {
         is_origin: false,
         delivery_status: null,
         send_error: null,
+        mentions: extractMentionUserIds(evt.body ?? "").map((user_id) => ({
+          user_id,
+          name: mentionNames.get(user_id) ?? null,
+        })),
       });
     }
     // Re-sort merged timeline by received_at ascending

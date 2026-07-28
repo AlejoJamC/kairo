@@ -356,7 +356,14 @@
     "escalateReasonPlaceholder": "Motivo de la escalación (opcional)…",
     "escalateConfirm": "Confirmar escalación",
     "escalateCancel": "Cancelar",
-    "escalating": "Escalando…"
+    "escalating": "Escalando…",
+    "mentionChipLabel": "Mencionado: {{name}}"
+  },
+  "notes": {
+    "loading": "Cargando notas…",
+    "empty": "Este ticket aún no tiene notas internas.",
+    "jumpToNote": "Ver esta nota en la conversación",
+    "unknownMember": "miembro"
   },
   "templatePicker": {
     "searchPlaceholder": "Buscar plantilla...",
@@ -433,6 +440,7 @@
     "tabSimilar": "Similares",
     "tabArticles": "Artículos",
     "tabEscalate": "Escalar",
+    "tabNotes": "Notas",
     "kpiPlan": "Plan",
     "kpiMrr": "MRR",
     "kpiSince": "Desde",

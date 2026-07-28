@@ -123,6 +123,13 @@ interface TriageStore {
   clearSuggestedReply: () => void;
   setPendingEscalation: (ticketId: string | null) => void;
   setClientProfile: (profile: ClientProfile | null) => void;
+  // KAI-232 — cross-panel scroll signal (ADR-011 pattern). Set to the id of a
+  // thread message (a `ticket_events.id` for an internal note) by the
+  // right-panel Notes tab or a mention notification in the bell; the center
+  // thread scrolls that card into view, highlights it, then clears the field.
+  scrollToMessageId: string | null;
+  requestScrollToMessage: (messageId: string) => void;
+  clearScrollToMessage: () => void;
 }
 
 export const useTriageStore = create<TriageStore>((set) => ({
@@ -220,4 +227,8 @@ export const useTriageStore = create<TriageStore>((set) => ({
   clearSuggestedReply: () => set({ aiSuggestedReply: null }),
   setPendingEscalation: (ticketId) => set({ pendingEscalation: ticketId }),
   setClientProfile: (profile) => set({ clientProfile: profile }),
+
+  scrollToMessageId: null,
+  requestScrollToMessage: (messageId) => set({ scrollToMessageId: messageId }),
+  clearScrollToMessage: () => set({ scrollToMessageId: null }),
 }));
