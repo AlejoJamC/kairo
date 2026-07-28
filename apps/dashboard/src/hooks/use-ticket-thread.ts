@@ -3,6 +3,16 @@ import { apiCall } from "@/lib/api-client";
 
 export type DeliveryStatus = "queued" | "sending" | "sent" | "failed";
 
+/**
+ * KAI-232: a mention inside an internal note. The body stores only the opaque
+ * token `@[user:<uuid>]`; the API resolves the display name on every read, so
+ * a rename never leaves a stale name behind (ADR-025 §3).
+ */
+export interface NoteMention {
+  user_id: string;
+  name: string | null;
+}
+
 export interface ThreadMessage {
   id: string;
   /** "internal" = agent-only note that never reaches the customer (KAI-221). */
@@ -16,6 +26,8 @@ export interface ThreadMessage {
   is_origin: boolean;
   delivery_status?: DeliveryStatus | null;
   send_error?: { code: string; message?: string } | null;
+  /** Present on internal notes only (KAI-232). */
+  mentions?: NoteMention[];
 }
 
 interface UseTicketThreadResult {

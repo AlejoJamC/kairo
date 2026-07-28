@@ -1260,7 +1260,8 @@ CREATE TABLE IF NOT EXISTS "public"."notifications" (
     "title" "text" NOT NULL,
     "body" "text" NOT NULL,
     "read_at" timestamp with time zone,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "ticket_event_id" "uuid"
 );
 
 
@@ -1449,6 +1450,21 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_messages" (
 
 
 ALTER TABLE "public"."ticket_messages" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."ticket_note_mentions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "ticket_event_id" "uuid" NOT NULL,
+    "mentioned_user_id" "uuid" NOT NULL,
+    "notified_at" timestamp with time zone,
+    "read_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."ticket_note_mentions" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."ticket_priority_sla_config" (
@@ -1865,6 +1881,16 @@ ALTER TABLE ONLY "public"."ticket_messages"
 
 
 
+ALTER TABLE ONLY "public"."ticket_note_mentions"
+    ADD CONSTRAINT "ticket_note_mentions_event_user_key" UNIQUE ("ticket_event_id", "mentioned_user_id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_note_mentions"
+    ADD CONSTRAINT "ticket_note_mentions_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."ticket_priority_sla_config"
     ADD CONSTRAINT "ticket_priority_sla_config_account_priority_key" UNIQUE ("account_id", "priority");
 
@@ -2175,6 +2201,14 @@ CREATE INDEX "idx_ticket_groups_account_id" ON "public"."ticket_groups" USING "b
 
 
 CREATE INDEX "idx_ticket_messages_message_id" ON "public"."ticket_messages" USING "btree" ("message_id");
+
+
+
+CREATE INDEX "idx_ticket_note_mentions_ticket" ON "public"."ticket_note_mentions" USING "btree" ("ticket_id");
+
+
+
+CREATE INDEX "idx_ticket_note_mentions_user" ON "public"."ticket_note_mentions" USING "btree" ("mentioned_user_id", "read_at");
 
 
 
@@ -2497,6 +2531,11 @@ ALTER TABLE ONLY "public"."notifications"
 
 
 ALTER TABLE ONLY "public"."notifications"
+    ADD CONSTRAINT "notifications_ticket_event_id_fkey" FOREIGN KEY ("ticket_event_id") REFERENCES "public"."ticket_events"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."notifications"
     ADD CONSTRAINT "notifications_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
@@ -2583,6 +2622,26 @@ ALTER TABLE ONLY "public"."ticket_messages"
 
 ALTER TABLE ONLY "public"."ticket_messages"
     ADD CONSTRAINT "ticket_messages_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ticket_note_mentions"
+    ADD CONSTRAINT "ticket_note_mentions_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ticket_note_mentions"
+    ADD CONSTRAINT "ticket_note_mentions_mentioned_user_id_fkey" FOREIGN KEY ("mentioned_user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ticket_note_mentions"
+    ADD CONSTRAINT "ticket_note_mentions_ticket_event_id_fkey" FOREIGN KEY ("ticket_event_id") REFERENCES "public"."ticket_events"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ticket_note_mentions"
+    ADD CONSTRAINT "ticket_note_mentions_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
 
@@ -2868,7 +2927,7 @@ CREATE POLICY "messages_access_by_account" ON "public"."messages" USING (("accou
 ALTER TABLE "public"."notifications" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "notifications_access_by_account" ON "public"."notifications" USING (("account_id" = "public"."current_account_id"()));
+CREATE POLICY "notifications_access_by_recipient" ON "public"."notifications" USING ((("account_id" = "public"."current_account_id"()) AND ("recipient_user_id" = "auth"."uid"())));
 
 
 
@@ -2961,6 +3020,13 @@ ALTER TABLE "public"."ticket_messages" ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "ticket_messages_access_by_account" ON "public"."ticket_messages" USING ((EXISTS ( SELECT 1
    FROM "public"."tickets" "t"
   WHERE (("t"."id" = "ticket_messages"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
+
+
+
+ALTER TABLE "public"."ticket_note_mentions" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_note_mentions_access_by_account" ON "public"."ticket_note_mentions" USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -3359,6 +3425,12 @@ GRANT ALL ON TABLE "public"."ticket_groups" TO "service_role";
 GRANT ALL ON TABLE "public"."ticket_messages" TO "anon";
 GRANT ALL ON TABLE "public"."ticket_messages" TO "authenticated";
 GRANT ALL ON TABLE "public"."ticket_messages" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_note_mentions" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_note_mentions" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_note_mentions" TO "service_role";
 
 
 

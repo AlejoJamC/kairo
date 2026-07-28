@@ -12,6 +12,8 @@ import {
 } from "@/components/triage/ClientProfileCard";
 import { useResizablePanel } from "@/hooks/use-resizable-panel";
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
+import { NotesPanel } from "@/components/triage/NotesPanel";
+import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Dashboard > Right Panel — Feature Flags (VITE_FF_*)
@@ -128,7 +130,7 @@ function formatSim(s: number | null): string | null {
 // Tab definitions
 // ---------------------------------------------------------------------------
 
-const TAB_IDS = ["assistant", "client", "similar", "articles", "escalate"] as const;
+const TAB_IDS = ["assistant", "client", "similar", "articles", "escalate", "notes"] as const;
 type TabId = typeof TAB_IDS[number];
 
 // ---------------------------------------------------------------------------
@@ -633,6 +635,9 @@ export function AiAssistant({ customer }: AiAssistantProps) {
         ...(similarTabEnabled ? [{ id: "similar" as const, label: t("ai.tabSimilar") }] : []),
         ...(articlesTabEnabled ? [{ id: "articles" as const, label: t("ai.tabArticles") }] : []),
         ...(escalateTabEnabled ? [{ id: "escalate" as const, label: t("ai.tabEscalate") }] : []),
+        // KAI-232 — gated by the shared internal-notes flag, not a tab-specific
+        // one: the whole internal-notes surface lives or dies together.
+        ...(INTERNAL_NOTES_ENABLED ? [{ id: "notes" as const, label: t("ai.tabNotes") }] : []),
       ]),
     [t]
   );
@@ -751,6 +756,9 @@ export function AiAssistant({ customer }: AiAssistantProps) {
             selectedTicketCategory={selectedTicket?.category ?? null}
             lang={i18n.language}
           />
+        )}
+        {INTERNAL_NOTES_ENABLED && activeTab === "notes" && (
+          <NotesPanel ticketId={selectedTicketId} />
         )}
       </div>
       )}

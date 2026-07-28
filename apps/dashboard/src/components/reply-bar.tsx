@@ -5,7 +5,18 @@ import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
 import { useTriageStore } from "@/stores/triage-store";
 import { apiCall } from "@/lib/api-client";
 import { isFlagEnabled } from "@/lib/feature-flags";
+import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
+import { useAccountMembers, filterMembers, type AccountMember } from "@/hooks/use-account-members";
+import {
+  findActiveMentionQuery,
+  insertMentionToken,
+  extractMentionUserIds,
+} from "@/lib/note-mentions";
+import { useAuth } from "@/contexts/auth-context";
 import type { ThreadMessage } from "@/hooks/use-ticket-thread";
+
+// KAI-232 — how many member suggestions the @mention dropdown shows at once.
+const MENTION_SUGGESTION_LIMIT = 6;
 
 // Same flag that gates the right-panel Escalation tab (ai-assistant.tsx).
 const escalateTabEnabled = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB);
@@ -49,6 +60,71 @@ const ACTION_CONFIG: Record<
 };
 
 // ---------------------------------------------------------------------------
+// KAI-232 — @mention dropdown, anchored above the note composer.
+// ---------------------------------------------------------------------------
+
+interface MentionDropdownProps {
+  members: AccountMember[];
+  activeIndex: number;
+  onPick: (member: AccountMember) => void;
+  onHover: (index: number) => void;
+}
+
+function MentionDropdown({ members, activeIndex, onPick, onHover }: MentionDropdownProps) {
+  return (
+    <div
+      data-testid="mention-dropdown"
+      role="listbox"
+      style={{
+        position: "absolute",
+        bottom: "calc(100% + 6px)",
+        left: 0,
+        minWidth: 240,
+        maxWidth: 320,
+        background: "white",
+        border: "1px solid var(--k-border)",
+        borderRadius: 8,
+        boxShadow: "0 4px 16px rgba(9,9,11,0.12)",
+        overflow: "hidden",
+        zIndex: 30,
+      }}
+    >
+      {members.map((member, index) => (
+        <button
+          key={member.user_id}
+          type="button"
+          role="option"
+          aria-selected={index === activeIndex}
+          // onMouseDown, not onClick: the textarea must not lose focus first.
+          onMouseDown={(e) => { e.preventDefault(); onPick(member); }}
+          onMouseEnter={() => onHover(index)}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: 1,
+            width: "100%",
+            padding: "6px 10px",
+            border: "none",
+            borderBottom: "1px solid var(--k-border-subtle)",
+            background: index === activeIndex ? "var(--k-accent-subtle)" : "white",
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--k-text-primary)" }}>
+            {member.name ?? member.email ?? member.user_id}
+          </span>
+          {member.email && member.name && (
+            <span style={{ fontSize: 11, color: "var(--k-text-tertiary)" }}>{member.email}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // ReplyBar
 // ---------------------------------------------------------------------------
 
@@ -59,6 +135,7 @@ interface ReplyBarProps {
 
 export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const { t } = useTranslation("dashboard");
+  const { user } = useAuth();
   const selectedTicketId = useTriageStore((s) => s.selectedTicketId);
   const tickets = useTriageStore((s) => s.tickets);
   const aiSuggestedReply = useTriageStore((s) => s.aiSuggestedReply);
@@ -105,6 +182,68 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       document.removeEventListener("keydown", onKey);
     };
   }, [sendMenuOpen]);
+
+  // ---------------------------------------------------------------------------
+  // KAI-232 — @mention autocomplete (note mode only)
+  // ---------------------------------------------------------------------------
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const [mentionQuery, setMentionQuery] = React.useState<{ query: string; start: number } | null>(null);
+  const [mentionIndex, setMentionIndex] = React.useState(0);
+
+  // Members load lazily — only once the agent actually opens note mode.
+  const noteMode = INTERNAL_NOTES_ENABLED && mode === "note";
+  const { members } = useAccountMembers(noteMode);
+
+  const mentionMatches = React.useMemo(
+    () =>
+      mentionQuery
+        ? filterMembers(members, mentionQuery.query, MENTION_SUGGESTION_LIMIT, user?.id ?? null)
+        : [],
+    [members, mentionQuery, user?.id],
+  );
+
+  const mentionOpen = noteMode && mentionQuery !== null && mentionMatches.length > 0;
+
+  // Chips for members already mentioned in the draft — the raw token is not
+  // readable in a plain textarea, so this is what confirms who was tagged.
+  const draftMentions: AccountMember[] = React.useMemo(() => {
+    if (!noteMode) return [];
+    const ids = extractMentionUserIds(draft);
+    return ids
+      .map((id) => members.find((m) => m.user_id === id))
+      .filter((m): m is AccountMember => Boolean(m));
+  }, [draft, members, noteMode]);
+
+  // Re-evaluate the mention context after any draft/caret change.
+  function syncMentionQuery(value: string, caret: number) {
+    if (!noteMode) {
+      setMentionQuery(null);
+      return;
+    }
+    const active = findActiveMentionQuery(value, caret);
+    setMentionQuery(active);
+    setMentionIndex(0);
+  }
+
+  function applyMention(member: AccountMember) {
+    if (!mentionQuery) return;
+    const el = textareaRef.current;
+    const caret = el?.selectionStart ?? draft.length;
+    const { value, caret: nextCaret } = insertMentionToken(
+      draft,
+      mentionQuery.start,
+      caret,
+      member.user_id,
+    );
+    setDraft(value);
+    setMentionQuery(null);
+    setMentionIndex(0);
+    // Restore focus and put the caret right after the inserted token.
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(nextCaret, nextCaret);
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // Escalation inline flow (KAI-221)
@@ -317,9 +456,35 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   // Keyboard
   // ---------------------------------------------------------------------------
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // KAI-232: while the mention dropdown is open it owns the arrow keys,
+    // Enter/Tab (select) and Escape (dismiss) — send shortcuts still work.
+    if (mentionOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % mentionMatches.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const picked = mentionMatches[mentionIndex];
+        if (picked) applyMention(picked);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionQuery(null);
+        return;
+      }
+    }
+
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
-      if (mode === "note") {
+      if (isNote) {
         handleSendNote();
       } else {
         handleSend(false);
@@ -351,7 +516,9 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   // Derived
   // ---------------------------------------------------------------------------
   const canSend = !!draft.trim() && !!selectedTicketId && !sending;
-  const isNote = mode === "note";
+  // KAI-232: with the internal-notes flag OFF the composer is reply-only —
+  // the mode selector is not rendered, and note mode can never be reached.
+  const isNote = INTERNAL_NOTES_ENABLED && mode === "note";
 
   // Lifecycle action buttons (only in reply mode, based on current status)
   const visibleActions: TicketAction[] = !isNote
@@ -422,6 +589,8 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       </div>
 
       {/* ── DIMENSION 1: Mode selector ─────────────────────────────────── */}
+      {/* KAI-232: the reply/note switch only exists when internal notes are on. */}
+      {INTERNAL_NOTES_ENABLED && (
       <div
         style={{
           display: "flex",
@@ -479,6 +648,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
           {t("replyBar.modeNote", "Internal note")}
         </button>
       </div>
+      )}
 
       {/* Tool buttons row */}
       <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
@@ -522,6 +692,32 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             {t("replyBar.noteVisibilityHint", "Visible only to your team")}
           </span>
         )}
+        {/* KAI-232: who this note will notify. The body stores opaque tokens,
+            so these chips are the only readable confirmation in the composer. */}
+        {isNote && draftMentions.map((member) => (
+          <span
+            key={member.user_id}
+            title={member.email ?? undefined}
+            aria-label={t("replyBar.mentionChipLabel", {
+              name: member.name ?? member.email ?? "",
+              defaultValue: "Mentioned: {{name}}",
+            })}
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: "var(--k-accent)",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "4px 9px",
+              background: "var(--k-accent-subtle)",
+              borderRadius: 999,
+              border: "1px solid #C7D2FE",
+            }}
+          >
+            @{member.name ?? member.email ?? member.user_id}
+          </span>
+        ))}
         <button
           type="button"
           style={{
@@ -654,7 +850,17 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         </div>
       ) : (
         /* Standard composer textarea */
+        <div style={{ position: "relative" }}>
+        {mentionOpen && (
+          <MentionDropdown
+            members={mentionMatches}
+            activeIndex={mentionIndex}
+            onPick={applyMention}
+            onHover={setMentionIndex}
+          />
+        )}
         <textarea
+          ref={textareaRef}
           placeholder={
             isNote
               ? t("replyBar.notePlaceholder", "Write an internal note… (only visible to your team)")
@@ -663,8 +869,15 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
           value={draft}
           onChange={(e) => {
             setDraft(e.target.value);
+            syncMentionQuery(e.target.value, e.target.selectionStart ?? 0);
             if (sendError) setSendError(null);
             if (sendSuccess) setSendSuccess(false);
+          }}
+          // Caret moves (click / arrow keys) can leave or enter a mention
+          // context without the text changing at all.
+          onSelect={(e) => {
+            const el = e.currentTarget;
+            syncMentionQuery(el.value, el.selectionStart ?? 0);
           }}
           onKeyDown={handleKeyDown}
           style={{
@@ -698,6 +911,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             e.currentTarget.style.boxShadow = "none";
           }}
         />
+        </div>
       )}
 
       {/* ── DIMENSION 3: Lifecycle actions ────────────────────────────── */}

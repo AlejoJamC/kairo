@@ -1049,6 +1049,7 @@ export type Database = {
           kind: string
           read_at: string | null
           recipient_user_id: string
+          ticket_event_id: string | null
           ticket_id: string | null
           title: string
         }
@@ -1060,6 +1061,7 @@ export type Database = {
           kind: string
           read_at?: string | null
           recipient_user_id: string
+          ticket_event_id?: string | null
           ticket_id?: string | null
           title: string
         }
@@ -1071,6 +1073,7 @@ export type Database = {
           kind?: string
           read_at?: string | null
           recipient_user_id?: string
+          ticket_event_id?: string | null
           ticket_id?: string | null
           title?: string
         }
@@ -1080,6 +1083,13 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_ticket_event_id_fkey"
+            columns: ["ticket_event_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_events"
             referencedColumns: ["id"]
           },
           {
@@ -1541,6 +1551,61 @@ export type Database = {
           },
           {
             foreignKeyName: "ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_note_mentions: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          mentioned_user_id: string
+          notified_at: string | null
+          read_at: string | null
+          ticket_event_id: string
+          ticket_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          mentioned_user_id: string
+          notified_at?: string | null
+          read_at?: string | null
+          ticket_event_id: string
+          ticket_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          mentioned_user_id?: string
+          notified_at?: string | null
+          read_at?: string | null
+          ticket_event_id?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_note_mentions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_note_mentions_ticket_event_id_fkey"
+            columns: ["ticket_event_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_note_mentions_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
