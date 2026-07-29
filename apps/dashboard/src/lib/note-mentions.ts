@@ -95,6 +95,18 @@ export function findActiveMentionQuery(
 }
 
 /**
+ * Strips every mention token for a user from a body, collapsing the whitespace
+ * the token leaves behind. Used when a mention chip is dismissed (spec C8) —
+ * the chip row is a view of the text, so removing one must edit the text.
+ */
+export function removeMentionToken(body: string, userId: string): string {
+  const token = buildMentionToken(userId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return body
+    .replace(new RegExp(`${token}\\s?`, "gi"), "")
+    .replace(/[ \t]{2,}/g, " ");
+}
+
+/**
  * Replaces the active `@query` with a mention token, returning the new body and
  * the caret position that follows the inserted token.
  */

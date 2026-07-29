@@ -11,12 +11,21 @@ import {
   findActiveMentionQuery,
   insertMentionToken,
   extractMentionUserIds,
+  removeMentionToken,
 } from "@/lib/note-mentions";
+import { MentionDropdown } from "./triage/mention-dropdown";
+import { TeamOnlyChip } from "./triage/note-primitives";
+import { Avatar } from "./ui/avatar";
 import { useAuth } from "@/contexts/auth-context";
 import type { ThreadMessage } from "@/hooks/use-ticket-thread";
 
 // KAI-232 — how many member suggestions the @mention dropdown shows at once.
 const MENTION_SUGGESTION_LIMIT = 6;
+
+// KAI-232 — note length cap, mirroring the API's InternalNoteSchema. The
+// counter only appears near the limit so it isn't noise while writing.
+const NOTE_MAX_LENGTH = 2000;
+const NOTE_COUNTER_THRESHOLD = 1800;
 
 // Same flag that gates the right-panel Escalation tab (ai-assistant.tsx).
 const escalateTabEnabled = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB);
@@ -60,67 +69,63 @@ const ACTION_CONFIG: Record<
 };
 
 // ---------------------------------------------------------------------------
-// KAI-232 — @mention dropdown, anchored above the note composer.
+// KAI-232 · design spec C7/C8 — a selected mention, removable.
+// Removing the chip also removes the token from the note body: the chip row is
+// a view of the text, never a second source of truth.
 // ---------------------------------------------------------------------------
 
-interface MentionDropdownProps {
-  members: AccountMember[];
-  activeIndex: number;
-  onPick: (member: AccountMember) => void;
-  onHover: (index: number) => void;
-}
+function SelectedMentionChip({
+  member,
+  onRemove,
+}: {
+  member: AccountMember;
+  onRemove: (userId: string) => void;
+}) {
+  const { t } = useTranslation("dashboard");
+  const [hovered, setHovered] = React.useState(false);
+  const label = member.name ?? member.email ?? member.user_id;
 
-function MentionDropdown({ members, activeIndex, onPick, onHover }: MentionDropdownProps) {
   return (
-    <div
-      data-testid="mention-dropdown"
-      role="listbox"
+    <span
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title={member.email ?? undefined}
       style={{
-        position: "absolute",
-        bottom: "calc(100% + 6px)",
-        left: 0,
-        minWidth: 240,
-        maxWidth: 320,
-        background: "white",
-        border: "1px solid var(--k-border)",
-        borderRadius: 8,
-        boxShadow: "0 4px 16px rgba(9,9,11,0.12)",
-        overflow: "hidden",
-        zIndex: 30,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "2px 5px 2px 3px",
+        borderRadius: 999,
+        background: hovered ? "#E0E7FF" : "var(--k-mention-bg)",
+        border: `1px solid ${hovered ? "var(--k-accent-border)" : "var(--k-mention-border)"}`,
+        color: "var(--k-accent)",
+        fontSize: 11,
+        fontWeight: 500,
       }}
     >
-      {members.map((member, index) => (
-        <button
-          key={member.user_id}
-          type="button"
-          role="option"
-          aria-selected={index === activeIndex}
-          // onMouseDown, not onClick: the textarea must not lose focus first.
-          onMouseDown={(e) => { e.preventDefault(); onPick(member); }}
-          onMouseEnter={() => onHover(index)}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
-            gap: 1,
-            width: "100%",
-            padding: "6px 10px",
-            border: "none",
-            borderBottom: "1px solid var(--k-border-subtle)",
-            background: index === activeIndex ? "var(--k-accent-subtle)" : "white",
-            cursor: "pointer",
-            textAlign: "left",
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--k-text-primary)" }}>
-            {member.name ?? member.email ?? member.user_id}
-          </span>
-          {member.email && member.name && (
-            <span style={{ fontSize: 11, color: "var(--k-text-tertiary)" }}>{member.email}</span>
-          )}
-        </button>
-      ))}
-    </div>
+      <Avatar name={member.name} email={member.email} seed={member.user_id} size={15} />
+      @{label}
+      <button
+        type="button"
+        onClick={() => onRemove(member.user_id)}
+        aria-label={t("mention.removeChip", { name: label, defaultValue: "Remove mention of {{name}}" })}
+        style={{
+          width: 13,
+          height: 13,
+          borderRadius: 999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
+          background: hovered ? "var(--k-mention-solid)" : "transparent",
+          color: hovered ? "white" : "#9BB0FF",
+        }}
+      >
+        <X style={{ width: 8, height: 8 }} strokeWidth={3} />
+      </button>
+    </span>
   );
 }
 
@@ -192,17 +197,35 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
 
   // Members load lazily — only once the agent actually opens note mode.
   const noteMode = INTERNAL_NOTES_ENABLED && mode === "note";
-  const { members } = useAccountMembers(noteMode);
+  const { members, loading: membersLoading } = useAccountMembers(noteMode);
 
-  const mentionMatches = React.useMemo(
+  // "New note" in the right-panel Notes tab: switch to note mode and focus.
+  const composeNoteRequests = useTriageStore((s) => s.composeNoteRequests);
+  React.useEffect(() => {
+    if (composeNoteRequests === 0 || !INTERNAL_NOTES_ENABLED) return;
+    setMode("note");
+    setShowAiBanner(false);
+    setShowEscalatePanel(false);
+    textareaRef.current?.focus();
+  }, [composeNoteRequests]);
+
+  // Pool = everyone but the author; matches = the visible slice of it. Both are
+  // needed so the dropdown can show an honest "n of N".
+  const mentionPool = React.useMemo(
     () =>
       mentionQuery
-        ? filterMembers(members, mentionQuery.query, MENTION_SUGGESTION_LIMIT, user?.id ?? null)
+        ? filterMembers(members, mentionQuery.query, Number.MAX_SAFE_INTEGER, user?.id ?? null)
         : [],
     [members, mentionQuery, user?.id],
   );
+  const mentionMatches = React.useMemo(
+    () => mentionPool.slice(0, MENTION_SUGGESTION_LIMIT),
+    [mentionPool],
+  );
 
-  const mentionOpen = noteMode && mentionQuery !== null && mentionMatches.length > 0;
+  // Stays open with no matches so the "no members found" state can show the
+  // query back (spec C6); only Enter is inert in that state.
+  const mentionOpen = noteMode && mentionQuery !== null;
 
   // Chips for members already mentioned in the draft — the raw token is not
   // readable in a plain textarea, so this is what confirms who was tagged.
@@ -213,6 +236,11 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       .map((id) => members.find((m) => m.user_id === id))
       .filter((m): m is AccountMember => Boolean(m));
   }, [draft, members, noteMode]);
+
+  function removeMention(userId: string) {
+    setDraft((current) => removeMentionToken(current, userId));
+    textareaRef.current?.focus();
+  }
 
   // Re-evaluate the mention context after any draft/caret change.
   function syncMentionQuery(value: string, caret: number) {
@@ -674,50 +702,17 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             </button>
           </TemplatePicker>
         )}
-        {isNote && (
-          <span
-            style={{
-              fontSize: 11,
-              color: "#92400E",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "4px 9px",
-              background: "#FEF3C7",
-              borderRadius: 999,
-              border: "1px solid #FDE68A",
-            }}
-          >
-            <Lock style={{ width: 10, height: 10 }} />
-            {t("replyBar.noteVisibilityHint", "Visible only to your team")}
+        {isNote && <TeamOnlyChip />}
+        {/* KAI-232 spec C7: who this note will notify. The body stores opaque
+            tokens, so these chips are the only readable confirmation. */}
+        {isNote && draftMentions.map((member) => (
+          <SelectedMentionChip key={member.user_id} member={member} onRemove={removeMention} />
+        ))}
+        {isNote && draftMentions.length > 0 && (
+          <span style={{ fontSize: 10.5, color: "var(--k-note-label)", opacity: 0.75, marginLeft: 2 }}>
+            {t("mention.willNotify", { count: draftMentions.length, defaultValue: "will be notified" })}
           </span>
         )}
-        {/* KAI-232: who this note will notify. The body stores opaque tokens,
-            so these chips are the only readable confirmation in the composer. */}
-        {isNote && draftMentions.map((member) => (
-          <span
-            key={member.user_id}
-            title={member.email ?? undefined}
-            aria-label={t("replyBar.mentionChipLabel", {
-              name: member.name ?? member.email ?? "",
-              defaultValue: "Mentioned: {{name}}",
-            })}
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: "var(--k-accent)",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "4px 9px",
-              background: "var(--k-accent-subtle)",
-              borderRadius: 999,
-              border: "1px solid #C7D2FE",
-            }}
-          >
-            @{member.name ?? member.email ?? member.user_id}
-          </span>
-        ))}
         <button
           type="button"
           style={{
@@ -854,7 +849,12 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         {mentionOpen && (
           <MentionDropdown
             members={mentionMatches}
+            totalCount={mentionPool.length}
+            query={mentionQuery?.query ?? ""}
             activeIndex={mentionIndex}
+            // Skeletons only on the very first open of the session (spec C5) —
+            // once the list is cached, a refresh must not blank the rows.
+            loading={membersLoading && members.length === 0}
             onPick={applyMention}
             onHover={setMentionIndex}
           />
@@ -863,9 +863,11 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
           ref={textareaRef}
           placeholder={
             isNote
-              ? t("replyBar.notePlaceholder", "Write an internal note… (only visible to your team)")
+              ? t("replyBar.notePlaceholder", "Write a note for your team… use @ to mention")
               : t("ticketDetail.replyPlaceholder")
           }
+          // Note bodies are capped server-side too (InternalNoteSchema).
+          maxLength={isNote ? NOTE_MAX_LENGTH : undefined}
           value={draft}
           onChange={(e) => {
             setDraft(e.target.value);
@@ -1073,6 +1075,19 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
           gap: 8,
         }}
       >
+        {/* KAI-232 rule F.9 — only surfaces near the cap, not while writing. */}
+        {isNote && draft.length >= NOTE_COUNTER_THRESHOLD && (
+          <span
+            style={{
+              marginRight: "auto",
+              fontFamily: "var(--k-font-mono)",
+              fontSize: 11,
+              color: draft.length >= NOTE_MAX_LENGTH ? "#EF4444" : "var(--k-note-label)",
+            }}
+          >
+            {draft.length} / {NOTE_MAX_LENGTH}
+          </span>
+        )}
         {isNote ? (
           /* Note mode: single "Add note" button */
           <button

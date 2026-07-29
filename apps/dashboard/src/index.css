@@ -146,8 +146,27 @@
   --k-gradient-ai:    linear-gradient(135deg, var(--k-accent), var(--k-accent-2));
   --k-success:        #10B981;
   --k-shadow-card:    0 1px 2px rgba(9, 9, 11, 0.04);
+  --k-shadow-popover: 0 4px 16px rgba(9, 9, 11, 0.08), 0 1px 2px rgba(9, 9, 11, 0.04);
   --k-font-mono:      "JetBrains Mono", "SF Mono", ui-monospace, monospace;
   --k-font-display:   "Inter Display", "Inter", system-ui, sans-serif;
+
+  /* Internal notes — amber "team only" family (KAI-232 / ADR-025).
+     Same amber the escalation card already used; promoted to tokens so the
+     note surfaces stop hardcoding hexes inline. */
+  --k-note-bg:           #FFFBEB;
+  --k-note-bg-strong:    #FEF3C7;
+  --k-note-bg-tint:      #FFFDF7;
+  --k-note-border:       #FDE68A;
+  --k-note-border-hover: #FCD34D;
+  --k-note-rail:         #F59E0B;
+  --k-note-label:        #B45309;
+  --k-note-text:         #92400E;
+  --k-note-text-strong:  #78350F;
+
+  /* Mentions always stay in the accent family, even on amber (KAI-232). */
+  --k-mention-bg:     var(--k-accent-subtle);
+  --k-mention-border: #DBE3FF;
+  --k-mention-solid:  var(--k-accent);
 }
 
 /* ─── Shared form primitives ────────────────────────────────────────────────
@@ -301,6 +320,38 @@
   background-size: 200% 100%;
   animation: k-shimmer 1.4s infinite linear;
   border-radius: 4px;
+}
+
+/* Amber-tinted skeleton for internal-note cards (KAI-232): same motion as
+   .shimmer, but reads as a note instead of a generic block. */
+.shimmer-note {
+  background: linear-gradient(90deg, var(--k-note-bg-strong) 0%, var(--k-note-border) 50%, var(--k-note-bg-strong) 100%);
+  background-size: 200% 100%;
+  animation: k-shimmer 1.4s infinite linear;
+  border-radius: 4px;
+}
+
+/* Soft opacity pulse — loading dots and live-stream indicators (KAI-232). */
+@keyframes k-pulse-soft {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+.pulse {
+  animation: k-pulse-soft 1.6s ease-in-out infinite;
+}
+
+/* Transient highlight for a thread message jumped to from the Notes tab or a
+   mention notification (KAI-232 · spec B5): outline + amber halo over 1.6s. */
+@keyframes k-note-jump {
+  0%   { outline-color: var(--k-note-rail); box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.18); }
+  70%  { outline-color: var(--k-note-rail); box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.18); }
+  100% { outline-color: rgba(245, 158, 11, 0); box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+}
+.note-jump-highlight {
+  outline: 2px solid var(--k-note-rail);
+  outline-offset: 2px;
+  border-radius: 12px;
+  animation: k-note-jump 1600ms ease-out forwards;
 }
 
 /* Auth-gate spinner — CSS animation using --k-accent */

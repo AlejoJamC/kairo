@@ -11,6 +11,8 @@ export type DeliveryStatus = "queued" | "sending" | "sent" | "failed";
 export interface NoteMention {
   user_id: string;
   name: string | null;
+  /** Resolved server-side: this mention points at the current viewer. */
+  is_me?: boolean;
 }
 
 export interface ThreadMessage {
@@ -28,6 +30,14 @@ export interface ThreadMessage {
   send_error?: { code: string; message?: string } | null;
   /** Present on internal notes only (KAI-232). */
   mentions?: NoteMention[];
+  /** Note author's user id — seeds the note card avatar. */
+  author_id?: string | null;
+  /** The current viewer wrote this note ("You" instead of a name). */
+  is_own_note?: boolean;
+  /** This note mentions the current viewer. */
+  mentions_me?: boolean;
+  /** ...and that mention has not been read yet — drives the unread treatment. */
+  mention_unread?: boolean;
 }
 
 interface UseTicketThreadResult {

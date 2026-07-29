@@ -3,6 +3,7 @@
 
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { getInitials } from "@/components/ui/avatar";
 
 interface UserMenuProps {
   collapsed?: boolean;
@@ -14,14 +15,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
   if (!profile) return null;
 
   const displayName = profile.name || profile.email;
-  const initials = profile.name
-    ? profile.name
-        .split(" ")
-        .map((p: string) => p[0] ?? "")
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
-    : (profile.email?.[0] ?? "U").toUpperCase();
+  const initials = getInitials(profile.name, profile.email);
 
   if (collapsed) {
     return (

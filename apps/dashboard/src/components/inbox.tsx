@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/auth-context";
 import { useTriageStore } from "@/stores/triage-store";
 import { useRealtimeTickets } from "@/hooks/use-realtime-tickets";
+import { useNoteCounts } from "@/hooks/use-note-counts";
 import { apiCall } from "@/lib/api-client";
 import { TicketList } from "./ticket-list";
 import { TicketDetail } from "./ticket-detail";
@@ -14,6 +15,10 @@ export function Inbox() {
   const { tickets, selectedTicketId, setTickets, setScanning, setOperationalSlaConfig } = useTriageStore();
 
   useRealtimeTickets();
+
+  // KAI-232 — per-ticket note counters for the queue chip, the ticket header
+  // and the Notes tab badge. Owned here, next to the ticket fetch.
+  useNoteCounts(!!user);
 
   // KAI-168 — fetch the account's operational SLA config once per session.
   // Tickets themselves are fetched directly from Supabase below (not via the

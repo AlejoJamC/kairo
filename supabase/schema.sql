@@ -505,6 +505,30 @@ $$;
 ALTER FUNCTION "public"."get_sidebar_counts"("p_account_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uuid", "p_user_id" "uuid") RETURNS TABLE("ticket_id" "uuid", "note_count" bigint, "unread_mentions" bigint)
+    LANGUAGE "sql" STABLE
+    AS $$
+  SELECT
+    t.id AS ticket_id,
+    COUNT(DISTINCT e.id) AS note_count,
+    COUNT(DISTINCT m.id) FILTER (
+      WHERE m.mentioned_user_id = p_user_id AND m.read_at IS NULL
+    ) AS unread_mentions
+  FROM public.tickets t
+  JOIN public.ticket_events e
+    ON e.ticket_id = t.id
+   AND e.event_type = 'internal_note'
+  LEFT JOIN public.ticket_note_mentions m
+    ON m.ticket_event_id = e.id
+   AND m.account_id = p_account_id
+  WHERE t.account_id = p_account_id
+  GROUP BY t.id;
+$$;
+
+
+ALTER FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -3160,6 +3184,12 @@ GRANT ALL ON FUNCTION "public"."get_invitation_by_token"("p_token" "uuid") TO "s
 GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_account_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_account_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_account_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uuid", "p_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uuid", "p_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uuid", "p_user_id" "uuid") TO "service_role";
 
 
 

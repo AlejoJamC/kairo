@@ -360,10 +360,41 @@
     "mentionChipLabel": "Mencionado: {{name}}"
   },
   "notes": {
-    "loading": "Cargando notas…",
-    "empty": "Este ticket aún no tiene notas internas.",
-    "jumpToNote": "Ver esta nota en la conversación",
-    "unknownMember": "miembro"
+    "loading": "cargando notas…",
+    "count": "{{count}} nota · este ticket",
+    "count_plural": "{{count}} notas · este ticket",
+    "new": "Nueva nota",
+    "you": "Tú",
+    "teamOnly": "SOLO EQUIPO",
+    "jump": "Ver en el hilo",
+    "jumpedFromNotes": "SALTO DESDE NOTAS",
+    "mentionedYou": "TE MENCIONÓ",
+    "mentionedYouIn": "te mencionó en",
+    "openAtNote": "Abrir ticket y saltar a la nota",
+    "privacy": "Las notas internas nunca se envían ni son visibles para el cliente.",
+    "unknownMember": "miembro",
+    "headerCount": "{{count}} nota",
+    "headerCount_plural": "{{count}} notas",
+    "queueChipTooltip": "Notas internas en este ticket",
+    "queueMentionTooltip": "Tienes una mención sin leer aquí",
+    "noTicket": "Ningún ticket seleccionado",
+    "noTicketHint": "Elige un ticket de la bandeja para ver sus notas internas y menciones.",
+    "empty": {
+      "title": "Aún no hay notas internas",
+      "hint": "Escribe la primera desde el modo «Nota interna» del compositor. Solo tu equipo puede verlas."
+    }
+  },
+  "mention": {
+    "header": "Mencionar a",
+    "counter": "{{shown}} de {{total}}",
+    "more": "+{{count}} más · sigue escribiendo para filtrar",
+    "empty": "No hay miembros que coincidan",
+    "willNotify": "será notificada",
+    "willNotify_plural": "serán notificados",
+    "removeChip": "Quitar la mención de {{name}}",
+    "keyNavigate": "navegar",
+    "keyInsert": "insertar",
+    "keyClose": "cerrar"
   },
   "templatePicker": {
     "searchPlaceholder": "Buscar plantilla...",

@@ -23,6 +23,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getNumericFlag } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { useTriageStore } from "@/stores/triage-store";
+import { Avatar, getInitials } from "@/components/ui/avatar";
 import type { Ticket } from "@kairo/types";
 import type { AppView } from "@/types";
 
@@ -80,6 +81,8 @@ interface ApiNotification {
   ticket_id: string | null;
   /** KAI-232 — note-level deep-link (nullable; only mention rows carry it). */
   ticket_event_id: string | null;
+  /** KAI-232 — ticket reference for the row's mono chip. */
+  ticket_short_id: string | null;
   title: string;
   body: string;
   read_at: string | null;
@@ -111,13 +114,14 @@ function toNotifItem(row: ApiNotification): NotifItem {
       id: row.id,
       kind: "mention",
       unread: !row.read_at,
-      // The API pre-renders "<Author> te mencionó en <ticket>" into `title`.
+      // `title` carries only the author's name; the sentence and the ticket
+      // chip are composed in NotifRow from the i18n catalog (KAI-232).
       who: row.title,
       actor: "@",
       actorBg: "var(--k-accent-subtle)",
       actorColor: "var(--k-accent)",
       title: "",
-      target: null,
+      target: row.ticket_short_id,
       preview: row.body,
       time: relativeTimeShort(row.created_at),
       ticketId: row.ticket_id,
@@ -182,6 +186,7 @@ function NotificationsPopover({ items, onMarkAll, onSelect }: NotifPopoverProps)
     items;
 
   const unread = items.filter((n) => n.unread).length;
+  const unreadMentions = items.filter((n) => n.unread && n.kind === "mention").length;
 
   // KAI-232: the "@menciones" tab only exists when internal notes are on —
   // otherwise it could never hold anything but would still advertise the feature.
@@ -228,6 +233,7 @@ function NotificationsPopover({ items, onMarkAll, onSelect }: NotifPopoverProps)
               key={id}
               onClick={() => setTab(id as typeof tab)}
               style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
                 fontSize: 11, padding: "4px 8px", borderRadius: 4,
                 background: tab === id ? T.surface2 : "transparent",
                 color: tab === id ? T.textPrimary : T.textTertiary,
@@ -235,6 +241,13 @@ function NotificationsPopover({ items, onMarkAll, onSelect }: NotifPopoverProps)
               }}
             >
               {label}
+              {/* Unread mentions pending on this tab (spec D1). */}
+              {id === "menciones" && unreadMentions > 0 && (
+                <span style={{
+                  width: 5, height: 5, borderRadius: 999,
+                  background: "var(--k-mention-solid)",
+                }}/>
+              )}
             </button>
           ))}
         </div>
@@ -269,10 +282,17 @@ function NotificationsPopover({ items, onMarkAll, onSelect }: NotifPopoverProps)
   );
 }
 
+/** "Johana Ferrer" → "Johana" — the row leads with a first name (spec D1). */
+function firstName(full: string): string {
+  return full.trim().split(/\s+/)[0] ?? full;
+}
+
 function NotifRow({ n, onSelect }: { n: NotifItem; onSelect: (item: NotifItem) => void }) {
+  const { t } = useTranslation(["dashboard"]);
   const [hovered, setHovered] = useState(false);
+  const isMention = n.kind === "mention";
   // Only mention rows lead somewhere today (KAI-232); the rest stay inert.
-  const clickable = n.kind === "mention" && !!n.ticketId;
+  const clickable = isMention && !!n.ticketId;
   return (
     <div
       onMouseEnter={() => setHovered(true)}
@@ -302,34 +322,58 @@ function NotifRow({ n, onSelect }: { n: NotifItem; onSelect: (item: NotifItem) =
           width: 4, height: 4, borderRadius: 999, background: T.accent,
         }}/>
       )}
-      {/* Actor avatar */}
-      <div style={{
-        width: 28, height: 28, borderRadius: 999, background: n.actorBg,
-        color: n.actorColor ?? "white", flexShrink: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 11, fontWeight: 600,
-      }}>
-        {n.actor}
-      </div>
+      {/* Actor avatar — mentions show the teammate; system kinds keep a glyph. */}
+      {isMention ? (
+        <Avatar name={n.who} seed={n.who} size={28} />
+      ) : (
+        <div style={{
+          width: 28, height: 28, borderRadius: 999, background: n.actorBg,
+          color: n.actorColor ?? "white", flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 11, fontWeight: 600,
+        }}>
+          {n.actor}
+        </div>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
           <NotifDot kind={n.kind}/>
           <span style={{ fontSize: 12, color: T.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-            <strong style={{ fontWeight: 500 }}>{n.who}</strong>
-            <span style={{ color: T.textSecondary }}> {n.title}</span>
+            <strong style={{ fontWeight: n.unread ? 600 : 500 }}>{firstName(n.who)}</strong>
+            <span style={{ color: T.textSecondary }}>
+              {isMention ? ` ${t("dashboard:notes.mentionedYouIn")}` : ` ${n.title}`}
+            </span>
             {n.target && (
               <span style={{ fontFamily: T.mono, color: T.accent, marginLeft: 4 }}>{n.target}</span>
             )}
           </span>
           <span style={{ fontSize: 10, fontFamily: T.mono, color: T.textTertiary, flexShrink: 0 }}>{n.time}</span>
         </div>
+        {/* A mention excerpt is quoted in the note's own amber, so it reads as
+            internal at a glance (KAI-232 spec D1). */}
         <div style={{
-          fontSize: 12, color: T.textSecondary, lineHeight: 1.45,
+          fontSize: 12,
+          color: isMention ? "var(--k-note-text)" : T.textSecondary,
+          lineHeight: 1.45,
           overflow: "hidden", display: "-webkit-box",
           WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+          ...(isMention ? {
+            padding: "4px 7px",
+            borderRadius: 5,
+            background: "var(--k-note-bg)",
+            border: "1px solid var(--k-note-border)",
+          } : null),
         } as React.CSSProperties}>
           {n.preview}
         </div>
+        {clickable && hovered && (
+          <div style={{
+            marginTop: 6, display: "flex", alignItems: "center", gap: 5,
+            fontFamily: T.mono, fontSize: 10, color: T.accent,
+          }}>
+            → {t("dashboard:notes.openAtNote")}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -638,6 +682,7 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
   }, []);
 
   const unread = notifs.filter((n) => n.unread).length;
+  const unreadMentions = notifs.filter((n) => n.unread && n.kind === "mention").length;
   const curStatusDot = STATUS_DOTS[status];
 
   function markRead(id: string) {
@@ -646,12 +691,12 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
     apiCall(`/api/v1/notifications/${id}/read`, { method: "PATCH" }).catch(() => {});
   }
 
+  // KAI-232 (design rule F.2): a bulk dismiss clears NOTIFICATIONS only — the
+  // note cards stay unread until actually read in the Notes tab. That is why
+  // this hits /read-all (no mention cascade) instead of N per-id PATCHes.
   function markAllRead() {
-    const unreadIds = notifs.filter((n) => n.unread).map((n) => n.id);
     setNotifs((ns) => ns.map((n) => ({ ...n, unread: false })));
-    unreadIds.forEach((id) => {
-      apiCall(`/api/v1/notifications/${id}/read`, { method: "PATCH" }).catch(() => {});
-    });
+    apiCall("/api/v1/notifications/read-all", { method: "PATCH" }).catch(() => {});
   }
 
   // KAI-232 — mention deep-link: mark read, open triage on that ticket, and
@@ -723,6 +768,16 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
               {unread}
             </span>
           )}
+          {/* KAI-232 spec D5 — "there are mentions among them". The red count
+              still covers ALL unread notifications; this is not a second
+              counter, just a hint about what kind they are. */}
+          {unreadMentions > 0 && (
+            <span style={{
+              position: "absolute", bottom: 3, right: 3,
+              width: 7, height: 7, borderRadius: 999,
+              background: "var(--k-mention-solid)", border: `1.5px solid ${T.bg}`,
+            }}/>
+          )}
         </button>
         {open === "notif" && (
           <NotificationsPopover
@@ -793,9 +848,7 @@ export function TopChrome({ collapsed, onToggle, onViewChange }: TopChromeProps)
   const { t } = useTranslation(["dashboard"]);
   const { profile, signOut } = useAuth();
 
-  const initials = profile?.name
-    ? profile.name.split(" ").map((p: string) => p[0] ?? "").join("").toUpperCase().slice(0, 2)
-    : (profile?.email?.[0] ?? "U").toUpperCase();
+  const initials = getInitials(profile?.name, profile?.email);
 
   const displayName = profile?.name ?? profile?.email ?? "Usuario";
   const email = profile?.email ?? "";
