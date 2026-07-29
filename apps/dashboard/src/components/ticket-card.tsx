@@ -1,11 +1,14 @@
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Users, ArrowUp } from "lucide-react";
+import { Users, ArrowUp, Lock } from "lucide-react";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
 import { getEmotionTokens } from "@kairo/ui";
 import { useTriageStore } from "@/stores/triage-store";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
+import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
+
+const NO_NOTE_COUNTS = { notes: 0, unread_mentions: 0 } as const;
 
 // ---------------------------------------------------------------------------
 // Sentiment helpers — sourced from @kairo/ui triage-tokens
@@ -271,6 +274,9 @@ export function TicketCard({
     }, LONG_PRESS_MS);
   }
 
+  // KAI-232 — note/mention counters for this row, from the shared store.
+  const noteCounts = useTriageStore((s) => s.noteCounts[ticket.id]) ?? NO_NOTE_COUNTS;
+
   const isSpam = (ticket.ticket_type ?? "").toLowerCase() === "spam";
   const relativeTime = useRelativeTime(ticket.received_at ?? ticket.created_at);
   const emotion = getEmotionTokens(ticket.sentiment);
@@ -368,6 +374,41 @@ export function TicketCard({
           </span>
         )}
         <PriorityBadge priority={ticket.priority} />
+        {/* KAI-232 — internal notes on this ticket (amber chip) and a blue dot
+            when one of them holds an unread mention of you (spec A1). Counts
+            come from the store, computed server-side per request. */}
+        {INTERNAL_NOTES_ENABLED && noteCounts.notes > 0 && (
+          <span
+            title={t("notes.queueChipTooltip", "Internal notes on this ticket")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              padding: "1px 5px",
+              borderRadius: 3,
+              background: "var(--k-note-bg)",
+              border: "1px solid var(--k-note-border)",
+              color: "var(--k-note-label)",
+              fontFamily: "var(--k-font-mono)",
+              fontSize: 9.5,
+            }}
+          >
+            <Lock style={{ width: 8, height: 8 }} />
+            {noteCounts.notes}
+          </span>
+        )}
+        {INTERNAL_NOTES_ENABLED && noteCounts.unread_mentions > 0 && (
+          <span
+            title={t("notes.queueMentionTooltip", "You have an unread mention here")}
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: 999,
+              background: "var(--k-mention-solid)",
+              flexShrink: 0,
+            }}
+          />
+        )}
         {ticket.ticket_type && (
           <span
             style={{

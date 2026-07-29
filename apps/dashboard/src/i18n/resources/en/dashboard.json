@@ -360,10 +360,41 @@
     "mentionChipLabel": "Mentioned: {{name}}"
   },
   "notes": {
-    "loading": "Loading notes…",
-    "empty": "No internal notes on this ticket yet.",
-    "jumpToNote": "Show this note in the conversation",
-    "unknownMember": "member"
+    "loading": "loading notes…",
+    "count": "{{count}} note · this ticket",
+    "count_plural": "{{count}} notes · this ticket",
+    "new": "New note",
+    "you": "You",
+    "teamOnly": "TEAM ONLY",
+    "jump": "View in thread",
+    "jumpedFromNotes": "JUMPED FROM NOTES",
+    "mentionedYou": "MENTIONED YOU",
+    "mentionedYouIn": "mentioned you in",
+    "openAtNote": "Open ticket and jump to note",
+    "privacy": "Internal notes are never sent to or visible by the customer.",
+    "unknownMember": "member",
+    "headerCount": "{{count}} note",
+    "headerCount_plural": "{{count}} notes",
+    "queueChipTooltip": "Internal notes on this ticket",
+    "queueMentionTooltip": "You have an unread mention here",
+    "noTicket": "No ticket selected",
+    "noTicketHint": "Pick a ticket from the queue to see its internal notes and mentions.",
+    "empty": {
+      "title": "No internal notes yet",
+      "hint": "Write the first one from the composer's «Internal note» mode. Only your team can see them."
+    }
+  },
+  "mention": {
+    "header": "Mention",
+    "counter": "{{shown}} of {{total}}",
+    "more": "+{{count}} more · keep typing to filter",
+    "empty": "No members found",
+    "willNotify": "will be notified",
+    "willNotify_plural": "will be notified",
+    "removeChip": "Remove mention of {{name}}",
+    "keyNavigate": "navigate",
+    "keyInsert": "insert",
+    "keyClose": "close"
   },
   "templatePicker": {
     "searchPlaceholder": "Search template...",

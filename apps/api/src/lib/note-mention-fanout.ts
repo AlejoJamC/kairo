@@ -18,6 +18,12 @@ const EXCERPT_MAX_CHARS = 140;
 export interface ResolvedMention {
   user_id: string;
   name: string | null;
+  /**
+   * True when this mention points at the caller. Resolved server-side so the
+   * client can render "you were tagged" (a solid accent chip) without knowing
+   * anything about identity — the API stays the single resolver (ADR-025 §3).
+   */
+  is_me?: boolean;
 }
 
 export interface FanOutMentionsOptions {
@@ -91,6 +97,16 @@ export async function resolveValidMentions(
 }
 
 /**
+ * Attaches `is_me` to already-resolved mentions, relative to the caller.
+ */
+export function markOwnMentions(
+  mentions: ResolvedMention[],
+  callerUserId: string,
+): ResolvedMention[] {
+  return mentions.map((m) => ({ ...m, is_me: m.user_id === callerUserId }));
+}
+
+/**
  * Writes mention + notification rows for every valid mention in a note.
  *
  * Returns ALL valid mentions — including a self-mention — so the caller can
@@ -120,19 +136,12 @@ export async function fanOutNoteMentions(
         ? `${plainBody.slice(0, EXCERPT_MAX_CHARS)}…`
         : plainBody;
 
-    const { data: ticket } = await supabase
-      .from("tickets")
-      .select("short_id, subject")
-      .eq("id", opts.ticketId)
-      .maybeSingle();
-
-    const ticketLabel = (ticket as { short_id?: string | null } | null)?.short_id ?? null;
-
-    // Spanish-first strings, matching the existing notification producer
-    // (escalation-check-cron). Notification i18n is known debt from KAI-168.
-    const title = ticketLabel
-      ? `${authorName ?? "Un compañero"} te mencionó en ${ticketLabel}`
-      : `${authorName ?? "Un compañero"} te mencionó en una nota interna`;
+    // `title` carries ONLY the author's display name — the sentence ("X
+    // mentioned you in KAI-T-1247") is composed client-side from the i18n
+    // catalog plus the ticket's short_id, so mention notifications are
+    // properly localized instead of server-rendered Spanish (the debt KAI-168
+    // left behind for `sla_escalation`).
+    const title = authorName ?? "";
 
     // Notifications first: `notified_at` is only stamped when delivery landed.
     const { error: notifErr } = await supabase.from("notifications").insert(

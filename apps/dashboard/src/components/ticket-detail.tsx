@@ -8,6 +8,8 @@ import { useTriageStore } from "@/stores/triage-store";
 import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
+import { TeamOnlyChip } from "./triage/note-primitives";
+import { Avatar, getInitials } from "./ui/avatar";
 import { getLandingUrl } from "@/lib/api-client";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
@@ -94,9 +96,7 @@ function PrioritySlaBar({ ticket }: { ticket: Ticket }) {
 // ---------------------------------------------------------------------------
 
 function SenderAvatar({ name, email }: { name: string | null; email: string | null }) {
-  const initials = name
-    ? name.split(" ").slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("")
-    : (email?.[0]?.toUpperCase() ?? "?");
+  const initials = getInitials(name, email);
   return (
     <div
       style={{
@@ -124,7 +124,7 @@ function SenderAvatar({ name, email }: { name: string | null; email: string | nu
 // MessageCard — renders a single thread message
 // ---------------------------------------------------------------------------
 
-function MessageCard({ message }: { message: ThreadMessage }) {
+function MessageCard({ message, jumped = false }: { message: ThreadMessage; jumped?: boolean }) {
   const { t } = useTranslation("dashboard");
   const isOutbound = message.direction === "outbound";
   const isInternal = message.direction === "internal";
@@ -143,7 +143,7 @@ function MessageCard({ message }: { message: ThreadMessage }) {
 
   const bodyText = message.body_plain ?? message.snippet ?? null;
 
-  // Internal note: compact amber card, full-width, no avatar offset
+  // Internal note: amber card, full-width, no avatar offset (KAI-232 spec B5)
   if (isInternal) {
     return (
       <div
@@ -151,53 +151,68 @@ function MessageCard({ message }: { message: ThreadMessage }) {
           display: "flex",
           flexDirection: "column",
           gap: 0,
-          borderLeft: "3px solid #F59E0B",
-          background: "#FFFBEB",
-          border: "1px solid #FDE68A",
-          borderRadius: 8,
+          borderLeft: "3px solid var(--k-note-rail)",
+          background: "var(--k-note-bg)",
+          border: "1px solid var(--k-note-border)",
+          borderRadius: 12,
           overflow: "hidden",
-          padding: "10px 14px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: "#92400E",
-              background: "#FEF3C7",
-              border: "1px solid #FDE68A",
-              borderRadius: 4,
-              padding: "1px 5px",
-              flexShrink: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            {t("ticketDetail.internalNote", "Internal note")}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 9,
+            padding: "10px 14px",
+            borderBottom: "1px solid var(--k-note-border)",
+          }}
+        >
+          <Avatar
+            name={message.sender_display_name}
+            email={message.sender_external_id}
+            seed={message.author_id ?? message.sender_external_id}
+            size={22}
+          />
+          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--k-note-text-strong)" }}>
+            {message.is_own_note ? t("notes.you", "You") : senderLabel}
           </span>
+          <TeamOnlyChip />
+          {/* Only exists while the jump highlight is running (spec B5). */}
+          {jumped && (
+            <span
+              style={{
+                fontFamily: "var(--k-font-mono)",
+                fontSize: 9.5,
+                color: "var(--k-note-label)",
+                background: "rgba(245,158,11,0.16)",
+                padding: "2px 6px",
+                borderRadius: 3,
+                letterSpacing: "0.04em",
+              }}
+            >
+              ↳ {t("notes.jumpedFromNotes", "JUMPED FROM NOTES")}
+            </span>
+          )}
           <span
             style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: "#92400E",
-            }}
-          >
-            {senderLabel}
-          </span>
-          <span
-            style={{
-              fontSize: 11,
-              color: "#A16207",
               marginLeft: "auto",
+              fontFamily: "var(--k-font-mono)",
+              fontSize: 10.5,
+              color: "var(--k-note-label)",
               flexShrink: 0,
             }}
           >
             {timestamp}
           </span>
         </div>
-        {/* KAI-232: mention tokens render as chips, never as raw @[user:…]. */}
-        <NoteBody body={bodyText} mentions={message.mentions} style={{ color: "#78350F" }} />
+        <div style={{ padding: "12px 14px" }}>
+          {/* KAI-232: mention tokens render as chips, never as raw @[user:…]. */}
+          <NoteBody
+            body={bodyText}
+            mentions={message.mentions}
+            style={{ fontSize: 13.5, lineHeight: 1.6, color: "var(--k-note-text-strong)" }}
+          />
+        </div>
       </div>
     );
   }
@@ -570,16 +585,12 @@ export function TicketDetail() {
                   if (el) messageRefs.current.set(msg.id, el);
                   else messageRefs.current.delete(msg.id);
                 }}
-                style={{
-                  borderRadius: 10,
-                  transition: "box-shadow 0.3s ease, background 0.3s ease",
-                  boxShadow:
-                    highlightedMessageId === msg.id
-                      ? "0 0 0 3px var(--k-accent-subtle), 0 0 0 4px var(--k-accent)"
-                      : "none",
-                }}
+                // KAI-232 spec B5: outline + amber halo fading out over 1.6s.
+                // Driven by a CSS class so the animation cannot drift from the
+                // token values (see .note-jump-highlight in index.css).
+                className={highlightedMessageId === msg.id ? "note-jump-highlight" : undefined}
               >
-                <MessageCard message={msg} />
+                <MessageCard message={msg} jumped={highlightedMessageId === msg.id} />
               </div>
             ))}
           </div>

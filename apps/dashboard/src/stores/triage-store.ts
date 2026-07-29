@@ -130,6 +130,22 @@ interface TriageStore {
   scrollToMessageId: string | null;
   requestScrollToMessage: (messageId: string) => void;
   clearScrollToMessage: () => void;
+  // KAI-232 — internal-note counters per ticket id, from GET /v1/notes/counts.
+  // Computed server-side per request (never stored on `tickets`); kept here so
+  // the queue, the ticket header and the Notes tab all read one copy.
+  // `unread_mentions` is scoped to the current user.
+  noteCounts: Record<string, NoteCounts>;
+  setNoteCounts: (counts: Record<string, NoteCounts>) => void;
+  // KAI-232 — "New note" in the Notes tab asks the composer to switch to note
+  // mode and take focus. A counter, not a boolean: every press must fire, even
+  // consecutive ones, and there is no state to reset afterwards.
+  composeNoteRequests: number;
+  requestComposeNote: () => void;
+}
+
+export interface NoteCounts {
+  notes: number;
+  unread_mentions: number;
 }
 
 export const useTriageStore = create<TriageStore>((set) => ({
@@ -231,4 +247,10 @@ export const useTriageStore = create<TriageStore>((set) => ({
   scrollToMessageId: null,
   requestScrollToMessage: (messageId) => set({ scrollToMessageId: messageId }),
   clearScrollToMessage: () => set({ scrollToMessageId: null }),
+
+  noteCounts: {},
+  setNoteCounts: (counts) => set({ noteCounts: counts }),
+
+  composeNoteRequests: 0,
+  requestComposeNote: () => set((state) => ({ composeNoteRequests: state.composeNoteRequests + 1 })),
 }));

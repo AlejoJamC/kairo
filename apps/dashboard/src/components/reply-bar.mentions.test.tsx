@@ -88,7 +88,8 @@ describe("ReplyBar — @mentions (flag ON)", () => {
 
   it("exposes note mode and its internal-only affordances", async () => {
     await renderNoteComposer();
-    expect(screen.getByText(/replyBar\.noteVisibilityHint/i)).toBeInTheDocument();
+    // The shared "TEAM ONLY" chip — the permanent privacy marker (spec C1).
+    expect(screen.getByText(/notes\.teamOnly/i)).toBeInTheDocument();
     expect(screen.getByText(/replyBar\.sendNote/i)).toBeInTheDocument();
   });
 
@@ -101,16 +102,18 @@ describe("ReplyBar — @mentions (flag ON)", () => {
 
     const dropdown = await screen.findByTestId("mention-dropdown");
     expect(dropdown).toBeInTheDocument();
-    expect(screen.getByText("Diana Ruiz")).toBeInTheDocument();
-    expect(screen.getByText("Luis Pena")).toBeInTheDocument();
+    // Rows are listbox options; queried by role because the matched run is
+    // wrapped in its own element once a query is active.
+    expect(screen.getByRole("option", { name: /Diana Ruiz/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Luis Pena/ })).toBeInTheDocument();
     // The note's own author is never a suggestion.
-    expect(screen.queryByText("Author Self")).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /Author Self/ })).not.toBeInTheDocument();
 
     await user.type(textarea, "dia");
     await waitFor(() => {
-      expect(screen.queryByText("Luis Pena")).not.toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: /Luis Pena/ })).not.toBeInTheDocument();
     });
-    expect(screen.getByText("Diana Ruiz")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Diana Ruiz/ })).toBeInTheDocument();
   });
 
   it("inserts an id token (never the display name) and shows a mention chip", async () => {
@@ -120,17 +123,36 @@ describe("ReplyBar — @mentions (flag ON)", () => {
     await user.click(textarea);
     await user.type(textarea, "ping @dia");
     await screen.findByTestId("mention-dropdown");
-    await user.click(screen.getByText("Diana Ruiz"));
+    await user.click(screen.getByRole("option", { name: /Diana Ruiz/ }));
 
     await waitFor(() => {
       expect(textarea.value).toBe(`ping @[user:${DIANA_ID}] `);
     });
     // The persisted body carries the id, not the name.
     expect(textarea.value).not.toContain("Diana Ruiz");
-    // ...but the composer confirms who will be notified.
-    expect(screen.getByText("@Diana Ruiz")).toBeInTheDocument();
+    // ...but the composer confirms who will be notified, with a removable chip.
+    expect(screen.getByLabelText(/mention\.removeChip/i)).toBeInTheDocument();
     // Dropdown closes after a pick.
     expect(screen.queryByTestId("mention-dropdown")).not.toBeInTheDocument();
+  });
+
+  it("removing a mention chip strips the token from the note body", async () => {
+    const user = await renderNoteComposer();
+    const textarea = screen.getByPlaceholderText(/replyBar\.notePlaceholder/i) as HTMLTextAreaElement;
+
+    await user.click(textarea);
+    await user.type(textarea, "ping @dia");
+    await screen.findByTestId("mention-dropdown");
+    await user.click(screen.getByRole("option", { name: /Diana Ruiz/ }));
+    await waitFor(() => expect(textarea.value).toContain(DIANA_ID));
+
+    // The chip row is a view of the text — dismissing it must edit the body.
+    await user.click(screen.getByLabelText(/mention\.removeChip/i));
+
+    await waitFor(() => {
+      expect(textarea.value).not.toContain(DIANA_ID);
+    });
+    expect(screen.queryByLabelText(/mention\.removeChip/i)).not.toBeInTheDocument();
   });
 
   it("posts the note body with the raw token — the API resolves mentions", async () => {
@@ -140,7 +162,7 @@ describe("ReplyBar — @mentions (flag ON)", () => {
     await user.click(textarea);
     await user.type(textarea, "ping @dia");
     await screen.findByTestId("mention-dropdown");
-    await user.click(screen.getByText("Diana Ruiz"));
+    await user.click(screen.getByRole("option", { name: /Diana Ruiz/ }));
 
     apiCallMock.mockClear();
     await user.click(screen.getByText(/replyBar\.sendNote/i));

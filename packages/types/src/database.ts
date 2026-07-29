@@ -2200,6 +2200,14 @@ export type Database = {
           status: string
         }[]
       }
+      get_ticket_note_counts: {
+        Args: { p_account_id: string; p_user_id: string }
+        Returns: {
+          note_count: number
+          ticket_id: string
+          unread_mentions: number
+        }[]
+      }
       has_account_access: { Args: { p_account_id: string }; Returns: boolean }
       is_account_admin: { Args: { p_account_id: string }; Returns: boolean }
       is_active_admin: { Args: never; Returns: boolean }

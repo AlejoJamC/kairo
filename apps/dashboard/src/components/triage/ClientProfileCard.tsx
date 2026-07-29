@@ -2,17 +2,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Phone, Copy, Check } from "lucide-react";
 import { useTriageStore } from "@/stores/triage-store";
+import { getInitials } from "@/components/ui/avatar";
 
-// ---------------------------------------------------------------------------
-// Avatar initials
-// ---------------------------------------------------------------------------
-
-function initials(name: string | null): string {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+const initials = (name: string | null) => getInitials(name);
 
 // ---------------------------------------------------------------------------
 // Skeleton — exported so parent can compose it

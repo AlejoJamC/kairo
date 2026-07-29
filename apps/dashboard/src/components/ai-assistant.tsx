@@ -646,6 +646,13 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   const [activeTab,      setActiveTab]      = useState<TabId>(defaultTabId);
   const [profileLoading, setProfileLoading] = useState(false);
 
+  // KAI-232 — unread mentions on the selected ticket, for the Notes tab badge.
+  const noteCounts = useTriageStore((s) => s.noteCounts);
+  const requestComposeNote = useTriageStore((s) => s.requestComposeNote);
+  const notesBadge = selectedTicketId
+    ? (noteCounts[selectedTicketId]?.unread_mentions ?? 0)
+    : 0;
+
   // Single fetch owned here — runs on ticket change regardless of active tab.
   // ClientProfileCard reads from store only (pure display component).
   useEffect(() => {
@@ -726,6 +733,27 @@ export function AiAssistant({ customer }: AiAssistantProps) {
                 <span style={{ width: 5, height: 5, borderRadius: 999, flexShrink: 0, background: "var(--k-gradient-ai)" }} />
               )} */}
               {label}
+              {/* KAI-232 — unread mentions on this ticket's notes (spec E2). */}
+              {id === "notes" && notesBadge > 0 && (
+                <span
+                  style={{
+                    minWidth: 15,
+                    height: 15,
+                    padding: "0 4px",
+                    borderRadius: 999,
+                    background: "var(--k-mention-solid)",
+                    color: "white",
+                    fontFamily: "var(--k-font-mono)",
+                    fontSize: 9,
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {notesBadge}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -758,7 +786,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
           />
         )}
         {INTERNAL_NOTES_ENABLED && activeTab === "notes" && (
-          <NotesPanel ticketId={selectedTicketId} />
+          <NotesPanel ticketId={selectedTicketId} onNewNote={requestComposeNote} />
         )}
       </div>
       )}

@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Lock } from "lucide-react";
 import type { Ticket } from "@kairo/types";
 import { useTriageStore } from "@/stores/triage-store";
+import { Chip } from "@/components/ui/chip";
+import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { CorrectionDialog } from "@/components/correction-dialog";
 import type { CorrectionFields } from "@/components/correction-dialog";
 import { apiCall } from "@/lib/api-client";
@@ -77,6 +80,9 @@ export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
 
   const isCorrected = correctedTicketIds.has(ticket.id);
   const isAssigned = !!ticket.assigned_to;
+
+  // KAI-232 — note count for this ticket, from the shared store.
+  const noteCount = useTriageStore((s) => s.noteCounts[ticket.id]?.notes) ?? 0;
 
   function handleCorrected(fields: CorrectionFields) {
     const patch: Partial<Ticket> = {};
@@ -158,6 +164,12 @@ export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
             >
               {ticket.category}
             </span>
+          )}
+          {/* KAI-232 spec A1 — how many internal notes this ticket carries. */}
+          {INTERNAL_NOTES_ENABLED && noteCount > 0 && (
+            <Chip tone="note" icon={<Lock style={{ width: 9, height: 9 }} />}>
+              {t("notes.headerCount", { count: noteCount, defaultValue: "{{count}} notes" })}
+            </Chip>
           )}
         </div>
       )}

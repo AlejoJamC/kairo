@@ -19,7 +19,7 @@ import {
 import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
 import { attachOperationalSla, buildConfigByPriority } from "../../lib/operational-sla.js";
 import { emitTicketEvent } from "../../lib/ticket-events.js";
-import { fanOutNoteMentions, resolveMentionNames } from "../../lib/note-mention-fanout.js";
+import { fanOutNoteMentions, resolveMentionNames, markOwnMentions } from "../../lib/note-mention-fanout.js";
 import { extractMentionUserIds } from "../../lib/note-mentions.js";
 import { createCompletionProvider, detectEscalationTriggers } from "@kairo/intelligence";
 import type { EscalationContext } from "@kairo/intelligence";
@@ -877,8 +877,12 @@ tickets.post("/:id/escalate", async (c) => {
 // ThreadMessage so the UI can append it optimistically.
 // ---------------------------------------------------------------------------
 
+// KAI-232: 2000 chars, matching the design spec (rule F.9). The composer shows
+// a counter from 1800 on. Was 50000 when KAI-221 shipped the endpoint.
+export const INTERNAL_NOTE_MAX_LENGTH = 2000;
+
 const InternalNoteSchema = z.object({
-  body: z.string().min(1).max(50000),
+  body: z.string().min(1).max(INTERNAL_NOTE_MAX_LENGTH),
 });
 
 tickets.post("/:id/notes", async (c) => {
@@ -960,7 +964,7 @@ tickets.post("/:id/notes", async (c) => {
     is_origin: false,
     delivery_status: null,
     send_error: null,
-    mentions,
+    mentions: markOwnMentions(mentions, user.id),
   };
 
   return c.json({ success: true, note }, 201);
@@ -1399,6 +1403,21 @@ tickets.get("/:id/messages", async (c) => {
     ];
     const mentionNames = await resolveMentionNames(mentionedIds);
 
+    // KAI-232: which of these notes hold an UNREAD mention of the caller.
+    // Drives the note card's unread treatment (design spec B4) — per-viewer
+    // state, so it can only be resolved here, not derived from the body.
+    const { data: unreadRows } = await supabase
+      .from("ticket_note_mentions")
+      .select("ticket_event_id")
+      .eq("account_id", ctx.accountId)
+      .eq("mentioned_user_id", ctx.userId)
+      .is("read_at", null)
+      .in("ticket_event_id", typedNotes.map((e) => e.id));
+
+    const unreadEventIds = new Set(
+      ((unreadRows ?? []) as { ticket_event_id: string }[]).map((r) => r.ticket_event_id),
+    );
+
     for (const evt of typedNotes) {
       const profile = evt.author_id ? profileMap[evt.author_id] : null;
       messages.push({
@@ -1416,7 +1435,15 @@ tickets.get("/:id/messages", async (c) => {
         mentions: extractMentionUserIds(evt.body ?? "").map((user_id) => ({
           user_id,
           name: mentionNames.get(user_id) ?? null,
+          // Lets the client render a solid chip for "you were tagged" without
+          // knowing who the viewer is (KAI-232).
+          is_me: user_id === ctx.userId,
         })),
+        // Author identity for the note card's avatar (design spec B4).
+        author_id: evt.author_id,
+        is_own_note: evt.author_id === ctx.userId,
+        mentions_me: extractMentionUserIds(evt.body ?? "").includes(ctx.userId),
+        mention_unread: unreadEventIds.has(evt.id),
       });
     }
     // Re-sort merged timeline by received_at ascending

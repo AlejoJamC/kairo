@@ -28,6 +28,7 @@ import { classificationProgress } from "./routes/v1/classification-progress.js";
 import { admin } from "./routes/v1/admin.js";
 import { notifications } from "./routes/v1/notifications.js";
 import { members } from "./routes/v1/members.js";
+import { notes } from "./routes/v1/notes.js";
 
 const app = new Hono({ strict: false });
 
@@ -48,6 +49,7 @@ v1.route("/classification", classificationProgress);
 v1.route("/admin", admin);
 v1.route("/notifications", notifications);
 v1.route("/members", members);
+v1.route("/notes", notes);
 
 app.route("/api/v1", v1);
 
