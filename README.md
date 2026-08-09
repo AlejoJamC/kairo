@@ -42,7 +42,7 @@ kairo/
 ├── supabase/
 │   └── migrations/     # shared DB migrations (Postgres via Supabase)
 └── kairo-internal/
-    └── architecture/   # 17 Architecture Decision Records
+    └── architecture/   # 25 Architecture Decision Records
 ```
 
 ## Getting Started

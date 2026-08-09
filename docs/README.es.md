@@ -2,6 +2,8 @@
 
 Cockpit de soporte con IA para equipos de soporte — clasifica correos, enruta tickets y aprende el comportamiento por cliente.
 
+🇬🇧 [English version](../README.md)
+
 ## Stack
 
 | Capa | Tecnología |
@@ -40,7 +42,7 @@ kairo/
 ├── supabase/
 │   └── migrations/     # migraciones de base de datos compartidas (Postgres vía Supabase)
 └── kairo-internal/
-    └── architecture/   # 17 Architecture Decision Records
+    └── architecture/   # 25 Architecture Decision Records
 ```
 
 ## Primeros pasos
