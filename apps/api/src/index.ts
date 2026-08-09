@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { serve } from "inngest/hono";
+import { env } from "./env.js";
 import { inngest } from "./lib/inngest.js";
 import { tier1FastPath } from "./functions/pipeline/tier1-fast-path.js";
 import { tier2Background } from "./functions/pipeline/tier2-background.js";
@@ -62,6 +63,6 @@ app.use(
 );
 
 export default {
-  port: 3001,
+  port: env.PORT,
   fetch: app.fetch,
 };
