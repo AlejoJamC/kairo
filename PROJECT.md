@@ -9,15 +9,19 @@ emails, and routes/responds based on learned behavior per client.
 ```
 /
 ├── apps/
+│   ├── api/            # Bun + Hono — backend API + Inngest pipeline functions (port 3001)
 │   ├── landing/        # Next.js 15 — public marketing site
 │   ├── dashboard/         # Vite + React 19 — main support dashboard
 │   ├── kelan/          # Next.js 15 — admin panel (internal)
-│   └── mobile/         # Expo (React Native) — mobile companion
+│   └── mobile/         # Expo (React Native) — mobile companion (scaffolded only)
 ├── packages/
 │   ├── env/            # centralized env validation (@t3-oss/env-core)
 │   ├── types/          # shared TypeScript interfaces
 │   ├── i18n/           # shared translation resources (EN/ES)
 │   ├── ui/             # shared ShadCN components
+│   ├── feature-flags/  # static + runtime feature flags
+│   ├── identity/       # email/phone normalization, contact dedup
+│   ├── claude_design/  # Pencil design token package
 │   └── intelligence/   # modular LLM provider (Ollama / Anthropic)
 │       └── prompts/    # versioned LLM prompts (YAML frontmatter + markdown)
 ├── supabase/
@@ -40,20 +44,21 @@ emails, and routes/responds based on learned behavior per client.
 │           │   └── ground_truth_50.csv  # human labels from KAI-102 (required by KAI-97)
 │           └── output/           # pipeline_output_50.csv · eval_report.json · eval_report.md
 ├── kairo-internal/
-│   ├── architecture/   # 17 Architecture Decision Records (ADR-001 to ADR-017)
+│   ├── architecture/   # 25 Architecture Decision Records (ADR-001 to ADR-025), gitignored/local-only
 │   └── varios/         # legacy design docs, ideation, architecture specs
 ├── docs/
 │   └── README.es.md    # Spanish documentation
 ├── PROJECT.md          # ← you are here (read this first, always)
-├── CLAUDE.md
-├── .cursorrules
-└── .antigravity.md
+└── .claude/
+    ├── CLAUDE.md       # single source of project instructions
+    └── rules/          # workflow.md, integrations.md
 ```
 
 ## Tech Stack
 | Layer       | Technology                        |
 |-------------|-----------------------------------|
 | Frontend    | Next.js 15, Vite, React 19        |
+| API         | Bun + Hono + Inngest              |
 | Mobile      | Expo (React Native)               |
 | Database    | Supabase (Postgres + Auth)        |
 | AI          | Claude API (prod) / Ollama (local)|
@@ -69,6 +74,10 @@ emails, and routes/responds based on learned behavior per client.
   - 4 OAuth scenarios handled in `/auth/callback`: returning user, duplicate email, invited user, brand-new user
   - Gmail inbox registered as `support_channels` entry on connect
 - Gmail sync (OAuth connected, emails being pulled)
+- Email classification wired end-to-end — `classifyEmailWithMeta` runs live in all three pipeline tiers (`apps/api/src/functions/pipeline/tier1-fast-path.ts`, `tier2-background.ts`, `tier3-deferred.ts`) plus a manual batch path (`batch-classify.ts`); progress and accuracy surfaced via `classification-progress.ts` / `intelligence.ts`
+- Bidirectional outbound messaging — reply bar → `POST /v1/tickets/:id/reply` queues the message, `outbound-send/send.ts` drives `queued → sending → sent|failed` and sends via Gmail with a fresh OAuth token (ADR-023)
+- Internal notes + @mentions — notes stored as `ticket_events` rows, `ticket_note_mentions` table, in-app mention notifications (never email) via `note-mention-fanout.ts` (ADR-025, KAI-232)
+- Escalation flow — dedicated "Escalado" view (`escalated-view.tsx`) with its own triage bucket, separate from Triage/Resolved
 - Client CRUD (full module with database persistence)
 - Session management
 - Profile settings with password change
@@ -77,7 +86,7 @@ emails, and routes/responds based on learned behavior per client.
 - Shared types (`packages/types`) with core schema
 - Centralized env validation (`packages/env`) via `@t3-oss/env-core` + Zod
 - Intelligence layer (`packages/intelligence`) — modular LLM provider abstraction (Ollama / Anthropic)
-- Email classification prompt versioned as markdown artifact (`packages/intelligence/prompts/email-classification.md` v2.1.0)
+- Email classification prompt versioned as markdown artifact (`packages/intelligence/prompts/email-classification.md`)
   - Frontmatter is single source of truth for allowed enum values (tipo, prioridad, categoria, tono, urgencia)
   - Zod schema built dynamically from frontmatter — never hardcoded separately
 - DB schema with AI classification constraints (migration 005)
@@ -86,11 +95,9 @@ emails, and routes/responds based on learned behavior per client.
 - Metrics eval script (`scripts/eval/compute_metrics.ts`) — joins ground truth + pipeline output, computes F1/calibration/tone-inflation report (KAI-97)
 
 ## What's NOT Built Yet
-- Email classification wired end-to-end (prompt exists, API call not integrated)
-- Conversation UI (sending messages to clients) — components scaffolded, not wired
 - i18n on remaining dashboard forms and views
 - Intelligence layer per-client learning / feedback loop
-- Mobile app (scaffolded, not functional)
+- Mobile app — still just a placeholder screen (`apps/mobile/app/index.tsx`), no routing or API wiring
 
 ## Code Conventions
 - TypeScript strict mode everywhere — no `any`, no implicit returns on async
