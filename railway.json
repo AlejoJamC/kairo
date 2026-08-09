@@ -1,10 +1,11 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
+    "builder": "RAILPACK",
     "buildCommand": "bun install && bunx turbo run build:api --filter=@kairo/api"
   },
   "deploy": {
-    "startCommand": "bun run apps/api/dist/index.js"
+    "startCommand": "bun run apps/api/dist/index.js",
+    "healthcheckPath": "/api/v1/health"
   }
 }
