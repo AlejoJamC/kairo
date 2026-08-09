@@ -32,4 +32,10 @@ describe("operationalSlaEscalationCron — interval flag wiring", () => {
     const mod = await import(`${MODULE_PATH}?t=${Date.now()}-b`);
     expect(mod.operationalSlaEscalationCron.opts.triggers[0].cron).toBe("*/15 * * * *");
   });
+
+  it("steps the hour field for whole-hour intervals (e.g. 720 = every 12h)", async () => {
+    process.env[ENV_KEY_INTERVAL] = "720";
+    const mod = await import(`${MODULE_PATH}?t=${Date.now()}-c`);
+    expect(mod.operationalSlaEscalationCron.opts.triggers[0].cron).toBe("0 */12 * * *");
+  });
 });

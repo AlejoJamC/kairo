@@ -15,12 +15,13 @@
 import { inngest } from "../../lib/inngest.js";
 import { supabase } from "../../lib/supabase.js";
 import { getNumericFlag } from "@kairo/feature-flags";
+import { buildIntervalCronExpression } from "../../lib/cron-interval.js";
 
 const intervalMinutes = Math.max(
   1,
   Math.floor(getNumericFlag("gmail_poll_cron_interval_minutes"))
 );
-const CRON_EXPRESSION = `*/${intervalMinutes} * * * *`;
+const CRON_EXPRESSION = buildIntervalCronExpression(intervalMinutes);
 
 /** Truncates "now" to the current tick boundary for deterministic event IDs. */
 function currentTickIso(): string {

@@ -17,6 +17,7 @@ import { inngest } from "../../lib/inngest.js";
 import { supabase } from "../../lib/supabase.js";
 import { getFlag, getNumericFlag } from "@kairo/feature-flags";
 import { emitTicketEvent } from "../../lib/ticket-events.js";
+import { buildIntervalCronExpression } from "../../lib/cron-interval.js";
 import {
   computeOperationalSlaTiming,
   buildConfigByPriority,
@@ -27,7 +28,7 @@ const intervalMinutes = Math.max(
   1,
   Math.floor(getNumericFlag("operational_sla_escalation_check_interval_minutes"))
 );
-const CRON_EXPRESSION = `*/${intervalMinutes} * * * *`;
+const CRON_EXPRESSION = buildIntervalCronExpression(intervalMinutes);
 
 const OPEN_STATUSES = ["open", "in_progress", "awaiting_customer", "reopened"];
 
