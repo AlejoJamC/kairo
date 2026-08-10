@@ -41,4 +41,10 @@ describe("gmailPollCron — interval flag wiring", () => {
     const mod = await import(`${MODULE_PATH}?t=${Date.now()}-b`);
     expect(mod.gmailPollCron.opts.triggers[0].cron).toBe("*/10 * * * *");
   });
+
+  it("steps the hour field for whole-hour intervals (e.g. 720 = every 12h)", async () => {
+    process.env[ENV_KEY] = "720";
+    const mod = await import(`${MODULE_PATH}?t=${Date.now()}-c`);
+    expect(mod.gmailPollCron.opts.triggers[0].cron).toBe("0 */12 * * *");
+  });
 });

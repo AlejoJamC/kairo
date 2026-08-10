@@ -10,12 +10,15 @@ interface AnthropicMessage {
   };
 }
 
+const DEFAULT_MODEL = 'claude-sonnet-4-6';
+
 export class AnthropicCompletionProvider implements CompletionProvider {
-  public readonly model = 'claude-sonnet-4-20250514';
+  public readonly model: string;
   private apiKey: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, model?: string) {
     this.apiKey = apiKey;
+    this.model = model ?? DEFAULT_MODEL;
   }
 
   async complete(prompt: string, options: CompletionOptions = {}): Promise<string> {

@@ -14,6 +14,21 @@ try {
 
 const nextConfig: NextConfig = {
   trailingSlash: true,
+  // Proxies /api/* (dashboard's @kairo/api calls, Inngest's /api/inngest sync
+  // target) to the deployed apps/api origin. The dashboard client always uses
+  // relative URLs (see apps/dashboard/src/lib/api-client.ts), so without this
+  // rewrite every /api/* request on this domain 404s in production. No-op
+  // locally when API_ORIGIN is unset — dev already proxies via Vite.
+  async rewrites() {
+    const apiOrigin = process.env.API_ORIGIN;
+    if (!apiOrigin) return [];
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${apiOrigin}/api/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -11,6 +11,7 @@ const CompletionConfigSchema = z.object({
   ollamaBaseUrl: z.string().url().optional(),
   ollamaModel: z.string().optional(),
   anthropicApiKey: z.string().optional(),
+  anthropicModel: z.string().optional(),
 });
 
 const EmbeddingConfigSchema = z.object({
@@ -27,6 +28,7 @@ export function createCompletionProvider(): CompletionProvider {
     ollamaBaseUrl: process.env['OLLAMA_BASE_URL'],
     ollamaModel: process.env['OLLAMA_MODEL'],
     anthropicApiKey: process.env['ANTHROPIC_API_KEY'],
+    anthropicModel: process.env['ANTHROPIC_MODEL'],
   });
 
   switch (config.completionMode) {
@@ -34,7 +36,7 @@ export function createCompletionProvider(): CompletionProvider {
       if (!config.anthropicApiKey) {
         throw new Error('ANTHROPIC_API_KEY required when INTELLIGENCE_PROVIDER=anthropic');
       }
-      return new AnthropicCompletionProvider(config.anthropicApiKey);
+      return new AnthropicCompletionProvider(config.anthropicApiKey, config.anthropicModel);
 
     case 'ollama':
     default:

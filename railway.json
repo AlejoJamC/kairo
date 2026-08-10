@@ -1,0 +1,11 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "bun install && bun run --filter=@kairo/intelligence build && bun run --filter=@kairo/identity build && cd apps/api && bun run build:api"
+  },
+  "deploy": {
+    "startCommand": "bun run apps/api/dist/index.js",
+    "healthcheckPath": "/api/v1/health"
+  }
+}

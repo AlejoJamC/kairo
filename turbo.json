@@ -35,7 +35,7 @@
     },
     "@kairo/landing#build": {
       "dependsOn": ["@kairo/dashboard#build"],
-      "env": ["GOOGLE_CLIENT_SECRET", "SUPABASE_SERVICE_ROLE_KEY"],
+      "env": ["GOOGLE_CLIENT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "API_ORIGIN"],
       "outputs": [".next/**", "!.next/cache/**", "public/dashboard/**"]
     }
   }
