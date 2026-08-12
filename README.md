@@ -16,7 +16,7 @@ AI-powered support cockpit for support teams — classifies emails, routes ticke
 | Database | Supabase (Postgres + Auth) |
 | AI | Claude API (prod) / Ollama (local) |
 | Email | Gmail API |
-| Deploy | Vercel |
+| Deploy | Vercel (webapp/landing/kelan) + Railway (api) |
 | Language | TypeScript (strict) |
 
 ## Structure

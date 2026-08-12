@@ -16,7 +16,7 @@ Cockpit de soporte con IA para equipos de soporte — clasifica correos, enruta 
 | Base de datos | Supabase (Postgres + Auth) |
 | IA | Claude API (prod) / Ollama (local) |
 | Correo | Gmail API |
-| Deploy | Vercel |
+| Deploy | Vercel (webapp/landing/kelan) + Railway (api) |
 | Lenguaje | TypeScript (strict) |
 
 ## Estructura
