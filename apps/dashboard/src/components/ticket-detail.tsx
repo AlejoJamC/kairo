@@ -124,6 +124,14 @@ function SenderAvatar({ name, email }: { name: string | null; email: string | nu
 // MessageCard — renders a single thread message
 // ---------------------------------------------------------------------------
 
+// sender_external_id stores the raw `From:` header (e.g. "Name <email>"), not
+// a bare email — extract the address before displaying it next to the name.
+function extractEmailAddress(raw: string): string {
+  const angleMatch = raw.match(/<([^>]+)>/);
+  if (angleMatch?.[1]) return angleMatch[1].trim();
+  return raw.trim();
+}
+
 function MessageCard({ message, jumped = false }: { message: ThreadMessage; jumped?: boolean }) {
   const { t } = useTranslation("dashboard");
   const isOutbound = message.direction === "outbound";
@@ -134,7 +142,7 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
     : (message.sender_display_name ?? message.sender_external_id ?? t("ticketDetail.unknownSender", "Unknown sender"));
 
   const senderEmail = !isOutbound && !isInternal && message.sender_display_name && message.sender_external_id
-    ? `<${message.sender_external_id}>`
+    ? `<${extractEmailAddress(message.sender_external_id)}>`
     : "";
 
   const timestamp = message.received_at
