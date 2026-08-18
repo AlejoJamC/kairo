@@ -1515,7 +1515,8 @@ tickets.post("/:id/classify-approve", async (c) => {
 // ---------------------------------------------------------------------------
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROMPT_DIR = join(__dirname, "../../../../packages/intelligence/prompts/reply-suggestion");
+// 5 levels up from apps/api/src/routes/v1 reaches the repo root.
+const PROMPT_DIR = join(__dirname, "../../../../../packages/intelligence/prompts/reply-suggestion");
 
 function loadPromptTemplate(lang: "es" | "en"): string {
   try {
