@@ -9,6 +9,36 @@ KAI-97 evaluation framework for comparison against human ground truth.
 - `ANTHROPIC_API_KEY` set in `.env` (root of monorepo), or
 - `INTELLIGENCE_PROVIDER=ollama` with a local Ollama instance running
 
+## Data layout (private repo)
+
+`scripts/eval/data/` is a **separate private git repo** — it holds real company
+emails and is fully ignored by this monorepo (see root `.gitignore`). Nothing
+under it, including its own README, is visible from here, so the expected tree
+is documented in this file:
+
+```
+scripts/eval/data/
+├── input/
+│   ├── ground_truth_50.csv    ← produced by KAI-102 (raw two-annotator sheet;
+│   │                            adapted in memory at run time — never edited)
+│   ├── _meta.json             ← optional: { "inter_annotator_agreement": <number> }
+│   └── eml/
+│       └── 001.eml … 050.eml  ← raw source emails
+└── output/                    ← auto-created by the scripts
+    └── <provider>-<model>/    ← one directory PER RUN, e.g. ollama-granite4.1-3b
+        ├── pipeline_output_50.csv   (includes provider + model columns)
+        ├── eval_report.md / eval_report.json
+        └── *.log
+```
+
+Each run's identity comes from `INTELLIGENCE_PROVIDER` + `OLLAMA_MODEL` /
+`ANTHROPIC_MODEL` at launch time; runs with different models never share or
+overwrite files. `eval:metrics` resolves the same directory from the same env
+vars, or takes it explicitly: `bun run eval:metrics <run-dir-name>`.
+
+Cloning this monorepo alone is not enough to run the eval — the private data
+repo must be present at `scripts/eval/data/`.
+
 ## Setup
 
 1. **Place your `.eml` files** in `scripts/eval/data/input/eml/`
@@ -40,6 +70,8 @@ bun run eval:pipeline
 |--------|-------------|
 | `email_id` | Zero-padded filename prefix (`001`–`050`) |
 | `filename` | Original filename (`001.eml`) |
+| `provider` | Provider that ran this row (`ollama` / `anthropic`) |
+| `model` | Actual model reported by the provider's response metadata |
 | `predicted_ticket_type` | `support` / `prospect` / `spam` / `internal` / `other` |
 | `predicted_priority` | `P1` / `P2` / `P3` |
 | `predicted_category` | `technical` / `billing` / `account` / `general` / `not_applicable` |

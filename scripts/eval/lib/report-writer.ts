@@ -25,6 +25,11 @@ export interface PerEmailDiff {
 export interface EvalReport {
   run_metadata: {
     generated_at: string;
+    // Which provider/model produced the pipeline output being measured
+    // (from the run directory + the output CSV's provider/model columns)
+    run_slug: string;
+    provider?: string;
+    model?: string;
     ground_truth_file: string;
     pipeline_output_file: string;
     total_emails: number;
@@ -105,6 +110,9 @@ export function buildMarkdown(report: EvalReport): string {
   // Header
   lines.push('# Kairo Pipeline Evaluation Report');
   lines.push(`Generated: ${meta.generated_at}`);
+  lines.push(
+    `Run: ${meta.provider ?? '?'} / ${meta.model ?? '?'} (\`${meta.run_slug}\`)`,
+  );
   lines.push(
     `Dataset: ${meta.total_emails} emails — ${meta.emails_evaluated} evaluated, ` +
     `${meta.emails_skipped_due_to_error} skipped (errors)`,

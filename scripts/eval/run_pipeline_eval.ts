@@ -1,13 +1,21 @@
 import { join } from 'path';
 import { readdir, readFile, writeFile, mkdir } from 'fs/promises';
-import { classifyEmail } from '@kairo/intelligence';
+// Relative import: scripts/eval is not a workspace package, so the
+// `@kairo/intelligence` specifier does not resolve at runtime (the tsconfig
+// `paths` alias only covers type-checking)
+import { classifyEmailWithMeta } from '../../packages/intelligence/src/index';
 import { parseEml } from './lib/parse-eml';
 import { writeCsv } from './lib/write-csv';
+import { resolveRunLabel } from './lib/run-label';
 
 // Resolve paths relative to this file's directory
 const SCRIPT_DIR = new URL('.', import.meta.url).pathname;
 const INPUT_DIR = join(SCRIPT_DIR, 'data/input/eml');
-const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output');
+
+// Each run writes into its own per-model directory so results from different
+// providers/models never overwrite each other
+const RUN = resolveRunLabel();
+const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', RUN.slug);
 const OUTPUT_CSV = join(OUTPUT_DIR, 'pipeline_output_50.csv');
 const LOG_FILE = join(OUTPUT_DIR, 'pipeline_eval_run.log');
 
@@ -16,6 +24,8 @@ const TEMPERATURE = 0;
 interface OutputRow {
   email_id: string;
   filename: string;
+  provider: string;
+  model: string;
   predicted_ticket_type: string;
   predicted_priority: string;
   predicted_category: string;
@@ -31,6 +41,8 @@ interface OutputRow {
 const CSV_COLUMNS: (keyof OutputRow)[] = [
   'email_id',
   'filename',
+  'provider',
+  'model',
   'predicted_ticket_type',
   'predicted_priority',
   'predicted_category',
@@ -66,6 +78,7 @@ async function main(): Promise<void> {
   const padWidth = String(total).length;
 
   console.log('Kairo Pipeline Eval — KAI-106');
+  console.log(`Run: ${RUN.provider} / ${RUN.model} → ${OUTPUT_DIR}`);
   console.log(`Dataset: ${INPUT_DIR} (${total} files)`);
   console.log(`Temperature: ${TEMPERATURE} (enforced)`);
   console.log('─'.repeat(44));
@@ -73,6 +86,7 @@ async function main(): Promise<void> {
   const rows: OutputRow[] = [];
   const logLines: string[] = [
     `[${new Date().toISOString()}] Kairo Pipeline Eval — KAI-106`,
+    `Run: ${RUN.provider} / ${RUN.model}`,
     `Dataset: ${INPUT_DIR} (${total} files)`,
     `Temperature: ${TEMPERATURE}`,
     '',
@@ -93,7 +107,7 @@ async function main(): Promise<void> {
       const rawContent = await readFile(join(INPUT_DIR, filename), 'utf-8');
       const parsed = parseEml(rawContent);
 
-      const result = await classifyEmail(
+      const { result, meta } = await classifyEmailWithMeta(
         { subject: parsed.subject, from: parsed.from, body: parsed.body },
         { temperature: TEMPERATURE }
       );
@@ -113,6 +127,8 @@ async function main(): Promise<void> {
       rows.push({
         email_id: emailId,
         filename,
+        provider: RUN.provider,
+        model: meta.model,
         predicted_ticket_type: result.type,
         predicted_priority: result.priority,
         predicted_category: result.category,
@@ -134,6 +150,8 @@ async function main(): Promise<void> {
       rows.push({
         email_id: emailId,
         filename,
+        provider: RUN.provider,
+        model: RUN.model,
         predicted_ticket_type: '',
         predicted_priority: '',
         predicted_category: '',
