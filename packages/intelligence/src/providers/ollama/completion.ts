@@ -30,6 +30,11 @@ export class OllamaCompletionProvider implements CompletionProvider {
         model: this.model,
         prompt,
         stream: false,
+        // Reasoning models (qwen, deepseek-r1, ...) spend their entire
+        // num_predict budget on the separate `thinking` field and return an
+        // empty response. Classification is schema-constrained output, not a
+        // reasoning task — disable thinking; non-reasoning models ignore it.
+        think: false,
         options: {
           temperature: options.temperature ?? 0.7,
           num_predict: options.maxTokens ?? 1000,

@@ -21,6 +21,11 @@ const LOG_FILE = join(OUTPUT_DIR, 'pipeline_eval_run.log');
 
 const TEMPERATURE = 0;
 
+// If this many emails fail consecutively from the very start, the model is
+// systematically incompatible (wrong format, model not pulled, provider
+// down) — abort instead of burning 15 minutes producing 50 identical errors
+const FAIL_FAST_THRESHOLD = 5;
+
 interface OutputRow {
   email_id: string;
   filename: string;
@@ -165,6 +170,17 @@ async function main(): Promise<void> {
       });
 
       errorCount++;
+    }
+
+    if (errorCount === idx && idx >= FAIL_FAST_THRESHOLD) {
+      const abortMsg =
+        `First ${idx} emails ALL failed — aborting run. The model/provider is ` +
+        `systematically incompatible; fix that before re-running (see errors above).`;
+      console.error('─'.repeat(44));
+      console.error(`✗ ${abortMsg}`);
+      logLines.push('', `ABORTED: ${abortMsg}`);
+      await writeFile(LOG_FILE, logLines.join('\n') + '\n', 'utf-8');
+      process.exit(1);
     }
   }
 
