@@ -12,6 +12,15 @@ interface AnthropicMessage {
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
+// The Claude 5 line (Fable/Mythos/Opus/Sonnet 5) removed sampling params —
+// `temperature` (and top_p/top_k) return a 400 if sent at all, rather than
+// being silently ignored. Matches dated snapshots too (e.g. `-5-20260305`).
+const NO_TEMPERATURE_MODEL = /^claude-(fable|mythos|opus|sonnet)-5(-|$)/;
+
+export function supportsTemperature(model: string): boolean {
+  return !NO_TEMPERATURE_MODEL.test(model);
+}
+
 export class AnthropicCompletionProvider implements CompletionProvider {
   public readonly model: string;
   private apiKey: string;
@@ -37,7 +46,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
       body: JSON.stringify({
         model: this.model,
         max_tokens: options.maxTokens ?? 1000,
-        temperature: options.temperature ?? 0.7,
+        ...(supportsTemperature(this.model) ? { temperature: options.temperature ?? 0.7 } : {}),
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -80,7 +89,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
       body: JSON.stringify({
         model: this.model,
         max_tokens: options.maxTokens ?? 1000,
-        temperature: options.temperature ?? 0.3,
+        ...(supportsTemperature(this.model) ? { temperature: options.temperature ?? 0.3 } : {}),
         messages: [{ role: 'user', content: prompt }],
       }),
     });

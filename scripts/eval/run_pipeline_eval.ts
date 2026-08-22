@@ -4,6 +4,7 @@ import { readdir, readFile, writeFile, mkdir } from 'fs/promises';
 // `@kairo/intelligence` specifier does not resolve at runtime (the tsconfig
 // `paths` alias only covers type-checking)
 import { classifyEmailWithMeta } from '../../packages/intelligence/src/index';
+import { supportsTemperature } from '../../packages/intelligence/src/providers/anthropic/completion';
 import { parseEml } from './lib/parse-eml';
 import { writeCsv } from './lib/write-csv';
 import { resolveRunLabel } from './lib/run-label';
@@ -82,10 +83,19 @@ async function main(): Promise<void> {
   const total = emlFiles.length;
   const padWidth = String(total).length;
 
+  // Claude 5-line models (Fable/Mythos/Opus/Sonnet 5) reject `temperature`
+  // outright — the completion provider omits it for them, so run-to-run
+  // reproducibility for those runs relies on the model's own default
+  // sampling, not on the enforced temperature=0 used for every other model.
+  const temperatureEnforced = RUN.provider !== 'anthropic' || supportsTemperature(RUN.model);
+  const temperatureLabel = temperatureEnforced
+    ? `${TEMPERATURE} (enforced)`
+    : `n/a — not sent (removed param on ${RUN.model}); reproducibility not guaranteed`;
+
   console.log('Kairo Pipeline Eval — KAI-106');
   console.log(`Run: ${RUN.provider} / ${RUN.model} → ${OUTPUT_DIR}`);
   console.log(`Dataset: ${INPUT_DIR} (${total} files)`);
-  console.log(`Temperature: ${TEMPERATURE} (enforced)`);
+  console.log(`Temperature: ${temperatureLabel}`);
   console.log('─'.repeat(44));
 
   const rows: OutputRow[] = [];
@@ -93,7 +103,7 @@ async function main(): Promise<void> {
     `[${new Date().toISOString()}] Kairo Pipeline Eval — KAI-106`,
     `Run: ${RUN.provider} / ${RUN.model}`,
     `Dataset: ${INPUT_DIR} (${total} files)`,
-    `Temperature: ${TEMPERATURE}`,
+    `Temperature: ${temperatureLabel}`,
     '',
   ];
 
