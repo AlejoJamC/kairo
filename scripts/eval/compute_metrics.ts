@@ -8,6 +8,10 @@ import type { AnalysisRow } from './lib/spanish-analysis';
 import { writeReports } from './lib/report-writer';
 import type { EvalReport, PerEmailDiff, FieldDiff } from './lib/report-writer';
 import { resolveRunLabel } from './lib/run-label';
+// The eval validates against the same enums the pipeline emits — one source
+import {
+  TICKET_TYPE, PRIORITY, CATEGORY, TONE, URGENCY,
+} from '../../packages/intelligence/src/index';
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
@@ -104,14 +108,17 @@ export function parseCsv(content: string): CsvParseResult {
 }
 
 // ─── Ground-truth adapter (KAI-93) ──────────────────────────────────────────
-// `ground_truth_50.csv` is the raw two-annotator comparison sheet from KAI-102:
-// Spanish labels with mixed casing/typos, consensus in `*_final` columns, ids
-// without zero-padding, and Excel-export ghost rows with an empty email_id.
-// This adapter translates it — in memory only, the file is never modified —
-// into the canonical schema the metrics expect. Non-obvious mappings:
-//   - category `informativa` → `general` (closest pipeline category)
-//   - difficulty has no consensus column → the harder of the two annotators
-//     wins (disagreement on difficulty is itself a sign of ambiguity)
+// `ground_truth_50.csv` is the raw two-annotator comparison sheet from KAI-102.
+// Its label values are already canonical, so nothing is translated here. What
+// the adapter still does is structural:
+//   - rename the Spanish consensus columns to the canonical field names
+//   - drop Excel-export ghost rows with an empty email_id
+//   - derive `difficulty`, which has no consensus column of its own: the harder
+//     of the two annotators wins, since disagreement on difficulty is itself a
+//     sign of ambiguity
+// Values pass through verbatim and are checked against the same enums the
+// pipeline emits. A value outside them is reported, never silently coerced —
+// coercion is how a business decision ends up buried in scoring code.
 
 const CANONICAL_GT_HEADERS = [
   'email_id', 'ticket_type', 'priority', 'category', 'tone', 'urgency', 'difficulty',
@@ -119,49 +126,28 @@ const CANONICAL_GT_HEADERS = [
 
 const DIFFICULTY_ORDER = ['easy', 'ambiguous', 'hard'];
 
-const GT_VALUE_MAPS: Record<string, Record<string, string>> = {
-  ticket_type: {
-    interno: 'internal', soporte: 'support', prospecto: 'prospect', otro: 'other',
-    internal: 'internal', support: 'support', prospect: 'prospect', spam: 'spam', other: 'other',
-  },
-  priority: { p1: 'P1', p2: 'P2', p3: 'P3' },
-  category: {
-    tecnico: 'technical', tecnica: 'technical', informativa: 'general',
-    facturacion: 'billing', cuenta: 'account', 'no aplica': 'not_applicable',
-    technical: 'technical', billing: 'billing', account: 'account',
-    general: 'general', not_applicable: 'not_applicable',
-  },
-  tone: {
-    neutro: 'neutral', frustrado: 'frustrated', frustado: 'frustrated',
-    frustracion: 'frustrated', agresivo: 'aggressive', positivo: 'positive',
-    neutral: 'neutral', frustrated: 'frustrated', aggressive: 'aggressive', positive: 'positive',
-  },
-  urgency: {
-    alta: 'high', media: 'medium', baja: 'low',
-    high: 'high', medium: 'medium', low: 'low',
-  },
-  difficulty: {
-    facil: 'easy', dacil: 'easy', medio: 'ambiguous', media: 'ambiguous',
-    dificil: 'hard', easy: 'easy', ambiguous: 'ambiguous', hard: 'hard',
-  },
+const CANONICAL_VALUES: Record<string, readonly string[]> = {
+  ticket_type: TICKET_TYPE,
+  priority: PRIORITY,
+  category: CATEGORY,
+  tone: TONE,
+  urgency: URGENCY,
+  difficulty: DIFFICULTY_ORDER,
 };
 
-// "field: value" → occurrences, reported after adaptation so no value is
-// silently passed through unmapped
-const unmappedGtValues = new Map<string, number>();
+// "field: value" → occurrences, reported after adaptation so nothing outside
+// the enum passes unnoticed
+const nonCanonicalGtValues = new Map<string, number>();
 
-function normalizeGtValue(field: string, raw: string): string {
-  const cleaned = raw
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-  if (cleaned === '') return '';
-  const mapped = GT_VALUE_MAPS[field]?.[cleaned];
-  if (mapped !== undefined) return mapped;
-  const key = `${field}: "${raw.trim()}"`;
-  unmappedGtValues.set(key, (unmappedGtValues.get(key) ?? 0) + 1);
-  return cleaned;
+function gtValue(field: string, raw: string): string {
+  const value = raw.trim();
+  if (value === '') return '';
+  const allowed = CANONICAL_VALUES[field];
+  if (allowed && !allowed.includes(value)) {
+    const key = `${field}: "${value}"`;
+    nonCanonicalGtValues.set(key, (nonCanonicalGtValues.get(key) ?? 0) + 1);
+  }
+  return value;
 }
 
 // '001' and '1' must join to the same row
@@ -170,8 +156,8 @@ export function canonicalEmailId(raw: string): string {
 }
 
 function deriveDifficulty(alexandra: string, alejandro: string): string {
-  const a = normalizeGtValue('difficulty', alexandra);
-  const b = normalizeGtValue('difficulty', alejandro);
+  const a = gtValue('difficulty', alexandra);
+  const b = gtValue('difficulty', alejandro);
   const rankA = DIFFICULTY_ORDER.indexOf(a);
   const rankB = DIFFICULTY_ORDER.indexOf(b);
   if (rankA === -1 && rankB === -1) return '';
@@ -188,11 +174,11 @@ export function adaptGroundTruth(parsed: CsvParseResult): CsvParseResult {
     if (!id) continue; // Excel-export ghost row
     rows.push({
       email_id: id,
-      ticket_type: normalizeGtValue('ticket_type', r['tipo_ticket_final'] ?? ''),
-      priority: normalizeGtValue('priority', r['prioridad_final'] ?? ''),
-      category: normalizeGtValue('category', r['categoria_final'] ?? ''),
-      tone: normalizeGtValue('tone', r['tono_final'] ?? ''),
-      urgency: normalizeGtValue('urgency', r['urgencia_final'] ?? ''),
+      ticket_type: gtValue('ticket_type', r['tipo_ticket_final'] ?? ''),
+      priority: gtValue('priority', r['prioridad_final'] ?? ''),
+      category: gtValue('category', r['categoria_final'] ?? ''),
+      tone: gtValue('tone', r['tono_final'] ?? ''),
+      urgency: gtValue('urgency', r['urgencia_final'] ?? ''),
       difficulty: deriveDifficulty(
         r['alexandra_dificultad'] ?? '',
         r['alejandro_dificultad'] ?? '',
@@ -203,10 +189,10 @@ export function adaptGroundTruth(parsed: CsvParseResult): CsvParseResult {
   return { headers: [...CANONICAL_GT_HEADERS], rows };
 }
 
-export function reportUnmappedGtValues(): void {
-  if (unmappedGtValues.size === 0) return;
-  console.warn('⚠  Ground-truth values without a canonical mapping (passed through as-is):');
-  for (const [key, count] of unmappedGtValues) {
+export function reportNonCanonicalGtValues(): void {
+  if (nonCanonicalGtValues.size === 0) return;
+  console.warn('⚠  Ground-truth values outside the pipeline enums (used as-is):');
+  for (const [key, count] of nonCanonicalGtValues) {
     console.warn(`     ${key} × ${count}`);
   }
 }
@@ -271,7 +257,7 @@ async function main(): Promise<void> {
         `(${gt.rows.length} rows kept of ${gtParsed.rows.length} parsed)`,
     );
   }
-  reportUnmappedGtValues();
+  reportNonCanonicalGtValues();
 
   // '001' (pipeline) and '1' (ground truth) must join to the same email
   for (const row of pipeline.rows) {

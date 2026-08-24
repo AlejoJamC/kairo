@@ -14,12 +14,20 @@ describe('extractPromptVersion', () => {
 });
 
 describe('getPromptVersion', () => {
-  it('reads the version from the ES classification prompt', async () => {
-    expect(await getPromptVersion('es')).toBe('1.0.0');
+  // Pinning an exact version here would fire on every deliberate bump. What
+  // must hold is that both prompts carry a marker and stay in lockstep — a
+  // rubric change landing in one language only makes eval runs across the two
+  // incomparable.
+  it('reads a semver version from the ES classification prompt', async () => {
+    expect(await getPromptVersion('es')).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it('reads the version from the EN classification prompt', async () => {
-    expect(await getPromptVersion('en')).toBe('1.0.0');
+  it('reads a semver version from the EN classification prompt', async () => {
+    expect(await getPromptVersion('en')).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it('keeps ES and EN on the same version', async () => {
+    expect(await getPromptVersion('en')).toBe((await getPromptVersion('es'))!);
   });
 });
 
