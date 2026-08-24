@@ -1,4 +1,4 @@
-import { computeFieldMetrics } from './metrics';
+import { computeFieldMetrics, computeBaseline } from './metrics';
 
 export interface ToneInflationResult {
   aggressive_or_frustrated_emails: number;
@@ -9,6 +9,8 @@ export interface ToneInflationResult {
 export interface DifficultyEntry {
   count: number;
   ticket_type_f1: number;
+  /** Same metric for the majority-class baseline on this subset. */
+  ticket_type_baseline_f1: number;
 }
 
 export interface DifficultyBreakdown {
@@ -67,7 +69,11 @@ export function computeDifficultyBreakdown(rows: AnalysisRow[]): DifficultyBreak
     const truths = subset.map((r) => r.gtTicketType);
     const preds = subset.map((r) => r.predictedTicketType);
     const metrics = computeFieldMetrics(truths, preds);
-    result[level] = { count: subset.length, ticket_type_f1: metrics.macro_f1 };
+    result[level] = {
+      count: subset.length,
+      ticket_type_f1: metrics.macro_f1,
+      ticket_type_baseline_f1: computeBaseline(truths).macro_f1,
+    };
   }
 
   return result;

@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir, access } from 'fs/promises';
 import { join } from 'path';
-import { computeFieldMetrics } from './lib/metrics';
+import { computeFieldMetrics, computeBaseline } from './lib/metrics';
 import { computeCalibration } from './lib/calibration';
 import type { CalibrationEntry } from './lib/calibration';
 import { computeToneInflation, computeDifficultyBreakdown } from './lib/spanish-analysis';
@@ -364,6 +364,7 @@ async function main(): Promise<void> {
   ];
 
   const fieldMetrics: Record<string, ReturnType<typeof computeFieldMetrics>> = {};
+  const baselines: Record<string, ReturnType<typeof computeBaseline>> = {};
 
   for (const { key, gtCol, predCol } of fields) {
     const truths: string[] = [];
@@ -378,8 +379,23 @@ async function main(): Promise<void> {
     }
 
     const metrics = computeFieldMetrics(truths, predictions);
+    const baseline = computeBaseline(truths);
     fieldMetrics[key] = metrics;
-    console.log(`  ${key.padEnd(14)} macro F1: ${metrics.macro_f1.toFixed(2)}`);
+    baselines[key] = baseline;
+
+    const delta = metrics.macro_f1 - baseline.macro_f1;
+    const flag = delta > 0 ? '' : '  ← does not beat baseline';
+    console.log(
+      `  ${key.padEnd(14)} macro F1: ${metrics.macro_f1.toFixed(2)}` +
+      `   baseline: ${baseline.macro_f1.toFixed(2)} (${baseline.majority_label})` +
+      `   ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}${flag}`,
+    );
+    if (metrics.off_rubric_predictions > 0) {
+      console.log(
+        `  ${' '.repeat(14)} off-rubric: ${metrics.off_rubric_predictions} prediction(s) ` +
+        `on ${metrics.off_rubric_labels.join(', ')} — excluded from the macro`,
+      );
+    }
   }
 
   // ── 7. Confidence calibration ─────────────────────────────────────────────
@@ -490,6 +506,13 @@ async function main(): Promise<void> {
       tone: fieldMetrics['tone']!,
       urgency: fieldMetrics['urgency']!,
     },
+    baseline: {
+      ticket_type: baselines['ticket_type']!,
+      priority: baselines['priority']!,
+      category: baselines['category']!,
+      tone: baselines['tone']!,
+      urgency: baselines['urgency']!,
+    },
     confidence_calibration: calibration,
     spanish_failure_modes: {
       tone_inflation: toneInflation,
@@ -505,13 +528,18 @@ async function main(): Promise<void> {
   console.log('─'.repeat(44));
 
   const easyF1 = difficultyBreakdown.easy.ticket_type_f1;
+  const easyBaseF1 = difficultyBreakdown.easy.ticket_type_baseline_f1;
   let decision: string;
-  if (easyF1 >= 0.8) decision = 'GO ✓';
+  // A run that does not beat a classifier ignoring the email is disqualified
+  // regardless of its absolute score
+  if (easyF1 <= easyBaseF1) decision = 'NO-GO ✗ (does not beat baseline)';
+  else if (easyF1 >= 0.8) decision = 'GO ✓';
   else if (easyF1 >= 0.6) decision = 'NEEDS WORK ⚠';
   else decision = 'NO-GO ✗';
 
   console.log(
-    `DECISION: ticket_type F1 on easy emails = ${easyF1.toFixed(2)} → ${decision}`,
+    `DECISION: ticket_type F1 on easy emails = ${easyF1.toFixed(2)} ` +
+    `(baseline ${easyBaseF1.toFixed(2)}) → ${decision}`,
   );
   console.log('');
   console.log('Reports written:');

@@ -89,3 +89,45 @@ export function computeFieldMetrics(
     off_rubric_labels, off_rubric_predictions,
   };
 }
+
+export interface BaselineMetrics {
+  /** The single class this classifier always answers. */
+  majority_label: string;
+  macro_f1: number;
+  accuracy: number;
+}
+
+/**
+ * Majority-class baseline: the score obtained by ignoring the email entirely
+ * and always answering whichever class the ground truth uses most.
+ *
+ * It is the floor a real classifier must clear. A model that fails to beat it
+ * carries no information about the email it just read, however high its
+ * absolute score looks. Derived from the truths alone — no model is called and
+ * no class is hardcoded, so it holds for any dataset.
+ */
+export function computeBaseline(truths: string[]): BaselineMetrics {
+  if (truths.length === 0) {
+    return { majority_label: '', macro_f1: 0, accuracy: 0 };
+  }
+
+  const counts = new Map<string, number>();
+  for (const t of truths) counts.set(t, (counts.get(t) ?? 0) + 1);
+
+  // Ties resolve alphabetically so the baseline is reproducible run to run
+  let majority_label = '';
+  let best = -1;
+  for (const label of [...counts.keys()].sort()) {
+    const c = counts.get(label)!;
+    if (c > best) {
+      best = c;
+      majority_label = label;
+    }
+  }
+
+  return {
+    majority_label,
+    macro_f1: computeFieldMetrics(truths, truths.map(() => majority_label)).macro_f1,
+    accuracy: safeDiv(best, truths.length),
+  };
+}
