@@ -10,6 +10,14 @@ export interface FieldMetrics {
   macro_precision: number;
   macro_recall: number;
   per_label: Record<string, LabelMetrics>;
+  /**
+   * Labels the model emitted that the ground truth never contains. They are
+   * excluded from the macro average (see below) but reported here, because
+   * predicting outside the rubric is a real defect worth surfacing.
+   */
+  off_rubric_labels: string[];
+  /** How many predictions fell on an off-rubric label. */
+  off_rubric_predictions: number;
 }
 
 function safeDiv(a: number, b: number): number {
@@ -26,11 +34,22 @@ export function computeFieldMetrics(
   predictions: string[],
 ): FieldMetrics {
   if (truths.length === 0) {
-    return { macro_f1: 0, macro_precision: 0, macro_recall: 0, per_label: {} };
+    return {
+      macro_f1: 0, macro_precision: 0, macro_recall: 0, per_label: {},
+      off_rubric_labels: [], off_rubric_predictions: 0,
+    };
   }
 
   // Derive labels from data — never hardcode expected values
   const labels = [...new Set([...truths, ...predictions])].sort();
+
+  // A label the ground truth never contains has support 0, so its recall and
+  // F1 are 0 by construction. Averaging it in caps the macro F1 at
+  // truthLabels / (truthLabels + offRubric), regardless of how well the model
+  // does on the real classes — the fewer classes a field has, the harder the
+  // cap bites. Scoring is therefore averaged over the classes the ground truth
+  // actually uses; off-rubric output is reported as its own metric instead.
+  const truthLabels = new Set(truths);
   const per_label: Record<string, LabelMetrics> = {};
 
   for (const label of labels) {
@@ -54,11 +73,19 @@ export function computeFieldMetrics(
     per_label[label] = { precision, recall, f1, support };
   }
 
-  const values = Object.values(per_label);
-  const n = values.length;
-  const macro_precision = safeDiv(values.reduce((s, v) => s + v.precision, 0), n);
-  const macro_recall = safeDiv(values.reduce((s, v) => s + v.recall, 0), n);
-  const macro_f1 = safeDiv(values.reduce((s, v) => s + v.f1, 0), n);
+  const scored = labels.filter((l) => truthLabels.has(l)).map((l) => per_label[l]!);
+  const n = scored.length;
+  const macro_precision = safeDiv(scored.reduce((s, v) => s + v.precision, 0), n);
+  const macro_recall = safeDiv(scored.reduce((s, v) => s + v.recall, 0), n);
+  const macro_f1 = safeDiv(scored.reduce((s, v) => s + v.f1, 0), n);
 
-  return { macro_f1, macro_precision, macro_recall, per_label };
+  const off_rubric_labels = labels.filter((l) => !truthLabels.has(l));
+  const off_rubric_predictions = predictions.filter(
+    (p) => !truthLabels.has(p),
+  ).length;
+
+  return {
+    macro_f1, macro_precision, macro_recall, per_label,
+    off_rubric_labels, off_rubric_predictions,
+  };
 }
