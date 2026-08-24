@@ -23,15 +23,43 @@ async function loadTemplate(lang: PromptLang): Promise<string> {
   return content;
 }
 
+// A field the caller could not supply is not the same as an empty one: the
+// prompt says so explicitly, so the model lowers confidence rather than
+// inventing a value it cannot see.
+const UNAVAILABLE: Record<PromptLang, string> = {
+  es: '(no disponible)',
+  en: '(not available)',
+  pt: '(indisponível)',
+};
+
+function renderAttachments(
+  attachments: EmailMessage['attachments'],
+  unavailable: string,
+): string {
+  if (attachments === undefined) return unavailable;
+  if (attachments.length === 0) return '—';
+  return attachments
+    .map((a) => `${a.filename} (${a.contentType})`)
+    .join(', ');
+}
+
 export async function buildPrompt(
   message: EmailMessage,
   lang: PromptLang = DEFAULT_LANG,
 ): Promise<string> {
   const template = await loadTemplate(lang);
+  const na = UNAVAILABLE[lang];
 
   return template
     .replaceAll('{{from}}', message.from)
+    .replaceAll('{{to}}', message.to ?? na)
+    .replaceAll('{{cc}}', message.cc ?? na)
     .replaceAll('{{subject}}', message.subject)
+    .replaceAll(
+      '{{thread_depth}}',
+      message.threadDepth === undefined ? na : String(message.threadDepth),
+    )
+    .replaceAll('{{attachments}}', renderAttachments(message.attachments, na))
     .replaceAll('{{body}}', message.body);
 }
 

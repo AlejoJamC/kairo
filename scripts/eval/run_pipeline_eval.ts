@@ -123,7 +123,15 @@ async function main(): Promise<void> {
       const parsed = parseEml(rawContent);
 
       const { result, meta } = await classifyEmailWithMeta(
-        { subject: parsed.subject, from: parsed.from, body: parsed.body },
+        {
+          subject: parsed.subject,
+          from: parsed.from,
+          to: parsed.to,
+          cc: parsed.cc,
+          body: parsed.body,
+          threadDepth: parsed.threadDepth,
+          attachments: parsed.attachments,
+        },
         { temperature: TEMPERATURE }
       );
 

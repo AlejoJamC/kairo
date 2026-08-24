@@ -42,10 +42,55 @@ describe('buildPrompt', () => {
     expect(out).toContain('user@example.com');
     expect(out).toContain('Test subject');
     expect(out).toContain('Test body line');
-    expect(out).not.toMatch(/\{\{from\}\}/);
-    expect(out).not.toMatch(/\{\{subject\}\}/);
-    expect(out).not.toMatch(/\{\{body\}\}/);
+    expect(out).not.toMatch(/\{\{\w+\}\}/);
     expect(out).toContain('Instrucciones de clasificación');
+  });
+
+  it('substitutes recipients, thread depth and attachments when supplied', async () => {
+    const out = await buildPrompt({
+      subject: 'S',
+      body: 'B',
+      from: 'sender@outside.com',
+      to: 'support@company.com',
+      cc: 'ops@company.com',
+      threadDepth: 4,
+      attachments: [{ filename: 'carta.doc', contentType: 'application/msword' }],
+    });
+
+    expect(out).toContain('support@company.com');
+    expect(out).toContain('ops@company.com');
+    expect(out).toContain('4');
+    expect(out).toContain('carta.doc (application/msword)');
+    expect(out).not.toMatch(/\{\{\w+\}\}/);
+  });
+
+  // `internal` is decided by sender vs recipient, so a missing field has to be
+  // visible to the model — otherwise it fills the gap by guessing
+  it('marks every field the caller could not supply as unavailable', async () => {
+    const out = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
+
+    // Per field, not just somewhere on the page: an empty `Para:` reads as a
+    // message with no recipient, which is a different claim from "not supplied"
+    expect(out).toContain('Para: (no disponible)');
+    expect(out).toContain('Copia: (no disponible)');
+    expect(out).toContain('Mensajes previos en el hilo: (no disponible)');
+    expect(out).toContain('Adjuntos: (no disponible)');
+    expect(out).not.toMatch(/\{\{\w+\}\}/);
+  });
+
+  it('distinguishes "no attachments" from "attachments unknown"', async () => {
+    const none = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com', attachments: [] });
+    const unknown = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
+
+    expect(none).toContain('Adjuntos: —');
+    expect(unknown).toContain('Adjuntos: (no disponible)');
+  });
+
+  it('uses the English marker for the English template', async () => {
+    const out = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' }, 'en');
+
+    expect(out).toContain('(not available)');
+    expect(out).not.toContain('(no disponible)');
   });
 
   it('loads the English template when lang=en', async () => {

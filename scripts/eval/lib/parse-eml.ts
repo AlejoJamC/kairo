@@ -1,7 +1,22 @@
+export interface EmailAttachment {
+  filename: string;
+  contentType: string;
+}
+
 export interface ParsedEmail {
   subject: string;
   from: string;
+  /** Recipients. Needed to tell an inbound ticket from the tenant's own mail. */
+  to: string;
+  cc: string;
   body: string;
+  /**
+   * How many messages precede this one in the thread, from `References`
+   * (falling back to `In-Reply-To`). 0 means it opens the thread.
+   */
+  threadDepth: number;
+  /** Attachment metadata only — the pipeline cannot read their contents. */
+  attachments: EmailAttachment[];
 }
 
 function decodeQuotedPrintable(input: string): string {
@@ -138,6 +153,41 @@ function extractFromMultipart(body: string, boundary: string): string | null {
   return fallback;
 }
 
+function countThreadDepth(headers: Map<string, string>): number {
+  const refs = headers.get('references') ?? '';
+  const ids = refs.match(/<[^>]+>/g);
+  if (ids && ids.length > 0) return ids.length;
+  return headers.get('in-reply-to') ? 1 : 0;
+}
+
+/**
+ * Attachment names live in `Content-Disposition: ...; filename=` or
+ * `Content-Type: ...; name=` inside part headers. Collect the names and pair
+ * each with the closest preceding Content-Type — enough to tell the model that
+ * a document exists and what kind, which is all it can know about it.
+ */
+function collectAttachments(raw: string): EmailAttachment[] {
+  const found: EmailAttachment[] = [];
+  const seen = new Set<string>();
+  const nameRe = /(?:file)?name\s*=\s*(?:"([^"]+)"|([^\s;\r\n]+))/gi;
+
+  let m: RegExpExecArray | null;
+  while ((m = nameRe.exec(raw)) !== null) {
+    const filename = decodeHeaderValue((m[1] ?? m[2] ?? '').trim());
+    if (!filename || seen.has(filename)) continue;
+
+    const before = raw.slice(Math.max(0, m.index - 400), m.index);
+    const ct = before.match(/Content-Type:\s*([^;\s]+)/gi);
+    const contentType = ct
+      ? (ct[ct.length - 1]!.split(':')[1] ?? '').trim().toLowerCase()
+      : 'application/octet-stream';
+
+    seen.add(filename);
+    found.push({ filename, contentType });
+  }
+  return found;
+}
+
 export function parseEml(content: string): ParsedEmail {
   // Detect line-ending style
   const hasCrLf = content.includes('\r\n');
@@ -155,10 +205,20 @@ export function parseEml(content: string): ParsedEmail {
 
   const subject = headers.get('subject') ?? '';
   const from = headers.get('from') ?? '';
+  const to = headers.get('to') ?? '';
+  const cc = headers.get('cc') ?? '';
   const contentType = headers.get('content-type') ?? 'text/plain';
   const transferEncoding = headers.get('content-transfer-encoding') ?? '';
 
   const body = extractPlainText(rawBody, contentType, transferEncoding) ?? rawBody;
 
-  return { subject, from, body: body.trim() };
+  return {
+    subject,
+    from,
+    to,
+    cc,
+    body: body.trim(),
+    threadDepth: countThreadDepth(headers),
+    attachments: collectAttachments(rawBody),
+  };
 }
