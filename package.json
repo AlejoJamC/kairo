@@ -18,7 +18,8 @@
     "test": "SKIP_LLM_INTEGRATION=1 bun test apps/api packages/intelligence scripts/eval && turbo run test --filter=@kairo/dashboard",
     "clean": "turbo run clean",
     "eval:pipeline": "bun scripts/eval/run_pipeline_eval.ts",
-    "eval:metrics": "bun scripts/eval/compute_metrics.ts"
+    "eval:metrics": "bun scripts/eval/compute_metrics.ts",
+    "eval:ablation": "bun scripts/eval/compare_ablation.ts"
   },
   "workspaces": ["apps/*", "packages/*"]
 }

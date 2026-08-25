@@ -92,8 +92,13 @@ async function main(): Promise<void> {
     ? `${TEMPERATURE} (enforced)`
     : `n/a — not sent (removed param on ${RUN.model}); reproducibility not guaranteed`;
 
+  const contextLabel = RUN.withoutContext
+    ? 'WITHHELD (ablation — recipients, thread depth and attachments sent as unavailable)'
+    : 'full (recipients, thread depth, attachments)';
+
   console.log('Kairo Pipeline Eval — KAI-106');
   console.log(`Run: ${RUN.provider} / ${RUN.model} → ${OUTPUT_DIR}`);
+  console.log(`Context: ${contextLabel}`);
   console.log(`Dataset: ${INPUT_DIR} (${total} files)`);
   console.log(`Temperature: ${temperatureLabel}`);
   console.log('─'.repeat(44));
@@ -102,6 +107,7 @@ async function main(): Promise<void> {
   const logLines: string[] = [
     `[${new Date().toISOString()}] Kairo Pipeline Eval — KAI-106`,
     `Run: ${RUN.provider} / ${RUN.model}`,
+    `Context: ${contextLabel}`,
     `Dataset: ${INPUT_DIR} (${total} files)`,
     `Temperature: ${temperatureLabel}`,
     '',
@@ -122,18 +128,24 @@ async function main(): Promise<void> {
       const rawContent = await readFile(join(INPUT_DIR, filename), 'utf-8');
       const parsed = parseEml(rawContent);
 
-      const { result, meta } = await classifyEmailWithMeta(
-        {
-          subject: parsed.subject,
-          from: parsed.from,
-          to: parsed.to,
-          cc: parsed.cc,
-          body: parsed.body,
-          threadDepth: parsed.threadDepth,
-          attachments: parsed.attachments,
-        },
-        { temperature: TEMPERATURE }
-      );
+      // Ablation: withholding the fields is not a second prompt — the template
+      // is identical and buildPrompt renders the gaps as unavailable, which is
+      // exactly what production sends from the call sites that lack them
+      const message = RUN.withoutContext
+        ? { subject: parsed.subject, from: parsed.from, body: parsed.body }
+        : {
+            subject: parsed.subject,
+            from: parsed.from,
+            to: parsed.to,
+            cc: parsed.cc,
+            body: parsed.body,
+            threadDepth: parsed.threadDepth,
+            attachments: parsed.attachments,
+          };
+
+      const { result, meta } = await classifyEmailWithMeta(message, {
+        temperature: TEMPERATURE,
+      });
 
       const elapsed = Math.round(performance.now() - emailStart);
 

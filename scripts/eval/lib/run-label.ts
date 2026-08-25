@@ -15,6 +15,14 @@ export interface RunLabel {
   provider: string;
   model: string;
   slug: string;
+  /**
+   * Ablation switch. When true the runner withholds the context fields
+   * (recipients, thread depth, attachments) so the prompt renders them as
+   * unavailable — the same shape production sends today from the call sites
+   * that only have subject/body/from. Comparing the two runs measures whether
+   * the model uses that context at all.
+   */
+  withoutContext: boolean;
 }
 
 export function resolveRunLabel(env: NodeJS.ProcessEnv = process.env): RunLabel {
@@ -23,7 +31,16 @@ export function resolveRunLabel(env: NodeJS.ProcessEnv = process.env): RunLabel 
     provider === 'anthropic'
       ? (env['ANTHROPIC_MODEL'] ?? 'claude-sonnet-4-6')
       : (env['OLLAMA_MODEL'] ?? 'llama3.2');
-  return { provider, model, slug: slugify(`${provider}-${model}`) };
+  const withoutContext = env['EVAL_NO_CONTEXT'] === '1';
+  // The mode is part of the run's identity, so an ablation run can never
+  // overwrite the run it is compared against
+  const suffix = withoutContext ? '-nocontext' : '';
+  return {
+    provider,
+    model,
+    slug: slugify(`${provider}-${model}`) + suffix,
+    withoutContext,
+  };
 }
 
 // 'ollama-granite4.1:3b' → 'ollama-granite4.1-3b'
