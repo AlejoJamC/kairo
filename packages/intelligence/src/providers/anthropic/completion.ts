@@ -1,9 +1,15 @@
 import type { z } from 'zod';
 import type { CompletionProvider, CompletionOptions, CompletionMeta } from '../base';
 
+interface AnthropicContentBlock {
+  type: string;
+  text?: string;
+}
+
 interface AnthropicMessage {
-  content: Array<{ text: string }>;
+  content: AnthropicContentBlock[];
   model?: string;
+  stop_reason?: string;
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
@@ -19,6 +25,36 @@ const NO_TEMPERATURE_MODEL = /^claude-(fable|mythos|opus|sonnet)-5(-|$)/;
 
 export function supportsTemperature(model: string): boolean {
   return !NO_TEMPERATURE_MODEL.test(model);
+}
+
+// Classification is a lookup against a rubric, not a reasoning problem. The
+// Claude 5 line reasons by default and its thinking tokens count against
+// max_tokens, so it would spend the whole budget thinking and return a
+// response with no text block at all — raising max_tokens does not help, it
+// just thinks longer. Every model in use accepts the parameter, so it is sent
+// unconditionally rather than gated on a model list that would go stale.
+const THINKING_DISABLED = { type: 'disabled' } as const;
+
+/**
+ * A response carries one block per content type. Never assume index 0 is the
+ * text: a reasoning model puts `thinking` first, and if it never finishes
+ * there is no text block at all.
+ */
+function extractText(data: AnthropicMessage, model: string): string {
+  const text = (data.content ?? [])
+    .filter((b) => b.type === 'text' && typeof b.text === 'string')
+    .map((b) => b.text)
+    .join('');
+
+  if (text === '') {
+    const types = (data.content ?? []).map((b) => b.type).join(', ') || 'none';
+    throw new Error(
+      `Anthropic response carried no text block (model ${model}, ` +
+        `blocks: ${types}, stop_reason: ${data.stop_reason ?? 'unknown'}). ` +
+        'If the model was still reasoning, it ran out of max_tokens before answering.',
+    );
+  }
+  return text;
 }
 
 export class AnthropicCompletionProvider implements CompletionProvider {
@@ -47,6 +83,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
         model: this.model,
         max_tokens: options.maxTokens ?? 1000,
         ...(supportsTemperature(this.model) ? { temperature: options.temperature ?? 0.7 } : {}),
+        thinking: THINKING_DISABLED,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -57,7 +94,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
     }
 
     const data = await response.json() as AnthropicMessage;
-    const text = data.content[0].text;
+    const text = extractText(data, this.model);
     return {
       text,
       rawText: text,
@@ -90,6 +127,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
         model: this.model,
         max_tokens: options.maxTokens ?? 1000,
         ...(supportsTemperature(this.model) ? { temperature: options.temperature ?? 0.3 } : {}),
+        thinking: THINKING_DISABLED,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -100,7 +138,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
     }
 
     const data = await response.json() as AnthropicMessage;
-    const text = data.content[0].text;
+    const text = extractText(data, this.model);
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
