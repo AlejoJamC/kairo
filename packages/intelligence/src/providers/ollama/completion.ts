@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { CompletionProvider, CompletionOptions, CompletionMeta } from '../base';
+import { fetchOrThrow, type CompletionProvider, type CompletionOptions, type CompletionMeta } from '../base';
 
 interface OllamaGenerateResponse {
   response: string;
@@ -37,7 +37,7 @@ export class OllamaCompletionProvider implements CompletionProvider {
     options: CompletionOptions,
     format?: unknown,
   ): Promise<{ text: string } & CompletionMeta> {
-    const response = await fetch(`${this.baseUrl}/api/generate`, {
+    const response = await fetchOrThrow(`${this.baseUrl}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -56,7 +56,7 @@ export class OllamaCompletionProvider implements CompletionProvider {
           stop: options.stopSequences,
         },
       }),
-    });
+    }, 'Ollama');
 
     if (!response.ok) {
       throw new Error(`Ollama API error: ${response.statusText}`);

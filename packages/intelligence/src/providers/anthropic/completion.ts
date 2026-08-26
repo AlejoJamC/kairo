@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { CompletionProvider, CompletionOptions, CompletionMeta } from '../base';
+import { fetchOrThrow, type CompletionProvider, type CompletionOptions, type CompletionMeta } from '../base';
 
 interface AnthropicContentBlock {
   type: string;
@@ -79,7 +79,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
   }
 
   async completeWithMeta(prompt: string, options: CompletionOptions = {}): Promise<{ text: string } & CompletionMeta> {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchOrThrow('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -93,7 +93,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
         thinking: THINKING_DISABLED,
         messages: [{ role: 'user', content: prompt }],
       }),
-    });
+    }, 'Anthropic');
 
     if (!response.ok) {
       const error = await response.text();
@@ -123,7 +123,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
     schema: z.ZodSchema<T>,
     options: CompletionOptions = {},
   ): Promise<{ data: T } & CompletionMeta> {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchOrThrow('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -143,7 +143,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
         tool_choice: { type: 'tool', name: CLASSIFY_TOOL },
         messages: [{ role: 'user', content: prompt }],
       }),
-    });
+    }, 'Anthropic');
 
     if (!response.ok) {
       const error = await response.text();
