@@ -56,9 +56,23 @@ interface GmailMessage {
   };
 }
 
-// Cap body sent to the classifier — headers + body all fit comfortably in the
-// prompt budget and we don't want a runaway 100KB email blowing up the LLM call.
-const CLASSIFIER_BODY_MAX_CHARS = 2000;
+// Tier 1 is the onboarding fast-path only — FAST_PATH_SCAN_SIZE (default 30)
+// messages, once per account, fired from the connect-Gmail wizard. Nothing
+// else triggers pipeline/tier1.triggered, so this is a low-volume, one-time
+// cost per signup, and getting the very first ticket right matters more here
+// than trimming it.
+//
+// This is a safety valve against a pathological input, not a trim of normal
+// correspondence (KAI-181): extractBody() only walks text/plain and
+// text/html MIME parts, so an email's attachments never reach this string
+// regardless of the raw .eml size on disk — measured on the KAI-93 corpus,
+// an 8.8MB email (mostly embedded images) extracted to 12,090 characters of
+// text. The largest real body across that corpus was 18,380 characters. This
+// cap sits just above that (real content never gets cut) and exists only to
+// stop something like a pasted log file or a MIME-parsing bug from reaching
+// the model — every local model handles 20k+ token prompts without
+// truncating, so this is not a context-window limit either.
+const CLASSIFIER_BODY_MAX_CHARS = 20_000;
 
 // ---------------------------------------------------------------------------
 // Gmail helpers

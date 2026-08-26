@@ -12,6 +12,7 @@ export {
   URGENCY,
   SUPPORTED_LANGS,
   DEFAULT_LANG,
+  stripQuotedThread,
 } from './classification';
 export type {
   ClassificationResult,

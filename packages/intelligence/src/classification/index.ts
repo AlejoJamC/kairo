@@ -15,3 +15,4 @@ export {
 } from './schema';
 export { buildPrompt, getPromptVersion, extractPromptVersion, SUPPORTED_LANGS, DEFAULT_LANG, type PromptLang } from './prompt';
 export type { EmailMessage } from './types';
+export { stripQuotedThread } from './strip-quotes';

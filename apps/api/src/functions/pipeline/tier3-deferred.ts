@@ -1,4 +1,4 @@
-import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { classifyEmailWithMeta, stripQuotedThread } from "@kairo/intelligence";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
@@ -22,6 +22,12 @@ interface GmailListResponse {
   nextPageToken?: string;
 }
 
+interface GmailMessagePart {
+  mimeType?: string;
+  body?: { data?: string; size?: number };
+  parts?: GmailMessagePart[];
+}
+
 interface GmailMessage {
   id: string;
   threadId: string;
@@ -30,6 +36,8 @@ interface GmailMessage {
   payload?: {
     headers?: GmailHeader[];
     mimeType?: string;
+    body?: { data?: string; size?: number };
+    parts?: GmailMessagePart[];
   };
 }
 
@@ -39,15 +47,6 @@ interface GmailMessage {
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1";
 
-const METADATA_HEADERS = [
-  "From",
-  "Subject",
-  "Date",
-  "List-Unsubscribe",
-  "X-Auto-Response-Suppress",
-  "Precedence",
-  "In-Reply-To",
-];
 
 async function gmailGet<T>(
   token: string,
@@ -85,10 +84,6 @@ async function fetchGmailRange(
   const afterStr = daysAgoDate(daysTo);
   const beforeStr = daysAgoDate(daysFrom);
 
-  const metaParams = new URLSearchParams({ format: "metadata" });
-  for (const h of METADATA_HEADERS) metaParams.append("metadataHeaders", h);
-  const metaParamStr = metaParams.toString();
-
   const allMessages: GmailMessage[] = [];
   let pageToken: string | undefined;
 
@@ -109,9 +104,13 @@ async function fetchGmailRange(
     const ids = list.messages ?? [];
 
     if (ids.length > 0) {
+      // format=full returns headers + MIME tree, same call this tier already made
+      // (one GET per id) — matches Tier 1 (KAI-93): the classifier needs the real
+      // body, not the ~200-char Gmail snippet, and format=full costs the same
+      // quota as format=metadata (5 units/call); only payload size differs.
       const settled = await Promise.allSettled(
         ids.map(({ id }) =>
-          fetch(`${GMAIL_BASE}/users/me/messages/${id}?${metaParamStr}`, {
+          fetch(`${GMAIL_BASE}/users/me/messages/${id}?format=full`, {
             headers: { Authorization: `Bearer ${token}` },
           }).then((r) => (r.ok ? (r.json() as Promise<GmailMessage>) : null))
         )
@@ -141,6 +140,42 @@ function headersToRecord(headers: GmailHeader[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const { name, value } of headers) out[name] = value;
   return out;
+}
+
+// Cap body sent to the classifier — matches Tier 1's CLASSIFIER_BODY_MAX_CHARS.
+const CLASSIFIER_BODY_MAX_CHARS = 2000;
+
+// Walks the MIME tree extracting decoded text/plain and text/html parts.
+// Same decoder as Tier 1 (KAI-93): Gmail returns part data base64url-encoded,
+// and Buffer's "base64" decoder accepts URL-safe variants on both Node and Bun.
+function extractBody(payload: GmailMessage["payload"]): {
+  body_plain: string;
+  body_html: string;
+} {
+  let body_plain = "";
+  let body_html = "";
+
+  const walk = (parts: GmailMessagePart[]): void => {
+    for (const part of parts) {
+      if (part.mimeType === "text/plain" && part.body?.data) {
+        body_plain += Buffer.from(part.body.data, "base64").toString("utf-8");
+      } else if (part.mimeType === "text/html" && part.body?.data) {
+        body_html += Buffer.from(part.body.data, "base64").toString("utf-8");
+      } else if (part.parts) {
+        walk(part.parts);
+      }
+    }
+  };
+
+  if (payload?.parts) {
+    walk(payload.parts);
+  } else if (payload?.body?.data) {
+    const decoded = Buffer.from(payload.body.data, "base64").toString("utf-8");
+    if (payload.mimeType === "text/html") body_html = decoded;
+    else body_plain = decoded;
+  }
+
+  return { body_plain, body_html };
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +245,8 @@ async function classifyWindow(
             received_at: receivedAt,
             sender_external_id: from,
             snippet: message.snippet ?? null,
+            body_plain: null,
+            body_html: null,
             classification_status: "skipped",
             skip_reason: filterResult.skip_reason,
             processing_tier: 3,
@@ -222,9 +259,12 @@ async function classifyWindow(
 
     const messageId = message.id;
     const snippet = message.snippet ?? "";
+    const { body_plain, body_html } = extractBody(message.payload);
+    const classifierBody = stripQuotedThread(body_plain || snippet)
+      .slice(0, CLASSIFIER_BODY_MAX_CHARS);
 
     const llmStart = Date.now();
-    const promise = classifyEmailWithMeta({ subject, body: snippet, from, tenantMailbox: userEmail })
+    const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
       .then(async ({ result: classification, meta, prompt, promptVersion }) => {
         logLlmCall({
           feature: "email_classification",
@@ -312,6 +352,8 @@ async function classifyWindow(
               received_at: receivedAt,
               sender_external_id: from,
               snippet: snippet || null,
+              body_plain: body_plain || null,
+              body_html: body_html || null,
               classification_status: "classified",
               processing_tier: 3,
               classified_at,
