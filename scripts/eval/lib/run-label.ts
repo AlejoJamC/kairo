@@ -23,6 +23,8 @@ export interface RunLabel {
    * the model uses that context at all.
    */
   withoutContext: boolean;
+  /** Rubric version this run is executing. Filled by the runner at start. */
+  promptVersion: string;
 }
 
 export function resolveRunLabel(env: NodeJS.ProcessEnv = process.env): RunLabel {
@@ -40,6 +42,7 @@ export function resolveRunLabel(env: NodeJS.ProcessEnv = process.env): RunLabel 
     model,
     slug: slugify(`${provider}-${model}`) + suffix,
     withoutContext,
+    promptVersion: 'unknown',
   };
 }
 

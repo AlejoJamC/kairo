@@ -37,6 +37,12 @@ describe("resolveRunLabel", () => {
     }
   });
 
+  it("starts with an unresolved prompt version, filled by the runner", () => {
+    // The rubric lives on disk, not in the environment; the runner reads it at
+    // start and stamps it on every row so a stored run can be tied to it
+    expect(resolveRunLabel(env()).promptVersion).toBe("unknown");
+  });
+
   it("keeps provider and model unchanged by the ablation flag", () => {
     const b = resolveRunLabel(env({ EVAL_NO_CONTEXT: "1" }));
 

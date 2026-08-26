@@ -224,3 +224,44 @@ describe.skipIf(skipLlm)('classifyEmail with real prompt', () => {
     expect(promptVersion).toBe('1.0.0');
   });
 });
+
+describe('tenant context', () => {
+  // `internal` is the residual class: everything that reaches the inbox and
+  // cannot be tied to what the company does for its customers. That decision
+  // needs two facts the email itself never carries
+  it('renders the tenant mailbox and line of business when supplied', async () => {
+    const out = await buildPrompt({
+      subject: 'S',
+      body: 'B',
+      from: 'a@b.com',
+      tenantMailbox: 'soporte@acme.com',
+      businessContext: 'Transporte de medicamentos para droguerías.',
+    });
+
+    expect(out).toContain('soporte@acme.com');
+    expect(out).toContain('Transporte de medicamentos para droguerías.');
+    expect(out).not.toMatch(/\{\{\w+\}\}/);
+  });
+
+  it('says the account has no declared business instead of leaving it blank', async () => {
+    const out = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
+
+    expect(out).toContain('Casilla que Kairo está leyendo: (no disponible)');
+    expect(out).toContain('A qué se dedica: (no disponible)');
+  });
+
+  it('makes internal the default rather than a sender check', async () => {
+    const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
+
+    expect(es).toContain('Es la clase por defecto');
+    // the competing shortcut that sent every external request to `support`
+    expect(es).not.toContain('si el remitente es externo y espera una acción');
+  });
+
+  it('keeps both languages on the same rule', async () => {
+    const en = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' }, 'en');
+
+    expect(en).toContain('It is the default class');
+    expect(en).toContain('What it does: (not available)');
+  });
+});

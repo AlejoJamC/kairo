@@ -288,7 +288,7 @@ export const incrementalSync = inngest.createFunction(
         const threadId = message.threadId;
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: snippet, from })
+        const promise = classifyEmailWithMeta({ subject, body: snippet, from, tenantMailbox: userEmail })
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",

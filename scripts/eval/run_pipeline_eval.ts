@@ -8,6 +8,7 @@ import { supportsTemperature } from '../../packages/intelligence/src/providers/a
 import { parseEml } from './lib/parse-eml';
 import { writeCsv } from './lib/write-csv';
 import { resolveRunLabel } from './lib/run-label';
+import { getPromptVersion, DEFAULT_LANG } from '../../packages/intelligence/src/classification/prompt';
 
 // Resolve paths relative to this file's directory
 const SCRIPT_DIR = new URL('.', import.meta.url).pathname;
@@ -22,6 +23,21 @@ const LOG_FILE = join(OUTPUT_DIR, 'pipeline_eval_run.log');
 
 const TEMPERATURE = 0;
 
+// Which rubric this run uses. Resolved once and written on every row, errors
+// included: a failure belongs to a prompt as much as an answer does.
+const PROMPT_LANG = DEFAULT_LANG;
+
+// The mailbox this corpus was collected from. In production it comes from the
+// connected Gmail account; here it has to be declared, because a classifier
+// that does not know which side is the house cannot tell the tenant's own
+// housekeeping from what it does for its customers.
+const TENANT_MAILBOX = process.env['EVAL_TENANT_MAILBOX'] ?? '';
+
+// One or two sentences on what the tenant does. Left empty until the account
+// has one: the prompt then says the field is unavailable and asks for lower
+// confidence, instead of the model inventing a line of business.
+const BUSINESS_CONTEXT = process.env['EVAL_BUSINESS_CONTEXT'] ?? '';
+
 // If this many emails fail consecutively from the very start, the model is
 // systematically incompatible (wrong format, model not pulled, provider
 // down) — abort instead of burning 15 minutes producing 50 identical errors
@@ -32,6 +48,12 @@ interface OutputRow {
   filename: string;
   provider: string;
   model: string;
+  /**
+   * Which rubric produced this row. Without it a stored run cannot be tied to
+   * the prompt that made it, and comparing two runs says nothing.
+   */
+  prompt_version: string;
+  prompt_lang: string;
   predicted_ticket_type: string;
   predicted_priority: string;
   predicted_category: string;
@@ -49,6 +71,8 @@ const CSV_COLUMNS: (keyof OutputRow)[] = [
   'filename',
   'provider',
   'model',
+  'prompt_version',
+  'prompt_lang',
   'predicted_ticket_type',
   'predicted_priority',
   'predicted_category',
@@ -75,6 +99,9 @@ function formatDuration(ms: number): string {
 async function main(): Promise<void> {
   await mkdir(OUTPUT_DIR, { recursive: true });
 
+  const promptVersion = (await getPromptVersion(PROMPT_LANG)) ?? 'unknown';
+  RUN.promptVersion = promptVersion;
+
   const allFiles = await readdir(INPUT_DIR);
   const emlFiles = allFiles
     .filter((f: string) => f.endsWith('.eml'))
@@ -98,6 +125,7 @@ async function main(): Promise<void> {
 
   console.log('Kairo Pipeline Eval — KAI-106');
   console.log(`Run: ${RUN.provider} / ${RUN.model} → ${OUTPUT_DIR}`);
+  console.log(`Prompt: ${PROMPT_LANG} v${promptVersion}`);
   console.log(`Context: ${contextLabel}`);
   console.log(`Dataset: ${INPUT_DIR} (${total} files)`);
   console.log(`Temperature: ${temperatureLabel}`);
@@ -107,6 +135,7 @@ async function main(): Promise<void> {
   const logLines: string[] = [
     `[${new Date().toISOString()}] Kairo Pipeline Eval — KAI-106`,
     `Run: ${RUN.provider} / ${RUN.model}`,
+    `Prompt: ${PROMPT_LANG} v${promptVersion}`,
     `Context: ${contextLabel}`,
     `Dataset: ${INPUT_DIR} (${total} files)`,
     `Temperature: ${temperatureLabel}`,
@@ -141,6 +170,8 @@ async function main(): Promise<void> {
             body: parsed.body,
             threadDepth: parsed.threadDepth,
             attachments: parsed.attachments,
+            ...(TENANT_MAILBOX ? { tenantMailbox: TENANT_MAILBOX } : {}),
+            ...(BUSINESS_CONTEXT ? { businessContext: BUSINESS_CONTEXT } : {}),
           };
 
       const { result, meta } = await classifyEmailWithMeta(message, {
@@ -164,6 +195,8 @@ async function main(): Promise<void> {
         filename,
         provider: RUN.provider,
         model: meta.model,
+        prompt_version: RUN.promptVersion,
+        prompt_lang: PROMPT_LANG,
         predicted_ticket_type: result.type,
         predicted_priority: result.priority,
         predicted_category: result.category,
@@ -187,6 +220,8 @@ async function main(): Promise<void> {
         filename,
         provider: RUN.provider,
         model: RUN.model,
+        prompt_version: RUN.promptVersion,
+        prompt_lang: PROMPT_LANG,
         predicted_ticket_type: '',
         predicted_priority: '',
         predicted_category: '',

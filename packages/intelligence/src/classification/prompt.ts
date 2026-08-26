@@ -53,6 +53,8 @@ export async function buildPrompt(
   return template
     .replaceAll('{{from}}', message.from)
     .replaceAll('{{to}}', message.to ?? na)
+    .replaceAll('{{tenant_mailbox}}', message.tenantMailbox ?? na)
+    .replaceAll('{{business_context}}', message.businessContext ?? na)
     .replaceAll('{{cc}}', message.cc ?? na)
     .replaceAll('{{subject}}', message.subject)
     .replaceAll(

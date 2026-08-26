@@ -313,7 +313,7 @@ export const tier1FastPath = inngest.createFunction(
         pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from })
+        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",
