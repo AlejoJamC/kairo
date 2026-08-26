@@ -1,21 +1,67 @@
 import { join } from 'path';
 import { readdir, readFile, writeFile, mkdir } from 'fs/promises';
-import { classifyEmail } from '@kairo/intelligence';
+// Relative import: scripts/eval is not a workspace package, so the
+// `@kairo/intelligence` specifier does not resolve at runtime (the tsconfig
+// `paths` alias only covers type-checking)
+import { classifyEmailWithMeta, stripQuotedThread } from '../../packages/intelligence/src/index';
+import { supportsTemperature } from '../../packages/intelligence/src/providers/anthropic/completion';
 import { parseEml } from './lib/parse-eml';
 import { writeCsv } from './lib/write-csv';
+import { resolveRunLabel, STAGE_BODY_RULES } from './lib/run-label';
+import { getPromptVersion, DEFAULT_LANG } from '../../packages/intelligence/src/classification/prompt';
 
 // Resolve paths relative to this file's directory
 const SCRIPT_DIR = new URL('.', import.meta.url).pathname;
 const INPUT_DIR = join(SCRIPT_DIR, 'data/input/eml');
-const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output');
+
+// Each run writes into its own per-model directory so results from different
+// providers/models never overwrite each other
+const RUN = resolveRunLabel();
+const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', RUN.slug);
 const OUTPUT_CSV = join(OUTPUT_DIR, 'pipeline_output_50.csv');
 const LOG_FILE = join(OUTPUT_DIR, 'pipeline_eval_run.log');
 
 const TEMPERATURE = 0;
 
+// How this run feeds the classifier, mirroring the production path named by
+// EVAL_STAGE. The two tiers differ in both the cap and whether the quoted
+// thread is stripped first, so measuring only one of them cannot answer which
+// model serves which moment of the pipeline.
+const BODY_RULE = STAGE_BODY_RULES[RUN.stage];
+
+// Which rubric this run uses. Resolved once and written on every row, errors
+// included: a failure belongs to a prompt as much as an answer does.
+const PROMPT_LANG = DEFAULT_LANG;
+
+// The mailbox this corpus was collected from. In production it comes from the
+// connected Gmail account; here it has to be declared, because a classifier
+// that does not know which side is the house cannot tell the tenant's own
+// housekeeping from what it does for its customers.
+const TENANT_MAILBOX = process.env['EVAL_TENANT_MAILBOX'] ?? '';
+
+// One or two sentences on what the tenant does. Left empty until the account
+// has one: the prompt then says the field is unavailable and asks for lower
+// confidence, instead of the model inventing a line of business.
+const BUSINESS_CONTEXT = process.env['EVAL_BUSINESS_CONTEXT'] ?? '';
+
+// If this many emails fail consecutively from the very start, the model is
+// systematically incompatible (wrong format, model not pulled, provider
+// down) — abort instead of burning 15 minutes producing 50 identical errors
+const FAIL_FAST_THRESHOLD = 5;
+
 interface OutputRow {
   email_id: string;
   filename: string;
+  provider: string;
+  model: string;
+  /**
+   * Which rubric produced this row. Without it a stored run cannot be tied to
+   * the prompt that made it, and comparing two runs says nothing.
+   */
+  prompt_version: string;
+  prompt_lang: string;
+  /** Which production path this row reproduces: onboarding or backfill. */
+  pipeline_stage: string;
   predicted_ticket_type: string;
   predicted_priority: string;
   predicted_category: string;
@@ -31,6 +77,11 @@ interface OutputRow {
 const CSV_COLUMNS: (keyof OutputRow)[] = [
   'email_id',
   'filename',
+  'provider',
+  'model',
+  'prompt_version',
+  'prompt_lang',
+  'pipeline_stage',
   'predicted_ticket_type',
   'predicted_priority',
   'predicted_category',
@@ -57,6 +108,9 @@ function formatDuration(ms: number): string {
 async function main(): Promise<void> {
   await mkdir(OUTPUT_DIR, { recursive: true });
 
+  const promptVersion = (await getPromptVersion(PROMPT_LANG)) ?? 'unknown';
+  RUN.promptVersion = promptVersion;
+
   const allFiles = await readdir(INPUT_DIR);
   const emlFiles = allFiles
     .filter((f: string) => f.endsWith('.eml'))
@@ -65,16 +119,40 @@ async function main(): Promise<void> {
   const total = emlFiles.length;
   const padWidth = String(total).length;
 
+  // Claude 5-line models (Fable/Mythos/Opus/Sonnet 5) reject `temperature`
+  // outright — the completion provider omits it for them, so run-to-run
+  // reproducibility for those runs relies on the model's own default
+  // sampling, not on the enforced temperature=0 used for every other model.
+  const temperatureEnforced = RUN.provider !== 'anthropic' || supportsTemperature(RUN.model);
+  const temperatureLabel = temperatureEnforced
+    ? `${TEMPERATURE} (enforced)`
+    : `n/a — not sent (removed param on ${RUN.model}); reproducibility not guaranteed`;
+
+  const contextLabel = RUN.withoutContext
+    ? 'WITHHELD (ablation — recipients, thread depth and attachments sent as unavailable)'
+    : 'full (recipients, thread depth, attachments)';
+
   console.log('Kairo Pipeline Eval — KAI-106');
+  console.log(`Run: ${RUN.provider} / ${RUN.model} → ${OUTPUT_DIR}`);
+  console.log(`Prompt: ${PROMPT_LANG} v${promptVersion}`);
+  console.log(
+    `Stage:  ${RUN.stage} — body ${BODY_RULE.stripQuotes ? 'stripped of quoted thread' : 'raw, quotes intact'}, ` +
+    `capped at ${BODY_RULE.maxChars.toLocaleString()} chars`
+  );
+  console.log(`Context: ${contextLabel}`);
   console.log(`Dataset: ${INPUT_DIR} (${total} files)`);
-  console.log(`Temperature: ${TEMPERATURE} (enforced)`);
+  console.log(`Temperature: ${temperatureLabel}`);
   console.log('─'.repeat(44));
 
   const rows: OutputRow[] = [];
   const logLines: string[] = [
     `[${new Date().toISOString()}] Kairo Pipeline Eval — KAI-106`,
+    `Run: ${RUN.provider} / ${RUN.model}`,
+    `Prompt: ${PROMPT_LANG} v${promptVersion}`,
+    `Stage: ${RUN.stage} (strip=${BODY_RULE.stripQuotes}, cap=${BODY_RULE.maxChars})`,
+    `Context: ${contextLabel}`,
     `Dataset: ${INPUT_DIR} (${total} files)`,
-    `Temperature: ${TEMPERATURE}`,
+    `Temperature: ${temperatureLabel}`,
     '',
   ];
 
@@ -93,10 +171,30 @@ async function main(): Promise<void> {
       const rawContent = await readFile(join(INPUT_DIR, filename), 'utf-8');
       const parsed = parseEml(rawContent);
 
-      const result = await classifyEmail(
-        { subject: parsed.subject, from: parsed.from, body: parsed.body },
-        { temperature: TEMPERATURE }
-      );
+      // Ablation: withholding the fields is not a second prompt — the template
+      // is identical and buildPrompt renders the gaps as unavailable, which is
+      // exactly what production sends from the call sites that lack them
+      const classifierBody = (
+        BODY_RULE.stripQuotes ? stripQuotedThread(parsed.body) : parsed.body
+      ).slice(0, BODY_RULE.maxChars);
+
+      const message = RUN.withoutContext
+        ? { subject: parsed.subject, from: parsed.from, body: classifierBody }
+        : {
+            subject: parsed.subject,
+            from: parsed.from,
+            to: parsed.to,
+            cc: parsed.cc,
+            body: classifierBody,
+            threadDepth: parsed.threadDepth,
+            attachments: parsed.attachments,
+            ...(TENANT_MAILBOX ? { tenantMailbox: TENANT_MAILBOX } : {}),
+            ...(BUSINESS_CONTEXT ? { businessContext: BUSINESS_CONTEXT } : {}),
+          };
+
+      const { result, meta } = await classifyEmailWithMeta(message, {
+        temperature: TEMPERATURE,
+      });
 
       const elapsed = Math.round(performance.now() - emailStart);
 
@@ -113,6 +211,11 @@ async function main(): Promise<void> {
       rows.push({
         email_id: emailId,
         filename,
+        provider: RUN.provider,
+        model: meta.model,
+        prompt_version: RUN.promptVersion,
+        prompt_lang: PROMPT_LANG,
+        pipeline_stage: RUN.stage,
         predicted_ticket_type: result.type,
         predicted_priority: result.priority,
         predicted_category: result.category,
@@ -134,6 +237,11 @@ async function main(): Promise<void> {
       rows.push({
         email_id: emailId,
         filename,
+        provider: RUN.provider,
+        model: RUN.model,
+        prompt_version: RUN.promptVersion,
+        prompt_lang: PROMPT_LANG,
+        pipeline_stage: RUN.stage,
         predicted_ticket_type: '',
         predicted_priority: '',
         predicted_category: '',
@@ -147,6 +255,17 @@ async function main(): Promise<void> {
       });
 
       errorCount++;
+    }
+
+    if (errorCount === idx && idx >= FAIL_FAST_THRESHOLD) {
+      const abortMsg =
+        `First ${idx} emails ALL failed — aborting run. The model/provider is ` +
+        `systematically incompatible; fix that before re-running (see errors above).`;
+      console.error('─'.repeat(44));
+      console.error(`✗ ${abortMsg}`);
+      logLines.push('', `ABORTED: ${abortMsg}`);
+      await writeFile(LOG_FILE, logLines.join('\n') + '\n', 'utf-8');
+      process.exit(1);
     }
   }
 

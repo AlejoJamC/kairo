@@ -1,4 +1,4 @@
-import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { classifyEmailWithMeta, stripQuotedThread } from "@kairo/intelligence";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -28,6 +28,12 @@ interface GmailListResponse {
   nextPageToken?: string;
 }
 
+interface GmailMessagePart {
+  mimeType?: string;
+  body?: { data?: string; size?: number };
+  parts?: GmailMessagePart[];
+}
+
 interface GmailMessage {
   id: string;
   threadId: string;
@@ -36,6 +42,8 @@ interface GmailMessage {
   payload?: {
     headers?: GmailHeader[];
     mimeType?: string;
+    body?: { data?: string; size?: number };
+    parts?: GmailMessagePart[];
   };
 }
 
@@ -45,15 +53,6 @@ interface GmailMessage {
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1";
 
-const METADATA_HEADERS = [
-  "From",
-  "Subject",
-  "Date",
-  "List-Unsubscribe",
-  "X-Auto-Response-Suppress",
-  "Precedence",
-  "In-Reply-To",
-];
 
 async function gmailGet<T>(
   token: string,
@@ -83,10 +82,6 @@ async function fetchGmailSince(
 ): Promise<GmailMessage[]> {
   const afterStr = afterDate.slice(0, 10).replace(/-/g, "/");
 
-  const metaParams = new URLSearchParams({ format: "metadata" });
-  for (const h of METADATA_HEADERS) metaParams.append("metadataHeaders", h);
-  const metaParamStr = metaParams.toString();
-
   const allMessages: GmailMessage[] = [];
   let pageToken: string | undefined;
 
@@ -107,9 +102,12 @@ async function fetchGmailSince(
     const ids = list.messages ?? [];
 
     if (ids.length > 0) {
+      // format=full returns headers + MIME tree (KAI-181): the classifier needs
+      // the real body, not the ~200-char Gmail snippet. Same call this tier
+      // already made (one GET per id) — only the format parameter changes.
       const settled = await Promise.allSettled(
         ids.map(({ id }) =>
-          fetch(`${GMAIL_BASE}/users/me/messages/${id}?${metaParamStr}`, {
+          fetch(`${GMAIL_BASE}/users/me/messages/${id}?format=full`, {
             headers: { Authorization: `Bearer ${token}` },
           }).then((r) => (r.ok ? (r.json() as Promise<GmailMessage>) : null))
         )
@@ -133,6 +131,44 @@ function headerValue(headers: GmailHeader[], name: string): string {
     headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
     ""
   );
+}
+
+// Cap body sent to the classifier as a safety net — only fires when
+// stripQuotedThread (KAI-181) leaves something abnormally long, since new
+// text on this corpus has a measured p90 of ~1,900 characters.
+const CLASSIFIER_BODY_MAX_CHARS = 2000;
+
+// Walks the MIME tree extracting decoded text/plain and text/html parts.
+// Gmail returns part data base64url-encoded; Buffer's "base64" decoder
+// accepts URL-safe variants on both Node and Bun.
+function extractBody(payload: GmailMessage["payload"]): {
+  body_plain: string;
+  body_html: string;
+} {
+  let body_plain = "";
+  let body_html = "";
+
+  const walk = (parts: GmailMessagePart[]): void => {
+    for (const part of parts) {
+      if (part.mimeType === "text/plain" && part.body?.data) {
+        body_plain += Buffer.from(part.body.data, "base64").toString("utf-8");
+      } else if (part.mimeType === "text/html" && part.body?.data) {
+        body_html += Buffer.from(part.body.data, "base64").toString("utf-8");
+      } else if (part.parts) {
+        walk(part.parts);
+      }
+    }
+  };
+
+  if (payload?.parts) {
+    walk(payload.parts);
+  } else if (payload?.body?.data) {
+    const decoded = Buffer.from(payload.body.data, "base64").toString("utf-8");
+    if (payload.mimeType === "text/html") body_html = decoded;
+    else body_plain = decoded;
+  }
+
+  return { body_plain, body_html };
 }
 
 function headersToRecord(headers: GmailHeader[]): Record<string, string> {
@@ -284,11 +320,17 @@ export const incrementalSync = inngest.createFunction(
         // Relevant — classify asynchronously, capture loop-local vars
         const messageId = message.id;
         const snippet = message.snippet ?? "";
+        // Unlike Tier 1/2/3, this path never persisted body_plain/body_html to
+        // the DB even before KAI-181 — out of scope here; only what reaches
+        // the classifier changes.
+        const { body_plain } = extractBody(message.payload);
+        const classifierBody = stripQuotedThread(body_plain || snippet)
+          .slice(0, CLASSIFIER_BODY_MAX_CHARS);
 
         const threadId = message.threadId;
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: snippet, from })
+        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",

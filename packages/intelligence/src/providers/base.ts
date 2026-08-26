@@ -37,3 +37,20 @@ export interface CompletionOptions {
   temperature?: number;
   stopSequences?: string[];
 }
+
+/**
+ * Node's fetch (undici) throws `TypeError: fetch failed` for every network
+ * failure and buries the actual reason (ECONNREFUSED, ENOTFOUND, timeout...)
+ * in `error.cause`, which never reaches the console by default. This
+ * surfaces that cause so a run fails with "connect ECONNREFUSED
+ * 127.0.0.1:11434" instead of the uninformative "fetch failed".
+ */
+export async function fetchOrThrow(url: string, init: RequestInit, label: string): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err: unknown) {
+    const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined;
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`${label} request failed: ${cause ?? message}`, { cause: err });
+  }
+}

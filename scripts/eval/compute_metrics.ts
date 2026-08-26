@@ -1,18 +1,29 @@
 import { readFile, writeFile, mkdir, access } from 'fs/promises';
 import { join } from 'path';
-import { computeFieldMetrics } from './lib/metrics';
+import { computeFieldMetrics, computeBaseline } from './lib/metrics';
 import { computeCalibration } from './lib/calibration';
 import type { CalibrationEntry } from './lib/calibration';
 import { computeToneInflation, computeDifficultyBreakdown } from './lib/spanish-analysis';
 import type { AnalysisRow } from './lib/spanish-analysis';
 import { writeReports } from './lib/report-writer';
 import type { EvalReport, PerEmailDiff, FieldDiff } from './lib/report-writer';
+import { resolveRunLabel } from './lib/run-label';
+// The eval validates against the same enums the pipeline emits — one source
+import {
+  TICKET_TYPE, PRIORITY, CATEGORY, TONE, URGENCY,
+} from '@kairo/intelligence';
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
 const SCRIPT_DIR = new URL('.', import.meta.url).pathname;
 const INPUT_DIR = join(SCRIPT_DIR, 'data/input');
-const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output');
+
+// Metrics run against ONE model's pipeline output, resolved from the same
+// env vars the pipeline run used (or pass the run directory name as argv[2],
+// e.g. `bun run eval:metrics ollama-granite4.1-3b`). Reports land next to
+// the pipeline output they measure — runs never share or overwrite files.
+const RUN_SLUG = process.argv[2] ?? resolveRunLabel().slug;
+const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', RUN_SLUG);
 
 const GT_FILE = join(INPUT_DIR, 'ground_truth_50.csv');
 const PIPELINE_FILE = join(OUTPUT_DIR, 'pipeline_output_50.csv');
@@ -29,7 +40,7 @@ interface CsvParseResult {
   rows: CsvRow[];
 }
 
-function parseCsv(content: string): CsvParseResult {
+export function parseCsv(content: string): CsvParseResult {
   // Normalise line endings
   const text = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
@@ -96,6 +107,96 @@ function parseCsv(content: string): CsvParseResult {
   return { headers, rows };
 }
 
+// ─── Ground-truth adapter (KAI-93) ──────────────────────────────────────────
+// `ground_truth_50.csv` is the raw two-annotator comparison sheet from KAI-102.
+// Its label values are already canonical, so nothing is translated here. What
+// the adapter still does is structural:
+//   - rename the Spanish consensus columns to the canonical field names
+//   - drop Excel-export ghost rows with an empty email_id
+//   - derive `difficulty`, which has no consensus column of its own: the harder
+//     of the two annotators wins, since disagreement on difficulty is itself a
+//     sign of ambiguity
+// Values pass through verbatim and are checked against the same enums the
+// pipeline emits. A value outside them is reported, never silently coerced —
+// coercion is how a business decision ends up buried in scoring code.
+
+const CANONICAL_GT_HEADERS = [
+  'email_id', 'ticket_type', 'priority', 'category', 'tone', 'urgency', 'difficulty',
+];
+
+const DIFFICULTY_ORDER = ['easy', 'ambiguous', 'hard'];
+
+const CANONICAL_VALUES: Record<string, readonly string[]> = {
+  ticket_type: TICKET_TYPE,
+  priority: PRIORITY,
+  category: CATEGORY,
+  tone: TONE,
+  urgency: URGENCY,
+  difficulty: DIFFICULTY_ORDER,
+};
+
+// "field: value" → occurrences, reported after adaptation so nothing outside
+// the enum passes unnoticed
+const nonCanonicalGtValues = new Map<string, number>();
+
+function gtValue(field: string, raw: string): string {
+  const value = raw.trim();
+  if (value === '') return '';
+  const allowed = CANONICAL_VALUES[field];
+  if (allowed && !allowed.includes(value)) {
+    const key = `${field}: "${value}"`;
+    nonCanonicalGtValues.set(key, (nonCanonicalGtValues.get(key) ?? 0) + 1);
+  }
+  return value;
+}
+
+// '001' and '1' must join to the same row
+export function canonicalEmailId(raw: string): string {
+  return raw.trim().replace(/^0+(?=\d)/, '');
+}
+
+function deriveDifficulty(alexandra: string, alejandro: string): string {
+  const a = gtValue('difficulty', alexandra);
+  const b = gtValue('difficulty', alejandro);
+  const rankA = DIFFICULTY_ORDER.indexOf(a);
+  const rankB = DIFFICULTY_ORDER.indexOf(b);
+  if (rankA === -1 && rankB === -1) return '';
+  return rankB > rankA ? b : a;
+}
+
+export function adaptGroundTruth(parsed: CsvParseResult): CsvParseResult {
+  // Already-canonical files pass through untouched
+  if (!parsed.headers.includes('tipo_ticket_final')) return parsed;
+
+  const rows: CsvRow[] = [];
+  for (const r of parsed.rows) {
+    const id = canonicalEmailId(r['email_id'] ?? '');
+    if (!id) continue; // Excel-export ghost row
+    rows.push({
+      email_id: id,
+      ticket_type: gtValue('ticket_type', r['tipo_ticket_final'] ?? ''),
+      priority: gtValue('priority', r['prioridad_final'] ?? ''),
+      category: gtValue('category', r['categoria_final'] ?? ''),
+      tone: gtValue('tone', r['tono_final'] ?? ''),
+      urgency: gtValue('urgency', r['urgencia_final'] ?? ''),
+      difficulty: deriveDifficulty(
+        r['alexandra_dificultad'] ?? '',
+        r['alejandro_dificultad'] ?? '',
+      ),
+    });
+  }
+
+  return { headers: [...CANONICAL_GT_HEADERS], rows };
+}
+
+export function reportNonCanonicalGtValues(): void {
+  if (nonCanonicalGtValues.size === 0) return;
+  console.warn('⚠  Ground-truth values outside the pipeline enums (used as-is):');
+  for (const [key, count] of nonCanonicalGtValues) {
+    console.warn(`     ${key} × ${count}`);
+  }
+}
+
 // ─── Guards ──────────────────────────────────────────────────────────────────
 
 async function fileExists(path: string): Promise<boolean> {
@@ -135,7 +236,9 @@ async function main(): Promise<void> {
   if (!(await fileExists(PIPELINE_FILE))) {
     console.error(
       `ERROR: Pipeline output file not found:\n  ${PIPELINE_FILE}\n\n` +
-        'Run KAI-106 first: bun run eval:pipeline',
+        `Expected the output of a pipeline run for "${RUN_SLUG}".\n` +
+        'Run `bun run eval:pipeline` with the same INTELLIGENCE_PROVIDER / model\n' +
+        'env vars, or pass the run directory name: bun run eval:metrics <run-slug>',
     );
     process.exit(1);
   }
@@ -144,8 +247,22 @@ async function main(): Promise<void> {
   const gtRaw = await readFile(GT_FILE, 'utf-8');
   const pipelineRaw = await readFile(PIPELINE_FILE, 'utf-8');
 
-  const gt = parseCsv(gtRaw);
+  const gtParsed = parseCsv(gtRaw);
   const pipeline = parseCsv(pipelineRaw);
+
+  const gt = adaptGroundTruth(gtParsed);
+  if (gt !== gtParsed) {
+    console.log(
+      `GT adapter: raw annotator sheet detected → normalized in memory ` +
+        `(${gt.rows.length} rows kept of ${gtParsed.rows.length} parsed)`,
+    );
+  }
+  reportNonCanonicalGtValues();
+
+  // '001' (pipeline) and '1' (ground truth) must join to the same email
+  for (const row of pipeline.rows) {
+    row['email_id'] = canonicalEmailId(row['email_id'] ?? '');
+  }
 
   // Verify headers match expected schema (warn but don't fail)
   verifyHeaders(
@@ -175,7 +292,14 @@ async function main(): Promise<void> {
   const allIds = [...new Set([...gtMap.keys(), ...pipelineMap.keys()])].sort();
   const total = allIds.length;
 
+  // Run identity: prefer what the output CSV itself recorded (real
+  // provenance, one row per LLM response); fall back to the directory name
+  // for CSVs produced before the provider/model columns existed
+  const runProvider = pipeline.rows.find((r) => r['provider'])?.['provider'];
+  const runModel = pipeline.rows.find((r) => r['model'])?.['model'];
+
   console.log('Kairo Eval Metrics — KAI-97');
+  console.log(`Run:              ${runProvider ?? '?'} / ${runModel ?? '?'} (${RUN_SLUG})`);
   console.log(`Ground truth:     ${GT_FILE} (${gt.rows.length} rows)`);
   console.log(`Pipeline output:  ${PIPELINE_FILE} (${pipeline.rows.length} rows)`);
 
@@ -226,6 +350,7 @@ async function main(): Promise<void> {
   ];
 
   const fieldMetrics: Record<string, ReturnType<typeof computeFieldMetrics>> = {};
+  const baselines: Record<string, ReturnType<typeof computeBaseline>> = {};
 
   for (const { key, gtCol, predCol } of fields) {
     const truths: string[] = [];
@@ -240,8 +365,23 @@ async function main(): Promise<void> {
     }
 
     const metrics = computeFieldMetrics(truths, predictions);
+    const baseline = computeBaseline(truths);
     fieldMetrics[key] = metrics;
-    console.log(`  ${key.padEnd(14)} macro F1: ${metrics.macro_f1.toFixed(2)}`);
+    baselines[key] = baseline;
+
+    const delta = metrics.macro_f1 - baseline.macro_f1;
+    const flag = delta > 0 ? '' : '  ← does not beat baseline';
+    console.log(
+      `  ${key.padEnd(14)} macro F1: ${metrics.macro_f1.toFixed(2)}` +
+      `   baseline: ${baseline.macro_f1.toFixed(2)} (${baseline.majority_label})` +
+      `   ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}${flag}`,
+    );
+    if (metrics.off_rubric_predictions > 0) {
+      console.log(
+        `  ${' '.repeat(14)} off-rubric: ${metrics.off_rubric_predictions} prediction(s) ` +
+        `on ${metrics.off_rubric_labels.join(', ')} — excluded from the macro`,
+      );
+    }
   }
 
   // ── 7. Confidence calibration ─────────────────────────────────────────────
@@ -335,6 +475,9 @@ async function main(): Promise<void> {
   const report: EvalReport = {
     run_metadata: {
       generated_at: new Date().toISOString(),
+      run_slug: RUN_SLUG,
+      ...(runProvider ? { provider: runProvider } : {}),
+      ...(runModel ? { model: runModel } : {}),
       ground_truth_file: GT_FILE,
       pipeline_output_file: PIPELINE_FILE,
       total_emails: total,
@@ -348,6 +491,13 @@ async function main(): Promise<void> {
       category: fieldMetrics['category']!,
       tone: fieldMetrics['tone']!,
       urgency: fieldMetrics['urgency']!,
+    },
+    baseline: {
+      ticket_type: baselines['ticket_type']!,
+      priority: baselines['priority']!,
+      category: baselines['category']!,
+      tone: baselines['tone']!,
+      urgency: baselines['urgency']!,
     },
     confidence_calibration: calibration,
     spanish_failure_modes: {
@@ -364,13 +514,18 @@ async function main(): Promise<void> {
   console.log('─'.repeat(44));
 
   const easyF1 = difficultyBreakdown.easy.ticket_type_f1;
+  const easyBaseF1 = difficultyBreakdown.easy.ticket_type_baseline_f1;
   let decision: string;
-  if (easyF1 >= 0.8) decision = 'GO ✓';
+  // A run that does not beat a classifier ignoring the email is disqualified
+  // regardless of its absolute score
+  if (easyF1 <= easyBaseF1) decision = 'NO-GO ✗ (does not beat baseline)';
+  else if (easyF1 >= 0.8) decision = 'GO ✓';
   else if (easyF1 >= 0.6) decision = 'NEEDS WORK ⚠';
   else decision = 'NO-GO ✗';
 
   console.log(
-    `DECISION: ticket_type F1 on easy emails = ${easyF1.toFixed(2)} → ${decision}`,
+    `DECISION: ticket_type F1 on easy emails = ${easyF1.toFixed(2)} ` +
+    `(baseline ${easyBaseF1.toFixed(2)}) → ${decision}`,
   );
   console.log('');
   console.log('Reports written:');
@@ -401,4 +556,7 @@ async function run(): Promise<void> {
   }
 }
 
-run();
+// Only execute when run directly — the exports above are importable for tests
+if (import.meta.main) {
+  run();
+}

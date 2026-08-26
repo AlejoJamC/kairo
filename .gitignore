@@ -6,8 +6,9 @@
 /packages/claude_design/
 
 # KAIRO
-# Evals
-#scripts/eval/data
+# Evals — scripts/eval/data is a separate private repo (company data); the
+# main repo must ignore the whole path, not just csv/eml extensions
+scripts/eval/data/
 *.eml
 *.csv
 

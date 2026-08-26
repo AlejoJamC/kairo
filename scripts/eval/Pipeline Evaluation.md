@@ -14,6 +14,35 @@ Antes de mostrárselo a un cliente real, necesitamos saber si clasifica bien o s
 
 ## Prerequisitos
 
+`scripts/eval/data/` es un **repo git privado aparte** — contiene correos
+reales de la empresa y el monorepo lo ignora por completo (ver `.gitignore`
+raíz). Nada de lo que hay adentro es visible desde este repo, así que la
+estructura esperada se documenta aquí:
+
+```
+scripts/eval/data/
+├── input/
+│   ├── ground_truth_50.csv    ← producido por KAI-102 (hoja cruda de dos
+│   │                            anotadores; se adapta en memoria al correr —
+│   │                            nunca se edita)
+│   ├── _meta.json             ← opcional: { "inter_annotator_agreement": <número> }
+│   └── eml/
+│       └── 001.eml … 050.eml  ← correos fuente crudos
+└── output/                    ← los scripts la crean solos
+    └── <provider>-<modelo>/   ← una carpeta POR CORRIDA, ej. ollama-granite4.1-3b
+        ├── pipeline_output_50.csv   (incluye columnas provider + model)
+        ├── eval_report.md / eval_report.json
+        └── *.log
+```
+
+La identidad de cada corrida sale de `INTELLIGENCE_PROVIDER` + `OLLAMA_MODEL` /
+`ANTHROPIC_MODEL` al momento de lanzar; corridas con modelos distintos jamás
+comparten ni pisan archivos. `eval:metrics` resuelve la misma carpeta desde las
+mismas env vars, o la recibe explícita: `bun run eval:metrics <nombre-carpeta>`.
+
+Clonar solo el monorepo no alcanza para correr el eval — el repo privado de
+datos debe estar montado en `scripts/eval/data/`.
+
 Antes de correr cualquier script, verificar que estos archivos existen:
 
 ```

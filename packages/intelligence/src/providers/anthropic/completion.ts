@@ -1,9 +1,22 @@
-import type { z } from 'zod';
-import type { CompletionProvider, CompletionOptions, CompletionMeta } from '../base';
+import { z } from 'zod';
+import { fetchOrThrow, type CompletionProvider, type CompletionOptions, type CompletionMeta } from '../base';
+
+interface AnthropicContentBlock {
+  type: string;
+  text?: string;
+  name?: string;
+  input?: unknown;
+}
+
+// Forcing a tool call is how the API is told to produce a structure rather
+// than asked to. The schema is validated server-side during generation, so an
+// enum violation or a missing field cannot come back at all.
+const CLASSIFY_TOOL = 'emit_classification';
 
 interface AnthropicMessage {
-  content: Array<{ text: string }>;
+  content: AnthropicContentBlock[];
   model?: string;
+  stop_reason?: string;
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
@@ -11,6 +24,45 @@ interface AnthropicMessage {
 }
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
+
+// The Claude 5 line (Fable/Mythos/Opus/Sonnet 5) removed sampling params —
+// `temperature` (and top_p/top_k) return a 400 if sent at all, rather than
+// being silently ignored. Matches dated snapshots too (e.g. `-5-20260305`).
+const NO_TEMPERATURE_MODEL = /^claude-(fable|mythos|opus|sonnet)-5(-|$)/;
+
+export function supportsTemperature(model: string): boolean {
+  return !NO_TEMPERATURE_MODEL.test(model);
+}
+
+// Classification is a lookup against a rubric, not a reasoning problem. The
+// Claude 5 line reasons by default and its thinking tokens count against
+// max_tokens, so it would spend the whole budget thinking and return a
+// response with no text block at all — raising max_tokens does not help, it
+// just thinks longer. Every model in use accepts the parameter, so it is sent
+// unconditionally rather than gated on a model list that would go stale.
+const THINKING_DISABLED = { type: 'disabled' } as const;
+
+/**
+ * A response carries one block per content type. Never assume index 0 is the
+ * text: a reasoning model puts `thinking` first, and if it never finishes
+ * there is no text block at all.
+ */
+function extractText(data: AnthropicMessage, model: string): string {
+  const text = (data.content ?? [])
+    .filter((b) => b.type === 'text' && typeof b.text === 'string')
+    .map((b) => b.text)
+    .join('');
+
+  if (text === '') {
+    const types = (data.content ?? []).map((b) => b.type).join(', ') || 'none';
+    throw new Error(
+      `Anthropic response carried no text block (model ${model}, ` +
+        `blocks: ${types}, stop_reason: ${data.stop_reason ?? 'unknown'}). ` +
+        'If the model was still reasoning, it ran out of max_tokens before answering.',
+    );
+  }
+  return text;
+}
 
 export class AnthropicCompletionProvider implements CompletionProvider {
   public readonly model: string;
@@ -27,7 +79,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
   }
 
   async completeWithMeta(prompt: string, options: CompletionOptions = {}): Promise<{ text: string } & CompletionMeta> {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchOrThrow('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -37,10 +89,11 @@ export class AnthropicCompletionProvider implements CompletionProvider {
       body: JSON.stringify({
         model: this.model,
         max_tokens: options.maxTokens ?? 1000,
-        temperature: options.temperature ?? 0.7,
+        ...(supportsTemperature(this.model) ? { temperature: options.temperature ?? 0.7 } : {}),
+        thinking: THINKING_DISABLED,
         messages: [{ role: 'user', content: prompt }],
       }),
-    });
+    }, 'Anthropic');
 
     if (!response.ok) {
       const error = await response.text();
@@ -48,7 +101,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
     }
 
     const data = await response.json() as AnthropicMessage;
-    const text = data.content[0].text;
+    const text = extractText(data, this.model);
     return {
       text,
       rawText: text,
@@ -70,7 +123,7 @@ export class AnthropicCompletionProvider implements CompletionProvider {
     schema: z.ZodSchema<T>,
     options: CompletionOptions = {},
   ): Promise<{ data: T } & CompletionMeta> {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchOrThrow('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -80,10 +133,17 @@ export class AnthropicCompletionProvider implements CompletionProvider {
       body: JSON.stringify({
         model: this.model,
         max_tokens: options.maxTokens ?? 1000,
-        temperature: options.temperature ?? 0.3,
+        ...(supportsTemperature(this.model) ? { temperature: options.temperature ?? 0.3 } : {}),
+        thinking: THINKING_DISABLED,
+        tools: [{
+          name: CLASSIFY_TOOL,
+          description: 'Return the classification of the email.',
+          input_schema: z.toJSONSchema(schema),
+        }],
+        tool_choice: { type: 'tool', name: CLASSIFY_TOOL },
         messages: [{ role: 'user', content: prompt }],
       }),
-    });
+    }, 'Anthropic');
 
     if (!response.ok) {
       const error = await response.text();
@@ -91,17 +151,23 @@ export class AnthropicCompletionProvider implements CompletionProvider {
     }
 
     const data = await response.json() as AnthropicMessage;
-    const text = data.content[0].text;
+    const call = (data.content ?? []).find(
+      (b) => b.type === 'tool_use' && b.name === CLASSIFY_TOOL,
+    );
 
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in Claude response');
+    if (!call || call.input === undefined) {
+      const types = (data.content ?? []).map((b) => b.type).join(', ') || 'none';
+      throw new Error(
+        `Anthropic returned no ${CLASSIFY_TOOL} call despite tool_choice forcing it ` +
+          `(model ${this.model}, blocks: ${types}, stop_reason: ${data.stop_reason ?? 'unknown'}).`,
+      );
     }
 
-    const parsed: unknown = JSON.parse(jsonMatch[0]);
     return {
-      data: schema.parse(parsed),
-      rawText: text,
+      // Already an object: the API produced it against the schema, so there is
+      // no text to fish JSON out of
+      data: schema.parse(call.input),
+      rawText: JSON.stringify(call.input),
       model: data.model ?? this.model,
       usage: {
         promptTokens: data.usage?.input_tokens ?? null,

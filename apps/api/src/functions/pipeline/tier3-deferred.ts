@@ -1,4 +1,4 @@
-import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { classifyEmailWithMeta, stripQuotedThread } from "@kairo/intelligence";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
@@ -7,6 +7,10 @@ import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
+import { upsertConversationByThread } from "../../lib/conversations.js";
+import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
+import { linkMessageToTicket } from "../../lib/ticket-messages.js";
+import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types (shared shape with Tier 1 & 2)
@@ -22,6 +26,12 @@ interface GmailListResponse {
   nextPageToken?: string;
 }
 
+interface GmailMessagePart {
+  mimeType?: string;
+  body?: { data?: string; size?: number };
+  parts?: GmailMessagePart[];
+}
+
 interface GmailMessage {
   id: string;
   threadId: string;
@@ -30,6 +40,8 @@ interface GmailMessage {
   payload?: {
     headers?: GmailHeader[];
     mimeType?: string;
+    body?: { data?: string; size?: number };
+    parts?: GmailMessagePart[];
   };
 }
 
@@ -39,15 +51,6 @@ interface GmailMessage {
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1";
 
-const METADATA_HEADERS = [
-  "From",
-  "Subject",
-  "Date",
-  "List-Unsubscribe",
-  "X-Auto-Response-Suppress",
-  "Precedence",
-  "In-Reply-To",
-];
 
 async function gmailGet<T>(
   token: string,
@@ -85,10 +88,6 @@ async function fetchGmailRange(
   const afterStr = daysAgoDate(daysTo);
   const beforeStr = daysAgoDate(daysFrom);
 
-  const metaParams = new URLSearchParams({ format: "metadata" });
-  for (const h of METADATA_HEADERS) metaParams.append("metadataHeaders", h);
-  const metaParamStr = metaParams.toString();
-
   const allMessages: GmailMessage[] = [];
   let pageToken: string | undefined;
 
@@ -109,9 +108,13 @@ async function fetchGmailRange(
     const ids = list.messages ?? [];
 
     if (ids.length > 0) {
+      // format=full returns headers + MIME tree, same call this tier already made
+      // (one GET per id) — matches Tier 1 (KAI-93): the classifier needs the real
+      // body, not the ~200-char Gmail snippet, and format=full costs the same
+      // quota as format=metadata (5 units/call); only payload size differs.
       const settled = await Promise.allSettled(
         ids.map(({ id }) =>
-          fetch(`${GMAIL_BASE}/users/me/messages/${id}?${metaParamStr}`, {
+          fetch(`${GMAIL_BASE}/users/me/messages/${id}?format=full`, {
             headers: { Authorization: `Bearer ${token}` },
           }).then((r) => (r.ok ? (r.json() as Promise<GmailMessage>) : null))
         )
@@ -141,6 +144,42 @@ function headersToRecord(headers: GmailHeader[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const { name, value } of headers) out[name] = value;
   return out;
+}
+
+// Cap body sent to the classifier — matches Tier 1's CLASSIFIER_BODY_MAX_CHARS.
+const CLASSIFIER_BODY_MAX_CHARS = 2000;
+
+// Walks the MIME tree extracting decoded text/plain and text/html parts.
+// Same decoder as Tier 1 (KAI-93): Gmail returns part data base64url-encoded,
+// and Buffer's "base64" decoder accepts URL-safe variants on both Node and Bun.
+function extractBody(payload: GmailMessage["payload"]): {
+  body_plain: string;
+  body_html: string;
+} {
+  let body_plain = "";
+  let body_html = "";
+
+  const walk = (parts: GmailMessagePart[]): void => {
+    for (const part of parts) {
+      if (part.mimeType === "text/plain" && part.body?.data) {
+        body_plain += Buffer.from(part.body.data, "base64").toString("utf-8");
+      } else if (part.mimeType === "text/html" && part.body?.data) {
+        body_html += Buffer.from(part.body.data, "base64").toString("utf-8");
+      } else if (part.parts) {
+        walk(part.parts);
+      }
+    }
+  };
+
+  if (payload?.parts) {
+    walk(payload.parts);
+  } else if (payload?.body?.data) {
+    const decoded = Buffer.from(payload.body.data, "base64").toString("utf-8");
+    if (payload.mimeType === "text/html") body_html = decoded;
+    else body_plain = decoded;
+  }
+
+  return { body_plain, body_html };
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +249,8 @@ async function classifyWindow(
             received_at: receivedAt,
             sender_external_id: from,
             snippet: message.snippet ?? null,
+            body_plain: null,
+            body_html: null,
             classification_status: "skipped",
             skip_reason: filterResult.skip_reason,
             processing_tier: 3,
@@ -221,10 +262,14 @@ async function classifyWindow(
     }
 
     const messageId = message.id;
+    const threadId = message.threadId;
     const snippet = message.snippet ?? "";
+    const { body_plain, body_html } = extractBody(message.payload);
+    const classifierBody = stripQuotedThread(body_plain || snippet)
+      .slice(0, CLASSIFIER_BODY_MAX_CHARS);
 
     const llmStart = Date.now();
-    const promise = classifyEmailWithMeta({ subject, body: snippet, from })
+    const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
       .then(async ({ result: classification, meta, prompt, promptVersion }) => {
         logLlmCall({
           feature: "email_classification",
@@ -271,53 +316,186 @@ async function classifyWindow(
           .select("id")
           .single();
 
-        const { data: ticket } = await supabase
-          .from("tickets")
-          .insert({
-            account_id:          accountId,
-            originating_user_id: userId,
-            subject,
-            from_email: from,
-            gmail_message_id: messageId,
-            ticket_type: classification.type,
-            priority: classification.priority,
-            category: classification.category,
-            sentiment: classification.tone,
-            ai_reasoning: classification.reasoning,
-            classification_confidence: classification.confidence,
-            classified_at,
-            classification_tier: 3,
-            priority_score: priorityScore,
-            emotion: classification.tone,
-            emotion_confidence: classification.confidence,
-            score_computed_at: classified_at,
-          })
-          .select("id")
-          .single();
-
-        if (proposal?.id && ticket?.id) {
-          await supabase
-            .from("ticket_proposals")
-            .update({ ticket_id: ticket.id })
-            .eq("id", proposal.id);
-        }
+        // KAI-181: group by thread instead of one ticket per message —
+        // tier2/tier3 were the two paths that never adopted this (tier1
+        // and incremental-sync already had it).
+        let ticketId: string | null = null;
+        let was_created = true;
+        let prior_status: string | null = null;
 
         if (channelIntegrationId) {
-          await supabase.from("messages").upsert(
-            {
-              account_id:             accountId,
-              channel_integration_id: channelIntegrationId,
-              external_id: messageId,
-              direction: "inbound",
+          try {
+            const { conversation_id } = await upsertConversationByThread(supabase, {
+              accountId,
+              channelIntegrationId,
+              externalThreadId: threadId,
+              customerExternalId: from,
+              customerDisplayName: null,
+            });
+
+            const result = await findOrCreateTicketForThread(supabase, {
+              accountId,
+              conversationId: conversation_id,
+              originatingUserId: userId,
+              classification: {
+                type: classification.type,
+                category: classification.category,
+                priority: classification.priority,
+                tone: classification.tone,
+                confidence: classification.confidence,
+                reasoning: classification.reasoning,
+              },
+              originMessage: {
+                subject,
+                from_email: from,
+                from_name: null,
+                to_email: null,
+                body_plain: body_plain || null,
+                body_html: body_html || null,
+                snippet: snippet || null,
+                gmail_message_id: messageId,
+                gmail_thread_id: threadId,
+                received_at: receivedAt,
+              },
+              classifiedAt: classified_at,
+              classificationTier: 3,
+              priorityScore,
+            });
+            ticketId = result.ticket_id;
+            was_created = result.was_created;
+            prior_status = result.prior_status;
+
+            if (proposal?.id) {
+              await supabase
+                .from("ticket_proposals")
+                .update({ ticket_id: ticketId })
+                .eq("id", proposal.id);
+            }
+
+            const { data: messageRow } = await supabase.from("messages").upsert(
+              {
+                account_id:             accountId,
+                conversation_id,
+                channel_integration_id: channelIntegrationId,
+                external_id: messageId,
+                thread_external_id: threadId,
+                direction: "inbound",
+                received_at: receivedAt,
+                sender_external_id: from,
+                snippet: snippet || null,
+                body_plain: body_plain || null,
+                body_html: body_html || null,
+                classification_status: "classified",
+                processing_tier: 3,
+                classified_at,
+              },
+              { onConflict: "channel_integration_id,external_id" }
+            ).select("id").single();
+
+            if (messageRow?.id) {
+              await linkMessageToTicket(supabase, {
+                ticket_id: ticketId,
+                message_id: messageRow.id,
+                is_origin: was_created,
+              });
+            }
+
+            if (!was_created) {
+              await applyCustomerReplyTransition(supabase, ticketId, prior_status);
+            }
+          } catch (helperErr: unknown) {
+            console.error(
+              `[tier3] thread helpers failed for ${messageId}:`,
+              helperErr instanceof Error ? helperErr.message : String(helperErr)
+            );
+            // Fallback: insert ticket without conversation linkage
+            const { data: fallbackTicket } = await supabase
+              .from("tickets")
+              .insert({
+                account_id:          accountId,
+                originating_user_id: userId,
+                subject,
+                from_email: from,
+                gmail_message_id: messageId,
+                gmail_thread_id: threadId,
+                received_at: receivedAt,
+                ticket_type: classification.type,
+                priority: classification.priority,
+                category: classification.category,
+                sentiment: classification.tone,
+                ai_reasoning: classification.reasoning,
+                classification_confidence: classification.confidence,
+                classified_at,
+                classification_tier: 3,
+                priority_score: priorityScore,
+                emotion: classification.tone,
+                emotion_confidence: classification.confidence,
+                score_computed_at: classified_at,
+              })
+              .select("id")
+              .single();
+            ticketId = fallbackTicket?.id ?? null;
+
+            if (proposal?.id && ticketId) {
+              await supabase
+                .from("ticket_proposals")
+                .update({ ticket_id: ticketId })
+                .eq("id", proposal.id);
+            }
+
+            await supabase.from("messages").upsert(
+              {
+                account_id:             accountId,
+                channel_integration_id: channelIntegrationId,
+                external_id: messageId,
+                direction: "inbound",
+                received_at: receivedAt,
+                sender_external_id: from,
+                snippet: snippet || null,
+                body_plain: body_plain || null,
+                body_html: body_html || null,
+                classification_status: "classified",
+                processing_tier: 3,
+                classified_at,
+              },
+              { onConflict: "channel_integration_id,external_id" }
+            );
+          }
+        } else {
+          // No channelIntegrationId — insert ticket directly, no conversation linkage possible
+          const { data: bareTicket } = await supabase
+            .from("tickets")
+            .insert({
+              account_id:          accountId,
+              originating_user_id: userId,
+              subject,
+              from_email: from,
+              gmail_message_id: messageId,
+              gmail_thread_id: threadId,
               received_at: receivedAt,
-              sender_external_id: from,
-              snippet: snippet || null,
-              classification_status: "classified",
-              processing_tier: 3,
+              ticket_type: classification.type,
+              priority: classification.priority,
+              category: classification.category,
+              sentiment: classification.tone,
+              ai_reasoning: classification.reasoning,
+              classification_confidence: classification.confidence,
               classified_at,
-            },
-            { onConflict: "channel_integration_id,external_id" }
-          );
+              classification_tier: 3,
+              priority_score: priorityScore,
+              emotion: classification.tone,
+              emotion_confidence: classification.confidence,
+              score_computed_at: classified_at,
+            })
+            .select("id")
+            .single();
+          ticketId = bareTicket?.id ?? null;
+
+          if (proposal?.id && ticketId) {
+            await supabase
+              .from("ticket_proposals")
+              .update({ ticket_id: ticketId })
+              .eq("id", proposal.id);
+          }
         }
       })
       .catch(async (err: unknown) => {

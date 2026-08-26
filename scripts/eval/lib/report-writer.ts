@@ -1,4 +1,4 @@
-import type { FieldMetrics } from './metrics';
+import type { FieldMetrics, BaselineMetrics } from './metrics';
 import type { CalibrationBand } from './calibration';
 import type { ToneInflationResult, DifficultyBreakdown, DifficultyEntry } from './spanish-analysis';
 
@@ -25,6 +25,11 @@ export interface PerEmailDiff {
 export interface EvalReport {
   run_metadata: {
     generated_at: string;
+    // Which provider/model produced the pipeline output being measured
+    // (from the run directory + the output CSV's provider/model columns)
+    run_slug: string;
+    provider?: string;
+    model?: string;
     ground_truth_file: string;
     pipeline_output_file: string;
     total_emails: number;
@@ -38,6 +43,17 @@ export interface EvalReport {
     category: FieldMetrics;
     tone: FieldMetrics;
     urgency: FieldMetrics;
+  };
+  /**
+   * Majority-class baseline per field, computed from the ground truth alone.
+   * A run that does not beat it is not a candidate, whatever its raw score.
+   */
+  baseline: {
+    ticket_type: BaselineMetrics;
+    priority: BaselineMetrics;
+    category: BaselineMetrics;
+    tone: BaselineMetrics;
+    urgency: BaselineMetrics;
   };
   confidence_calibration: CalibrationBand[];
   spanish_failure_modes: {
@@ -69,7 +85,11 @@ function mdTable(headers: string[], rows: string[][]): string {
 
 // ─── Go/No-Go decision ───────────────────────────────────────────────────────
 
-function goNoGo(easyF1: number): string {
+function goNoGo(easyF1: number, baselineF1: number): string {
+  // Failing to beat a classifier that ignores the email is disqualifying on
+  // its own — a high absolute score under that floor measures class imbalance,
+  // not classification.
+  if (easyF1 <= baselineF1) return 'NO-GO ✗ (does not beat baseline)';
   if (easyF1 >= 0.8) return 'GO ✓';
   if (easyF1 >= 0.6) return 'NEEDS WORK ⚠';
   return 'NO-GO ✗';
@@ -98,13 +118,17 @@ export function buildMarkdown(report: EvalReport): string {
     spanish_failure_modes: sfm, per_email_diff: diffs } = report;
 
   const easyF1 = sfm.difficulty_breakdown.easy.ticket_type_f1;
-  const decision = goNoGo(easyF1);
+  const easyBaseF1 = sfm.difficulty_breakdown.easy.ticket_type_baseline_f1;
+  const decision = goNoGo(easyF1, easyBaseF1);
 
   const lines: string[] = [];
 
   // Header
   lines.push('# Kairo Pipeline Evaluation Report');
   lines.push(`Generated: ${meta.generated_at}`);
+  lines.push(
+    `Run: ${meta.provider ?? '?'} / ${meta.model ?? '?'} (\`${meta.run_slug}\`)`,
+  );
   lines.push(
     `Dataset: ${meta.total_emails} emails — ${meta.emails_evaluated} evaluated, ` +
     `${meta.emails_skipped_due_to_error} skipped (errors)`,
@@ -123,10 +147,16 @@ export function buildMarkdown(report: EvalReport): string {
       ['≥ 80%', 'Pipeline is showable to client'],
       ['60–79%', 'Real problem, needs adjustment before demo'],
       ['< 60%', 'Do not show. Identify where it fails and fix.'],
+      ['≤ baseline', 'Not a candidate — no information about the email.'],
     ],
   ));
   lines.push('');
   lines.push(`**ticket_type F1 on easy emails: ${pct(easyF1)} → ${decision}**`);
+  lines.push(
+    `Majority-class baseline on the same subset: **${pct(easyBaseF1)}** ` +
+    `(always answering \`${report.baseline.ticket_type.majority_label}\`) — ` +
+    `run is **${f2(easyF1 - easyBaseF1)}** against the floor.`,
+  );
   lines.push('');
 
   // F1 table
@@ -134,13 +164,28 @@ export function buildMarkdown(report: EvalReport): string {
   lines.push('');
   const fieldRows = (
     Object.entries(fm) as [string, FieldMetrics][]
-  ).map(([field, m]) => [
-    field,
-    f2(m.macro_f1),
-    f2(m.macro_precision),
-    f2(m.macro_recall),
-  ]);
-  lines.push(mdTable(['Field', 'Macro F1', 'Macro Precision', 'Macro Recall'], fieldRows));
+  ).map(([field, m]) => {
+    const base = report.baseline[field as keyof typeof report.baseline];
+    return [
+      field,
+      f2(m.macro_f1),
+      f2(base.macro_f1),
+      f2(m.macro_f1 - base.macro_f1),
+      f2(m.macro_precision),
+      f2(m.macro_recall),
+      String(m.off_rubric_predictions),
+    ];
+  });
+  lines.push(mdTable(
+    ['Field', 'Macro F1', 'Baseline', 'vs Baseline', 'Macro Precision', 'Macro Recall', 'Off-rubric'],
+    fieldRows,
+  ));
+  lines.push('');
+  lines.push(
+    '**Baseline** is a classifier that ignores the email and always answers the ' +
+    "ground truth's most frequent class. A negative `vs Baseline` means the run " +
+    'carries no information about the email it read.',
+  );
   lines.push('');
 
   // Per-label tables
@@ -181,9 +226,13 @@ export function buildMarkdown(report: EvalReport): string {
       level.charAt(0).toUpperCase() + level.slice(1),
       String(d.count),
       pct(d.ticket_type_f1),
+      pct(d.ticket_type_baseline_f1),
     ],
   );
-  lines.push(mdTable(['Difficulty', '# Emails', 'ticket_type F1'], diffRows));
+  lines.push(mdTable(
+    ['Difficulty', '# Emails', 'ticket_type F1', 'Baseline'],
+    diffRows,
+  ));
   lines.push('');
 
   // Per-email diff — mismatches only
