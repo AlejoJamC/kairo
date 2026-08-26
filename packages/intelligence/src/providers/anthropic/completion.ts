@@ -1,10 +1,17 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { CompletionProvider, CompletionOptions, CompletionMeta } from '../base';
 
 interface AnthropicContentBlock {
   type: string;
   text?: string;
+  name?: string;
+  input?: unknown;
 }
+
+// Forcing a tool call is how the API is told to produce a structure rather
+// than asked to. The schema is validated server-side during generation, so an
+// enum violation or a missing field cannot come back at all.
+const CLASSIFY_TOOL = 'emit_classification';
 
 interface AnthropicMessage {
   content: AnthropicContentBlock[];
@@ -128,6 +135,12 @@ export class AnthropicCompletionProvider implements CompletionProvider {
         max_tokens: options.maxTokens ?? 1000,
         ...(supportsTemperature(this.model) ? { temperature: options.temperature ?? 0.3 } : {}),
         thinking: THINKING_DISABLED,
+        tools: [{
+          name: CLASSIFY_TOOL,
+          description: 'Return the classification of the email.',
+          input_schema: z.toJSONSchema(schema),
+        }],
+        tool_choice: { type: 'tool', name: CLASSIFY_TOOL },
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -138,17 +151,23 @@ export class AnthropicCompletionProvider implements CompletionProvider {
     }
 
     const data = await response.json() as AnthropicMessage;
-    const text = extractText(data, this.model);
+    const call = (data.content ?? []).find(
+      (b) => b.type === 'tool_use' && b.name === CLASSIFY_TOOL,
+    );
 
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in Claude response');
+    if (!call || call.input === undefined) {
+      const types = (data.content ?? []).map((b) => b.type).join(', ') || 'none';
+      throw new Error(
+        `Anthropic returned no ${CLASSIFY_TOOL} call despite tool_choice forcing it ` +
+          `(model ${this.model}, blocks: ${types}, stop_reason: ${data.stop_reason ?? 'unknown'}).`,
+      );
     }
 
-    const parsed: unknown = JSON.parse(jsonMatch[0]);
     return {
-      data: schema.parse(parsed),
-      rawText: text,
+      // Already an object: the API produced it against the schema, so there is
+      // no text to fish JSON out of
+      data: schema.parse(call.input),
+      rawText: JSON.stringify(call.input),
       model: data.model ?? this.model,
       usage: {
         promptTokens: data.usage?.input_tokens ?? null,

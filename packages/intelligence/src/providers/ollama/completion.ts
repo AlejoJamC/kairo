@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { CompletionProvider, CompletionOptions, CompletionMeta } from '../base';
 
 interface OllamaGenerateResponse {
@@ -23,6 +23,20 @@ export class OllamaCompletionProvider implements CompletionProvider {
   }
 
   async completeWithMeta(prompt: string, options: CompletionOptions = {}): Promise<{ text: string } & CompletionMeta> {
+    return this.request(prompt, options);
+  }
+
+  /**
+   * `format` accepts a JSON Schema, which Ollama compiles into a decoding
+   * grammar: the model cannot emit a token that would break the schema. That
+   * turns "please answer with JSON" from a request the model may ignore into
+   * a constraint it cannot.
+   */
+  private async request(
+    prompt: string,
+    options: CompletionOptions,
+    format?: unknown,
+  ): Promise<{ text: string } & CompletionMeta> {
     const response = await fetch(`${this.baseUrl}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -30,6 +44,7 @@ export class OllamaCompletionProvider implements CompletionProvider {
         model: this.model,
         prompt,
         stream: false,
+        ...(format !== undefined ? { format } : {}),
         // Reasoning models (qwen, deepseek-r1, ...) spend their entire
         // num_predict budget on the separate `thinking` field and return an
         // empty response. Classification is schema-constrained output, not a
@@ -69,14 +84,25 @@ export class OllamaCompletionProvider implements CompletionProvider {
     schema: z.ZodSchema<T>,
     options: CompletionOptions = {},
   ): Promise<{ data: T } & CompletionMeta> {
-    const meta = await this.completeWithMeta(prompt, { temperature: options.temperature ?? 0.3 });
+    const meta = await this.request(
+      prompt,
+      { temperature: options.temperature ?? 0.3 },
+      z.toJSONSchema(schema),
+    );
 
-    const jsonMatch = meta.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in Ollama response');
+    // Grammar-constrained output is already well-formed JSON, but a model can
+    // still stop early on a token budget, so a parse failure is reported with
+    // what actually came back instead of a bare "no JSON found".
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(meta.text);
+    } catch {
+      throw new Error(
+        `Ollama returned output that is not valid JSON despite a schema-constrained ` +
+          `request (model ${meta.model}): ${meta.text.slice(0, 200)}`,
+      );
     }
 
-    const parsed: unknown = JSON.parse(jsonMatch[0]);
     return {
       data: schema.parse(parsed),
       rawText: meta.rawText,

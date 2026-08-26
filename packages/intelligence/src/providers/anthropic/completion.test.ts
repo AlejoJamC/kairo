@@ -79,13 +79,36 @@ describe('text extraction', () => {
     await expect(provider().complete('p')).rejects.toThrow(/no text block/);
   });
 
-  it('parses JSON out of a text block behind a thinking block', async () => {
+  it('reads the structure from the forced tool call, not from text', async () => {
     mockResponse([
       { type: 'thinking', thinking: '...' },
-      { type: 'text', text: '```json\n{"ok": true}\n```' },
+      { type: 'tool_use', name: 'emit_classification', input: { ok: true } },
     ]);
 
     expect(await provider().completeJSON('p', schema)).toEqual({ ok: true });
+  });
+
+  it('forces the tool so the schema is enforced during generation', async () => {
+    mockResponse([{ type: 'tool_use', name: 'emit_classification', input: { ok: true } }]);
+    await provider().completeJSON('p', schema);
+
+    expect(lastBody['tool_choice']).toEqual({ type: 'tool', name: 'emit_classification' });
+    const tools = lastBody['tools'] as Array<{ name: string; input_schema: unknown }>;
+    expect(tools[0]!.name).toBe('emit_classification');
+    expect(tools[0]!.input_schema).toMatchObject({ type: 'object', required: ['ok'] });
+  });
+
+  it('fails with a diagnosable message when the forced tool call is missing', async () => {
+    mockResponse([{ type: 'text', text: 'sorry, I cannot' }], 'end_turn');
+
+    await expect(provider().completeJSON('p', schema)).rejects.toThrow(/emit_classification/);
+  });
+
+  it('plain completion carries no tools', async () => {
+    mockResponse([{ type: 'text', text: 'x' }]);
+    await provider().complete('p');
+
+    expect('tools' in lastBody).toBe(false);
   });
 });
 
