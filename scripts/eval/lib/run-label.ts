@@ -23,9 +23,34 @@ export interface RunLabel {
    * the model uses that context at all.
    */
   withoutContext: boolean;
+  /**
+   * Which production path this run reproduces. The two tiers feed the
+   * classifier differently, so a single number cannot answer "which model
+   * serves which moment of the pipeline" — each stage is its own measurement.
+   *
+   * - 'onboarding' — tier1-fast-path: raw body with the quoted thread intact,
+   *   capped at 20,000 chars. Runs once per account over
+   *   FAST_PATH_SCAN_SIZE messages; this is the path that produces the very
+   *   first ticket.
+   * - 'backfill' — tier2/tier3/incremental-sync: stripQuotedThread() first,
+   *   then capped at 2,000. This is where the bulk of an account's history
+   *   is classified.
+   */
+  stage: PipelineStage;
   /** Rubric version this run is executing. Filled by the runner at start. */
   promptVersion: string;
 }
+
+export type PipelineStage = 'onboarding' | 'backfill';
+
+/** Body handling per stage, mirroring the production call sites exactly. */
+export const STAGE_BODY_RULES: Record<
+  PipelineStage,
+  { maxChars: number; stripQuotes: boolean }
+> = {
+  onboarding: { maxChars: 20_000, stripQuotes: false },
+  backfill: { maxChars: 2_000, stripQuotes: true },
+};
 
 export function resolveRunLabel(env: NodeJS.ProcessEnv = process.env): RunLabel {
   const provider = env['INTELLIGENCE_PROVIDER'] ?? 'ollama';
@@ -34,14 +59,21 @@ export function resolveRunLabel(env: NodeJS.ProcessEnv = process.env): RunLabel 
       ? (env['ANTHROPIC_MODEL'] ?? 'claude-sonnet-4-6')
       : (env['OLLAMA_MODEL'] ?? 'llama3.2');
   const withoutContext = env['EVAL_NO_CONTEXT'] === '1';
-  // The mode is part of the run's identity, so an ablation run can never
-  // overwrite the run it is compared against
-  const suffix = withoutContext ? '-nocontext' : '';
+  const stage: PipelineStage =
+    env['EVAL_STAGE'] === 'onboarding' ? 'onboarding' : 'backfill';
+
+  // Both switches are part of the run's identity, so no run can ever
+  // overwrite the run it is meant to be compared against
+  const suffix =
+    (stage === 'onboarding' ? '-onboarding' : '') +
+    (withoutContext ? '-nocontext' : '');
+
   return {
     provider,
     model,
     slug: slugify(`${provider}-${model}`) + suffix,
     withoutContext,
+    stage,
     promptVersion: 'unknown',
   };
 }

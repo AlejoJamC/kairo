@@ -3,11 +3,11 @@ import { readdir, readFile, writeFile, mkdir } from 'fs/promises';
 // Relative import: scripts/eval is not a workspace package, so the
 // `@kairo/intelligence` specifier does not resolve at runtime (the tsconfig
 // `paths` alias only covers type-checking)
-import { classifyEmailWithMeta } from '../../packages/intelligence/src/index';
+import { classifyEmailWithMeta, stripQuotedThread } from '../../packages/intelligence/src/index';
 import { supportsTemperature } from '../../packages/intelligence/src/providers/anthropic/completion';
 import { parseEml } from './lib/parse-eml';
 import { writeCsv } from './lib/write-csv';
-import { resolveRunLabel } from './lib/run-label';
+import { resolveRunLabel, STAGE_BODY_RULES } from './lib/run-label';
 import { getPromptVersion, DEFAULT_LANG } from '../../packages/intelligence/src/classification/prompt';
 
 // Resolve paths relative to this file's directory
@@ -22,6 +22,12 @@ const OUTPUT_CSV = join(OUTPUT_DIR, 'pipeline_output_50.csv');
 const LOG_FILE = join(OUTPUT_DIR, 'pipeline_eval_run.log');
 
 const TEMPERATURE = 0;
+
+// How this run feeds the classifier, mirroring the production path named by
+// EVAL_STAGE. The two tiers differ in both the cap and whether the quoted
+// thread is stripped first, so measuring only one of them cannot answer which
+// model serves which moment of the pipeline.
+const BODY_RULE = STAGE_BODY_RULES[RUN.stage];
 
 // Which rubric this run uses. Resolved once and written on every row, errors
 // included: a failure belongs to a prompt as much as an answer does.
@@ -54,6 +60,8 @@ interface OutputRow {
    */
   prompt_version: string;
   prompt_lang: string;
+  /** Which production path this row reproduces: onboarding or backfill. */
+  pipeline_stage: string;
   predicted_ticket_type: string;
   predicted_priority: string;
   predicted_category: string;
@@ -73,6 +81,7 @@ const CSV_COLUMNS: (keyof OutputRow)[] = [
   'model',
   'prompt_version',
   'prompt_lang',
+  'pipeline_stage',
   'predicted_ticket_type',
   'predicted_priority',
   'predicted_category',
@@ -126,6 +135,10 @@ async function main(): Promise<void> {
   console.log('Kairo Pipeline Eval — KAI-106');
   console.log(`Run: ${RUN.provider} / ${RUN.model} → ${OUTPUT_DIR}`);
   console.log(`Prompt: ${PROMPT_LANG} v${promptVersion}`);
+  console.log(
+    `Stage:  ${RUN.stage} — body ${BODY_RULE.stripQuotes ? 'stripped of quoted thread' : 'raw, quotes intact'}, ` +
+    `capped at ${BODY_RULE.maxChars.toLocaleString()} chars`
+  );
   console.log(`Context: ${contextLabel}`);
   console.log(`Dataset: ${INPUT_DIR} (${total} files)`);
   console.log(`Temperature: ${temperatureLabel}`);
@@ -136,6 +149,7 @@ async function main(): Promise<void> {
     `[${new Date().toISOString()}] Kairo Pipeline Eval — KAI-106`,
     `Run: ${RUN.provider} / ${RUN.model}`,
     `Prompt: ${PROMPT_LANG} v${promptVersion}`,
+    `Stage: ${RUN.stage} (strip=${BODY_RULE.stripQuotes}, cap=${BODY_RULE.maxChars})`,
     `Context: ${contextLabel}`,
     `Dataset: ${INPUT_DIR} (${total} files)`,
     `Temperature: ${temperatureLabel}`,
@@ -160,14 +174,18 @@ async function main(): Promise<void> {
       // Ablation: withholding the fields is not a second prompt — the template
       // is identical and buildPrompt renders the gaps as unavailable, which is
       // exactly what production sends from the call sites that lack them
+      const classifierBody = (
+        BODY_RULE.stripQuotes ? stripQuotedThread(parsed.body) : parsed.body
+      ).slice(0, BODY_RULE.maxChars);
+
       const message = RUN.withoutContext
-        ? { subject: parsed.subject, from: parsed.from, body: parsed.body }
+        ? { subject: parsed.subject, from: parsed.from, body: classifierBody }
         : {
             subject: parsed.subject,
             from: parsed.from,
             to: parsed.to,
             cc: parsed.cc,
-            body: parsed.body,
+            body: classifierBody,
             threadDepth: parsed.threadDepth,
             attachments: parsed.attachments,
             ...(TENANT_MAILBOX ? { tenantMailbox: TENANT_MAILBOX } : {}),
@@ -197,6 +215,7 @@ async function main(): Promise<void> {
         model: meta.model,
         prompt_version: RUN.promptVersion,
         prompt_lang: PROMPT_LANG,
+        pipeline_stage: RUN.stage,
         predicted_ticket_type: result.type,
         predicted_priority: result.priority,
         predicted_category: result.category,
@@ -222,6 +241,7 @@ async function main(): Promise<void> {
         model: RUN.model,
         prompt_version: RUN.promptVersion,
         prompt_lang: PROMPT_LANG,
+        pipeline_stage: RUN.stage,
         predicted_ticket_type: '',
         predicted_priority: '',
         predicted_category: '',
