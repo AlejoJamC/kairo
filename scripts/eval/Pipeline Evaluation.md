@@ -72,7 +72,9 @@ scripts/eval/data/output/pipeline_output_50.csv
 scripts/eval/data/output/pipeline_eval_run.log
 ```
 
-**Por qué secuencial y no paralelo:** Para que los tiers del pipeline (0, 1, 2, 3) se ejecuten limpiamente y el campo `processing_tier` en el output sea confiable. En paralelo los tiers se mezclan.
+**Qué NO es este script:** no ejecuta el pipeline de tiers. Llama `classifyEmailWithMeta()` directamente — sin Inngest, sin Gmail, sin pre-filtro (Tier 0) y sin persistencia. Lo que mide es el clasificador, no la orquestación que lo rodea.
+
+**Por qué secuencial y no paralelo:** para que `processing_time_ms` sea la latencia limpia de una llamada individual. Es la cifra que gobierna Tier 1, donde el primer ticket aparece cuando responde la primera de las llamadas que se disparan en paralelo. Correr el eval en paralelo contaminaría esa medición sin representar mejor a ningún tier.
 
 **Por qué** `temperature: 0`: Sin esto, correr el mismo email dos veces puede dar resultados diferentes. El benchmark es inútil si no es reproducible.
 
