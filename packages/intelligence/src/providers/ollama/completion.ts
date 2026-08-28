@@ -90,12 +90,20 @@ export class OllamaCompletionProvider implements CompletionProvider {
       z.toJSONSchema(schema),
     );
 
-    // Grammar-constrained output is already well-formed JSON, but a model can
-    // still stop early on a token budget, so a parse failure is reported with
-    // what actually came back instead of a bare "no JSON found".
+    // The grammar constrains the JSON object itself, but not what a model's
+    // chat template puts around it — some (muse-glimmer) leak a literal
+    // end-of-turn token after the closing brace, others wrap the object in a
+    // ```json fence. Both put well-formed JSON inside a slightly larger
+    // string; slicing to the outermost braces recovers it without touching
+    // models that already return bare JSON (first "{" / last "}" are the
+    // string's own ends, so the slice is a no-op).
+    const start = meta.text.indexOf('{');
+    const end = meta.text.lastIndexOf('}');
+    const candidate = start !== -1 && end > start ? meta.text.slice(start, end + 1) : meta.text;
+
     let parsed: unknown;
     try {
-      parsed = JSON.parse(meta.text);
+      parsed = JSON.parse(candidate);
     } catch {
       throw new Error(
         `Ollama returned output that is not valid JSON despite a schema-constrained ` +
