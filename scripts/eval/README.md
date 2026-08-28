@@ -78,7 +78,7 @@ bun run eval:pipeline
 | `predicted_tone` | `aggressive` / `frustrated` / `neutral` / `positive` |
 | `predicted_urgency` | `high` / `medium` / `low` |
 | `confidence` | `0.0`–`1.0` as returned by the pipeline |
-| `processing_tier` | `0` — current pipeline is single-tier |
+| `processing_tier` | `0` — the eval calls the classifier directly and does not run any tier. In production this column is an integer written by the pipeline: `1` fast-path, `2` background, `3` deferred, `0` incremental-sync |
 | `processing_time_ms` | Wall clock time for this email |
 | `raw_reasoning` | The `reasoning` field from the pipeline |
 | `error` | Error message if classification failed, empty otherwise |
@@ -94,6 +94,13 @@ bun run eval:pipeline
 ## Notes
 
 - Temperature is forced to `0` for deterministic, reproducible results
-- Emails are processed **sequentially** (one at a time) — expect ~5–15 min for 50 emails
+- Emails are processed **sequentially** (one at a time) so `processing_time_ms` is the
+  clean latency of a single call — the figure that governs Tier 1, where the first
+  ticket renders as soon as the first of several parallel calls returns
+- Wall-clock for 50 emails depends entirely on the model: measured 3 min (Claude Haiku 4.5)
+  to 52 min (a 31B open-weight model). Do not read it as a pipeline number — production
+  dispatches classifications in parallel
+- The eval does **not** execute the tier pipeline: no Inngest, no Gmail fetch, no Tier 0
+  pre-filter, no persistence. It measures the classifier, not the orchestration
 - This script does **not** require or read `ground_truth_50.csv`
 - Comparison against ground truth is handled separately in KAI-97
