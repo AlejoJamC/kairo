@@ -7,7 +7,37 @@ KAI-97 evaluation framework for comparison against human ground truth.
 ## Prerequisites
 
 - `ANTHROPIC_API_KEY` set in `.env` (root of monorepo), or
-- `INTELLIGENCE_PROVIDER=ollama` with a local Ollama instance running
+- `INTELLIGENCE_PROVIDER=ollama` with an Ollama endpoint reachable
+
+### Choosing where inference runs
+
+Open-weight models are not a local-only category. `OLLAMA_BASE_URL` points the
+run at any Ollama-compatible endpoint; it defaults to `http://localhost:11434`,
+which is the development runtime, not a constraint.
+
+```bash
+OLLAMA_BASE_URL=https://gpu.internal:11434 \
+INTELLIGENCE_PROVIDER=ollama OLLAMA_MODEL=granite4.2:30b bun run eval:pipeline
+```
+
+A non-default endpoint gets its own run directory (`…-at-<host>`), because the
+same model on a laptop and on a remote GPU produces latency figures that are
+not comparable. The endpoint is also written on every output row.
+
+### Two runs against one endpoint
+
+Starting a second run against an endpoint already serving a model does not
+fail — the two runs **share** it. Both then measure an endpoint serving two
+clients: wall-clock latency roughly doubles while the model is unchanged.
+Measured on this corpus, `granite4.2:30b` reports ~22 s/email alone and ~57 s
+when two runs overlap.
+
+The runner checks `/api/ps` at start and prints a warning when the endpoint is
+already busy. It does not block: sharing an endpoint is fine when only quality
+is being measured, since F1 is unaffected. **Do not publish latency from a run
+that carried that warning.** The `tokens_per_second` column comes from the
+provider's own generation timer and is the figure to compare across runs —
+unlike wall-clock, a drop in it is a real throughput signal.
 
 ## Data layout (private repo)
 
@@ -72,6 +102,11 @@ bun run eval:pipeline
 | `filename` | Original filename (`001.eml`) |
 | `provider` | Provider that ran this row (`ollama` / `anthropic`) |
 | `model` | Actual model reported by the provider's response metadata |
+| `prompt_version` | Rubric version that produced this row |
+| `prompt_lang` | Rubric language (`es` / `en`) |
+| `pipeline_stage` | Production path reproduced: `onboarding` (raw body, 20k cap) or `backfill` (quotes stripped, 2k cap) |
+| `endpoint` | Where inference ran. A latency figure is meaningless without it |
+| `tokens_per_second` | Generation throughput from the provider's own timer (Ollama only; empty for Anthropic). Comparable across runs in a way wall-clock is not |
 | `predicted_ticket_type` | `support` / `prospect` / `spam` / `internal` / `other` |
 | `predicted_priority` | `P1` / `P2` / `P3` |
 | `predicted_category` | `technical` / `billing` / `account` / `general` / `not_applicable` |

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { resolveRunLabel, slugify, STAGE_BODY_RULES } from "./run-label";
+import { resolveRunLabel, slugify, STAGE_BODY_RULES, LOCAL_OLLAMA } from "./run-label";
 
 const env = (over: Record<string, string> = {}) =>
   ({ INTELLIGENCE_PROVIDER: "ollama", OLLAMA_MODEL: "granite4.1:3b", ...over }) as NodeJS.ProcessEnv;
@@ -79,6 +79,46 @@ describe("resolveRunLabel", () => {
 
     expect(b.provider).toBe("ollama");
     expect(b.model).toBe("granite4.1:3b");
+  });
+});
+
+describe("endpoint", () => {
+  // Open-weight models run on a laptop and on a remote GPU alike. The model
+  // name alone cannot tell those two runs apart, and their latency figures
+  // are not comparable, so the endpoint is part of the run's identity.
+  it("defaults to the local Ollama endpoint", () => {
+    const r = resolveRunLabel(env());
+
+    expect(r.endpoint).toBe(LOCAL_OLLAMA);
+    expect(r.slug).toBe("ollama-granite4.1-3b");
+  });
+
+  it("honours OLLAMA_BASE_URL and gives a remote endpoint its own directory", () => {
+    const r = resolveRunLabel(env({ OLLAMA_BASE_URL: "https://gpu.example.com:11434" }));
+
+    expect(r.endpoint).toBe("https://gpu.example.com:11434");
+    expect(r.slug).toBe("ollama-granite4.1-3b-at-gpu.example.com-11434");
+  });
+
+  it("keeps endpoint independent of stage and ablation in the slug", () => {
+    const r = resolveRunLabel(env({
+      OLLAMA_BASE_URL: "https://gpu.example.com",
+      EVAL_STAGE: "onboarding",
+      EVAL_NO_CONTEXT: "1",
+    }));
+
+    expect(r.slug).toBe("ollama-granite4.1-3b-onboarding-nocontext-at-gpu.example.com");
+  });
+
+  it("reports the Anthropic API as the endpoint and never suffixes it", () => {
+    const r = resolveRunLabel(env({
+      INTELLIGENCE_PROVIDER: "anthropic",
+      ANTHROPIC_MODEL: "claude-haiku-4-5-20251001",
+      OLLAMA_BASE_URL: "https://gpu.example.com",
+    }));
+
+    expect(r.endpoint).toBe("https://api.anthropic.com");
+    expect(r.slug).toBe("anthropic-claude-haiku-4-5-20251001");
   });
 });
 

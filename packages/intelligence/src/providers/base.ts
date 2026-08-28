@@ -23,6 +23,18 @@ export interface CompletionMeta {
   rawText: string;
   model: string;
   usage: CompletionUsage;
+  /**
+   * Generation throughput reported by the provider, when it reports one.
+   *
+   * Wall-clock latency alone cannot tell a slow model from a busy endpoint:
+   * two runs sharing one inference server each see their latency roughly
+   * double while the model is unchanged. Tokens per second comes from the
+   * provider's own generation timer, so a drop in it is a real throughput
+   * signal, and comparing it across runs of the same model exposes
+   * contention that wall-clock hides. Null when the provider does not
+   * report generation timings.
+   */
+  tokensPerSecond: number | null;
 }
 
 export interface EmbeddingProvider {

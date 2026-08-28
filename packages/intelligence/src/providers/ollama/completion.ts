@@ -6,6 +6,22 @@ interface OllamaGenerateResponse {
   model?: string;
   prompt_eval_count?: number;
   eval_count?: number;
+  /** Nanoseconds spent generating the response tokens (excludes prompt eval). */
+  eval_duration?: number;
+}
+
+/**
+ * Ollama reports its own generation timer, so throughput can be derived
+ * without trusting wall-clock: `eval_duration` is nanoseconds spent emitting
+ * `eval_count` tokens. This is the figure that separates a slow model from a
+ * shared endpoint — latency doubles under contention, but so does the time
+ * per token, and only the latter is measured here.
+ */
+function throughput(data: OllamaGenerateResponse): number | null {
+  const tokens = data.eval_count;
+  const ns = data.eval_duration;
+  if (!tokens || !ns) return null;
+  return tokens / (ns / 1_000_000_000);
 }
 
 export class OllamaCompletionProvider implements CompletionProvider {
@@ -71,6 +87,7 @@ export class OllamaCompletionProvider implements CompletionProvider {
         promptTokens: data.prompt_eval_count ?? null,
         completionTokens: data.eval_count ?? null,
       },
+      tokensPerSecond: throughput(data),
     };
   }
 
@@ -116,6 +133,7 @@ export class OllamaCompletionProvider implements CompletionProvider {
       rawText: meta.rawText,
       model: meta.model,
       usage: meta.usage,
+      tokensPerSecond: meta.tokensPerSecond,
     };
   }
 }
