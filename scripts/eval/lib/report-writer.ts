@@ -173,11 +173,11 @@ export function buildMarkdown(report: EvalReport): string {
       f2(m.macro_f1 - base.macro_f1),
       f2(m.macro_precision),
       f2(m.macro_recall),
-      String(m.off_rubric_predictions),
+      String(m.off_ground_truth_predictions),
     ];
   });
   lines.push(mdTable(
-    ['Field', 'Macro F1', 'Baseline', 'vs Baseline', 'Macro Precision', 'Macro Recall', 'Off-rubric'],
+    ['Field', 'Macro F1', 'Baseline', 'vs Baseline', 'Macro Precision', 'Macro Recall', 'Off-GT'],
     fieldRows,
   ));
   lines.push('');
@@ -186,6 +186,39 @@ export function buildMarkdown(report: EvalReport): string {
     "ground truth's most frequent class. A negative `vs Baseline` means the run " +
     'carries no information about the email it read.',
   );
+  lines.push('');
+  lines.push(
+    '**Off-GT** counts predictions on a class the ground truth never uses. It is ' +
+    'not a model defect — the class can be perfectly legal under the rubric and ' +
+    'simply absent from this corpus. Those predictions get no F1 of their own, ' +
+    'but they still count as false negatives against the true class. A high ' +
+    'number here is a statement about the corpus, not about the model.',
+  );
+  lines.push('');
+
+  // Off-contract is the real defect: a value the prompt never offered. It is
+  // usually zero, and saying so out loud is the point — it is what proves the
+  // schema-constrained decoding held for the whole run.
+  const offContract = (Object.entries(fm) as [string, FieldMetrics][])
+    .filter(([, m]) => m.off_contract_predictions > 0);
+  if (offContract.length === 0) {
+    lines.push(
+      '**Off-contract: none.** Every prediction in this run is a value the ' +
+      'classification enums allow.',
+    );
+  } else {
+    lines.push(
+      '**Off-contract** — predictions outside the enum the model was given. ' +
+      'Unlike Off-GT, this *is* a model defect:',
+    );
+    lines.push('');
+    for (const [field, m] of offContract) {
+      lines.push(
+        `- \`${field}\`: ${m.off_contract_predictions} prediction(s) on ` +
+        `${m.off_contract_labels.map((l) => `\`${l}\``).join(', ')}`,
+      );
+    }
+  }
   lines.push('');
 
   // Per-label tables

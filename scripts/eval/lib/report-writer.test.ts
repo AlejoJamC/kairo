@@ -3,14 +3,16 @@ import { buildMarkdown } from "./report-writer";
 import type { EvalReport } from "./report-writer";
 import type { FieldMetrics, BaselineMetrics } from "./metrics";
 
-function fm(macro_f1: number, off = 0): FieldMetrics {
+function fm(macro_f1: number, off = 0, offContract = 0): FieldMetrics {
   return {
     macro_f1,
     macro_precision: macro_f1,
     macro_recall: macro_f1,
     per_label: {},
-    off_rubric_labels: off > 0 ? ["prospect"] : [],
-    off_rubric_predictions: off,
+    off_ground_truth_labels: off > 0 ? ["prospect"] : [],
+    off_ground_truth_predictions: off,
+    off_contract_labels: offContract > 0 ? ["soporte"] : [],
+    off_contract_predictions: offContract,
   };
 }
 
@@ -18,8 +20,8 @@ function base(macro_f1: number): BaselineMetrics {
   return { majority_label: "support", macro_f1, accuracy: macro_f1 };
 }
 
-function report(easyF1: number, baselineF1: number, off = 0): EvalReport {
-  const fields = { ticket_type: fm(easyF1, off), priority: fm(0.3), category: fm(0.4), tone: fm(0.3), urgency: fm(0.2) };
+function report(easyF1: number, baselineF1: number, off = 0, offContract = 0): EvalReport {
+  const fields = { ticket_type: fm(easyF1, off, offContract), priority: fm(0.3), category: fm(0.4), tone: fm(0.3), urgency: fm(0.2) };
   const baselines = { ticket_type: base(baselineF1), priority: base(0.2), category: base(0.3), tone: base(0.3), urgency: base(0.2) };
   return {
     run_metadata: {
@@ -95,13 +97,37 @@ describe("markdown report", () => {
     expect(md).toContain("`support`");
   });
 
-  it("shows baseline and off-rubric columns in the field table", () => {
+  it("shows baseline and off-ground-truth columns in the field table", () => {
     const md = buildMarkdown(report(0.48, 0.46, 5));
 
     expect(md).toContain("| Field ");
     expect(md).toContain("Baseline");
     expect(md).toContain("vs Baseline");
-    expect(md).toContain("Off-rubric");
+    expect(md).toContain("Off-GT");
+  });
+
+  // The column used to be called "Off-rubric", which read as "the model
+  // answered outside its instructions". It never meant that: the class is
+  // legal, the corpus just never uses it. The wording has to say so.
+  it("says Off-GT is about the corpus, not a model defect", () => {
+    const md = buildMarkdown(report(0.48, 0.46, 5));
+
+    expect(md).toContain("not a model defect");
+    expect(md).not.toContain("Off-rubric");
+  });
+
+  it("states outright when nothing fell outside the contract", () => {
+    const md = buildMarkdown(report(0.48, 0.46, 5));
+
+    expect(md).toContain("Off-contract: none.");
+  });
+
+  it("names the field and the value when a prediction breaks the contract", () => {
+    const md = buildMarkdown(report(0.48, 0.46, 5, 2));
+
+    expect(md).toContain("is* a model defect");
+    expect(md).toContain("`ticket_type`: 2 prediction(s) on `soporte`");
+    expect(md).not.toContain("Off-contract: none.");
   });
 
   it("shows a negative delta when the run is under the floor", () => {

@@ -1,15 +1,30 @@
 """Gate git history writes on an explicit, unspent instruction.
 
 A permissions allow-rule grants a command pattern forever, so "the user said
-commit once" silently becomes "may commit at will". This hook closes that by
-reading the session transcript and answering two questions the permission
-system cannot:
+commit once" silently becomes "may commit at will" for the rest of the
+session. That is the failure this hook exists to stop.
 
-  1. Does the LAST message the human actually typed ask for this?
-  2. Has that instruction already been spent on an earlier commit?
+The rule is a QUOTA, not a grammar check. Asking how the sentence was built --
+does it carry an imperative verb, is the verb elided, is it a mention or an
+order -- answers the wrong question and gets it wrong both ways. What matters
+is the count:
 
-One instruction authorises one commit. Wanting a second one is fine -- it just
-needs to be asked for again, which resets the count.
+  * The word appears in the last message the human typed -> ONE history write
+    of that kind is authorised.
+  * The message states a number ("2 commits", "haga 3 commits") -> that many.
+  * The word does not appear -> zero. Finishing work authorises nothing.
+
+Once the count is spent, every further attempt fails -- now and for the rest
+of the session -- until the user asks again. One instruction can never become
+a standing licence.
+
+`commit` and `push` carry separate quotas, so "commit y push" authorises one
+of each and nothing more.
+
+Tradeoff, accepted deliberately: a message that merely discusses committing
+now authorises one. That is the price of dropping the grammar check, and it is
+cheap -- the damage this guards against is not one unwanted commit, it is a
+hundred of them off a single word.
 """
 import sys, json, re
 
@@ -17,38 +32,57 @@ HISTORY_WRITE = re.compile(
     r"(?:^|[;&|\n]|(?<![A-Za-z0-9_])\()\s*git(?:\s+-C\s+\S+)?\s+(commit|push)\b"
 )
 
-# An order to commit, not a mention of one. The discriminator is an imperative
-# "do it" verb governing the word: "haga un commit" is an instruction,
-# "quien le dio permiso de comitear" and "que bloquee git commit" are not.
-# Verb stems are loose because the instruction is often typed fast ("hagag").
-INSTRUCTION = re.compile(
-    r"\b(hag\w{0,5}|haz\w{0,3}|realic\w+|realiz\w+|ejecut\w+|corr[ae]|proced\w+|"
-    r"dale|apliqu\w+|aplic\w+)\b[^.;\n]{0,24}?\b(commit\w*|comit\w*|push\w*)\b"
-    r"|^\s*(commit|push|commitea|comitea|pushea)\b"
-    r"|\b(commit\w*|comit\w*)\s+(and|y)\s+push\b"
-    r"|\b(suba|sube|subelo|pushee|pushea)\b",
-    re.I | re.M,
-)
+# Any spelling of the word is the ask -- commit, commitear, comitea, commiteo.
+MENTION = {
+    # `git commit --amend` IS a commit -- HISTORY_WRITE already counts it as
+    # one -- so asking for "an amend" has to authorise one too. Without this
+    # the hook recognises the command but not the order for it.
+    "commit": re.compile(r"\b(commit\w*|comit\w*|amend\w*|enmend\w*|enmien\w*)\b", re.I),
+    "push":   re.compile(r"\b(push\w*|pushe\w*)\b",   re.I),
+}
+
+WORD_NUMBERS = {
+    "un": 1, "una": 1, "uno": 1, "one": 1, "single": 1,
+    "dos": 2, "two": 2, "tres": 3, "three": 3,
+    "cuatro": 4, "four": 4, "cinco": 5, "five": 5,
+}
+
+# A stated count sits immediately before the word. Anything further away is
+# some other number in the sentence, not a quota.
+COUNT_WINDOW = 3
+
+# An implausible count is a number that happened to be nearby (a ticket id, a
+# file count), not a quota. Fall back to one.
+MAX_COUNT = 50
 
 
 # Text the user is quoting back -- fenced blocks, and long double-quoted
 # passages -- is evidence in an argument, not an order. This conversation is
 # full of the user pasting an earlier reply to criticise it, and those pastes
-# contain phrases like "haga un commit".
+# contain the word.
 FENCE = re.compile(r"```.*?```", re.S)
 BLOCKQ = re.compile(r'^"\s*$.*?^"\s*$', re.S | re.M)
 INLINEQ = re.compile(r'"[^"\n]*"')
 
 
 def own_words(text):
-    """Drop material the user is quoting rather than saying.
-
-    This conversation is largely the user pasting an earlier reply back to
-    argue with it, and those pastes contain the very phrases that authorise a
-    commit. A fenced block, a passage fenced by a lone double-quote line, and
-    a short quoted phrase are all citations, not orders.
-    """
+    """Drop material the user is quoting rather than saying."""
     return INLINEQ.sub(" ", BLOCKQ.sub(" ", FENCE.sub(" ", text)))
+
+
+def quota(text, verb):
+    """How many `git <verb>` this message authorises. 0 means it did not ask."""
+    found = MENTION[verb].search(text)
+    if not found:
+        return 0
+    lead = re.findall(r"[a-z0-9]+", text[:found.start()].lower())[-COUNT_WINDOW:]
+    for token in reversed(lead):
+        if token.isdigit():
+            count = int(token)
+            return count if 0 < count <= MAX_COUNT else 1
+        if token in WORD_NUMBERS:
+            return WORD_NUMBERS[token]
+    return 1
 
 
 def blocked(reason):
@@ -82,21 +116,27 @@ def human_text(entry):
     )
 
 
-def counts_as_history_write(entry):
-    """An assistant turn that ran git commit/push via Bash."""
-    if entry.get("type") != "assistant":
-        return False
-    content = entry.get("message", {}).get("content")
-    if not isinstance(content, list):
-        return False
-    for b in content:
-        if not isinstance(b, dict) or b.get("type") != "tool_use":
+def spent(entries, verb):
+    """History writes of this kind attempted since the instruction.
+
+    Attempted, not executed: a call that was refused still spends the quota.
+    The safe failure here is to make the user say it again.
+    """
+    used = 0
+    for entry in entries:
+        if entry.get("type") != "assistant":
             continue
-        if b.get("name") != "Bash":
+        content = entry.get("message", {}).get("content")
+        if not isinstance(content, list):
             continue
-        if HISTORY_WRITE.search(b.get("input", {}).get("command", "")):
-            return True
-    return False
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            if block.get("name") != "Bash":
+                continue
+            command = block.get("input", {}).get("command", "")
+            used += sum(1 for m in HISTORY_WRITE.finditer(command) if m.group(1) == verb)
+    return used
 
 
 payload = json.load(sys.stdin)
@@ -130,18 +170,19 @@ for i in range(len(entries) - 1, -1, -1):
 if last_human is None:
     raise SystemExit
 
-instruction = human_text(entries[last_human])
-if not INSTRUCTION.search(own_words(instruction)):
+allowed = quota(own_words(human_text(entries[last_human])), verb)
+if allowed == 0:
     blocked(
-        "No commit or push was asked for. The last thing the user typed does "
-        "not mention one, and finishing work is not an instruction to commit. "
-        "Report what changed and wait for the explicit order."
+        "No git {0} was asked for. The last thing the user typed does not "
+        "mention one, and finishing work is not an instruction to {0}. Report "
+        "what changed and wait for the explicit order.".format(verb)
     )
 
-already = sum(1 for e in entries[last_human + 1:] if counts_as_history_write(e))
-if already:
+used = spent(entries[last_human + 1:], verb)
+if used >= allowed:
     blocked(
-        "That instruction has already been used: {} git commit/push command(s) "
-        "ran since the user's last message. One instruction authorises one. "
-        "Ask before running another `git {}`.".format(already, verb)
+        "Quota spent. The user's last message authorised {0} git {1}(s); {2} "
+        "have already been attempted since. It does not authorise another one "
+        "-- not now, not later in this session. Stop and ask before running "
+        "any further git {1}.".format(allowed, verb, used)
     )
