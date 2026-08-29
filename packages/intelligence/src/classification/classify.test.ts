@@ -221,7 +221,11 @@ describe.skipIf(skipLlm)('classifyEmail with real prompt', () => {
     expect(meta.usage).toHaveProperty('promptTokens');
     expect(meta.usage).toHaveProperty('completionTokens');
     expect(prompt).toContain('user@client.com');
-    expect(promptVersion).toBe('1.0.0');
+    // Not a pinned number: that fires on every deliberate bump, and this one
+    // sat stale at 1.0.0 through two of them. What must hold is that the
+    // version reported alongside a classification is the one the prompt file
+    // actually carries -- that is the column every eval row is stamped with.
+    expect(promptVersion).toBe(await getPromptVersion('es'));
   });
 });
 

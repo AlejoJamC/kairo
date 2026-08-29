@@ -116,12 +116,32 @@ def human_text(entry):
     )
 
 
-def spent(entries, verb):
-    """History writes of this kind attempted since the instruction.
+def refused(entries):
+    """Tool calls whose result came back an error.
 
-    Attempted, not executed: a call that was refused still spends the quota.
-    The safe failure here is to make the user say it again.
+    A refused call wrote nothing: a permission denial, a commit message the
+    English validator rejected, a git error. Charging those to the quota makes
+    the user re-authorise work that never happened. Only an explicit error
+    result clears an attempt -- an ambiguous one still counts, because the safe
+    failure here is to block.
     """
+    ids = set()
+    for entry in entries:
+        content = entry.get("message", {}).get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if (isinstance(block, dict)
+                    and block.get("type") == "tool_result"
+                    and block.get("is_error")
+                    and block.get("tool_use_id")):
+                ids.add(block["tool_use_id"])
+    return ids
+
+
+def spent(entries, verb):
+    """History writes of this kind that actually ran since the instruction."""
+    never_ran = refused(entries)
     used = 0
     for entry in entries:
         if entry.get("type") != "assistant":
@@ -133,6 +153,8 @@ def spent(entries, verb):
             if not isinstance(block, dict) or block.get("type") != "tool_use":
                 continue
             if block.get("name") != "Bash":
+                continue
+            if block.get("id") in never_ran:
                 continue
             command = block.get("input", {}).get("command", "")
             used += sum(1 for m in HISTORY_WRITE.finditer(command) if m.group(1) == verb)
