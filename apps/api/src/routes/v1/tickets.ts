@@ -4,6 +4,8 @@ import { classifyEmailWithMeta, generateEmbedding, extractPromptVersion } from "
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { supabase } from "../../lib/supabase.js";
 import { resolveUserAndAccount, resolveMemberRole } from "../../lib/auth.js";
+import { buildClassifierBody } from "../../lib/classifier-input.js";
+import { getGmailEmailByAccount } from "../../lib/gmail-token.js";
 import { inngest } from "../../lib/inngest.js";
 import { env } from "../../env.js";
 import {
@@ -369,8 +371,9 @@ tickets.post("/:id/classify", async (c) => {
   try {
     const { result, meta, prompt, promptVersion } = await classifyEmailWithMeta({
       subject: ticket.subject,
-      body: ticket.body_plain ?? "",
+      body: buildClassifierBody("backfill", ticket.body_plain),
       from: ticket.from_email,
+      tenantMailbox: await getGmailEmailByAccount(ctx.accountId),
     });
     classification = result;
 
@@ -562,6 +565,10 @@ tickets.post("/classify-batch", async (c) => {
     }
   }
 
+  // The rubric needs the tenant's own mailbox to tell `support` from
+  // `internal`. Resolved once for the whole batch, not per ticket.
+  const tenantMailbox = await getGmailEmailByAccount(accountId);
+
   // Step 3 & 4: Evaluate each ticket
   const results: BatchTicketResult[] = [];
 
@@ -598,8 +605,9 @@ tickets.post("/classify-batch", async (c) => {
     try {
       const { result: classification, meta, prompt, promptVersion } = await classifyEmailWithMeta({
         subject: ticket.subject,
-        body: ticket.body_plain ?? "",
+        body: buildClassifierBody("backfill", ticket.body_plain),
         from: ticket.from_email,
+        tenantMailbox,
       });
 
       logLlmCall({

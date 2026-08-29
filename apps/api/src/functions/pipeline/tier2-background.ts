@@ -1,4 +1,5 @@
-import { classifyEmailWithMeta, stripQuotedThread } from "@kairo/intelligence";
+import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { buildClassifierBody } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
@@ -185,9 +186,6 @@ function headersToRecord(headers: GmailHeader[]): Record<string, string> {
   return out;
 }
 
-// Cap body sent to the classifier — matches Tier 1's CLASSIFIER_BODY_MAX_CHARS.
-const CLASSIFIER_BODY_MAX_CHARS = 2000;
-
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Same decoder as Tier 1 (KAI-93): Gmail returns part data base64url-encoded,
 // and Buffer's "base64" decoder accepts URL-safe variants on both Node and Bun.
@@ -354,8 +352,7 @@ export const tier2Background = inngest.createFunction(
         const threadId = message.threadId;
         const snippet = message.snippet ?? "";
         const { body_plain, body_html } = extractBody(message.payload);
-        const classifierBody = stripQuotedThread(body_plain || snippet)
-          .slice(0, CLASSIFIER_BODY_MAX_CHARS);
+        const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
 
         const llmStart = Date.now();
         const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })

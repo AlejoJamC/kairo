@@ -96,6 +96,7 @@ export interface GmailPollDeps {
     subject: string;
     body: string;
     from: string;
+    tenantMailbox?: string;
   }) => Promise<ClassificationResult>;
   upsertConversationByThread: (
     client: DbClient,

@@ -16,6 +16,8 @@ import {
   type GmailPollDeps,
   type PollAccountResult,
 } from "./types.js";
+// Pure function, no I/O — safe to import directly rather than inject.
+import { buildClassifierBody } from "../classifier-input.js";
 
 function headerValue(headers: { name: string; value: string }[], name: string): string {
   return (
@@ -209,7 +211,15 @@ async function ingestMessages(
 
       const conversation_id = resolvedConversationId;
 
-      const classification = await deps.classifyEmail({ subject, body: snippet, from });
+      // This path only ever has the Gmail snippet — it does not decode the
+      // MIME body — but it goes through the same rule as every other queued
+      // path, and it sends the tenant mailbox the rubric needs.
+      const classification = await deps.classifyEmail({
+        subject,
+        body: buildClassifierBody("backfill", null, snippet),
+        from,
+        tenantMailbox: userEmail,
+      });
       const classifiedAt = new Date().toISOString();
 
       const result = await deps.findOrCreateTicketForThread(deps.db, {

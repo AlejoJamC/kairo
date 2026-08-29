@@ -1,4 +1,5 @@
-import { classifyEmailWithMeta, stripQuotedThread } from "@kairo/intelligence";
+import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { buildClassifierBody } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -177,11 +178,6 @@ function headerValue(headers: GmailHeader[], name: string): string {
     ""
   );
 }
-
-// Cap body sent to the classifier as a safety net — only fires when
-// stripQuotedThread (KAI-181) leaves something abnormally long, since new
-// text on this corpus has a measured p90 of ~1,900 characters.
-const CLASSIFIER_BODY_MAX_CHARS = 2000;
 
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Gmail returns part data base64url-encoded; Buffer's "base64" decoder
@@ -369,8 +365,7 @@ export const incrementalSync = inngest.createFunction(
         // the DB even before KAI-181 — out of scope here; only what reaches
         // the classifier changes.
         const { body_plain } = extractBody(message.payload);
-        const classifierBody = stripQuotedThread(body_plain || snippet)
-          .slice(0, CLASSIFIER_BODY_MAX_CHARS);
+        const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
 
         const threadId = message.threadId;
 

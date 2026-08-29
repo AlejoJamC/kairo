@@ -2,6 +2,8 @@ import { classifyEmailWithMeta } from "@kairo/intelligence";
 import { inngest } from "../lib/inngest.js";
 import { supabase } from "../lib/supabase.js";
 import { logLlmCall } from "../lib/llm-logging.js";
+import { buildClassifierBody } from "../lib/classifier-input.js";
+import { getGmailEmailByAccount } from "../lib/gmail-token.js";
 import { resolveModelVersion } from "../lib/model-version.js";
 import type { BatchTicketResult } from "../lib/schemas/classification.js";
 
@@ -43,6 +45,14 @@ export const batchClassify = inngest.createFunction(
     };
 
     const foundIds = new Set(tickets.map((t) => t.id));
+
+    // The rubric needs the tenant's own mailbox to tell `support` from
+    // `internal`. Resolved once for the whole batch, not per ticket.
+    const tenantMailbox = accountId
+      ? ((await step.run("resolve-tenant-mailbox", () =>
+          getGmailEmailByAccount(accountId)
+        )) as string)
+      : "";
 
     // -----------------------------------------------------------------------
     // Step 2: Check for human corrections on force-reclassify tickets
@@ -99,8 +109,9 @@ export const batchClassify = inngest.createFunction(
         try {
           const { result: classification, meta, prompt, promptVersion } = await classifyEmailWithMeta({
             subject: ticket.subject,
-            body: ticket.body_plain ?? "",
+            body: buildClassifierBody("backfill", ticket.body_plain),
             from: ticket.from_email,
+            tenantMailbox,
           });
 
           logLlmCall({
