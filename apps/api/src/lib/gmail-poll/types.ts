@@ -97,6 +97,7 @@ export interface GmailPollDeps {
       subject: string;
       body: string;
       from: string;
+      tenantMailbox?: string;
     },
     options?: { context?: { accountId?: string } },
   ) => Promise<ClassificationResult>;
