@@ -364,7 +364,7 @@ async function main(): Promise<void> {
       predictions.push(pRow[predCol] ?? '');
     }
 
-    const metrics = computeFieldMetrics(truths, predictions);
+    const metrics = computeFieldMetrics(truths, predictions, CANONICAL_VALUES[key]);
     const baseline = computeBaseline(truths);
     fieldMetrics[key] = metrics;
     baselines[key] = baseline;
@@ -376,10 +376,20 @@ async function main(): Promise<void> {
       `   baseline: ${baseline.macro_f1.toFixed(2)} (${baseline.majority_label})` +
       `   ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}${flag}`,
     );
-    if (metrics.off_rubric_predictions > 0) {
+    // Two different things, deliberately reported apart. The first is a gap in
+    // the corpus: a class the rubric allows but these 50 emails never exercise.
+    // The second is a defect in the model: a value the prompt never offered.
+    if (metrics.off_ground_truth_predictions > 0) {
       console.log(
-        `  ${' '.repeat(14)} off-rubric: ${metrics.off_rubric_predictions} prediction(s) ` +
-        `on ${metrics.off_rubric_labels.join(', ')} — excluded from the macro`,
+        `  ${' '.repeat(14)} off-ground-truth: ${metrics.off_ground_truth_predictions} prediction(s) ` +
+        `on ${metrics.off_ground_truth_labels.join(', ')} — allowed by the rubric, absent from ` +
+        `this corpus. No F1 of their own, but still counted as false negatives`,
+      );
+    }
+    if (metrics.off_contract_predictions > 0) {
+      console.log(
+        `  ${' '.repeat(14)} ⚠ off-contract: ${metrics.off_contract_predictions} prediction(s) ` +
+        `on ${metrics.off_contract_labels.join(', ')} — outside the enum the model was given`,
       );
     }
   }
