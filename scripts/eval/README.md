@@ -75,6 +75,38 @@ every account today is a task in another domain, not a condition this bench
 observes: re-measuring an accepted delta spends compute reconfirming a decision
 instead of informing one.
 
+## Annotator agreement
+
+Every F1 in a report is distance to a label. That distance only means something
+if the label is reproducible — if two people reading the same email with the
+same rubric write the same value. `eval:metrics` computes that from the sheet's
+own annotator columns and prints it above the F1 table:
+
+| Field | Agreement | By chance | Kappa | Reading |
+|---|---|---|---|---|
+| tone | 94% | 38% | 0.90 | almost perfect |
+| category | 88% | 68% | 0.62 | substantial |
+| ticket_type | 88% | 76% | 0.51 | moderate |
+| priority | 48% | 32% | 0.24 | fair |
+| urgency | 44% | 38% | 0.10 | slight |
+| difficulty | 88% | 88% | −0.03 | no better than chance |
+
+**Read the kappa, not the percentage.** Two classes with a skewed split hand out
+~50% agreement for free, so the raw figure is not comparable between fields —
+`ticket_type` and `difficulty` both sit at 88% and one of them is worth nothing.
+That last row matters more than it looks: the verdict is macro F1 over the
+emails *both* annotators called easy, and they agree on that split no better
+than their own habits predict.
+
+`tone` is read from the `*_tono_v130` columns and only those. The sheet also
+carries the original four-class pass and an intermediate binary one; neither
+describes a label anything reads, and the first was annotated before the
+insistence rule existed, at 12% agreement.
+
+Nothing is hand-written: there is no `_meta.json`. A corpus whose sheet has no
+annotator columns simply gets no agreement section, which is the honest answer
+there — a zero would read as "they never agreed".
+
 ## Data layout (private repo)
 
 `scripts/eval/data/` is a **separate private git repo** — it holds real company
@@ -87,7 +119,6 @@ scripts/eval/data/
 ├── input/
 │   ├── ground_truth_50.csv    ← produced by KAI-102 (raw two-annotator sheet;
 │   │                            adapted in memory at run time — never edited)
-│   ├── _meta.json             ← optional: { "inter_annotator_agreement": <number> }
 │   └── eml/
 │       └── 001.eml … 050.eml  ← raw source emails
 └── output/                    ← auto-created by the scripts

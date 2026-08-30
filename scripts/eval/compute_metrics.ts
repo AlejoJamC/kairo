@@ -2,6 +2,8 @@ import { readFile, writeFile, mkdir, access } from 'fs/promises';
 import { join } from 'path';
 import { computeFieldMetrics, computeBaseline } from './lib/metrics';
 import { computeCalibration } from './lib/calibration';
+import { computeAgreement } from './lib/agreement';
+import type { FieldAgreement } from './lib/agreement';
 import type { CalibrationEntry } from './lib/calibration';
 import { computeToneInflation, computeDifficultyBreakdown } from './lib/spanish-analysis';
 import type { AnalysisRow } from './lib/spanish-analysis';
@@ -27,7 +29,6 @@ const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', RUN_SLUG);
 
 const GT_FILE = join(INPUT_DIR, 'ground_truth_50.csv');
 const PIPELINE_FILE = join(OUTPUT_DIR, 'pipeline_output_50.csv');
-const META_FILE = join(INPUT_DIR, '_meta.json');
 const JSON_OUT = join(OUTPUT_DIR, 'eval_report.json');
 const MD_OUT = join(OUTPUT_DIR, 'eval_report.md');
 
@@ -205,6 +206,54 @@ export function adaptGroundTruth(parsed: CsvParseResult): CsvParseResult {
   return { headers: [...CANONICAL_GT_HEADERS], rows };
 }
 
+// ─── Agreement between the two annotators ───────────────────────────────────
+// Which pair of raw columns holds each field. Four fields are named in English
+// and two in Spanish because the sheet grew that way; the mapping is here so
+// nothing downstream has to know.
+//
+// `tone` points at the v1.3.0 pass and only at it. The sheet carries two
+// earlier tone passes -- the original four-class one and an intermediate binary
+// one -- and neither describes a label anything reads. The first was annotated
+// before the insistence rule existed and the two annotators agreed on 12% of
+// it; treating it as a second opinion on the same question would be averaging a
+// mistake into the answer.
+const ANNOTATOR_COLUMNS: Record<string, [string, string]> = {
+  ticket_type: ['alexandra_ticket_type', 'alejandro_ticket_type'],
+  priority:    ['alexandra_priority', 'alejandro_priority'],
+  category:    ['alexandra_category', 'alejandro_category'],
+  tone:        ['alexandra_tono_v130', 'alejandro_tono_v130'],
+  urgency:     ['alexandra_urgency', 'alejandro_urgency'],
+  // Not a classifier field, but the verdict is computed on the emails both
+  // annotators called easy, so how well they agree on that decides which
+  // subset the headline number is measured over.
+  difficulty:  ['alexandra_dificultad', 'alejandro_dificultad'],
+};
+
+/**
+ * Agreement per field, read straight off the raw annotator sheet.
+ *
+ * Undefined when the sheet carries no annotator columns at all -- an
+ * already-canonical ground truth, or another tenant's corpus. Absent is the
+ * honest answer there; a zero would read as "they never agreed".
+ */
+export function computeAnnotatorAgreement(
+  parsed: CsvParseResult,
+): Record<string, FieldAgreement> | undefined {
+  const present = Object.entries(ANNOTATOR_COLUMNS).filter(
+    ([, [a, b]]) => parsed.headers.includes(a) && parsed.headers.includes(b),
+  );
+  if (present.length === 0) return undefined;
+
+  const out: Record<string, FieldAgreement> = {};
+  for (const [field, [colA, colB]] of present) {
+    out[field] = computeAgreement(
+      parsed.rows.map((r) => r[colA] ?? ''),
+      parsed.rows.map((r) => r[colB] ?? ''),
+    );
+  }
+  return out;
+}
+
 export function reportNonCanonicalGtValues(): void {
   if (nonCanonicalGtValues.size === 0) return;
   console.warn('⚠  Ground-truth values outside the pipeline enums (used as-is):');
@@ -336,18 +385,20 @@ async function main(): Promise<void> {
   console.log(`Emails evaluated: ${evaluated.length} (${skipped.length} skipped — errors)`);
   console.log('─'.repeat(44));
 
-  // ── 5. Read optional _meta.json ───────────────────────────────────────────
-  let interAnnotatorAgreement: number | undefined;
-  if (await fileExists(META_FILE)) {
-    try {
-      const metaContent = await readFile(META_FILE, 'utf-8');
-      const meta = JSON.parse(metaContent) as Record<string, unknown>;
-      if (typeof meta['inter_annotator_agreement'] === 'number') {
-        interAnnotatorAgreement = meta['inter_annotator_agreement'];
-      }
-    } catch {
-      // Silently skip malformed meta file
+  // ── 5. Agreement between the two annotators ───────────────────────────────
+  // Computed from the sheet rather than read from a hand-written file. It is a
+  // property of the ground truth, and it qualifies every F1 below it: a field
+  // the annotators do not reproduce has no stable target to score against.
+  const annotatorAgreement = computeAnnotatorAgreement(gtParsed);
+  if (annotatorAgreement) {
+    console.log('Annotator agreement (raw, and above chance):');
+    for (const [field, a] of Object.entries(annotatorAgreement)) {
+      console.log(
+        `  ${field.padEnd(14)} ${(a.observed * 100).toFixed(0).padStart(3)}%` +
+        `   kappa ${a.kappa >= 0 ? '+' : ''}${a.kappa.toFixed(3)}   n=${a.n}`,
+      );
     }
+    console.log('─'.repeat(44));
   }
 
   // ── 6. Compute field metrics ──────────────────────────────────────────────
@@ -509,7 +560,7 @@ async function main(): Promise<void> {
       total_emails: total,
       emails_evaluated: evaluated.length,
       emails_skipped_due_to_error: skipped.length,
-      ...(interAnnotatorAgreement !== undefined ? { inter_annotator_agreement: interAnnotatorAgreement } : {}),
+      ...(annotatorAgreement ? { annotator_agreement: annotatorAgreement } : {}),
     },
     field_metrics: {
       ticket_type: fieldMetrics['ticket_type']!,
