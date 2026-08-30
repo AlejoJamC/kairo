@@ -267,10 +267,17 @@ describe('tenant context', () => {
     expect(out).toContain('A qué se dedica: (no disponible)');
   });
 
-  it('makes internal the default rather than a sender check', async () => {
+  // `internal` used to be declared the default class, and the decision order
+  // ended on it. `other` was defined at the bottom but no route reached it, so
+  // it was unreachable by construction — 0 of 100 annotations used it while
+  // every email nobody could place became `internal`. There is exactly one
+  // residual class and it is `other`; `internal` is whose work the email is.
+  it('makes other the residual class, not internal', async () => {
     const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
 
-    expect(es).toContain('Es la clase por defecto');
+    expect(es).toContain('Si ninguna encaja → `other`');
+    expect(es).toContain('No es la clase por defecto');
+    expect(es).not.toContain('Es la clase por defecto cuando');
     // the competing shortcut that sent every external request to `support`
     expect(es).not.toContain('si el remitente es externo y espera una acción');
   });
@@ -278,7 +285,9 @@ describe('tenant context', () => {
   it('keeps both languages on the same rule', async () => {
     const en = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' }, 'en');
 
-    expect(en).toContain('It is the default class');
+    expect(en).toContain('If none of them fits -> `other`');
+    expect(en).toContain('It is not the default class');
+    expect(en).not.toContain('It is the default class when');
     expect(en).toContain('What it does: (not available)');
   });
 });
