@@ -21,10 +21,19 @@ import { getPromptVersion, DEFAULT_LANG } from '../../packages/intelligence/src/
 import { BENCH, ONBOARDING_BENCH, VARIANTS, cellSlug, bodyRule, cellKey, totalCells, variantsFor } from './lib/matrix';
 import { Ledger } from './lib/ledger';
 import { LOCAL_OLLAMA } from './lib/run-label';
+import { resolveCorpus } from './lib/corpus';
 
 const SCRIPT_DIR = new URL('.', import.meta.url).pathname;
-const INPUT_DIR = join(SCRIPT_DIR, 'data/input/eml');
-const OUTPUT_ROOT = process.env['EVAL_OUTPUT_ROOT'] ?? join(SCRIPT_DIR, 'data/output');
+
+// Which body of email this run measures, and where its results land. A second
+// corpus writes into its own subtree: its cells and its ledger are only
+// meaningful against its own email count.
+const CORPUS = resolveCorpus();
+const INPUT_DIR = join(SCRIPT_DIR, CORPUS.emlDir);
+const OUTPUT_ROOT = join(
+  process.env['EVAL_OUTPUT_ROOT'] ?? join(SCRIPT_DIR, 'data/output'),
+  CORPUS.outputSubdir,
+);
 const LEDGER_PATH = join(OUTPUT_ROOT, '.matrix-state', 'ledger.jsonl');
 const RUN_LOG = join(OUTPUT_ROOT, '.matrix-state', 'matrix_run.log');
 const BC_FILE = join(SCRIPT_DIR, 'data/input/business_context.txt');
@@ -131,7 +140,7 @@ async function main(): Promise<void> {
   console.log('Kairo Pipeline Eval — KAI-93 matrix');
   console.log(`Prompt: ${DEFAULT_LANG} v${promptVersion}   Temperature: ${TEMPERATURE}`);
   console.log(`Tenant mailbox: ${TENANT_MAILBOX} (sent in every variant, as production does)`);
-  console.log(`Dataset: ${emails.length} emails`);
+  console.log(`Corpus: ${CORPUS.id} — ${emails.length} emails from ${CORPUS.emlDir}`);
   console.log('─'.repeat(72));
   console.log('Variants per email, in this order:');
   for (const [i, v] of VARIANTS.entries()) {
