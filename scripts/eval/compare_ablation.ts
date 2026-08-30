@@ -20,6 +20,7 @@
 import { readFile, access } from 'fs/promises';
 import { join } from 'path';
 import { parseCsv, adaptGroundTruth, canonicalEmailId } from './compute_metrics';
+import { PIPELINE_OUTPUT } from './lib/run-files';
 import { computeFieldMetrics } from './lib/metrics';
 import { resolveRunLabel } from './lib/run-label';
 
@@ -41,7 +42,7 @@ const FIELDS = [
 type Row = Record<string, string>;
 
 async function loadRun(slug: string): Promise<Map<string, Row>> {
-  const path = join(OUTPUT_DIR, slug, 'pipeline_output_50.csv');
+  const path = join(OUTPUT_DIR, slug, PIPELINE_OUTPUT);
   try {
     await access(path);
   } catch {

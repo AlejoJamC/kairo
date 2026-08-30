@@ -11,6 +11,7 @@ import { writeReports } from './lib/report-writer';
 import type { EvalReport, PerEmailDiff, FieldDiff } from './lib/report-writer';
 import { resolveRunLabel } from './lib/run-label';
 import { resolveCorpus } from './lib/corpus';
+import { PIPELINE_OUTPUT } from './lib/run-files';
 // The eval validates against the same enums the pipeline emits — one source
 import {
   TICKET_TYPE, PRIORITY, CATEGORY, TONE, URGENCY,
@@ -33,7 +34,7 @@ const RUN_SLUG = process.argv[2] ?? resolveRunLabel().slug;
 const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', CORPUS.outputSubdir, RUN_SLUG);
 
 const GT_FILE = join(SCRIPT_DIR, CORPUS.groundTruth);
-const PIPELINE_FILE = join(OUTPUT_DIR, 'pipeline_output_50.csv');
+const PIPELINE_FILE = join(OUTPUT_DIR, PIPELINE_OUTPUT);
 const JSON_OUT = join(OUTPUT_DIR, 'eval_report.json');
 const MD_OUT = join(OUTPUT_DIR, 'eval_report.md');
 
@@ -387,7 +388,7 @@ async function main(): Promise<void> {
     pipeline.headers,
     ['email_id', 'predicted_ticket_type', 'predicted_priority', 'predicted_category',
      'predicted_tone', 'predicted_urgency', 'confidence', 'error'],
-    'pipeline_output_50.csv',
+    PIPELINE_OUTPUT,
   );
 
   // ── 3. Join on email_id ───────────────────────────────────────────────────
@@ -493,7 +494,7 @@ async function main(): Promise<void> {
       `   ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}${flag}`,
     );
     // Two different things, deliberately reported apart. The first is a gap in
-    // the corpus: a class the rubric allows but these 50 emails never exercise.
+    // the corpus: a class the rubric allows but this corpus never exercises.
     // The second is a defect in the model: a value the prompt never offered.
     if (metrics.off_ground_truth_predictions > 0) {
       console.log(

@@ -204,7 +204,7 @@ scripts/eval/data/
 │       └── 001.eml … 050.eml  ← raw source emails
 └── output/                    ← auto-created by the scripts
     └── <provider>-<model>/    ← one directory PER RUN, e.g. ollama-granite4.1-3b
-        ├── pipeline_output_50.csv   (includes provider + model columns)
+        ├── pipeline_output.csv      (includes provider + model columns)
         ├── eval_report.md / eval_report.json
         └── *.log
 ```
@@ -239,7 +239,7 @@ bun run eval:pipeline
 
 | File | Description |
 |------|-------------|
-| `scripts/eval/data/output/pipeline_output_50.csv` | Pipeline predictions, one row per email |
+| `scripts/eval/data/output/<run>/pipeline_output.csv` | Pipeline predictions, one row per email |
 | `scripts/eval/data/output/pipeline_eval_run.log` | Per-run execution log with timing and errors |
 
 ### CSV columns
