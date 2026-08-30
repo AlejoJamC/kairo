@@ -1,10 +1,10 @@
 import { classifyEmailWithMeta } from "@kairo/intelligence";
-import { buildClassifierBody } from "../../lib/classifier-input.js";
+import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { NonRetriableError } from "inngest";
-import { getFreshGmailToken, getGmailEmailByAccount } from "../../lib/gmail-token.js";
+import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
@@ -235,7 +235,7 @@ export const tier2Background = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Step 1: Fetch Gmail credentials + full 0–N day window
     // -----------------------------------------------------------------------
-    const { messages, userEmail, accountId: resolvedAccountId } = await step.run(
+    const { messages, userEmail, businessContext, accountId: resolvedAccountId } = await step.run(
       "fetch-0-15d-headers",
       async () => {
         // ADR-022 Phase 2: resolve accountId, then read tokens from oauth_credentials.
@@ -250,19 +250,26 @@ export const tier2Background = inngest.createFunction(
         const accountId = memberRow?.account_id;
         if (!accountId) {
           console.warn(`[tier2] account_id missing for user ${userId} — aborting`);
-          return { messages: [] as GmailMessage[], userEmail: "", accountId: "" };
+          return { messages: [] as GmailMessage[], userEmail: "", businessContext: "", accountId: "" };
         }
 
-        const [freshToken, email] = await Promise.all([
+        // Resolved once for the whole window, not once per email: the mailbox
+        // and the tenant's line of business are per-account state (KAI-93).
+        const [freshToken, ctx] = await Promise.all([
           getFreshGmailToken(accountId),
-          getGmailEmailByAccount(accountId),
+          resolveClassifierContext("backfill", accountId),
         ]);
 
         const msgs = await fetchGmailWindow(freshToken, env.TIER_2_WINDOW_DAYS);
-        return { messages: msgs, userEmail: email, accountId };
+        return {
+          messages: msgs,
+          userEmail: ctx.tenantMailbox,
+          businessContext: ctx.businessContext ?? "",
+          accountId,
+        };
       }
     // Inngest's JsonifyObject loses interface field types across step boundaries; cast back
-    ) as { messages: GmailMessage[]; userEmail: string; accountId: string };
+    ) as { messages: GmailMessage[]; userEmail: string; businessContext: string; accountId: string };
 
     if (messages.length === 0) {
       console.warn(`[tier2] No messages in window for user ${userId}`);
@@ -355,7 +362,11 @@ export const tier2Background = inngest.createFunction(
         const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
+        const promise = classifyEmailWithMeta({
+          subject, body: classifierBody, from,
+          tenantMailbox: userEmail,
+          ...(businessContext ? { businessContext } : {}),
+        })
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",

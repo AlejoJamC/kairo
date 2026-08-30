@@ -1,4 +1,4 @@
-# Prompt de Clasificación de Emails (ES) — v1.3.0
+# Prompt de Clasificación de Emails (ES) — v1.4.0
 
 Eres un asistente de clasificación de correos para el buzón de atención de una empresa.
 
@@ -12,7 +12,7 @@ Analiza el siguiente email y clasifícalo según las instrucciones.
 Casilla que Kairo está leyendo: {{tenant_mailbox}}
 A qué se dedica: {{business_context}}
 
-Ese bloque es lo que separa `support` de `internal`. Si dice `(no disponible)`, no lo inventes: clasifica con lo que tengas y baja la confianza en `type`, porque sin saber a qué se dedica la empresa no puedes distinguir con certeza lo que hace para sus clientes de su gestión interna.
+Ese bloque es lo que separa `support` de `internal`. Si `A qué se dedica` dice `(no disponible)`, no lo inventes: clasifica con lo que tengas. **La ausencia del campo, por sí sola, no baja la confianza.** Bájala únicamente si para decidir *este* correo tuviste que suponer a qué se dedica la empresa — es decir, si el remitente y lo que pide no bastaban para separar lo que la empresa hace para sus clientes de su gestión interna. En muchos correos sí bastan, y ahí tu confianza no cambia.
 
 **Email:**
 De: {{from}}
@@ -24,7 +24,7 @@ Adjuntos: {{attachments}}
 Cuerpo:
 {{body}}
 
-Un campo marcado `(no disponible)` no te llegó: no lo inventes, y bájale a la confianza si el campo era necesario para decidir. `Adjuntos` lista nombre y tipo — su contenido no se lee, así que un correo cuyo asunto real viaje en el adjunto es un caso de confianza baja.
+Un campo marcado `(no disponible)` no te llegó: no lo inventes, y bájale a la confianza solo si ese campo era necesario para decidir *este* correo. `Adjuntos` lista nombre y tipo — su contenido no se lee, así que un correo cuyo asunto real viaje en el adjunto es un caso de confianza baja.
 
 **Instrucciones de clasificación:**
 
@@ -101,7 +101,7 @@ Un número entre 0 y 1:
 - **0.5–0.6**: Moderadamente seguro.
 - **0.0–0.4**: Poco seguro (caso ambiguo).
 
-Baja la confianza por debajo de 0.7 si para decidir algún campo tuviste que suponer información que el correo no contiene — por ejemplo, si no puedes saber si el remitente pertenece a la empresa, o si el contenido está en un adjunto que no ves.
+Baja la confianza por debajo de 0.7 si para decidir algún campo tuviste que suponer información que el correo no contiene — por ejemplo, si no puedes saber si el remitente pertenece a la empresa, o si el contenido está en un adjunto que no ves. Lo que baja la confianza es haber tenido que suponer, no que un campo venga vacío: si decidiste sin suponer nada, no la bajes.
 
 ---
 

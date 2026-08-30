@@ -39,6 +39,37 @@ that carried that warning.** The `tokens_per_second` column comes from the
 provider's own generation timer and is the figure to compare across runs —
 unlike wall-clock, a drop in it is a real throughput signal.
 
+## Where the business context comes from
+
+`{{business_context}}` — "what does this company do" — is the block the rubric
+names as what separates `support` from `internal`. Two runners feed it, and
+neither feeds it the way production does:
+
+| Runner | Source | Behaviour when absent |
+|--------|--------|-----------------------|
+| `eval:pipeline` | `EVAL_BUSINESS_CONTEXT` env var | Unset → the field is not sent, and the rubric renders `(no disponible)` |
+| `eval:matrix` | `scripts/eval/data/input/business_context.txt` | Missing or empty → the run **refuses to start**: two of its four variants exist to measure this field, and without it they would silently repeat the other two |
+
+```bash
+EVAL_BUSINESS_CONTEXT="$(cat scripts/eval/data/input/business_context.txt)" bun run eval:pipeline
+```
+
+**Both of those texts are written by hand, and production's is not.** In
+production the value is read from `accounts.business_context` — a column that
+is empty until something fills it, and whose text is expected to be refined
+over time. A hand-written paragraph is the best case: it measures the ceiling
+the field can buy, not what an account will actually be carrying. Report a
+figure from these runs as a ceiling, not as a forecast.
+
+The other asymmetry is the stage. Production sends the field on the backfill
+stage only — tier 2, tier 3, incremental-sync, the Gmail poll and the
+reclassify endpoints — and never on tier 1, which runs before any value can
+exist. The matrix's two `onboarding-bc` cells therefore do not describe a
+production path at all: they are the control that justifies withholding the
+field there, and on the bench they earned it (the best onboarding model lost
+0.073 macro F1 with the context; none of the five gained). The rule itself
+lives in `apps/api/src/lib/classifier-input.ts`.
+
 ## Data layout (private repo)
 
 `scripts/eval/data/` is a **separate private git repo** — it holds real company
@@ -105,6 +136,8 @@ bun run eval:pipeline
 | `prompt_version` | Rubric version that produced this row |
 | `prompt_lang` | Rubric language (`es` / `en`) |
 | `pipeline_stage` | Production path reproduced: `onboarding` (raw body, 20k cap) or `backfill` (quotes stripped, 2k cap) |
+| `business_context` | Whether this row carried the `{{business_context}}` block (`yes` / `no`). Written by `eval:matrix`; `eval:pipeline` does not emit this column |
+| `tenant_mailbox` | The mailbox sent as the tenant's own. Written by `eval:matrix` only |
 | `endpoint` | Where inference ran. A latency figure is meaningless without it |
 | `tokens_per_second` | Generation throughput from the provider's own timer (Ollama only; empty for Anthropic). Comparable across runs in a way wall-clock is not |
 | `predicted_ticket_type` | `support` / `prospect` / `spam` / `internal` / `other` |

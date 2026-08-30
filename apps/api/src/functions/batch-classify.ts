@@ -2,8 +2,7 @@ import { classifyEmailWithMeta } from "@kairo/intelligence";
 import { inngest } from "../lib/inngest.js";
 import { supabase } from "../lib/supabase.js";
 import { logLlmCall } from "../lib/llm-logging.js";
-import { buildClassifierBody } from "../lib/classifier-input.js";
-import { getGmailEmailByAccount } from "../lib/gmail-token.js";
+import { buildClassifierBody, resolveClassifierContext } from "../lib/classifier-input.js";
 import { resolveModelVersion } from "../lib/model-version.js";
 import type { BatchTicketResult } from "../lib/schemas/classification.js";
 
@@ -47,12 +46,16 @@ export const batchClassify = inngest.createFunction(
     const foundIds = new Set(tickets.map((t) => t.id));
 
     // The rubric needs the tenant's own mailbox to tell `support` from
-    // `internal`. Resolved once for the whole batch, not per ticket.
-    const tenantMailbox = accountId
-      ? ((await step.run("resolve-tenant-mailbox", () =>
-          getGmailEmailByAccount(accountId)
-        )) as string)
-      : "";
+    // `internal`, and its line of business to anchor both. Resolved once for
+    // the whole batch, not per ticket (KAI-93).
+    const { tenantMailbox, businessContext } = accountId
+      ? ((await step.run("resolve-classifier-context", async () => {
+          const ctx = await resolveClassifierContext("backfill", accountId);
+          // Optional fields do not survive Inngest's JSON step boundary as
+          // `undefined`; "" crosses it and is normalised back below.
+          return { tenantMailbox: ctx.tenantMailbox, businessContext: ctx.businessContext ?? "" };
+        })) as { tenantMailbox: string; businessContext: string })
+      : { tenantMailbox: "", businessContext: "" };
 
     // -----------------------------------------------------------------------
     // Step 2: Check for human corrections on force-reclassify tickets
@@ -112,6 +115,7 @@ export const batchClassify = inngest.createFunction(
             body: buildClassifierBody("backfill", ticket.body_plain),
             from: ticket.from_email,
             tenantMailbox,
+            ...(businessContext ? { businessContext } : {}),
           });
 
           logLlmCall({

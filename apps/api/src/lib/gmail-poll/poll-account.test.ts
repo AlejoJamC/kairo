@@ -102,7 +102,7 @@ function baseDeps(overrides: Partial<GmailPollDeps>): GmailPollDeps {
   return {
     db: undefined as unknown as DbClient, // overridden per-test
     getFreshGmailToken: async () => "fresh-token",
-    getGmailEmailByAccount: async () => "support@mycompany.com",
+    resolveClassifierContext: async () => ({ tenantMailbox: "support@mycompany.com" }),
     getProfile: async () => ({ emailAddress: "support@mycompany.com", historyId: "1000" }),
     historyList: async () => ({ history: [], historyId: "1001" }),
     messagesList: async () => ({ messages: [] }),

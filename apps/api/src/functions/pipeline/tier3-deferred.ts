@@ -1,9 +1,10 @@
 import { classifyEmailWithMeta } from "@kairo/intelligence";
-import { buildClassifierBody } from "../../lib/classifier-input.js";
+import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
+import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
-import { getFreshGmailToken, getGmailEmailByAccount } from "../../lib/gmail-token.js";
+import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
@@ -232,7 +233,10 @@ async function classifyWindow(
   userId: string,
   accountId: string,
   accessToken: string,
-  userEmail: string,
+  // The tenant fields the rubric needs, resolved once per run (KAI-93). Carries
+  // the business context on this stage; `tenantMailbox` is also what the
+  // pre-filter uses to tell the tenant's own address from a correspondent's.
+  classifierContext: ClassifierContext,
   channelIntegrationId: string | null,
   daysFrom: number,
   daysTo: number
@@ -277,7 +281,7 @@ async function classifyWindow(
       headers: headersToRecord(headers),
       gmailCategories,
       mimeType: message.payload?.mimeType,
-      userEmail,
+      userEmail: classifierContext.tenantMailbox,
     });
 
     if (filterResult.status === "skip") {
@@ -310,7 +314,13 @@ async function classifyWindow(
     const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
 
     const llmStart = Date.now();
-    const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
+    const promise = classifyEmailWithMeta({
+      subject, body: classifierBody, from,
+      tenantMailbox: classifierContext.tenantMailbox,
+      ...(classifierContext.businessContext
+        ? { businessContext: classifierContext.businessContext }
+        : {}),
+    })
       .then(async ({ result: classification, meta, prompt, promptVersion }) => {
         logLlmCall({
           feature: "email_classification",
@@ -606,7 +616,7 @@ export const tier3Deferred = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Fetch Gmail credentials + channel integration id once
     // -----------------------------------------------------------------------
-    const { accessToken, userEmail, accountId, channelIntegrationId } = (await step.run(
+    const { accessToken, tenantMailbox, businessContext, accountId, channelIntegrationId } = (await step.run(
       "fetch-credentials",
       async () => {
         // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
@@ -621,30 +631,39 @@ export const tier3Deferred = inngest.createFunction(
         const accountId = memberRow?.account_id;
         if (!accountId) {
           console.warn(`[tier3] account_id missing for user ${userId} — aborting`);
-          return { accessToken: null, userEmail: "", accountId: "", channelIntegrationId: null };
+          return { accessToken: null, tenantMailbox: "", businessContext: "", accountId: "", channelIntegrationId: null };
         }
 
-        const [freshToken, email, channelRow] = await Promise.all([
+        const [freshToken, ctx, channelRow] = await Promise.all([
           getFreshGmailToken(accountId).catch(() => null),
-          getGmailEmailByAccount(accountId),
+          resolveClassifierContext("backfill", accountId),
           supabase.from("channel_integrations").select("id").eq("account_id", accountId).eq("provider", "gmail").limit(1).single(),
         ]);
 
         if (!freshToken) {
           console.warn(`[tier3] No Gmail credentials found for account ${accountId}`);
-          return { accessToken: null, userEmail: "", accountId, channelIntegrationId: null };
+          return { accessToken: null, tenantMailbox: "", businessContext: "", accountId, channelIntegrationId: null };
         }
 
         return {
           accessToken: freshToken,
-          userEmail: email,
+          tenantMailbox: ctx.tenantMailbox,
+          businessContext: ctx.businessContext ?? "",
           accountId,
           channelIntegrationId: channelRow.data?.id ?? null,
         };
       }
-    )) as { accessToken: string | null; userEmail: string; accountId: string; channelIntegrationId: string | null };
+    )) as { accessToken: string | null; tenantMailbox: string; businessContext: string; accountId: string; channelIntegrationId: string | null };
 
     if (!accessToken || !accountId) return;
+
+    // Rebuilt on this side of the step boundary: Inngest serializes step output
+    // to JSON, so an absent optional field has to travel as "" and come back as
+    // absent, or every window would send an empty business_context block.
+    const classifierContext: ClassifierContext = {
+      tenantMailbox,
+      ...(businessContext ? { businessContext } : {}),
+    };
 
     // -----------------------------------------------------------------------
     // Batch A: 16–30 days
@@ -654,7 +673,7 @@ export const tier3Deferred = inngest.createFunction(
         userId,
         accountId,
         accessToken,
-        userEmail,
+        classifierContext,
         channelIntegrationId,
         16,
         30
@@ -669,7 +688,7 @@ export const tier3Deferred = inngest.createFunction(
         userId,
         accountId,
         accessToken,
-        userEmail,
+        classifierContext,
         channelIntegrationId,
         31,
         60
@@ -684,7 +703,7 @@ export const tier3Deferred = inngest.createFunction(
         userId,
         accountId,
         accessToken,
-        userEmail,
+        classifierContext,
         channelIntegrationId,
         61,
         env.MAX_EMAIL_AGE_DAYS

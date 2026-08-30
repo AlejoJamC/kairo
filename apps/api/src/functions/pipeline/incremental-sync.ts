@@ -1,10 +1,10 @@
 import { classifyEmailWithMeta } from "@kairo/intelligence";
-import { buildClassifierBody } from "../../lib/classifier-input.js";
+import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
-import { getFreshGmailToken, getGmailEmailByAccount } from "../../lib/gmail-token.js";
+import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
@@ -279,9 +279,11 @@ export const incrementalSync = inngest.createFunction(
     // Step 3: Classify new emails
     // -----------------------------------------------------------------------
     await step.run("classify-new-emails", async () => {
-      const [gmailAccessToken, userEmail, channelRow] = await Promise.all([
+      // The tenant fields are per-account, so they are resolved once for the
+      // whole sync rather than once per email (KAI-93).
+      const [gmailAccessToken, classifierContext, channelRow] = await Promise.all([
         getFreshGmailToken(accountId),
-        getGmailEmailByAccount(accountId),
+        resolveClassifierContext("backfill", accountId),
         supabase
           .from("channel_integrations")
           .select("id")
@@ -292,6 +294,7 @@ export const incrementalSync = inngest.createFunction(
       ]);
 
       const channelIntegrationId: string | null = channelRow.data?.id ?? null;
+      const { tenantMailbox: userEmail, businessContext } = classifierContext;
 
       // Collect existing gmail_message_ids for this user to skip duplicates
       const incomingIds = headers.map((m) => m.id);
@@ -370,7 +373,11 @@ export const incrementalSync = inngest.createFunction(
         const threadId = message.threadId;
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
+        const promise = classifyEmailWithMeta({
+          subject, body: classifierBody, from,
+          tenantMailbox: userEmail,
+          ...(businessContext ? { businessContext } : {}),
+        })
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",
