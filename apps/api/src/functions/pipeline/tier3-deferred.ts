@@ -1,5 +1,7 @@
 import { classifyEmailWithMeta } from "@kairo/intelligence";
+import type { TicketType } from "@kairo/intelligence";
 import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
+import { backfillProposalStatus, autoApprovedTypes } from "./backfill-proposal-status.js";
 import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -237,6 +239,8 @@ async function classifyWindow(
   // the business context on this stage; `tenantMailbox` is also what the
   // pre-filter uses to tell the tenant's own address from a correspondent's.
   classifierContext: ClassifierContext,
+  /** Classes this account may auto-approve. Resolved once per run, like the context. */
+  autoApproved: TicketType[],
   channelIntegrationId: string | null,
   daysFrom: number,
   daysTo: number
@@ -362,7 +366,13 @@ async function classifyWindow(
             confidence_score: classification.confidence,
             model_version: resolveModelVersion(),
             raw_llm_output: classification as Record<string, unknown>,
-            status: "auto_approved",
+            // Same rule as Tier 2 — see backfill-proposal-status.ts. Nobody is
+            // watching here either.
+            status: backfillProposalStatus({
+              type: classification.type,
+              businessContext: classifierContext.businessContext,
+              autoApprovalEnabled: autoApproved.includes(classification.type),
+            }),
           })
           .select("id")
           .single();
@@ -616,7 +626,7 @@ export const tier3Deferred = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Fetch Gmail credentials + channel integration id once
     // -----------------------------------------------------------------------
-    const { accessToken, tenantMailbox, businessContext, accountId, channelIntegrationId } = (await step.run(
+    const { accessToken, tenantMailbox, businessContext, autoApproved, accountId, channelIntegrationId } = (await step.run(
       "fetch-credentials",
       async () => {
         // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
@@ -631,29 +641,31 @@ export const tier3Deferred = inngest.createFunction(
         const accountId = memberRow?.account_id;
         if (!accountId) {
           console.warn(`[tier3] account_id missing for user ${userId} — aborting`);
-          return { accessToken: null, tenantMailbox: "", businessContext: "", accountId: "", channelIntegrationId: null };
+          return { accessToken: null, tenantMailbox: "", businessContext: "", autoApproved: [] as string[], accountId: "", channelIntegrationId: null };
         }
 
-        const [freshToken, ctx, channelRow] = await Promise.all([
+        const [freshToken, ctx, autoApproved, channelRow] = await Promise.all([
           getFreshGmailToken(accountId).catch(() => null),
           resolveClassifierContext("backfill", accountId),
+          autoApprovedTypes(accountId),
           supabase.from("channel_integrations").select("id").eq("account_id", accountId).eq("provider", "gmail").limit(1).single(),
         ]);
 
         if (!freshToken) {
           console.warn(`[tier3] No Gmail credentials found for account ${accountId}`);
-          return { accessToken: null, tenantMailbox: "", businessContext: "", accountId, channelIntegrationId: null };
+          return { accessToken: null, tenantMailbox: "", businessContext: "", autoApproved: [] as string[], accountId, channelIntegrationId: null };
         }
 
         return {
           accessToken: freshToken,
           tenantMailbox: ctx.tenantMailbox,
           businessContext: ctx.businessContext ?? "",
+          autoApproved: autoApproved as string[],
           accountId,
           channelIntegrationId: channelRow.data?.id ?? null,
         };
       }
-    )) as { accessToken: string | null; tenantMailbox: string; businessContext: string; accountId: string; channelIntegrationId: string | null };
+    )) as { accessToken: string | null; tenantMailbox: string; businessContext: string; autoApproved: string[]; accountId: string; channelIntegrationId: string | null };
 
     if (!accessToken || !accountId) return;
 
@@ -674,6 +686,7 @@ export const tier3Deferred = inngest.createFunction(
         accountId,
         accessToken,
         classifierContext,
+        autoApproved as TicketType[],
         channelIntegrationId,
         16,
         30
@@ -689,6 +702,7 @@ export const tier3Deferred = inngest.createFunction(
         accountId,
         accessToken,
         classifierContext,
+        autoApproved as TicketType[],
         channelIntegrationId,
         31,
         60
@@ -704,6 +718,7 @@ export const tier3Deferred = inngest.createFunction(
         accountId,
         accessToken,
         classifierContext,
+        autoApproved as TicketType[],
         channelIntegrationId,
         61,
         env.MAX_EMAIL_AGE_DAYS

@@ -1,5 +1,6 @@
 import { classifyEmailWithMeta } from "@kairo/intelligence";
 import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
+import { backfillProposalStatus, autoApprovedTypes } from "./backfill-proposal-status.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
@@ -235,7 +236,7 @@ export const tier2Background = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Step 1: Fetch Gmail credentials + full 0–N day window
     // -----------------------------------------------------------------------
-    const { messages, userEmail, businessContext, accountId: resolvedAccountId } = await step.run(
+    const { messages, userEmail, businessContext, autoApproved, accountId: resolvedAccountId } = await step.run(
       "fetch-0-15d-headers",
       async () => {
         // ADR-022 Phase 2: resolve accountId, then read tokens from oauth_credentials.
@@ -250,14 +251,15 @@ export const tier2Background = inngest.createFunction(
         const accountId = memberRow?.account_id;
         if (!accountId) {
           console.warn(`[tier2] account_id missing for user ${userId} — aborting`);
-          return { messages: [] as GmailMessage[], userEmail: "", businessContext: "", accountId: "" };
+          return { messages: [] as GmailMessage[], userEmail: "", businessContext: "", autoApproved: [] as string[], accountId: "" };
         }
 
         // Resolved once for the whole window, not once per email: the mailbox
         // and the tenant's line of business are per-account state (KAI-93).
-        const [freshToken, ctx] = await Promise.all([
+        const [freshToken, ctx, autoApproved] = await Promise.all([
           getFreshGmailToken(accountId),
           resolveClassifierContext("backfill", accountId),
+          autoApprovedTypes(accountId),
         ]);
 
         const msgs = await fetchGmailWindow(freshToken, env.TIER_2_WINDOW_DAYS);
@@ -265,11 +267,12 @@ export const tier2Background = inngest.createFunction(
           messages: msgs,
           userEmail: ctx.tenantMailbox,
           businessContext: ctx.businessContext ?? "",
+          autoApproved: autoApproved as string[],
           accountId,
         };
       }
     // Inngest's JsonifyObject loses interface field types across step boundaries; cast back
-    ) as { messages: GmailMessage[]; userEmail: string; businessContext: string; accountId: string };
+    ) as { messages: GmailMessage[]; userEmail: string; businessContext: string; autoApproved: string[]; accountId: string };
 
     if (messages.length === 0) {
       console.warn(`[tier2] No messages in window for user ${userId}`);
@@ -408,7 +411,15 @@ export const tier2Background = inngest.createFunction(
                 confidence_score: classification.confidence,
                 model_version: resolveModelVersion(),
                 raw_llm_output: classification as Record<string, unknown>,
-                status: "auto_approved",
+                // No human is anywhere near this stage, so nothing stands on
+                // its own without the tenant context, and no class is
+                // privileged in code — the permission is per account and per
+                // class, resolved once above.
+                status: backfillProposalStatus({
+                  type: classification.type,
+                  businessContext,
+                  autoApprovalEnabled: autoApproved.includes(classification.type),
+                }),
               })
               .select("id")
               .single();

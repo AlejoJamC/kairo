@@ -1,5 +1,6 @@
 import { classifyEmailWithMeta, detectEscalationTriggers } from "@kairo/intelligence";
 import { buildClassifierBody } from "../../lib/classifier-input.js";
+import { tier1ProposalStatus } from "./tier1-proposal-status.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { getFlag } from "@kairo/feature-flags";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -340,7 +341,11 @@ export const tier1FastPath = inngest.createFunction(
               DEFAULT_WEIGHTS
             );
 
-            // Stage classification as an auto-approved proposal before persisting the ticket
+            // Nothing is delayed by the split below: the ticket further down is
+            // written with its classification either way, as it already is when
+            // this insert fails outright. What changes is that a `pending` label
+            // stops claiming a review that did not happen, and POST
+            // /v1/tickets/:id/classify-approve has something to act on.
             const { data: proposal, error: proposalErr } = await supabase
               .from("ticket_proposals")
               .insert({
@@ -355,7 +360,7 @@ export const tier1FastPath = inngest.createFunction(
                 confidence_score: classification.confidence,
                 model_version: resolveModelVersion(),
                 raw_llm_output: classification as Record<string, unknown>,
-                status: "auto_approved",
+                status: tier1ProposalStatus(classification.type),
               })
               .select("id")
               .single();
