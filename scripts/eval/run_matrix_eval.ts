@@ -18,7 +18,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileS
 import { classifyEmailWithMeta, stripQuotedThread } from '../../packages/intelligence/src/index';
 import { parseEml } from './lib/parse-eml';
 import { getPromptVersion, DEFAULT_LANG } from '../../packages/intelligence/src/classification/prompt';
-import { BENCH, VARIANTS, cellSlug, bodyRule, cellKey } from './lib/matrix';
+import { BENCH, ONBOARDING_BENCH, VARIANTS, cellSlug, bodyRule, cellKey, totalCells, variantsFor } from './lib/matrix';
 import { Ledger } from './lib/ledger';
 import { LOCAL_OLLAMA } from './lib/run-label';
 
@@ -113,12 +113,12 @@ async function main(): Promise<void> {
   }
 
   const emails = (await readdir(INPUT_DIR)).filter((f) => f.endsWith('.eml')).sort();
-  const total = BENCH.length * VARIANTS.length * emails.length;
+  const total = totalCells(emails.length);
 
   if (dropFinishedLedger(total)) {
     console.log('Previous run was complete — its ledger is spent and was deleted. Starting fresh.');
     // Rows are appended, so a leftover CSV would be written a second time.
-    const stale = BENCH.flatMap((m) => VARIANTS.map((v) => cellSlug(m, v)))
+    const stale = BENCH.flatMap((m) => variantsFor(m).map((v) => cellSlug(m, v)))
       .filter((slug) => existsSync(join(OUTPUT_ROOT, slug, 'pipeline_output_50.csv')));
     if (stale.length > 0) {
       console.warn(`⚠  ${stale.length} run director(ies) still hold a CSV from that run ` +
@@ -142,7 +142,12 @@ async function main(): Promise<void> {
   }
   console.log('─'.repeat(72));
   console.log('Models, in this order (fastest first, one finished before the next starts):');
-  for (const [i, m] of BENCH.entries()) console.log(`  ${i + 1}. ${m.label} — ${m.provider}/${m.model}`);
+  for (const [i, m] of BENCH.entries()) {
+    const ids = variantsFor(m).map((v) => v.id).join(', ');
+    console.log(`  ${i + 1}. ${m.label} — ${m.provider}/${m.model}   [${ids}]`);
+  }
+  console.log(`Tier 1 runs ${ONBOARDING_BENCH.length} of ${BENCH.length} models: ` +
+    `${ONBOARDING_BENCH.map((m) => m.label).join(', ')} — the ones that cleared 0.80.`);
   console.log('─'.repeat(72));
   console.log(`Total cells: ${total}   already done: ${ledger.completed}   remaining: ${total - ledger.completed}`);
   if (MAX_MINUTES) console.log(`Will stop after ${MAX_MINUTES} minute(s).`);
@@ -180,7 +185,7 @@ async function main(): Promise<void> {
       const emailId = filename.replace(/\.eml$/, '');
       const parsed = parseEml(await readFile(join(INPUT_DIR, filename), 'utf-8'));
 
-      for (const v of VARIANTS) {
+      for (const v of variantsFor(m)) {
         if (stopping) break;
         const key = cellKey(m, v, emailId);
         if (ledger.has(key)) continue;
@@ -259,7 +264,7 @@ async function main(): Promise<void> {
     console.log('Re-run the same command to continue; finished cells are skipped.');
   } else {
     console.log('\nMetrics for each cell:');
-    for (const m of BENCH) for (const v of VARIANTS) {
+    for (const m of BENCH) for (const v of variantsFor(m)) {
       console.log(`  bun run eval:metrics ${cellSlug(m, v)}`);
     }
   }
