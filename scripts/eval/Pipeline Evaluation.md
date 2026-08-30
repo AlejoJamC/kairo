@@ -30,7 +30,7 @@ scripts/eval/data/
 │       └── 001.eml … 050.eml  ← correos fuente crudos
 └── output/                    ← los scripts la crean solos
     └── <provider>-<modelo>/   ← una carpeta POR CORRIDA, ej. ollama-granite4.1-3b
-        ├── pipeline_output_50.csv   (incluye columnas provider + model)
+        ├── pipeline_output.csv   (incluye columnas provider + model)
         ├── eval_report.md / eval_report.json
         └── *.log
 ```
@@ -68,7 +68,7 @@ bun run eval:pipeline
 **Output esperado:**
 
 ```
-scripts/eval/data/output/pipeline_output_50.csv
+scripts/eval/data/output/pipeline_output.csv
 scripts/eval/data/output/pipeline_eval_run.log
 ```
 
@@ -84,7 +84,7 @@ scripts/eval/data/output/pipeline_eval_run.log
 
 **Script:** `bun run eval:metrics`
 **Issue:** [KAI-97](https://linear.app/agent-kairo/issue/KAI-97/evaluation-framework-precision-recall-and-confidence-calibration-over)
-**Qué hace:** Toma `ground_truth_50.csv` y `pipeline_output_50.csv`, los cruza por `email_id`, y calcula F1, precisión, recall, calibración de confianza, y análisis de fallos en español.
+**Qué hace:** Toma `ground_truth_50.csv` y `pipeline_output.csv`, los cruza por `email_id`, y calcula F1, precisión, recall, calibración de confianza, y análisis de fallos en español.
 
 ```bash
 # Desde la raíz del monorepo
@@ -135,7 +135,7 @@ El `eval_report.json` también es el input que [KEL-2](https://linear.app/agent-
 KAI-102 ya produjo ground_truth_50.csv ✅
          ↓
 bun run eval:pipeline   (KAI-106)
-         ↓  pipeline_output_50.csv
+         ↓  pipeline_output.csv
 bun run eval:metrics    (KAI-97)
          ↓  eval_report.md → GO / NO-GO
 KAI-93 se cierra

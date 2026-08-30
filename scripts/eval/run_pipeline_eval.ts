@@ -8,6 +8,7 @@ import { supportsTemperature } from '../../packages/intelligence/src/providers/a
 import { parseEml } from './lib/parse-eml';
 import { writeCsv } from './lib/write-csv';
 import { resolveRunLabel, STAGE_BODY_RULES, LOCAL_OLLAMA } from './lib/run-label';
+import { PIPELINE_OUTPUT } from './lib/run-files';
 import { getPromptVersion, DEFAULT_LANG } from '../../packages/intelligence/src/classification/prompt';
 
 // Resolve paths relative to this file's directory
@@ -18,7 +19,7 @@ const INPUT_DIR = join(SCRIPT_DIR, 'data/input/eml');
 // providers/models never overwrite each other
 const RUN = resolveRunLabel();
 const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', RUN.slug);
-const OUTPUT_CSV = join(OUTPUT_DIR, 'pipeline_output_50.csv');
+const OUTPUT_CSV = join(OUTPUT_DIR, PIPELINE_OUTPUT);
 const LOG_FILE = join(OUTPUT_DIR, 'pipeline_eval_run.log');
 
 const TEMPERATURE = 0;

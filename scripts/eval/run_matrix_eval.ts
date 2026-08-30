@@ -22,6 +22,7 @@ import { BENCH, ONBOARDING_BENCH, VARIANTS, cellSlug, bodyRule, cellKey, totalCe
 import { Ledger } from './lib/ledger';
 import { LOCAL_OLLAMA } from './lib/run-label';
 import { resolveCorpus } from './lib/corpus';
+import { PIPELINE_OUTPUT } from './lib/run-files';
 
 const SCRIPT_DIR = new URL('.', import.meta.url).pathname;
 
@@ -65,7 +66,7 @@ function csvCell(v: string | number): string {
  * is what makes a stop-and-resume workflow safe.
  */
 function appendRow(dir: string, row: Row): void {
-  const file = join(dir, 'pipeline_output_50.csv');
+  const file = join(dir, PIPELINE_OUTPUT);
   mkdirSync(dir, { recursive: true });
   if (!existsSync(file)) {
     writeFileSync(file, CSV_COLUMNS.join(',') + '\n', 'utf-8');
@@ -128,7 +129,7 @@ async function main(): Promise<void> {
     console.log('Previous run was complete — its ledger is spent and was deleted. Starting fresh.');
     // Rows are appended, so a leftover CSV would be written a second time.
     const stale = BENCH.flatMap((m) => variantsFor(m).map((v) => cellSlug(m, v)))
-      .filter((slug) => existsSync(join(OUTPUT_ROOT, slug, 'pipeline_output_50.csv')));
+      .filter((slug) => existsSync(join(OUTPUT_ROOT, slug, PIPELINE_OUTPUT)));
     if (stale.length > 0) {
       console.warn(`⚠  ${stale.length} run director(ies) still hold a CSV from that run ` +
         `(${stale[0]}${stale.length > 1 ? ', …' : ''}). Archive or delete them, or their rows will be duplicated.`);
