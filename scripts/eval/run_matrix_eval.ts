@@ -14,7 +14,7 @@
  */
 import { join } from 'path';
 import { readdir, readFile } from 'fs/promises';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { classifyEmailWithMeta, stripQuotedThread } from '../../packages/intelligence/src/index';
 import { parseEml } from './lib/parse-eml';
 import { getPromptVersion, DEFAULT_LANG } from '../../packages/intelligence/src/classification/prompt';
@@ -83,6 +83,23 @@ function requestStop(signal: string): void {
   console.log('Re-run the same command to continue from where this leaves off.\n');
 }
 
+/**
+ * A finished run's bookkeeping is spent. It records which of `total` cells are
+ * already on disk, and once every one of them is, it can only do harm: the next
+ * run reads it, finds nothing left to do, and reports success having written
+ * nothing. It holds no measurement — the CSVs do — so it is deleted, not kept.
+ *
+ * An interrupted run is left exactly as it is. Resuming is the whole reason the
+ * ledger exists, and a config that grew (a model added) also reads as short of
+ * total and correctly resumes into the delta.
+ */
+function dropFinishedLedger(total: number): boolean {
+  if (!existsSync(LEDGER_PATH)) return false;
+  if (new Ledger(LEDGER_PATH).completed < total) return false;
+  rmSync(join(OUTPUT_ROOT, '.matrix-state'), { recursive: true, force: true });
+  return true;
+}
+
 async function main(): Promise<void> {
   process.on('SIGINT', () => requestStop('SIGINT'));
   process.on('SIGTERM', () => requestStop('SIGTERM'));
@@ -96,8 +113,20 @@ async function main(): Promise<void> {
   }
 
   const emails = (await readdir(INPUT_DIR)).filter((f) => f.endsWith('.eml')).sort();
-  const ledger = new Ledger(LEDGER_PATH);
   const total = BENCH.length * VARIANTS.length * emails.length;
+
+  if (dropFinishedLedger(total)) {
+    console.log('Previous run was complete — its ledger is spent and was deleted. Starting fresh.');
+    // Rows are appended, so a leftover CSV would be written a second time.
+    const stale = BENCH.flatMap((m) => VARIANTS.map((v) => cellSlug(m, v)))
+      .filter((slug) => existsSync(join(OUTPUT_ROOT, slug, 'pipeline_output_50.csv')));
+    if (stale.length > 0) {
+      console.warn(`⚠  ${stale.length} run director(ies) still hold a CSV from that run ` +
+        `(${stale[0]}${stale.length > 1 ? ', …' : ''}). Archive or delete them, or their rows will be duplicated.`);
+    }
+  }
+
+  const ledger = new Ledger(LEDGER_PATH);
 
   console.log('Kairo Pipeline Eval — KAI-93 matrix');
   console.log(`Prompt: ${DEFAULT_LANG} v${promptVersion}   Temperature: ${TEMPERATURE}`);
