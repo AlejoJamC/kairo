@@ -18,6 +18,7 @@ import {createSemaphore} from "../../lib/semaphore.js";
 import {withRetry} from "../../lib/retry.js";
 import {createCircuitBreaker} from "../../lib/circuit-breaker.js";
 import {recordClassificationFailure} from "../../lib/classification-outcome.js";
+import {backfillProposalStatus, autoApprovedTypes} from "./backfill-proposal-status.js";
 
 // KAI-191: tier3 writes priority/category onto every ticket it creates, but
 // used to leave no trace of that AI decision — the human correction path did,
@@ -241,6 +242,8 @@ async function classifyWindow(
     // the business context on this stage; `tenantMailbox` is also what the
     // pre-filter uses to tell the tenant's own address from a correspondent's.
     classifierContext: ClassifierContext,
+    /** Classes this account may auto-approve. Resolved once per run, like the context. */
+    autoApproved: TicketType[],
     channelIntegrationId: string | null,
     daysFrom: number,
     daysTo: number
@@ -398,7 +401,13 @@ async function classifyWindow(
                         confidence_score: classification.confidence,
                         model_version: resolveModelVersion(),
                         raw_llm_output: classification as Record<string, unknown>,
-                        status: "auto_approved",
+                        // Same rule as Tier 2 — see backfill-proposal-status.ts. Nobody is
+                        // watching here either.
+                        status: backfillProposalStatus({
+                            type: classification.type,
+                            businessContext: classifierContext.businessContext,
+                            autoApprovalEnabled: autoApproved.includes(classification.type),
+                        }),
                     })
                     .select("id")
                     .single();
@@ -648,127 +657,144 @@ async function classifyWindow(
 // ---------------------------------------------------------------------------
 
 export const tier3Deferred = inngest.createFunction(
-    {
-        id: "tier3-deferred",
-        concurrency: {limit: env.BACKGROUND_CONCURRENCY},
-        triggers: [{event: "pipeline/tier3.triggered"}],
-    },
-    async ({event, step}) => {
-        const {userId} = event.data;
+        {
+            id: "tier3-deferred",
+            concurrency: {limit: env.BACKGROUND_CONCURRENCY},
+            triggers: [{event: "pipeline/tier3.triggered"}],
+        },
+        async ({event, step}) => {
+            const {userId} = event.data;
 
-        // -----------------------------------------------------------------------
-        // Fetch Gmail credentials + channel integration id once
-        // -----------------------------------------------------------------------
-        const {accessToken, tenantMailbox, businessContext, accountId, channelIntegrationId} = (await step.run(
-            "fetch-credentials",
-            async () => {
-                // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
-                const {data: memberRow} = await supabase
-                    .from("account_members")
-                    .select("account_id")
-                    .eq("user_id", userId)
-                    .eq("status", "active")
-                    .order("joined_at", {ascending: true})
-                    .limit(1)
-                    .maybeSingle();
-                const accountId = memberRow?.account_id;
-                if (!accountId) {
-                    console.warn(`[tier3] account_id missing for user ${userId} — aborting`);
+            // -----------------------------------------------------------------------
+            // Fetch Gmail credentials + channel integration id once
+            // -----------------------------------------------------------------------
+            const {
+                accessToken,
+                tenantMailbox,
+                businessContext,
+                autoApproved,
+                accountId,
+                channelIntegrationId
+            } = (await step.run(
+                "fetch-credentials",
+                async () => {
+                    // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
+                    const {data: memberRow} = await supabase
+                        .from("account_members")
+                        .select("account_id")
+                        .eq("user_id", userId)
+                        .eq("status", "active")
+                        .order("joined_at", {ascending: true})
+                        .limit(1)
+                        .maybeSingle();
+                    const accountId = memberRow?.account_id;
+                    if (!accountId) {
+                        console.warn(`[tier3] account_id missing for user ${userId} — aborting`);
+                        return {
+                            accessToken: null,
+                            tenantMailbox: "",
+                            businessContext: "",
+                            autoApproved: [] as string[],
+                            accountId: "",
+                            channelIntegrationId: null
+                        };
+                    }
+
+                    const [freshToken, ctx, autoApproved, channelRow] = await Promise.all([
+                        getFreshGmailToken(accountId).catch(() => null),
+                        resolveClassifierContext("backfill", accountId),
+                        autoApprovedTypes(accountId),
+                        supabase.from("channel_integrations").select("id").eq("account_id", accountId).eq("provider", "gmail").limit(1).single(),
+                    ]);
+
+                    if (!freshToken) {
+                        console.warn(`[tier3] No Gmail credentials found for account ${accountId}`);
+                        return {
+                            accessToken: null,
+                            tenantMailbox: "",
+                            businessContext: "",
+                            autoApproved: [] as string[],
+                            accountId,
+                            channelIntegrationId: null
+                        };
+                    }
+
                     return {
-                        accessToken: null,
-                        tenantMailbox: "",
-                        businessContext: "",
-                        accountId: "",
-                        channelIntegrationId: null
-                    };
-                }
-
-                const [freshToken, ctx, channelRow] = await Promise.all([
-                    getFreshGmailToken(accountId).catch(() => null),
-                    resolveClassifierContext("backfill", accountId),
-                    supabase.from("channel_integrations").select("id").eq("account_id", accountId).eq("provider", "gmail").limit(1).single(),
-                ]);
-
-                if (!freshToken) {
-                    console.warn(`[tier3] No Gmail credentials found for account ${accountId}`);
-                    return {
-                        accessToken: null,
-                        tenantMailbox: "",
-                        businessContext: "",
+                        accessToken: freshToken,
+                        tenantMailbox: ctx.tenantMailbox,
+                        businessContext: ctx.businessContext ?? "",
+                        autoApproved: autoApproved as string[],
                         accountId,
-                        channelIntegrationId: null
+                        channelIntegrationId: channelRow.data?.id ?? null,
                     };
                 }
+            )) as {
+                accessToken: string | null;
+                tenantMailbox: string;
+                businessContext: string;
+                autoApproved: string[];
+                accountId: string;
+                channelIntegrationId: string | null
+            };
 
-                return {
-                    accessToken: freshToken,
-                    tenantMailbox: ctx.tenantMailbox,
-                    businessContext: ctx.businessContext ?? "",
-                    accountId,
-                    channelIntegrationId: channelRow.data?.id ?? null,
-                };
-            }
-        )) as {
-            accessToken: string | null;
-            tenantMailbox: string;
-            businessContext: string;
-            accountId: string;
-            channelIntegrationId: string | null
-        };
 
-        if (!accessToken || !accountId) return;
+            if (!accessToken || !accountId) return;
 
-        // Rebuilt on this side of the step boundary: Inngest serializes step output
-        // to JSON, so an absent optional field has to travel as "" and come back as
-        // absent, or every window would send an empty business_context block.
-        const classifierContext: ClassifierContext = {
-            tenantMailbox,
-            ...(businessContext ? {businessContext} : {}),
-        };
+            // Rebuilt on this side of the step boundary: Inngest serializes step output
+            // to JSON, so an absent optional field has to travel as "" and come back as
+            // absent, or every window would send an empty business_context block.
+            const classifierContext: ClassifierContext = {
+                tenantMailbox,
+                ...(businessContext ? {businessContext} : {}),
+            };
 
-        // -----------------------------------------------------------------------
-        // Batch A: 16–30 days
-        // -----------------------------------------------------------------------
-        await step.run("batch-a-16-30d", async () => {
-            await classifyWindow(
-                userId,
-                accountId,
-                accessToken,
-                classifierContext,
-                channelIntegrationId,
-                16,
-                30
-            );
-        });
+    // -----------------------------------------------------------------------
+    // Batch A: 16–30 days
+    // -----------------------------------------------------------------------
+    await step.run("batch-a-16-30d", async () => {
+      await classifyWindow(
+        userId,
+        accountId,
+        accessToken,
+        classifierContext,
+        autoApproved as TicketType[],
+        channelIntegrationId,
+        16,
+        30
+      );
+    });
 
-        // -----------------------------------------------------------------------
-        // Batch B: 31–60 days
-        // -----------------------------------------------------------------------
-        await step.run("batch-b-31-60d", async () => {
-            await classifyWindow(
-                userId,
-                accountId,
-                accessToken,
-                classifierContext,
-                channelIntegrationId,
-                31,
-                60
-            );
-        });
+    // -----------------------------------------------------------------------
+    // Batch B: 31–60 days
+    // -----------------------------------------------------------------------
+    await step.run("batch-b-31-60d", async () => {
+      await classifyWindow(
+        userId,
+        accountId,
+        accessToken,
+        classifierContext,
+        autoApproved as TicketType[],
+        channelIntegrationId,
+        31,
+        60
+      );
+    });
 
-        // -----------------------------------------------------------------------
-        // Batch C: 61–MAX_EMAIL_AGE_DAYS days
-        // -----------------------------------------------------------------------
-        await step.run("batch-c-61-maxd", async () => {
-            await classifyWindow(
-                userId,
-                accountId,
-                accessToken,
-                classifierContext,
-                channelIntegrationId,
-                61,
-                env.MAX_EMAIL_AGE_DAYS
-            );
-        });
-    }
-);
+    // -----------------------------------------------------------------------
+    // Batch C: 61–MAX_EMAIL_AGE_DAYS days
+    // -----------------------------------------------------------------------
+    await step.run("batch-c-61-maxd", async () => {
+      await classifyWindow(
+        userId,
+        accountId,
+        accessToken,
+        classifierContext,
+        autoApproved as TicketType[],
+        channelIntegrationId,
+        61,
+        env.MAX_EMAIL_AGE_DAYS
+      );
+    });
+  }
+    )
+;
