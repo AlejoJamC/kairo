@@ -1,4 +1,6 @@
 import type { FieldMetrics, BaselineMetrics } from './metrics';
+import type { FieldAgreement } from './agreement';
+import { readKappa } from './agreement';
 import type { CalibrationBand } from './calibration';
 import type { ToneInflationResult, DifficultyBreakdown, DifficultyEntry } from './spanish-analysis';
 
@@ -35,7 +37,12 @@ export interface EvalReport {
     total_emails: number;
     emails_evaluated: number;
     emails_skipped_due_to_error: number;
-    inter_annotator_agreement?: number;
+    /**
+     * Agreement between the two annotators, per field. Not one number: on this
+     * corpus the fields range from almost perfect to no better than chance, and
+     * a single average would hide exactly the ones whose F1 cannot be trusted.
+     */
+    annotator_agreement?: Record<string, FieldAgreement>;
   };
   field_metrics: {
     ticket_type: FieldMetrics;
@@ -133,8 +140,30 @@ export function buildMarkdown(report: EvalReport): string {
     `Dataset: ${meta.total_emails} emails — ${meta.emails_evaluated} evaluated, ` +
     `${meta.emails_skipped_due_to_error} skipped (errors)`,
   );
-  if (meta.inter_annotator_agreement !== undefined) {
-    lines.push(`Inter-annotator agreement: ${pct(meta.inter_annotator_agreement)}`);
+  lines.push('');
+
+  if (meta.annotator_agreement) {
+    lines.push('## Annotator Agreement');
+    lines.push('');
+    lines.push(mdTable(
+      ['Field', 'Agreement', 'By chance', 'Kappa', 'Reading', 'n'],
+      Object.entries(meta.annotator_agreement).map(([field, a]) => [
+        field,
+        pct(a.observed),
+        pct(a.expected),
+        f2(a.kappa),
+        readKappa(a.kappa),
+        String(a.n),
+      ]),
+    ));
+    lines.push('');
+    lines.push(
+      'Every F1 below is distance to one of these labels. Where the two ' +
+      'annotators do not reproduce a field, there is no stable target to score ' +
+      'against and its F1 measures closeness to a coin flip. Read `Kappa`, not ' +
+      '`Agreement`: a two-class field with a skewed split hands out ~50% for ' +
+      'free, so the raw percentage is not comparable between fields.',
+    );
   }
   lines.push('');
 
