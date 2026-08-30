@@ -1,21 +1,21 @@
-import {classifyEmailWithMeta} from "@kairo/intelligence";
-import {buildClassifierBody, resolveClassifierContext} from "../../lib/classifier-input.js";
-import {logLlmCall} from "../../lib/llm-logging.js";
-import {resolveModelVersion} from "../../lib/model-version.js";
-import {preFilterEmail} from "../../lib/email/pre-filter.js";
-import {inngest} from "../../lib/inngest.js";
-import {getFreshGmailToken} from "../../lib/gmail-token.js";
-import {supabase} from "../../lib/supabase.js";
-import {env} from "../../env.js";
-import {maybeSendOutOfHoursReply} from "../../lib/out-of-hours-reply.js";
-import {maybeSendTicketAcknowledgement} from "../../lib/ticket-acknowledgement.js";
-import {maybeGenerateTicketEmbedding} from "../../lib/ticket-embedding.js";
-import {upsertConversationByThread} from "../../lib/conversations.js";
-import {findOrCreateTicketForThread} from "../../lib/tickets-by-thread.js";
-import {linkMessageToTicket} from "../../lib/ticket-messages.js";
-import {applyCustomerReplyTransition} from "../../lib/ticket-thread-transitions.js";
-import {emitTicketClassification} from "../../lib/ticket-events.js";
-import {recordClassificationFailure} from "../../lib/classification-outcome.js";
+import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
+import { logLlmCall } from "../../lib/llm-logging.js";
+import { resolveModelVersion } from "../../lib/model-version.js";
+import { preFilterEmail } from "../../lib/email/pre-filter.js";
+import { inngest } from "../../lib/inngest.js";
+import { getFreshGmailToken } from "../../lib/gmail-token.js";
+import { supabase } from "../../lib/supabase.js";
+import { env } from "../../env.js";
+import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
+import { maybeSendTicketAcknowledgement } from "../../lib/ticket-acknowledgement.js";
+import { maybeGenerateTicketEmbedding } from "../../lib/ticket-embedding.js";
+import { upsertConversationByThread } from "../../lib/conversations.js";
+import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
+import { linkMessageToTicket } from "../../lib/ticket-messages.js";
+import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
+import { emitTicketClassification } from "../../lib/ticket-events.js";
+import { recordClassificationFailure } from "../../lib/classification-outcome.js";
 
 // KAI-191: incremental-sync writes priority/category onto every ticket it
 // creates, but used to leave no trace of that AI decision — the human
@@ -25,40 +25,40 @@ import {recordClassificationFailure} from "../../lib/classification-outcome.js";
 // null — an existing ticket's classification is never touched here, per
 // KAI-165 decision #1).
 async function recordAiClassification(
-    accountId: string,
-    ticketId: string,
-    classification: { category: string | null; priority: string; confidence: number },
-    occurredAt: string
+  accountId: string,
+  ticketId: string,
+  classification: { category: string | null; priority: string; confidence: number },
+  occurredAt: string
 ): Promise<void> {
-    const modelVersion = resolveModelVersion();
-    if (classification.category) {
-        await emitTicketClassification({
-            accountId,
-            ticketId,
-            actorType: "ai",
-            actorRef: "incremental-sync",
-            dimension: "category",
-            applied: true,
-            fromValue: null,
-            toValue: classification.category,
-            confidence: classification.confidence,
-            modelVersion,
-            occurredAt,
-        });
-    }
+  const modelVersion = resolveModelVersion();
+  if (classification.category) {
     await emitTicketClassification({
-        accountId,
-        ticketId,
-        actorType: "ai",
-        actorRef: "incremental-sync",
-        dimension: "priority",
-        applied: true,
-        fromValue: null,
-        toValue: classification.priority,
-        confidence: classification.confidence,
-        modelVersion,
-        occurredAt,
+      accountId,
+      ticketId,
+      actorType: "ai",
+      actorRef: "incremental-sync",
+      dimension: "category",
+      applied: true,
+      fromValue: null,
+      toValue: classification.category,
+      confidence: classification.confidence,
+      modelVersion,
+      occurredAt,
     });
+  }
+  await emitTicketClassification({
+    accountId,
+    ticketId,
+    actorType: "ai",
+    actorRef: "incremental-sync",
+    dimension: "priority",
+    applied: true,
+    fromValue: null,
+    toValue: classification.priority,
+    confidence: classification.confidence,
+    modelVersion,
+    occurredAt,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -66,32 +66,32 @@ async function recordAiClassification(
 // ---------------------------------------------------------------------------
 
 interface GmailHeader {
-    name: string;
-    value: string;
+  name: string;
+  value: string;
 }
 
 interface GmailListResponse {
-    messages?: { id: string; threadId: string }[];
-    nextPageToken?: string;
+  messages?: { id: string; threadId: string }[];
+  nextPageToken?: string;
 }
 
 interface GmailMessagePart {
-    mimeType?: string;
-    body?: { data?: string; size?: number };
-    parts?: GmailMessagePart[];
+  mimeType?: string;
+  body?: { data?: string; size?: number };
+  parts?: GmailMessagePart[];
 }
 
 interface GmailMessage {
-    id: string;
-    threadId: string;
-    labelIds?: string[];
-    snippet?: string;
-    payload?: {
-        headers?: GmailHeader[];
-        mimeType?: string;
-        body?: { data?: string; size?: number };
-        parts?: GmailMessagePart[];
-    };
+  id: string;
+  threadId: string;
+  labelIds?: string[];
+  snippet?: string;
+  payload?: {
+    headers?: GmailHeader[];
+    mimeType?: string;
+    body?: { data?: string; size?: number };
+    parts?: GmailMessagePart[];
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -102,21 +102,21 @@ const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1";
 
 
 async function gmailGet<T>(
-    token: string,
-    path: string,
-    params?: Record<string, string>
+  token: string,
+  path: string,
+  params?: Record<string, string>
 ): Promise<T> {
-    const url = new URL(`${GMAIL_BASE}/${path}`);
-    if (params) {
-        for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-    }
-    const res = await fetch(url.toString(), {
-        headers: {Authorization: `Bearer ${token}`},
-    });
-    if (!res.ok) {
-        throw new Error(`Gmail API ${path}: ${res.status} ${res.statusText}`);
-    }
-    return res.json() as Promise<T>;
+  const url = new URL(`${GMAIL_BASE}/${path}`);
+  if (params) {
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  }
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error(`Gmail API ${path}: ${res.status} ${res.statusText}`);
+  }
+  return res.json() as Promise<T>;
 }
 
 /**
@@ -124,99 +124,99 @@ async function gmailGet<T>(
  * Paginates automatically.
  */
 async function fetchGmailSince(
-    token: string,
-    afterDate: string
+  token: string,
+  afterDate: string
 ): Promise<GmailMessage[]> {
-    const afterStr = afterDate.slice(0, 10).replace(/-/g, "/");
+  const afterStr = afterDate.slice(0, 10).replace(/-/g, "/");
 
-    const allMessages: GmailMessage[] = [];
-    let pageToken: string | undefined;
+  const allMessages: GmailMessage[] = [];
+  let pageToken: string | undefined;
 
-    do {
-        const params: Record<string, string> = {
-            maxResults: "500",
-            labelIds: "INBOX",
-            q: `after:${afterStr}`,
-        };
-        if (pageToken) params["pageToken"] = pageToken;
+  do {
+    const params: Record<string, string> = {
+      maxResults: "500",
+      labelIds: "INBOX",
+      q: `after:${afterStr}`,
+    };
+    if (pageToken) params["pageToken"] = pageToken;
 
-        const list = await gmailGet<GmailListResponse>(
-            token,
-            "users/me/messages",
-            params
-        );
+    const list = await gmailGet<GmailListResponse>(
+      token,
+      "users/me/messages",
+      params
+    );
 
-        const ids = list.messages ?? [];
+    const ids = list.messages ?? [];
 
-        if (ids.length > 0) {
-            // format=full returns headers + MIME tree (KAI-181): the classifier needs
-            // the real body, not the ~200-char Gmail snippet. Same call this tier
-            // already made (one GET per id) — only the format parameter changes.
-            const settled = await Promise.allSettled(
-                ids.map(({id}) =>
-                    fetch(`${GMAIL_BASE}/users/me/messages/${id}?format=full`, {
-                        headers: {Authorization: `Bearer ${token}`},
-                    }).then((r) => (r.ok ? (r.json() as Promise<GmailMessage>) : null))
-                )
-            );
+    if (ids.length > 0) {
+      // format=full returns headers + MIME tree (KAI-181): the classifier needs
+      // the real body, not the ~200-char Gmail snippet. Same call this tier
+      // already made (one GET per id) — only the format parameter changes.
+      const settled = await Promise.allSettled(
+        ids.map(({ id }) =>
+          fetch(`${GMAIL_BASE}/users/me/messages/${id}?format=full`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).then((r) => (r.ok ? (r.json() as Promise<GmailMessage>) : null))
+        )
+      );
 
-            for (const r of settled) {
-                if (r.status === "fulfilled" && r.value !== null) {
-                    allMessages.push(r.value);
-                }
-            }
+      for (const r of settled) {
+        if (r.status === "fulfilled" && r.value !== null) {
+          allMessages.push(r.value);
         }
+      }
+    }
 
-        pageToken = list.nextPageToken;
-    } while (pageToken);
+    pageToken = list.nextPageToken;
+  } while (pageToken);
 
-    return allMessages;
+  return allMessages;
 }
 
 function headerValue(headers: GmailHeader[], name: string): string {
-    return (
-        headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
-        ""
-    );
+  return (
+    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
+    ""
+  );
 }
 
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Gmail returns part data base64url-encoded; Buffer's "base64" decoder
 // accepts URL-safe variants on both Node and Bun.
 function extractBody(payload: GmailMessage["payload"]): {
-    body_plain: string;
-    body_html: string;
+  body_plain: string;
+  body_html: string;
 } {
-    let body_plain = "";
-    let body_html = "";
+  let body_plain = "";
+  let body_html = "";
 
-    const walk = (parts: GmailMessagePart[]): void => {
-        for (const part of parts) {
-            if (part.mimeType === "text/plain" && part.body?.data) {
-                body_plain += Buffer.from(part.body.data, "base64").toString("utf-8");
-            } else if (part.mimeType === "text/html" && part.body?.data) {
-                body_html += Buffer.from(part.body.data, "base64").toString("utf-8");
-            } else if (part.parts) {
-                walk(part.parts);
-            }
-        }
-    };
-
-    if (payload?.parts) {
-        walk(payload.parts);
-    } else if (payload?.body?.data) {
-        const decoded = Buffer.from(payload.body.data, "base64").toString("utf-8");
-        if (payload.mimeType === "text/html") body_html = decoded;
-        else body_plain = decoded;
+  const walk = (parts: GmailMessagePart[]): void => {
+    for (const part of parts) {
+      if (part.mimeType === "text/plain" && part.body?.data) {
+        body_plain += Buffer.from(part.body.data, "base64").toString("utf-8");
+      } else if (part.mimeType === "text/html" && part.body?.data) {
+        body_html += Buffer.from(part.body.data, "base64").toString("utf-8");
+      } else if (part.parts) {
+        walk(part.parts);
+      }
     }
+  };
 
-    return {body_plain, body_html};
+  if (payload?.parts) {
+    walk(payload.parts);
+  } else if (payload?.body?.data) {
+    const decoded = Buffer.from(payload.body.data, "base64").toString("utf-8");
+    if (payload.mimeType === "text/html") body_html = decoded;
+    else body_plain = decoded;
+  }
+
+  return { body_plain, body_html };
 }
 
 function headersToRecord(headers: GmailHeader[]): Record<string, string> {
-    const out: Record<string, string> = {};
-    for (const {name, value} of headers) out[name] = value;
-    return out;
+  const out: Record<string, string> = {};
+  for (const { name, value } of headers) out[name] = value;
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -224,446 +224,449 @@ function headersToRecord(headers: GmailHeader[]): Record<string, string> {
 // ---------------------------------------------------------------------------
 
 export const incrementalSync = inngest.createFunction(
-    {
-        id: "incremental-sync",
-        concurrency: {limit: env.INCREMENTAL_SYNC_CONCURRENCY},
-        triggers: [{event: "pipeline/incremental-sync.triggered"}],
-    },
-    async ({event, step}) => {
-        const {userId} = event.data;
+  {
+    id: "incremental-sync",
+    concurrency: { limit: env.INCREMENTAL_SYNC_CONCURRENCY },
+    triggers: [{ event: "pipeline/incremental-sync.triggered" }],
+  },
+  async ({ event, step }) => {
+    const { userId } = event.data;
 
-        // ADR-022 Phase 2: resolve accountId once (outside steps — idempotent read).
-        const {data: memberRow} = await supabase
-            .from("account_members")
-            .select("account_id")
-            .eq("user_id", userId)
-            .eq("status", "active")
-            .order("joined_at", {ascending: true})
-            .limit(1)
-            .maybeSingle();
-        const accountId = memberRow?.account_id;
-        if (!accountId) {
-            console.warn(`[incremental-sync] account_id missing for user ${userId} — aborting`);
-            return;
+    // ADR-022 Phase 2: resolve accountId once (outside steps — idempotent read).
+    const { data: memberRow } = await supabase
+      .from("account_members")
+      .select("account_id")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("joined_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const accountId = memberRow?.account_id;
+    if (!accountId) {
+      console.warn(`[incremental-sync] account_id missing for user ${userId} — aborting`);
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 1: Get cursor — MAX(received_at) from already-classified messages
+    // -----------------------------------------------------------------------
+    const cursor = (await step.run("get-cursor", async () => {
+      const { data } = await supabase
+        .from("messages")
+        .select("received_at")
+        .eq("account_id", accountId)
+        .not("classification_status", "is", null)
+        .order("received_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      return data?.received_at ?? null;
+    })) as string | null;
+
+    // No prior classified messages — onboarding pipeline handles first-time users
+    if (!cursor) return;
+
+    // -----------------------------------------------------------------------
+    // Step 2: Fetch Gmail headers since the cursor
+    // -----------------------------------------------------------------------
+    const headers = (await step.run("fetch-new-emails", async () => {
+      const token = await getFreshGmailToken(accountId);
+      return fetchGmailSince(token, cursor);
+    })) as GmailMessage[];
+
+    if (headers.length === 0) return;
+
+    // -----------------------------------------------------------------------
+    // Step 3: Classify new emails
+    // -----------------------------------------------------------------------
+    await step.run("classify-new-emails", async () => {
+      // The tenant fields are per-account, so they are resolved once for the
+      // whole sync rather than once per email (KAI-93).
+      const [gmailAccessToken, classifierContext, channelRow] = await Promise.all([
+        getFreshGmailToken(accountId),
+        resolveClassifierContext("backfill", accountId),
+        supabase
+          .from("channel_integrations")
+          .select("id")
+          .eq("account_id", accountId)
+          .eq("provider", "gmail")
+          .limit(1)
+          .single(),
+      ]);
+
+      const channelIntegrationId: string | null = channelRow.data?.id ?? null;
+      const { tenantMailbox: userEmail, businessContext } = classifierContext;
+
+      // Collect existing gmail_message_ids for this user to skip duplicates
+      const incomingIds = headers.map((m) => m.id);
+      const { data: existing } = await supabase
+        .from("messages")
+        .select("external_id")
+        .in("external_id", incomingIds);
+
+      const existingIds = new Set((existing ?? []).map((r) => r.external_id));
+
+      const classificationPromises: Promise<void>[] = [];
+
+      for (const message of headers) {
+        // Skip messages already in DB
+        if (existingIds.has(message.id)) continue;
+
+        const msgHeaders = message.payload?.headers ?? [];
+        const from = headerValue(msgHeaders, "From");
+        const subject = headerValue(msgHeaders, "Subject");
+        const messageIdHeader = headerValue(msgHeaders, "Message-ID") || null;
+        const dateStr = headerValue(msgHeaders, "Date");
+        const receivedAt = dateStr
+          ? new Date(dateStr).toISOString()
+          : new Date().toISOString();
+        const gmailCategories = (message.labelIds ?? []).filter((l) =>
+          l.startsWith("CATEGORY_")
+        );
+
+        // Insert stub with 'pending' status immediately
+        if (channelIntegrationId) {
+          await supabase.from("messages").insert({
+            account_id:             accountId,
+            channel_integration_id: channelIntegrationId,
+            external_id: message.id,
+            direction: "inbound",
+            received_at: receivedAt,
+            sender_external_id: from,
+            snippet: message.snippet ?? null,
+            classification_status: "pending",
+            processing_batch: "incremental",
+          });
         }
 
-        // -----------------------------------------------------------------------
-        // Step 1: Get cursor — MAX(received_at) from already-classified messages
-        // -----------------------------------------------------------------------
-        const cursor = (await step.run("get-cursor", async () => {
-            const {data} = await supabase
-                .from("messages")
-                .select("received_at")
-                .eq("account_id", accountId)
-                .not("classification_status", "is", null)
-                .order("received_at", {ascending: false})
-                .limit(1)
-                .maybeSingle();
+        const filterResult = preFilterEmail({
+          from,
+          subject,
+          headers: headersToRecord(msgHeaders),
+          gmailCategories,
+          mimeType: message.payload?.mimeType,
+          userEmail,
+        });
 
-            return data?.received_at ?? null;
-        })) as string | null;
+        if (filterResult.status === "skip") {
+          if (channelIntegrationId) {
+            await supabase
+              .from("messages")
+              .update({
+                classification_status: "skipped",
+                skip_reason: filterResult.skip_reason,
+              })
+              .eq("external_id", message.id)
+              .eq("channel_integration_id", channelIntegrationId);
+          }
+          continue;
+        }
 
-        // No prior classified messages — onboarding pipeline handles first-time users
-        if (!cursor) return;
+        // Relevant — classify asynchronously, capture loop-local vars
+        const messageId = message.id;
+        const snippet = message.snippet ?? "";
+        // Unlike Tier 1/2/3, this path never persisted body_plain/body_html to
+        // the DB even before KAI-181 — out of scope here; only what reaches
+        // the classifier changes.
+        const { body_plain } = extractBody(message.payload);
+        const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
 
-        // -----------------------------------------------------------------------
-        // Step 2: Fetch Gmail headers since the cursor
-        // -----------------------------------------------------------------------
-        const headers = (await step.run("fetch-new-emails", async () => {
-            const token = await getFreshGmailToken(accountId);
-            return fetchGmailSince(token, cursor);
-        })) as GmailMessage[];
+        const threadId = message.threadId;
 
-        if (headers.length === 0) return;
+        const llmStart = Date.now();
+        const promise = classifyEmailWithMeta(
+          {
+            subject,
+            body: classifierBody,
+            from,
+            tenantMailbox: userEmail,
+            ...(businessContext ? { businessContext } : {}),
+          },
+          { context: { accountId } },
+        )
+          .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+            logLlmCall({
+              feature: "email_classification",
+              model: meta.model,
+              promptVersion,
+              promptText: prompt,
+              responseText: meta.rawText,
+              promptTokens: meta.usage.promptTokens,
+              completionTokens: meta.usage.completionTokens,
+              confidenceScore: classification.confidence,
+              latencyMs: Date.now() - llmStart,
+              triggeredByUserId: userId,
+              accountId,
+            });
+            const classified_at = new Date().toISOString();
 
-        // -----------------------------------------------------------------------
-        // Step 3: Classify new emails
-        // -----------------------------------------------------------------------
-        await step.run("classify-new-emails", async () => {
-            // The tenant fields are per-account, so they are resolved once for the
-            // whole sync rather than once per email (KAI-93).
-            const [gmailAccessToken, classifierContext, channelRow] = await Promise.all([
-                getFreshGmailToken(accountId),
-                resolveClassifierContext("backfill", accountId),
-                supabase
-                    .from("channel_integrations")
-                    .select("id")
-                    .eq("account_id", accountId)
-                    .eq("provider", "gmail")
-                    .limit(1)
-                    .single(),
-            ]);
+            let ticketId: string | null = null;
+            let ticketNumber: number | null = null;
+            let was_created = true;
+            let prior_status: string | null = null;
+            let conversationIdForMessages: string | null = null;
 
-            const channelIntegrationId: string | null = channelRow.data?.id ?? null;
-            const {tenantMailbox: userEmail, businessContext} = classifierContext;
-
-            // Collect existing gmail_message_ids for this user to skip duplicates
-            const incomingIds = headers.map((m) => m.id);
-            const {data: existing} = await supabase
-                .from("messages")
-                .select("external_id")
-                .in("external_id", incomingIds);
-
-            const existingIds = new Set((existing ?? []).map((r) => r.external_id));
-
-            const classificationPromises: Promise<void>[] = [];
-
-            for (const message of headers) {
-                // Skip messages already in DB
-                if (existingIds.has(message.id)) continue;
-
-                const msgHeaders = message.payload?.headers ?? [];
-                const from = headerValue(msgHeaders, "From");
-                const subject = headerValue(msgHeaders, "Subject");
-                const messageIdHeader = headerValue(msgHeaders, "Message-ID") || null;
-                const dateStr = headerValue(msgHeaders, "Date");
-                const receivedAt = dateStr
-                    ? new Date(dateStr).toISOString()
-                    : new Date().toISOString();
-                const gmailCategories = (message.labelIds ?? []).filter((l) =>
-                    l.startsWith("CATEGORY_")
-                );
-
-                // Insert stub with 'pending' status immediately
-                if (channelIntegrationId) {
-                    await supabase.from("messages").insert({
-                        account_id: accountId,
-                        channel_integration_id: channelIntegrationId,
-                        external_id: message.id,
-                        direction: "inbound",
-                        received_at: receivedAt,
-                        sender_external_id: from,
-                        snippet: message.snippet ?? null,
-                        classification_status: "pending",
-                        processing_batch: "incremental",
-                    });
-                }
-
-                const filterResult = preFilterEmail({
-                    from,
-                    subject,
-                    headers: headersToRecord(msgHeaders),
-                    gmailCategories,
-                    mimeType: message.payload?.mimeType,
-                    userEmail,
+            if (channelIntegrationId) {
+              try {
+                const { conversation_id } = await upsertConversationByThread(supabase, {
+                  accountId,
+                  channelIntegrationId,
+                  externalThreadId: threadId,
+                  customerExternalId: from,
+                  customerDisplayName: null,
                 });
 
-                if (filterResult.status === "skip") {
-                    if (channelIntegrationId) {
-                        await supabase
-                            .from("messages")
-                            .update({
-                                classification_status: "skipped",
-                                skip_reason: filterResult.skip_reason,
-                            })
-                            .eq("external_id", message.id)
-                            .eq("channel_integration_id", channelIntegrationId);
-                    }
-                    continue;
-                }
-
-                // Relevant — classify asynchronously, capture loop-local vars
-                const messageId = message.id;
-                const snippet = message.snippet ?? "";
-                // Unlike Tier 1/2/3, this path never persisted body_plain/body_html to
-                // the DB even before KAI-181 — out of scope here; only what reaches
-                // the classifier changes.
-                const {body_plain} = extractBody(message.payload);
-                const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
-
-                const threadId = message.threadId;
-
-                const llmStart = Date.now();
-                const promise = classifyEmailWithMeta({
+                const result = await findOrCreateTicketForThread(supabase, {
+                  accountId,
+                  conversationId: conversation_id,
+                  originatingUserId: userId,
+                  classification: {
+                    type: classification.type,
+                    category: classification.category,
+                    priority: classification.priority,
+                    tone: classification.tone,
+                    confidence: classification.confidence,
+                    reasoning: classification.reasoning,
+                  },
+                  originMessage: {
                     subject,
-                    body: classifierBody,
-                    from,
-                    tenantMailbox: userEmail,
-                    ...(businessContext ? {businessContext} : {}),
-                }, {context: {accountId}})
-                    .then(async ({result: classification, meta, prompt, promptVersion}) => {
-                        logLlmCall({
-                            feature: "email_classification",
-                            model: meta.model,
-                            promptVersion,
-                            promptText: prompt,
-                            responseText: meta.rawText,
-                            promptTokens: meta.usage.promptTokens,
-                            completionTokens: meta.usage.completionTokens,
-                            confidenceScore: classification.confidence,
-                            latencyMs: Date.now() - llmStart,
-                            triggeredByUserId: userId,
-                            accountId,
-                        });
-                        const classified_at = new Date().toISOString();
+                    from_email: from,
+                    from_name: null,
+                    to_email: null,
+                    body_plain: null,
+                    body_html: null,
+                    snippet,
+                    gmail_message_id: messageId,
+                    gmail_thread_id: threadId,
+                    received_at: receivedAt,
+                  },
+                  classifiedAt: classified_at,
+                  classificationTier: 0,
+                  priorityScore: null,
+                });
+                ticketId = result.ticket_id;
+                ticketNumber = result.ticket_number;
+                was_created = result.was_created;
+                prior_status = result.prior_status;
+                conversationIdForMessages = conversation_id;
 
-                        let ticketId: string | null = null;
-                        let ticketNumber: number | null = null;
-                        let was_created = true;
-                        let prior_status: string | null = null;
-                        let conversationIdForMessages: string | null = null;
+                // Update message row with conversation + classified status
+                await supabase
+                  .from("messages")
+                  .update({
+                    conversation_id,
+                    classification_status: "classified",
+                    processing_tier: 0,
+                    classified_at,
+                  })
+                  .eq("external_id", messageId)
+                  .eq("channel_integration_id", channelIntegrationId);
 
-                        if (channelIntegrationId) {
-                            try {
-                                const {conversation_id} = await upsertConversationByThread(supabase, {
-                                    accountId,
-                                    channelIntegrationId,
-                                    externalThreadId: threadId,
-                                    customerExternalId: from,
-                                    customerDisplayName: null,
-                                });
+                // Fetch the message id to link it
+                const { data: msgRow } = await supabase
+                  .from("messages")
+                  .select("id")
+                  .eq("external_id", messageId)
+                  .eq("channel_integration_id", channelIntegrationId)
+                  .maybeSingle();
 
-                                const result = await findOrCreateTicketForThread(supabase, {
-                                    accountId,
-                                    conversationId: conversation_id,
-                                    originatingUserId: userId,
-                                    classification: {
-                                        type: classification.type,
-                                        category: classification.category,
-                                        priority: classification.priority,
-                                        tone: classification.tone,
-                                        confidence: classification.confidence,
-                                        reasoning: classification.reasoning,
-                                    },
-                                    originMessage: {
-                                        subject,
-                                        from_email: from,
-                                        from_name: null,
-                                        to_email: null,
-                                        body_plain: null,
-                                        body_html: null,
-                                        snippet,
-                                        gmail_message_id: messageId,
-                                        gmail_thread_id: threadId,
-                                        received_at: receivedAt,
-                                    },
-                                    classifiedAt: classified_at,
-                                    classificationTier: 0,
-                                    priorityScore: null,
-                                });
-                                ticketId = result.ticket_id;
-                                ticketNumber = result.ticket_number;
-                                was_created = result.was_created;
-                                prior_status = result.prior_status;
-                                conversationIdForMessages = conversation_id;
-
-                                // Update message row with conversation + classified status
-                                await supabase
-                                    .from("messages")
-                                    .update({
-                                        conversation_id,
-                                        classification_status: "classified",
-                                        processing_tier: 0,
-                                        classified_at,
-                                    })
-                                    .eq("external_id", messageId)
-                                    .eq("channel_integration_id", channelIntegrationId);
-
-                                // Fetch the message id to link it
-                                const {data: msgRow} = await supabase
-                                    .from("messages")
-                                    .select("id")
-                                    .eq("external_id", messageId)
-                                    .eq("channel_integration_id", channelIntegrationId)
-                                    .maybeSingle();
-
-                                if (msgRow?.id) {
-                                    await linkMessageToTicket(supabase, {
-                                        ticket_id: ticketId,
-                                        message_id: msgRow.id,
-                                        is_origin: was_created,
-                                    });
-                                }
-
-                                if (was_created && ticketId) {
-                                    await recordAiClassification(accountId, ticketId, classification, classified_at);
-                                }
-
-                                if (!was_created) {
-                                    await applyCustomerReplyTransition(supabase, ticketId, prior_status);
-                                }
-                            } catch (helperErr: unknown) {
-                                console.error(
-                                    `[incremental-sync] thread helpers failed for ${messageId}:`,
-                                    helperErr instanceof Error ? helperErr.message : String(helperErr)
-                                );
-                                // Fallback: insert ticket without conversation linkage
-                                const {data: fallbackTicket} = await supabase
-                                    .from("tickets")
-                                    .insert({
-                                        account_id: accountId,
-                                        originating_user_id: userId,
-                                        subject,
-                                        from_email: from,
-                                        gmail_message_id: messageId,
-                                        gmail_thread_id: threadId,
-                                        received_at: receivedAt,
-                                        ticket_type: classification.type,
-                                        priority: classification.priority,
-                                        category: classification.category,
-                                        sentiment: classification.tone,
-                                        ai_reasoning: classification.reasoning,
-                                        classification_confidence: classification.confidence,
-                                        classified_at,
-                                        classification_tier: 0,
-                                    })
-                                    .select("id, ticket_number")
-                                    .single();
-                                ticketId = fallbackTicket?.id ?? null;
-                                ticketNumber = fallbackTicket?.ticket_number ?? null;
-
-                                if (ticketId) {
-                                    await recordAiClassification(accountId, ticketId, classification, classified_at);
-                                }
-
-                                await supabase
-                                    .from("messages")
-                                    .update({classification_status: "classified", processing_tier: 0, classified_at})
-                                    .eq("external_id", messageId)
-                                    .eq("channel_integration_id", channelIntegrationId);
-                            }
-                        } else {
-                            // No channelIntegrationId — insert ticket directly
-                            const {data: bareTicket} = await supabase
-                                .from("tickets")
-                                .insert({
-                                    account_id: accountId,
-                                    originating_user_id: userId,
-                                    subject,
-                                    from_email: from,
-                                    gmail_message_id: messageId,
-                                    gmail_thread_id: threadId,
-                                    received_at: receivedAt,
-                                    ticket_type: classification.type,
-                                    priority: classification.priority,
-                                    category: classification.category,
-                                    sentiment: classification.tone,
-                                    ai_reasoning: classification.reasoning,
-                                    classification_confidence: classification.confidence,
-                                    classified_at,
-                                    classification_tier: 0,
-                                })
-                                .select("id, ticket_number")
-                                .single();
-                            ticketId = bareTicket?.id ?? null;
-                            ticketNumber = bareTicket?.ticket_number ?? null;
-
-                            if (ticketId) {
-                                await recordAiClassification(accountId, ticketId, classification, classified_at);
-                            }
-                        }
-
-                        if (ticketId && was_created) {
-                            // KAI-246: send the acknowledgement first. If it goes out, skip the
-                            // out-of-hours reply for this creation — the customer should not get
-                            // two auto-replies for the same inbound email. When the flag is off
-                            // (default), the ack didn't send, or ticketNumber is unavailable,
-                            // out-of-hours behaves as before.
-                            const ackOutcome = ticketNumber === null
-                                ? {sent: false as const, reason: "send_failed" as const}
-                                : await maybeSendTicketAcknowledgement({
-                                    supabase,
-                                    accountId,
-                                    ticketId,
-                                    ticketNumber,
-                                    conversationId: conversationIdForMessages,
-                                    channelIntegrationId,
-                                    gmailThreadId: threadId,
-                                    subject,
-                                    fromHeader: from,
-                                    customerDisplayName: null,
-                                    category: classification.category,
-                                    receivedAt,
-                                    messageIdHeader,
-                                }).catch((err: unknown) => {
-                                    console.error(`[incremental-sync] Acknowledgement failed for ticket ${ticketId}:`, err);
-                                    return {sent: false as const, reason: "send_failed" as const};
-                                });
-
-                            if (!ackOutcome.sent) {
-                                maybeSendOutOfHoursReply({
-                                    supabase,
-                                    accountId,
-                                    ticketId,
-                                    gmailAccessToken,
-                                    gmailThreadId: threadId,
-                                    gmailMessageId: messageId,
-                                    fromHeader: from,
-                                    subject,
-                                    receivedAt,
-                                }).catch((err: unknown) => {
-                                    console.error(
-                                        `[incremental-sync] Out-of-hours reply failed for ticket ${ticketId}:`,
-                                        err
-                                    );
-                                });
-                            }
-
-                            maybeGenerateTicketEmbedding({
-                                supabase,
-                                ticketId,
-                                accountId,
-                                subject,
-                                bodyPreview: snippet,
-                            }).catch((err: unknown) => {
-                                console.error(
-                                    `[incremental-sync] Embedding generation failed for ticket ${ticketId}:`,
-                                    err
-                                );
-                            });
-                        }
-                    })
-                    .catch(async (err: unknown) => {
-                        const detail = err instanceof Error ? err.message : String(err);
-                        console.error(
-                            `[incremental-sync] Classification failed for ${messageId}: ${detail}`
-                        );
-
-                        logLlmCall({
-                            feature: "email_classification",
-                            model: resolveModelVersion(),
-                            promptText: `${from} | ${subject}`,
-                            latencyMs: Date.now() - llmStart,
-                            errorCode: "LLM_ERROR",
-                            errorDetail: detail,
-                            triggeredByUserId: userId,
-                            accountId,
-                        });
-
-                        if (channelIntegrationId) {
-                            await recordClassificationFailure({
-                                supabase,
-                                accountId,
-                                channelIntegrationId,
-                                externalId: messageId,
-                                threadExternalId: threadId,
-                                receivedAt,
-                                senderExternalId: from,
-                                senderDisplayName: null,
-                                subject,
-                                snippet,
-                                bodyPlain: body_plain || null,
-                                bodyHtml: null,
-                                messageIdHeader,
-                                processingTier: 0,
-                                err,
-                                maxAttempts: env.CLASSIFICATION_MAX_ATTEMPTS,
-                            });
-                        }
-                    });
-
-                classificationPromises.push(promise);
-
-                // Respect INCREMENTAL_SYNC_CONCURRENCY by draining in chunks
-                if (classificationPromises.length >= env.INCREMENTAL_SYNC_CONCURRENCY) {
-                    await Promise.allSettled(classificationPromises.splice(0));
+                if (msgRow?.id) {
+                  await linkMessageToTicket(supabase, {
+                    ticket_id: ticketId,
+                    message_id: msgRow.id,
+                    is_origin: was_created,
+                  });
                 }
+
+                if (was_created && ticketId) {
+                  await recordAiClassification(accountId, ticketId, classification, classified_at);
+                }
+
+                if (!was_created) {
+                  await applyCustomerReplyTransition(supabase, ticketId, prior_status);
+                }
+              } catch (helperErr: unknown) {
+                console.error(
+                  `[incremental-sync] thread helpers failed for ${messageId}:`,
+                  helperErr instanceof Error ? helperErr.message : String(helperErr)
+                );
+                // Fallback: insert ticket without conversation linkage
+                const { data: fallbackTicket } = await supabase
+                  .from("tickets")
+                  .insert({
+                    account_id: accountId,
+                    originating_user_id: userId,
+                    subject,
+                    from_email: from,
+                    gmail_message_id: messageId,
+                    gmail_thread_id: threadId,
+                    received_at: receivedAt,
+                    ticket_type: classification.type,
+                    priority: classification.priority,
+                    category: classification.category,
+                    sentiment: classification.tone,
+                    ai_reasoning: classification.reasoning,
+                    classification_confidence: classification.confidence,
+                    classified_at,
+                    classification_tier: 0,
+                  })
+                  .select("id, ticket_number")
+                  .single();
+                ticketId = fallbackTicket?.id ?? null;
+                ticketNumber = fallbackTicket?.ticket_number ?? null;
+
+                if (ticketId) {
+                  await recordAiClassification(accountId, ticketId, classification, classified_at);
+                }
+
+                await supabase
+                  .from("messages")
+                  .update({ classification_status: "classified", processing_tier: 0, classified_at })
+                  .eq("external_id", messageId)
+                  .eq("channel_integration_id", channelIntegrationId);
+              }
+            } else {
+              // No channelIntegrationId — insert ticket directly
+              const { data: bareTicket } = await supabase
+                .from("tickets")
+                .insert({
+                  account_id: accountId,
+                  originating_user_id: userId,
+                  subject,
+                  from_email: from,
+                  gmail_message_id: messageId,
+                  gmail_thread_id: threadId,
+                  received_at: receivedAt,
+                  ticket_type: classification.type,
+                  priority: classification.priority,
+                  category: classification.category,
+                  sentiment: classification.tone,
+                  ai_reasoning: classification.reasoning,
+                  classification_confidence: classification.confidence,
+                  classified_at,
+                  classification_tier: 0,
+                })
+                .select("id, ticket_number")
+                .single();
+              ticketId = bareTicket?.id ?? null;
+              ticketNumber = bareTicket?.ticket_number ?? null;
+
+              if (ticketId) {
+                await recordAiClassification(accountId, ticketId, classification, classified_at);
+              }
             }
 
-            // Drain remaining
-            if (classificationPromises.length > 0) {
-                await Promise.allSettled(classificationPromises);
+            if (ticketId && was_created) {
+              // KAI-246: send the acknowledgement first. If it goes out, skip the
+              // out-of-hours reply for this creation — the customer should not get
+              // two auto-replies for the same inbound email. When the flag is off
+              // (default), the ack didn't send, or ticketNumber is unavailable,
+              // out-of-hours behaves as before.
+              const ackOutcome = ticketNumber === null
+                ? { sent: false as const, reason: "send_failed" as const }
+                : await maybeSendTicketAcknowledgement({
+                    supabase,
+                    accountId,
+                    ticketId,
+                    ticketNumber,
+                    conversationId: conversationIdForMessages,
+                    channelIntegrationId,
+                    gmailThreadId: threadId,
+                    subject,
+                    fromHeader: from,
+                    customerDisplayName: null,
+                    category: classification.category,
+                    receivedAt,
+                    messageIdHeader,
+                  }).catch((err: unknown) => {
+                    console.error(`[incremental-sync] Acknowledgement failed for ticket ${ticketId}:`, err);
+                    return { sent: false as const, reason: "send_failed" as const };
+                  });
+
+              if (!ackOutcome.sent) {
+                maybeSendOutOfHoursReply({
+                  supabase,
+                  accountId,
+                  ticketId,
+                  gmailAccessToken,
+                  gmailThreadId: threadId,
+                  gmailMessageId: messageId,
+                  fromHeader: from,
+                  subject,
+                  receivedAt,
+                }).catch((err: unknown) => {
+                  console.error(
+                    `[incremental-sync] Out-of-hours reply failed for ticket ${ticketId}:`,
+                    err
+                  );
+                });
+              }
+
+              maybeGenerateTicketEmbedding({
+                supabase,
+                ticketId,
+                accountId,
+                subject,
+                bodyPreview: snippet,
+              }).catch((err: unknown) => {
+                console.error(
+                  `[incremental-sync] Embedding generation failed for ticket ${ticketId}:`,
+                  err
+                );
+              });
             }
-        });
-    }
+          })
+          .catch(async (err: unknown) => {
+            const detail = err instanceof Error ? err.message : String(err);
+            console.error(
+              `[incremental-sync] Classification failed for ${messageId}: ${detail}`
+            );
+
+            logLlmCall({
+              feature: "email_classification",
+              model: resolveModelVersion(),
+              promptText: `${from} | ${subject}`,
+              latencyMs: Date.now() - llmStart,
+              errorCode: "LLM_ERROR",
+              errorDetail: detail,
+              triggeredByUserId: userId,
+              accountId,
+            });
+
+            if (channelIntegrationId) {
+              await recordClassificationFailure({
+                supabase,
+                accountId,
+                channelIntegrationId,
+                externalId: messageId,
+                threadExternalId: threadId,
+                receivedAt,
+                senderExternalId: from,
+                senderDisplayName: null,
+                subject,
+                snippet,
+                bodyPlain: body_plain || null,
+                bodyHtml: null,
+                messageIdHeader,
+                processingTier: 0,
+                err,
+                maxAttempts: env.CLASSIFICATION_MAX_ATTEMPTS,
+              });
+            }
+          });
+
+        classificationPromises.push(promise);
+
+        // Respect INCREMENTAL_SYNC_CONCURRENCY by draining in chunks
+        if (classificationPromises.length >= env.INCREMENTAL_SYNC_CONCURRENCY) {
+          await Promise.allSettled(classificationPromises.splice(0));
+        }
+      }
+
+      // Drain remaining
+      if (classificationPromises.length > 0) {
+        await Promise.allSettled(classificationPromises);
+      }
+    });
+  }
 );

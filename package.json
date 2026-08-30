@@ -26,8 +26,5 @@
     "eval:ablation": "bun scripts/eval/compare_ablation.ts",
     "eval:matrix": "bun scripts/eval/run_matrix_eval.ts"
   },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ]
+  "workspaces": ["apps/*", "packages/*"]
 }

@@ -222,8 +222,7 @@ async function ingestMessages(
         subject,
         body: buildClassifierBody("backfill", null, snippet),
         from,
-        tenantMailbox: userEmail,
-          ...classifierContext,
+        ...classifierContext,
       }, { context: { accountId } });
       const classifiedAt = new Date().toISOString();
 

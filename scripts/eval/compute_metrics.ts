@@ -5,11 +5,12 @@ import { computeCalibration } from './lib/calibration';
 import { computeAgreement } from './lib/agreement';
 import type { FieldAgreement } from './lib/agreement';
 import type { CalibrationEntry } from './lib/calibration';
-import { computeToneInflation, computeDifficultyBreakdown, DIFFICULTY_LEVELS } from './lib/spanish-analysis';
+import { computeToneInflation, computeDifficultyBreakdown } from './lib/spanish-analysis';
 import type { AnalysisRow } from './lib/spanish-analysis';
 import { writeReports } from './lib/report-writer';
 import type { EvalReport, PerEmailDiff, FieldDiff } from './lib/report-writer';
 import { resolveRunLabel } from './lib/run-label';
+import { DIFFICULTY_LEVELS } from './lib/difficulty';
 import { resolveCorpus } from './lib/corpus';
 import { PIPELINE_OUTPUT } from './lib/run-files';
 // The eval validates against the same enums the pipeline emits — one source
