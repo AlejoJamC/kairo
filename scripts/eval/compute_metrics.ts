@@ -5,11 +5,12 @@ import { computeCalibration } from './lib/calibration';
 import { computeAgreement } from './lib/agreement';
 import type { FieldAgreement } from './lib/agreement';
 import type { CalibrationEntry } from './lib/calibration';
-import { computeToneInflation, computeDifficultyBreakdown } from './lib/spanish-analysis';
+import { computeToneInflation, computeDifficultyBreakdown, DIFFICULTY_LEVELS } from './lib/spanish-analysis';
 import type { AnalysisRow } from './lib/spanish-analysis';
 import { writeReports } from './lib/report-writer';
 import type { EvalReport, PerEmailDiff, FieldDiff } from './lib/report-writer';
 import { resolveRunLabel } from './lib/run-label';
+import { resolveCorpus } from './lib/corpus';
 // The eval validates against the same enums the pipeline emits — one source
 import {
   TICKET_TYPE, PRIORITY, CATEGORY, TONE, URGENCY,
@@ -18,16 +19,20 @@ import {
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
 const SCRIPT_DIR = new URL('.', import.meta.url).pathname;
-const INPUT_DIR = join(SCRIPT_DIR, 'data/input');
+
+// The corpus decides both halves at once: the labels and where the predictions
+// for those same emails were written. Selecting them separately would let a run
+// be scored against another corpus's ground truth.
+const CORPUS = resolveCorpus();
 
 // Metrics run against ONE model's pipeline output, resolved from the same
 // env vars the pipeline run used (or pass the run directory name as argv[2],
 // e.g. `bun run eval:metrics ollama-granite4.1-3b`). Reports land next to
 // the pipeline output they measure — runs never share or overwrite files.
 const RUN_SLUG = process.argv[2] ?? resolveRunLabel().slug;
-const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', RUN_SLUG);
+const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', CORPUS.outputSubdir, RUN_SLUG);
 
-const GT_FILE = join(INPUT_DIR, 'ground_truth_50.csv');
+const GT_FILE = join(SCRIPT_DIR, CORPUS.groundTruth);
 const PIPELINE_FILE = join(OUTPUT_DIR, 'pipeline_output_50.csv');
 const JSON_OUT = join(OUTPUT_DIR, 'eval_report.json');
 const MD_OUT = join(OUTPUT_DIR, 'eval_report.md');
@@ -114,26 +119,95 @@ export function parseCsv(content: string): CsvParseResult {
 // the adapter still does is structural:
 //   - rename the Spanish consensus columns to the canonical field names
 //   - drop Excel-export ghost rows with an empty email_id
-//   - derive `difficulty`, which has no consensus column of its own: the harder
-//     of the two annotators wins, since disagreement on difficulty is itself a
-//     sign of ambiguity
 // Values pass through verbatim and are checked against the same enums the
 // pipeline emits. A value outside them is reported, never silently coerced —
 // coercion is how a business decision ends up buried in scoring code.
 
-// The tone label is versioned by the rubric that produced it. `tono_final` was
-// annotated before the insistence rule was written down, so a run scored
-// against it and one scored against the v1.3.0 pass are aiming at different
-// targets. Reading the versioned column keeps a label and the rubric that
-// produced it tied together, the same way `prompt_version` ties a prediction
-// to the rubric that produced it.
-const GT_TONE_COLUMN = 'tono_final_v130';
+// ─── Sheet schemas ───────────────────────────────────────────────────────────
+// Two annotator sheets exist and they name their columns differently. The
+// original grew a column at a time and ended up half in Spanish; anything
+// written from now on is in English like the rest of the repo.
+//
+// They are not interchangeable, and one collision makes that dangerous:
+// `alexandra_tone` exists in both. In the legacy sheet it is the original
+// four-class pass, annotated before the insistence rule was written down, on
+// which the two annotators agreed 12% of the time. In an English sheet it is
+// the live pass. Reading one as the other would score a run against labels
+// nobody stands behind, and nothing downstream could tell.
+//
+// So detection keys on the consensus column for `ticket_type`, whose two
+// spellings cannot both be right, and a sheet carrying both is refused rather
+// than guessed at.
+
+interface SheetSchema {
+  name: string;
+  /** Canonical field -> the column holding the resolved label. */
+  final: Record<string, string>;
+  /** Canonical field -> the two annotators' own columns. */
+  annotators: Record<string, [string, string]>;
+}
+
+const ENGLISH_SHEET: SheetSchema = {
+  name: 'english',
+  final: {
+    ticket_type: 'ticket_type_final',
+    priority: 'priority_final',
+    category: 'category_final',
+    tone: 'tone_final',
+    urgency: 'urgency_final',
+    difficulty: 'difficulty_final',
+  },
+  annotators: {
+    ticket_type: ['alexandra_ticket_type', 'alejandro_ticket_type'],
+    priority: ['alexandra_priority', 'alejandro_priority'],
+    category: ['alexandra_category', 'alejandro_category'],
+    tone: ['alexandra_tone', 'alejandro_tone'],
+    urgency: ['alexandra_urgency', 'alejandro_urgency'],
+    difficulty: ['alexandra_difficulty', 'alejandro_difficulty'],
+  },
+};
+
+const LEGACY_SHEET: SheetSchema = {
+  name: 'legacy (mixed es/en)',
+  final: {
+    ticket_type: 'tipo_ticket_final',
+    priority: 'prioridad_final',
+    category: 'categoria_final',
+    // The v1.3.0 pass, and only it. The sheet also carries the original
+    // four-class pass and an intermediate binary one; neither describes a label
+    // anything reads.
+    tone: 'tono_final_v130',
+    urgency: 'urgencia_final',
+    difficulty: 'difficulty_final',
+  },
+  annotators: {
+    ticket_type: ['alexandra_ticket_type', 'alejandro_ticket_type'],
+    priority: ['alexandra_priority', 'alejandro_priority'],
+    category: ['alexandra_category', 'alejandro_category'],
+    tone: ['alexandra_tono_v130', 'alejandro_tono_v130'],
+    urgency: ['alexandra_urgency', 'alejandro_urgency'],
+    difficulty: ['alexandra_dificultad', 'alejandro_dificultad'],
+  },
+};
+
+/** The schema a sheet is written in, or undefined when it is already canonical. */
+export function detectSheet(headers: string[]): SheetSchema | undefined {
+  const english = headers.includes(ENGLISH_SHEET.final['ticket_type']!);
+  const legacy = headers.includes(LEGACY_SHEET.final['ticket_type']!);
+  if (english && legacy) {
+    throw new Error(
+      'Ground truth carries both sheet schemas. `alexandra_tone` means a ' +
+      'different pass in each, so which one to read cannot be inferred. Keep one.',
+    );
+  }
+  if (english) return ENGLISH_SHEET;
+  if (legacy) return LEGACY_SHEET;
+  return undefined;
+}
 
 const CANONICAL_GT_HEADERS = [
   'email_id', 'ticket_type', 'priority', 'category', 'tone', 'urgency', 'difficulty',
 ];
-
-const DIFFICULTY_ORDER = ['easy', 'ambiguous', 'hard'];
 
 const CANONICAL_VALUES: Record<string, readonly string[]> = {
   ticket_type: TICKET_TYPE,
@@ -141,7 +215,7 @@ const CANONICAL_VALUES: Record<string, readonly string[]> = {
   category: CATEGORY,
   tone: TONE,
   urgency: URGENCY,
-  difficulty: DIFFICULTY_ORDER,
+  difficulty: DIFFICULTY_LEVELS,
 };
 
 // "field: value" → occurrences, reported after adaptation so nothing outside
@@ -164,73 +238,44 @@ export function canonicalEmailId(raw: string): string {
   return raw.trim().replace(/^0+(?=\d)/, '');
 }
 
-function deriveDifficulty(alexandra: string, alejandro: string): string {
-  const a = gtValue('difficulty', alexandra);
-  const b = gtValue('difficulty', alejandro);
-  const rankA = DIFFICULTY_ORDER.indexOf(a);
-  const rankB = DIFFICULTY_ORDER.indexOf(b);
-  if (rankA === -1 && rankB === -1) return '';
-  return rankB > rankA ? b : a;
-}
-
 export function adaptGroundTruth(parsed: CsvParseResult): CsvParseResult {
   // Already-canonical files pass through untouched
-  if (!parsed.headers.includes('tipo_ticket_final')) return parsed;
+  const sheet = detectSheet(parsed.headers);
+  if (!sheet) return parsed;
 
-  // Without this column every row's tone would be empty and the field would
-  // report an F1 computed from nothing, silently. Say so instead.
-  if (!parsed.headers.includes(GT_TONE_COLUMN)) {
-    console.warn(
-      `⚠  Ground truth has no "${GT_TONE_COLUMN}" column — tone metrics will be empty.`,
-    );
+  // A missing consensus column would leave every row's value empty and the
+  // field would report an F1 computed from nothing, silently. Say so instead.
+  for (const [field, column] of Object.entries(sheet.final)) {
+    if (!parsed.headers.includes(column)) {
+      console.warn(
+        `⚠  Ground truth has no "${column}" column — ${field} metrics will be empty.`,
+      );
+    }
   }
 
   const rows: CsvRow[] = [];
   for (const r of parsed.rows) {
     const id = canonicalEmailId(r['email_id'] ?? '');
     if (!id) continue; // Excel-export ghost row
-    rows.push({
-      email_id: id,
-      ticket_type: gtValue('ticket_type', r['tipo_ticket_final'] ?? ''),
-      priority: gtValue('priority', r['prioridad_final'] ?? ''),
-      category: gtValue('category', r['categoria_final'] ?? ''),
-      tone: gtValue('tone', r[GT_TONE_COLUMN] ?? ''),
-      urgency: gtValue('urgency', r['urgencia_final'] ?? ''),
-      difficulty: deriveDifficulty(
-        r['alexandra_dificultad'] ?? '',
-        r['alejandro_dificultad'] ?? '',
-      ),
-    });
+    const row: CsvRow = { email_id: id };
+    for (const [field, column] of Object.entries(sheet.final)) {
+      row[field] = gtValue(field, r[column] ?? '');
+    }
+    rows.push(row);
   }
 
   return { headers: [...CANONICAL_GT_HEADERS], rows };
 }
 
 // ─── Agreement between the two annotators ───────────────────────────────────
-// Which pair of raw columns holds each field. Four fields are named in English
-// and two in Spanish because the sheet grew that way; the mapping is here so
-// nothing downstream has to know.
-//
-// `tone` points at the v1.3.0 pass and only at it. The sheet carries two
-// earlier tone passes -- the original four-class one and an intermediate binary
-// one -- and neither describes a label anything reads. The first was annotated
-// before the insistence rule existed and the two annotators agreed on 12% of
-// it; treating it as a second opinion on the same question would be averaging a
-// mistake into the answer.
-const ANNOTATOR_COLUMNS: Record<string, [string, string]> = {
-  ticket_type: ['alexandra_ticket_type', 'alejandro_ticket_type'],
-  priority:    ['alexandra_priority', 'alejandro_priority'],
-  category:    ['alexandra_category', 'alejandro_category'],
-  tone:        ['alexandra_tono_v130', 'alejandro_tono_v130'],
-  urgency:     ['alexandra_urgency', 'alejandro_urgency'],
-  // Not a classifier field, but the verdict is computed on the emails both
-  // annotators called easy, so how well they agree on that decides which
-  // subset the headline number is measured over.
-  difficulty:  ['alexandra_dificultad', 'alejandro_dificultad'],
-};
 
 /**
- * Agreement per field, read straight off the raw annotator sheet.
+ * Agreement per field, read straight off the raw annotator sheet, using the
+ * column names of whichever schema that sheet is written in.
+ *
+ * `difficulty` is in here although it is not a classifier field: the verdict is
+ * macro F1 over the emails both annotators called easy, so how well they agree
+ * on that decides which subset the headline number is measured over.
  *
  * Undefined when the sheet carries no annotator columns at all -- an
  * already-canonical ground truth, or another tenant's corpus. Absent is the
@@ -239,7 +284,10 @@ const ANNOTATOR_COLUMNS: Record<string, [string, string]> = {
 export function computeAnnotatorAgreement(
   parsed: CsvParseResult,
 ): Record<string, FieldAgreement> | undefined {
-  const present = Object.entries(ANNOTATOR_COLUMNS).filter(
+  const sheet = detectSheet(parsed.headers);
+  if (!sheet) return undefined;
+
+  const present = Object.entries(sheet.annotators).filter(
     ([, [a, b]]) => parsed.headers.includes(a) && parsed.headers.includes(b),
   );
   if (present.length === 0) return undefined;
@@ -365,6 +413,7 @@ async function main(): Promise<void> {
 
   console.log('Kairo Eval Metrics — KAI-97');
   console.log(`Run:              ${runProvider ?? '?'} / ${runModel ?? '?'} (${RUN_SLUG})`);
+  console.log(`Corpus:           ${CORPUS.id}`);
   console.log(`Ground truth:     ${GT_FILE} (${gt.rows.length} rows)`);
   console.log(`Pipeline output:  ${PIPELINE_FILE} (${pipeline.rows.length} rows)`);
 

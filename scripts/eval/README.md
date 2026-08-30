@@ -107,6 +107,87 @@ Nothing is hand-written: there is no `_meta.json`. A corpus whose sheet has no
 annotator columns simply gets no agreement section, which is the honest answer
 there — a zero would read as "they never agreed".
 
+## Two corpora
+
+`EVAL_CORPUS` selects which body of email a run measures. It defaults to `main`,
+so every command that worked before this existed still means the same thing.
+
+| | `main` | `coverage` |
+|---|---|---|
+| Emails | `data/input/eml/` | `data/input/coverage/eml/` |
+| Ground truth | `data/input/ground_truth_50.csv` | `data/input/coverage/coverage_ground_truth.csv` |
+| Output | `data/output/<cell>/` | `data/output/coverage/<cell>/` |
+| How it was built | a random window of the inbox | hand-picked, on purpose |
+| How to read it | macro F1 — the verdict | pass or fail, never a mean |
+
+```bash
+EVAL_CORPUS=coverage bun run eval:matrix
+EVAL_CORPUS=coverage bun run eval:metrics ollama-granite4.2-30b
+```
+
+**`coverage` exists because a random window cannot reach an edge case.** In 100
+annotations of `main`, `prospect`, `spam` and `other` had **zero** examples
+between them — three of the five classes production can emit were never
+measured. Sampling harder does not fix that: they are rare by nature.
+
+**They must not be merged.** The majority-class baseline is derived from the
+ground truth's own label frequencies, so injecting hand-picked examples into
+`main` would move the floor the verdict is measured against without anything
+flagging it, and macro F1 would stop weighting `internal` at half. A separate
+subtree also gives each corpus its own execution ledger, which is only
+meaningful against the cell count it was written for.
+
+Email ids in `coverage` start at 101: `canonicalEmailId` strips leading zeros,
+so `001` in one corpus and `001` in the other would collide if the two sheets
+were ever joined.
+
+An unknown `EVAL_CORPUS` is a fatal error rather than a fallback to `main` —
+silently measuring one corpus while a report claims another is the failure this
+split exists to prevent.
+
+### Sheet schema
+
+`main` is written half in Spanish because it grew a column at a time. Anything
+written from now on uses English column names, and the adapter reads both:
+
+| | Legacy (`main`) | English (`coverage` and anything new) |
+|---|---|---|
+| Consensus | `tipo_ticket_final`, `prioridad_final`, … | `ticket_type_final`, `priority_final`, … |
+| Tone consensus | `tono_final_v130` | `tone_final` |
+| Difficulty consensus | `difficulty_final` | `difficulty_final` |
+| Annotators | `alexandra_tono_v130`, `alexandra_dificultad` | `alexandra_tone`, `alexandra_difficulty` |
+
+Detection keys on the `ticket_type` consensus column, whose two spellings cannot
+both be right. A sheet carrying both is refused rather than guessed at:
+`alexandra_tone` means the original four-class pass in the legacy sheet — the
+one the annotators agreed on 12% of the time — and the live pass in an English
+one. Reading one as the other would score a run against labels nobody stands
+behind.
+
+### Difficulty
+
+How hard the annotators found the email to label. It is theirs to resolve, like
+every other field, and it has a consensus column:
+
+| Value | Meaning |
+|---|---|
+| `easy` | straightforward to classify |
+| `ambiguous` | they are not fully in agreement, or there is doubt |
+| `hard` | indisputably difficult to label — passive-aggressive wording, a request whose real subject sits in an attachment, a thread whose owner cannot be told from the text |
+
+It carries weight the name does not suggest: **the verdict is macro F1 over the
+`easy` emails only**, so this column decides which subset the headline number is
+measured over.
+
+Until now there was no consensus column and the adapter derived one — the
+harsher of the two annotators won. That is a judgement resolved by an `indexOf`,
+on the one field that decides what the verdict is computed on. It now comes from
+`difficulty_final` like everything else.
+
+In `coverage` the same column separates the two questions that set answers:
+`easy` on the unequivocal examples, `ambiguous` or `hard` on the ones picked
+specifically to sit near the boundary.
+
 ## Data layout (private repo)
 
 `scripts/eval/data/` is a **separate private git repo** — it holds real company
