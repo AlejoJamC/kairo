@@ -61,14 +61,19 @@ over time. A hand-written paragraph is the best case: it measures the ceiling
 the field can buy, not what an account will actually be carrying. Report a
 figure from these runs as a ceiling, not as a forecast.
 
-The other asymmetry is the stage. Production sends the field on the backfill
-stage only — tier 2, tier 3, incremental-sync, the Gmail poll and the
-reclassify endpoints — and never on tier 1, which runs before any value can
-exist. The matrix's two `onboarding-bc` cells therefore do not describe a
-production path at all: they are the control that justifies withholding the
-field there, and on the bench they earned it (the best onboarding model lost
-0.073 macro F1 with the context; none of the five gained). The rule itself
-lives in `apps/api/src/lib/classifier-input.ts`.
+The field is no longer an axis of the matrix. It was one, it was measured, and
+both answers are settled: on backfill it is worth +0.082 macro F1 (median,
+five models) and on onboarding the best model lost 0.073 with it and none of
+the five gained. Both answers are enforced in
+`apps/api/src/lib/classifier-input.ts` — `onboarding` does not read the column,
+`backfill` always does — so a cell varying it would measure something no call
+site can produce.
+
+One cell per stage, therefore: `onboarding` without the context and `backfill`
+with it, each mirroring what its call sites send. That the column is empty for
+every account today is a task in another domain, not a condition this bench
+observes: re-measuring an accepted delta spends compute reconfirming a decision
+instead of informing one.
 
 ## Data layout (private repo)
 

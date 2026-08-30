@@ -16,14 +16,26 @@ export interface BenchModel {
   provider: 'anthropic' | 'ollama';
   model: string;
   label: string;
+  /**
+   * The stages this model is measured on. Not every model is a candidate for
+   * every stage, and a cell for a stage a model will never serve costs minutes
+   * per email to produce a number nobody can act on.
+   */
+  stages: PipelineStage[];
 }
 
 export const BENCH: BenchModel[] = [
-  { provider: 'anthropic', model: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-  { provider: 'ollama', model: 'muse-glimmer:30b', label: 'muse-glimmer 30b' },
-  { provider: 'ollama', model: 'qwen3.8:latest', label: 'qwen 3.8' },
-  { provider: 'ollama', model: 'granite4.2:30b', label: 'granite 4.2 30b' },
-  { provider: 'ollama', model: 'gemma4:31b', label: 'gemma4 31b' },
+  // Onboarding only. Tier 1 is one scan per signup; backfill is the whole
+  // history and then every message that arrives, forever.
+  { provider: 'anthropic', model: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', stages: ['onboarding'] },
+  // Backfill only: did not clear 0.80 on the previous matrix, and onboarding
+  // decides on accuracy against the latency of a single call.
+  { provider: 'ollama', model: 'muse-glimmer:30b', label: 'muse-glimmer 30b', stages: ['backfill'] },
+  // Cleared 0.80: candidates for both stages.
+  { provider: 'ollama', model: 'qwen3.8:latest', label: 'qwen 3.8', stages: ['onboarding', 'backfill'] },
+  { provider: 'ollama', model: 'granite4.2:30b', label: 'granite 4.2 30b', stages: ['onboarding', 'backfill'] },
+  // Backfill only, same reason as muse-glimmer.
+  { provider: 'ollama', model: 'gemma4:31b', label: 'gemma4 31b', stages: ['backfill'] },
 ];
 
 /**
@@ -43,43 +55,58 @@ export interface Variant {
   question: string;
 }
 
+// One cell per stage, because each stage now has exactly one condition. Both
+// business-context variants were questions, both were answered on the KAI-93
+// bench, and both answers are enforced in apps/api/src/lib/classifier-input.ts:
+// `onboarding` does not read the column, `backfill` always does.
+//
+// A settled question is not an experiment. Re-measuring a delta that has
+// already been accepted spends compute to reconfirm a decision instead of
+// informing one, and an empty column is a task in another domain, not a
+// condition this bench exists to observe.
 export const VARIANTS: Variant[] = [
   {
     id: 'onboarding',
     stage: 'onboarding',
     businessContext: false,
-    question: 'Tier 1 as it runs today. Baseline for the onboarding column.',
-  },
-  {
-    id: 'onboarding-bc',
-    stage: 'onboarding',
-    businessContext: true,
     question:
-      'Does asking the user for their line of business at sign-up buy enough ' +
-      'accuracy to justify the risk it puts on the 60-second first-ticket promise?',
+      'Tier 1, and the only condition it has: raw body, quoted thread intact, ' +
+      'no business context. The stage is settled, so it is measured once.',
   },
   {
     id: 'backfill',
     stage: 'backfill',
-    businessContext: false,
-    question: 'Tier 2/3 as they run today. Baseline for the backfill column.',
-  },
-  {
-    id: 'backfill-bc',
-    stage: 'backfill',
     businessContext: true,
     question:
-      'Here the description costs the user nothing -- it would be derived from ' +
-      'the backfill itself. Is the gain worth building that derivation?',
+      'Tier 2/3, incremental-sync, the poll and the reclassify endpoints, with ' +
+      'the tenant context they are wired to carry.',
   },
 ];
+
+/**
+ * Which stages a model is measured on is a property of the model row, so there
+ * is one place to look and one place to change it. These are views over that,
+ * not a second list that could drift away from it.
+ */
+export const ONBOARDING_BENCH: BenchModel[] = BENCH.filter((m) =>
+  m.stages.includes('onboarding'),
+);
+
+/** The variants a given model is measured on. */
+export function variantsFor(m: BenchModel): Variant[] {
+  return VARIANTS.filter((v) => m.stages.includes(v.stage));
+}
+
+/** Total cells for one pass over the corpus. */
+export function totalCells(emails: number): number {
+  return BENCH.reduce((n, m) => n + variantsFor(m).length, 0) * emails;
+}
 
 /** Directory name for one (model, variant) pair. */
 export function cellSlug(m: BenchModel, v: Variant): string {
   const base = slugify(`${m.provider}-${m.model}`);
-  const suffix =
-    (v.stage === 'onboarding' ? '-onboarding' : '') + (v.businessContext ? '-bc' : '');
-  return base + suffix;
+  // One cell per stage, so the stage alone names the directory.
+  return base + (v.stage === 'onboarding' ? '-onboarding' : '');
 }
 
 /** Body rule for a variant, mirroring the production call sites. */

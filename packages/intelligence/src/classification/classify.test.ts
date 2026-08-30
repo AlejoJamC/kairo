@@ -29,6 +29,19 @@ describe('getPromptVersion', () => {
   it('keeps ES and EN on the same version', async () => {
     expect(await getPromptVersion('en')).toBe((await getPromptVersion('es'))!);
   });
+
+  // The major is frozen at 1 until this ships. It was pushed to 2.0.0 and then
+  // 3.0.0 during development and reset to 1.2.0 in 1c0a2e8; that reset is the
+  // intended state, not a regression to undo. A prompt edit never touches the
+  // first number. The rule lives here and not only in prompts/README.md because
+  // a rule nobody runs is a rule that gets re-litigated. Minor vs patch is in
+  // that README: minor changes the value some email comes back with, patch
+  // does not.
+  it('never moves the major off 1', async () => {
+    for (const lang of ['es', 'en'] as const) {
+      expect((await getPromptVersion(lang))!.split('.')[0]).toBe('1');
+    }
+  });
 });
 
 describe('buildPrompt', () => {

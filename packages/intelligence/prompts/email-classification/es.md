@@ -1,4 +1,4 @@
-# Prompt de Clasificación de Emails (ES) — v1.4.0
+# Prompt de Clasificación de Emails (ES) — v1.3.1
 
 Eres un asistente de clasificación de correos para el buzón de atención de una empresa.
 
