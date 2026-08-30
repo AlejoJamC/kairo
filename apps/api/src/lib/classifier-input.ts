@@ -15,6 +15,9 @@
 
 import { stripQuotedThread } from "@kairo/intelligence";
 
+import { getGmailEmailByAccount } from "./gmail-token.js";
+import { supabase } from "./supabase.js";
+
 export type ClassifierStage = "onboarding" | "backfill";
 
 export interface ClassifierBodyRule {
@@ -64,4 +67,88 @@ export function buildClassifierBody(
   const rule = CLASSIFIER_BODY_RULES[stage];
   const raw = bodyPlain || snippet || "";
   return (rule.stripQuotes ? stripQuotedThread(raw) : raw).slice(0, rule.maxChars);
+}
+
+// ---------------------------------------------------------------------------
+// The tenant context that travels with the body.
+//
+// `tenantMailbox` and `businessContext` are the two fields the rubric points at
+// when it separates `support` from `internal`, and they are resolved together
+// because a call site that forgets one of them is exactly the drift this module
+// exists to stop.
+//
+// The stage decides whether the business context is sent at all — it is not an
+// argument the caller gets to pass. That is the whole point of routing this
+// through here.
+// ---------------------------------------------------------------------------
+
+export interface ClassifierContext {
+  /** The mailbox Kairo is reading. Sent by every stage. */
+  tenantMailbox: string;
+  /**
+   * What the tenant's company does. Absent on `onboarding`, and absent on
+   * `backfill` until the account has one — the rubric then renders
+   * `(no disponible)` and classifies without it.
+   */
+  businessContext?: string;
+}
+
+/**
+ * Reads `accounts.business_context`.
+ *
+ * Never throws: a classification is worth more without the context than not at
+ * all, and this column is read on every backfill call. The most likely failure
+ * is also the most benign one — an environment where the migration adding the
+ * column has not been applied yet.
+ */
+async function readBusinessContext(accountId: string): Promise<string | undefined> {
+  try {
+    const { data, error } = await supabase
+      .from("accounts")
+      .select("business_context")
+      .eq("id", accountId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn(`[classifier-input] business_context unreadable for account ${accountId}: ${error.message}`);
+      return undefined;
+    }
+
+    const text = (data?.business_context as string | null | undefined)?.trim();
+    return text ? text : undefined;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[classifier-input] business_context unreadable for account ${accountId}: ${message}`);
+    return undefined;
+  }
+}
+
+/**
+ * The tenant fields to hand the classifier for a given stage.
+ *
+ * Resolve this once per batch — per Inngest step, per poll, per request — and
+ * reuse it for every email in that batch, the way the tenant mailbox already
+ * was. It is per-account state, not per-email state.
+ *
+ * On `onboarding` the business context is not even read. Tier 1 runs before any
+ * value could exist, and the KAI-93 bench measured the field as actively
+ * harmful in that column: the best onboarding model lost 0.073 macro F1 with it
+ * and none of the five gained. `backfill` is the opposite case — a median gain
+ * of +0.082 across the same five models — so once a value exists, every
+ * non-Tier-1 call from that moment on carries it.
+ */
+export async function resolveClassifierContext(
+  stage: ClassifierStage,
+  accountId: string
+): Promise<ClassifierContext> {
+  if (stage === "onboarding") {
+    return { tenantMailbox: await getGmailEmailByAccount(accountId) };
+  }
+
+  const [tenantMailbox, businessContext] = await Promise.all([
+    getGmailEmailByAccount(accountId),
+    readBusinessContext(accountId),
+  ]);
+
+  return { tenantMailbox, ...(businessContext ? { businessContext } : {}) };
 }

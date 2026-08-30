@@ -20,6 +20,7 @@ import { recordClassificationFailure } from "../classification-outcome.js";
 import { env } from "../../env.js";
 // Pure function, no I/O — safe to import directly rather than inject.
 import { buildClassifierBody } from "../classifier-input.js";
+import type { ClassifierContext } from "../classifier-input.js";
 
 function headerValue(headers: { name: string; value: string }[], name: string): string {
   return (
@@ -70,10 +71,11 @@ async function ingestMessages(
     channelIntegrationId: string;
     token: string;
     messageIds: string[];
-    userEmail: string;
+    classifierContext: ClassifierContext;
   }
 ): Promise<{ ticketsCreated: number; ticketsReopened: number; skipped: number; processed: number }> {
-  const { accountId, channelIntegrationId, token, messageIds, userEmail } = args;
+  const { accountId, channelIntegrationId, token, messageIds, classifierContext } = args;
+  const userEmail = classifierContext.tenantMailbox;
 
   let ticketsCreated = 0;
   let ticketsReopened = 0;
@@ -215,12 +217,13 @@ async function ingestMessages(
 
       // This path only ever has the Gmail snippet — it does not decode the
       // MIME body — but it goes through the same rule as every other queued
-      // path, and it sends the tenant mailbox the rubric needs.
+      // path, and it sends the tenant fields the rubric needs.
       const classification = await deps.classifyEmail({
         subject,
         body: buildClassifierBody("backfill", null, snippet),
         from,
         tenantMailbox: userEmail,
+          ...classifierContext,
       }, { context: { accountId } });
       const classifiedAt = new Date().toISOString();
 
@@ -390,7 +393,10 @@ export async function pollGmailAccount(
     };
   }
 
-  const userEmail = await deps.getGmailEmailByAccount(accountId);
+  // Resolved once per poll, not once per message: this is per-account state
+  // (KAI-93). `backfill` — every path that is not the Tier 1 onboarding scan
+  // carries the tenant's line of business once the account has one.
+  const classifierContext = await deps.resolveClassifierContext("backfill", accountId);
 
   // -------------------------------------------------------------------------
   // Incremental path: history.list from the stored cursor.
@@ -404,7 +410,7 @@ export async function pollGmailAccount(
           channelIntegrationId: row.id,
           token,
           messageIds,
-          userEmail,
+          classifierContext,
         })
       : { ticketsCreated: 0, ticketsReopened: 0, skipped: 0, processed: 0 };
 
@@ -440,7 +446,7 @@ export async function pollGmailAccount(
           channelIntegrationId: row.id,
           token,
           messageIds,
-          userEmail,
+          classifierContext,
         })
       : { ticketsCreated: 0, ticketsReopened: 0, skipped: 0, processed: 0 };
 
