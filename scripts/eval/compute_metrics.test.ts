@@ -14,7 +14,7 @@ import {
 const HEADERS = [
   "email_id",
   "tipo_ticket_final", "prioridad_final", "categoria_final",
-  "tono_final", "urgencia_final",
+  "tono_final_v130", "urgencia_final",
   "alexandra_dificultad", "alejandro_dificultad",
 ].join(",");
 
