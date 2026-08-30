@@ -120,6 +120,14 @@ export function parseCsv(content: string): CsvParseResult {
 // pipeline emits. A value outside them is reported, never silently coerced —
 // coercion is how a business decision ends up buried in scoring code.
 
+// The tone label is versioned by the rubric that produced it. `tono_final` was
+// annotated before the insistence rule was written down, so a run scored
+// against it and one scored against the v1.3.0 pass are aiming at different
+// targets. Reading the versioned column keeps a label and the rubric that
+// produced it tied together, the same way `prompt_version` ties a prediction
+// to the rubric that produced it.
+const GT_TONE_COLUMN = 'tono_final_v130';
+
 const CANONICAL_GT_HEADERS = [
   'email_id', 'ticket_type', 'priority', 'category', 'tone', 'urgency', 'difficulty',
 ];
@@ -168,6 +176,14 @@ export function adaptGroundTruth(parsed: CsvParseResult): CsvParseResult {
   // Already-canonical files pass through untouched
   if (!parsed.headers.includes('tipo_ticket_final')) return parsed;
 
+  // Without this column every row's tone would be empty and the field would
+  // report an F1 computed from nothing, silently. Say so instead.
+  if (!parsed.headers.includes(GT_TONE_COLUMN)) {
+    console.warn(
+      `⚠  Ground truth has no "${GT_TONE_COLUMN}" column — tone metrics will be empty.`,
+    );
+  }
+
   const rows: CsvRow[] = [];
   for (const r of parsed.rows) {
     const id = canonicalEmailId(r['email_id'] ?? '');
@@ -177,7 +193,7 @@ export function adaptGroundTruth(parsed: CsvParseResult): CsvParseResult {
       ticket_type: gtValue('ticket_type', r['tipo_ticket_final'] ?? ''),
       priority: gtValue('priority', r['prioridad_final'] ?? ''),
       category: gtValue('category', r['categoria_final'] ?? ''),
-      tone: gtValue('tone', r['tono_final'] ?? ''),
+      tone: gtValue('tone', r[GT_TONE_COLUMN] ?? ''),
       urgency: gtValue('urgency', r['urgencia_final'] ?? ''),
       difficulty: deriveDifficulty(
         r['alexandra_dificultad'] ?? '',
