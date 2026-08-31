@@ -856,6 +856,19 @@ $$;
 ALTER FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."reject_ticket_activity_log_mutation"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'ticket_activity_log is append-only: % is not allowed', TG_OP
+    USING ERRCODE = 'insufficient_privilege';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."reject_ticket_activity_log_mutation"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."reject_ticket_state_history_mutation"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -1483,6 +1496,45 @@ CREATE TABLE IF NOT EXISTS "public"."tenant_sla_rules" (
 ALTER TABLE "public"."tenant_sla_rules" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."ticket_activity_log" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "seq" bigint NOT NULL,
+    "domain" "text" NOT NULL,
+    "event_type" "text" NOT NULL,
+    "actor_type" "text" NOT NULL,
+    "actor_user_id" "uuid",
+    "actor_ref" "text",
+    "reason" "text",
+    "occurred_at" timestamp with time zone NOT NULL,
+    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "metadata" "jsonb",
+    "idempotency_key" "text",
+    CONSTRAINT "ticket_activity_log_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
+    CONSTRAINT "ticket_activity_log_domain_check" CHECK (("domain" = ANY (ARRAY['tickets'::"text", 'deduplication'::"text", 'grouping'::"text", 'ans'::"text", 'escalation'::"text"]))),
+    CONSTRAINT "ticket_activity_log_event_type_check" CHECK (("event_type" = ANY (ARRAY['assignment'::"text", 'merge'::"text", 'merged_into'::"text", 'grouped'::"text", 'sla_breach'::"text", 'escalated'::"text"])))
+);
+
+
+ALTER TABLE "public"."ticket_activity_log" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_activity_log" IS 'Append-only log of non-state ticket facts (assignment, merge, grouping, SLA breach, escalation) shared across domains. account_id is denormalised on purpose so tenant scoping and metrics need no join back to tickets.';
+
+
+
+ALTER TABLE "public"."ticket_activity_log" ALTER COLUMN "seq" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."ticket_activity_log_seq_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."ticket_events" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "ticket_id" "uuid" NOT NULL,
@@ -2015,6 +2067,16 @@ ALTER TABLE ONLY "public"."tenant_sla_rules"
 
 
 
+ALTER TABLE ONLY "public"."ticket_activity_log"
+    ADD CONSTRAINT "ticket_activity_log_account_id_idempotency_key_key" UNIQUE ("account_id", "idempotency_key");
+
+
+
+ALTER TABLE ONLY "public"."ticket_activity_log"
+    ADD CONSTRAINT "ticket_activity_log_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."ticket_events"
     ADD CONSTRAINT "ticket_events_pkey" PRIMARY KEY ("id");
 
@@ -2363,6 +2425,14 @@ CREATE INDEX "idx_tenant_sla_rules_account_id" ON "public"."tenant_sla_rules" US
 
 
 
+CREATE INDEX "idx_ticket_activity_log_account_occurred" ON "public"."ticket_activity_log" USING "btree" ("account_id", "occurred_at");
+
+
+
+CREATE INDEX "idx_ticket_activity_log_ticket_seq" ON "public"."ticket_activity_log" USING "btree" ("ticket_id", "seq");
+
+
+
 CREATE INDEX "idx_ticket_events_author_id" ON "public"."ticket_events" USING "btree" ("author_id");
 
 
@@ -2532,6 +2602,10 @@ CREATE OR REPLACE TRIGGER "on_ticket_type_auto_approval_updated" BEFORE UPDATE O
 
 
 CREATE OR REPLACE TRIGGER "on_tickets_updated" BEFORE UPDATE ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "ticket_activity_log_append_only" BEFORE DELETE OR UPDATE ON "public"."ticket_activity_log" FOR EACH ROW EXECUTE FUNCTION "public"."reject_ticket_activity_log_mutation"();
 
 
 
@@ -2778,6 +2852,21 @@ ALTER TABLE ONLY "public"."tenant_priority_config"
 
 ALTER TABLE ONLY "public"."tenant_sla_rules"
     ADD CONSTRAINT "tenant_sla_rules_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ticket_activity_log"
+    ADD CONSTRAINT "ticket_activity_log_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_activity_log"
+    ADD CONSTRAINT "ticket_activity_log_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."ticket_activity_log"
+    ADD CONSTRAINT "ticket_activity_log_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
 
@@ -3199,6 +3288,17 @@ CREATE POLICY "tenant_sla_rules_access_by_account" ON "public"."tenant_sla_rules
 
 
 
+ALTER TABLE "public"."ticket_activity_log" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_activity_log_insert_by_account" ON "public"."ticket_activity_log" FOR INSERT WITH CHECK (("account_id" = "public"."current_account_id"()));
+
+
+
+CREATE POLICY "ticket_activity_log_select_by_account" ON "public"."ticket_activity_log" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
+
+
+
 ALTER TABLE "public"."ticket_events" ENABLE ROW LEVEL SECURITY;
 
 
@@ -3456,6 +3556,12 @@ GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "s
 
 
 
+GRANT ALL ON FUNCTION "public"."reject_ticket_activity_log_mutation"() TO "anon";
+GRANT ALL ON FUNCTION "public"."reject_ticket_activity_log_mutation"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reject_ticket_activity_log_mutation"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "anon";
 GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "service_role";
@@ -3639,6 +3745,18 @@ GRANT ALL ON TABLE "public"."tenant_priority_config" TO "service_role";
 GRANT ALL ON TABLE "public"."tenant_sla_rules" TO "anon";
 GRANT ALL ON TABLE "public"."tenant_sla_rules" TO "authenticated";
 GRANT ALL ON TABLE "public"."tenant_sla_rules" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_activity_log" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_activity_log" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_activity_log" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."ticket_activity_log_seq_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."ticket_activity_log_seq_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."ticket_activity_log_seq_seq" TO "service_role";
 
 
 

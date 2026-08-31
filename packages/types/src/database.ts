@@ -1396,6 +1396,72 @@ export type Database = {
           },
         ]
       }
+      ticket_activity_log: {
+        Row: {
+          account_id: string
+          actor_ref: string | null
+          actor_type: string
+          actor_user_id: string | null
+          domain: string
+          event_type: string
+          id: string
+          idempotency_key: string | null
+          metadata: Json | null
+          occurred_at: string
+          reason: string | null
+          recorded_at: string
+          seq: number
+          ticket_id: string
+        }
+        Insert: {
+          account_id: string
+          actor_ref?: string | null
+          actor_type: string
+          actor_user_id?: string | null
+          domain: string
+          event_type: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          occurred_at: string
+          reason?: string | null
+          recorded_at?: string
+          seq?: never
+          ticket_id: string
+        }
+        Update: {
+          account_id?: string
+          actor_ref?: string | null
+          actor_type?: string
+          actor_user_id?: string | null
+          domain?: string
+          event_type?: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          occurred_at?: string
+          reason?: string | null
+          recorded_at?: string
+          seq?: never
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_activity_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_activity_log_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_events: {
         Row: {
           author_id: string | null
