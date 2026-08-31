@@ -34,6 +34,7 @@ import {
   isTicketStatus,
   type TicketStatus,
 } from "../../lib/ticket-status-machine.js";
+import { TICKET_STATUSES, RESOLVED_STATUSES } from "@kairo/types";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { linkMessageToTicket, countTicketMessages } from "../../lib/ticket-messages.js";
 import { appendKairoToken, buildKairoToken } from "../../lib/ticket-traceability.js";
@@ -219,7 +220,8 @@ tickets.post("/:id/recalculate-score", async (c) => {
 // comma-separated p_status_filter.
 // ---------------------------------------------------------------------------
 
-const RESOLVED_STATUSES = ["resolved", "auto_resolved"] as const;
+// RESOLVED_STATUSES ("resolved", "auto_resolved") comes from @kairo/types —
+// see the import above.
 
 tickets.get("/:id/related-history", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
@@ -703,16 +705,7 @@ tickets.get("/:id/activity", async (c) => {
 // ---------------------------------------------------------------------------
 
 const UpdateStatusSchema = z.object({
-  status: z.enum([
-    "open",
-    "awaiting_customer",
-    "in_progress",
-    "resolved",
-    "auto_resolved",
-    "guided",
-    "escalated",
-    "reopened",
-  ]),
+  status: z.enum(TICKET_STATUSES as [TicketStatus, ...TicketStatus[]]),
 });
 
 tickets.patch("/:id/status", async (c) => {
@@ -985,6 +978,27 @@ const ReplySchema = z.object({
   templateId: z.string().uuid().optional(),
   intent: z.enum(["reply", "resolve"]).default("reply"),
 });
+
+// KAI-191 — statuses that auto-transition to `awaiting_customer` when an
+// agent sends a reply. Replying means "now waiting on the customer" —
+// applies to any active state (incl. reopened, KAI-221), not just
+// open/in_progress. Resolved/escalated/guided/awaiting are intentionally
+// excluded. Exhaustive over TicketStatus so a new status forces an explicit
+// decision here instead of silently being left out (or wrongly included).
+const IS_AUTO_AWAITING_SOURCE: Record<TicketStatus, boolean> = {
+  open: true,
+  in_progress: true,
+  reopened: true,
+  awaiting_customer: false,
+  resolved: false,
+  auto_resolved: false,
+  guided: false,
+  escalated: false,
+};
+
+const AUTO_AWAITING_SOURCES: TicketStatus[] = TICKET_STATUSES.filter(
+  (status) => IS_AUTO_AWAITING_SOURCE[status]
+);
 
 tickets.post("/:id/reply", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
@@ -1277,10 +1291,6 @@ tickets.post("/:id/reply", async (c) => {
   // 6. Update ticket: last_response_at + status transition.
   // Optimistic — the agent has responded; delivery is tracked independently via delivery_status.
   const currentStatus = ticket.status ?? "open";
-  // Replying means "now waiting on the customer" — applies to any active state
-  // (incl. reopened, KAI-221), not just open/in_progress. Resolved/awaiting are
-  // intentionally excluded.
-  const AUTO_AWAITING_SOURCES: TicketStatus[] = ["open", "in_progress", "reopened"];
   const shouldTransitionToAwaiting =
     intent === "reply" && isTicketStatus(currentStatus) && AUTO_AWAITING_SOURCES.includes(currentStatus as TicketStatus);
 

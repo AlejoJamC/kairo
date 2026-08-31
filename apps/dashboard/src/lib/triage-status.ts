@@ -1,4 +1,4 @@
-import type { TicketStatus } from "@kairo/types";
+import { TICKET_STATUSES, type TicketStatus } from "@kairo/types";
 
 // ---------------------------------------------------------------------------
 // Single source of truth for how a ticket status maps to the dashboard's
@@ -55,3 +55,43 @@ export const TRIAGE_COUNTED_STATUSES: TicketStatus[] = (
 )
   .filter(([, bucket]) => bucket === "triage")
   .map(([status]) => status);
+
+// Statuses shown in the Escalado view and counted by its badge. Derived from
+// the same STATUS_BUCKET map above so it can't drift from it.
+export const ESCALATED_STATUSES: TicketStatus[] = (
+  Object.entries(STATUS_BUCKET) as [TicketStatus, StatusBucket][]
+)
+  .filter(([, bucket]) => bucket === "escalated")
+  .map(([status]) => status);
+
+// ---------------------------------------------------------------------------
+// KAI-191 — statuses excluded from the Inbox/TicketList initial fetch, i.e.
+// the values inside `.not("status", "in", "(...)")` in inbox.tsx and
+// ticket-list.tsx.
+//
+// KNOWN DISCREPANCY, preserved on purpose: this is NOT the same set as
+// "not triage-active" above. STATUS_BUCKET (and isTriageActive) treats
+// 'escalated' as leaving the triage queue, but this query has never
+// excluded 'escalated' — today it comes back from Supabase along with the
+// triage-active tickets. Fixing that mismatch is a behaviour change and is
+// out of scope for this refactor (KAI-191 only consolidates the vocabulary
+// declaration); this constant exists to reproduce today's three-value list
+// exactly, not to reconcile it with STATUS_BUCKET.
+const IS_EXCLUDED_FROM_INBOX_FETCH: Record<TicketStatus, boolean> = {
+  open: false,
+  in_progress: false,
+  guided: false,
+  reopened: false,
+  escalated: false,
+  awaiting_customer: true,
+  resolved: true,
+  auto_resolved: true,
+};
+
+export const INBOX_FETCH_EXCLUDED_STATUSES: TicketStatus[] = TICKET_STATUSES.filter(
+  (status) => IS_EXCLUDED_FROM_INBOX_FETCH[status]
+);
+
+// Ready-to-use PostgREST `.not("status", "in", ...)` filter value built from
+// the constant above, e.g. "(awaiting_customer,resolved,auto_resolved)".
+export const INBOX_FETCH_EXCLUDED_STATUSES_FILTER = `(${INBOX_FETCH_EXCLUDED_STATUSES.join(",")})`;

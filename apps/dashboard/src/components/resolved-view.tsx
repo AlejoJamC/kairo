@@ -8,11 +8,12 @@ import { TicketDetail } from "@/components/ticket-detail";
 import { AiAssistant } from "@/components/ai-assistant";
 import { TicketCard } from "@/components/ticket-card";
 import type { AppView } from "@/types";
-import type { Ticket } from "@kairo/types";
+import { RESOLVED_STATUSES, type Ticket } from "@kairo/types";
 
 // Terminal statuses shown in this view — both are already rendered read-only
 // by TicketDetail (KAI-25), so no per-ticket prop plumbing is needed here.
-const RESOLVED_STATUSES = ["resolved", "auto_resolved"] as const;
+// RESOLVED_STATUSES ("resolved", "auto_resolved") comes from @kairo/types —
+// shared with the API's related-history lookback (KAI-191).
 
 interface ResolvedViewProps {
   onViewChange: (view: AppView) => void;

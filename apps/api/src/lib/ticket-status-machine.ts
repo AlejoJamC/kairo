@@ -1,23 +1,9 @@
-export type TicketStatus =
-  | 'open'
-  | 'awaiting_customer'
-  | 'in_progress'
-  | 'resolved'
-  | 'auto_resolved'
-  | 'guided'
-  | 'escalated'
-  | 'reopened';
+// KAI-191 — the status vocabulary itself lives in @kairo/types now
+// (TicketStatus, TICKET_STATUSES); this file only owns the transition rules
+// and the helpers built on top of them.
+import { TICKET_STATUSES, type TicketStatus } from '@kairo/types';
 
-export const TICKET_STATUSES: TicketStatus[] = [
-  'open',
-  'awaiting_customer',
-  'in_progress',
-  'resolved',
-  'auto_resolved',
-  'guided',
-  'escalated',
-  'reopened',
-];
+export type { TicketStatus };
 
 export const ALLOWED_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   open:               ['awaiting_customer', 'in_progress', 'resolved', 'escalated', 'guided', 'auto_resolved'],

@@ -23,6 +23,7 @@ import {
   buildConfigByPriority,
   type TicketPriority,
 } from "../../lib/operational-sla.js";
+import { TICKET_STATUSES, type TicketStatus } from "@kairo/types";
 
 const intervalMinutes = Math.max(
   1,
@@ -30,7 +31,24 @@ const intervalMinutes = Math.max(
 );
 const CRON_EXPRESSION = buildIntervalCronExpression(intervalMinutes);
 
-const OPEN_STATUSES = ["open", "in_progress", "awaiting_customer", "reopened"];
+// KAI-191 — which statuses this cron treats as "still open" and therefore
+// eligible for an escalation notification. Exhaustive over TicketStatus so a
+// new status forces an explicit decision here instead of silently being
+// skipped (or wrongly notified on) by this cron.
+const IS_OPEN_FOR_ESCALATION_CHECK: Record<TicketStatus, boolean> = {
+  open: true,
+  in_progress: true,
+  awaiting_customer: true,
+  reopened: true,
+  resolved: false,
+  auto_resolved: false,
+  guided: false,
+  escalated: false,
+};
+
+const OPEN_STATUSES: TicketStatus[] = TICKET_STATUSES.filter(
+  (status) => IS_OPEN_FOR_ESCALATION_CHECK[status]
+);
 
 interface OpenTicketRow {
   id: string;

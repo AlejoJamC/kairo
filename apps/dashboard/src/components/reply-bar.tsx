@@ -18,6 +18,7 @@ import { TeamOnlyChip } from "./triage/note-primitives";
 import { Avatar } from "./ui/avatar";
 import { useAuth } from "@/contexts/auth-context";
 import type { ThreadMessage } from "@/hooks/use-ticket-thread";
+import type { TicketStatus } from "@kairo/types";
 
 // KAI-232 — how many member suggestions the @mention dropdown shows at once.
 const MENTION_SUGGESTION_LIMIT = 6;
@@ -44,7 +45,7 @@ type TicketAction = "reconocer" | "resolver";
 
 const ACTION_CONFIG: Record<
   TicketAction,
-  { labelKey: string; defaultLabel: string; status: string; style: React.CSSProperties }
+  { labelKey: string; defaultLabel: string; status: TicketStatus; style: React.CSSProperties }
 > = {
   reconocer: {
     labelKey: "replyBar.actionReconocer",
@@ -67,6 +68,25 @@ const ACTION_CONFIG: Record<
     },
   },
 };
+
+// KAI-191 — statuses in which the Escalate action is offered. Exhaustive
+// over TicketStatus so a new status forces an explicit decision here.
+const IS_ESCALATABLE_STATUS: Record<TicketStatus, boolean> = {
+  open: true,
+  in_progress: true,
+  reopened: true,
+  awaiting_customer: true,
+  resolved: false,
+  auto_resolved: false,
+  guided: false,
+  escalated: false,
+};
+
+const ESCALATABLE_STATUSES: TicketStatus[] = (
+  Object.entries(IS_ESCALATABLE_STATUS) as [TicketStatus, boolean][]
+)
+  .filter(([, escalatable]) => escalatable)
+  .map(([status]) => status);
 
 // ---------------------------------------------------------------------------
 // KAI-232 · design spec C7/C8 — a selected mention, removable.
@@ -558,7 +578,10 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     : [];
 
   // Show escalate button only for statuses where escalation is valid
-  const canEscalate = escalateTabEnabled && !isNote && ["open", "in_progress", "reopened", "awaiting_customer"].includes(currentStatus);
+  const canEscalate =
+    escalateTabEnabled &&
+    !isNote &&
+    ESCALATABLE_STATUSES.includes(currentStatus as (typeof ESCALATABLE_STATUSES)[number]);
 
   // Accent / left stripe based on mode
   const modeAccentGradient = isNote

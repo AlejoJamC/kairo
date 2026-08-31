@@ -4,9 +4,9 @@ import {
   getTransitionError,
   isTicketStatus,
   ALLOWED_TRANSITIONS,
-  TICKET_STATUSES,
   type TicketStatus,
 } from "./ticket-status-machine.js";
+import { TICKET_STATUSES } from "@kairo/types";
 
 describe("isTicketStatus", () => {
   it("accepts all valid statuses", () => {
