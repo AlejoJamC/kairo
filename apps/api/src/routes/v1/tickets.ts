@@ -32,6 +32,7 @@ import {
   isValidTransition,
   getTransitionError,
   isTransitionAllowedForRole,
+  getAllowedTransitionsForRole,
   isTicketStatus,
   type TicketStatus,
 } from "../../lib/ticket-status-machine.js";
@@ -784,6 +785,85 @@ tickets.patch("/:id/status", async (c) => {
   });
 
   return c.json({ success: true, ticket: updatedTicket });
+});
+
+// ---------------------------------------------------------------------------
+// GET /v1/tickets/:id/lifecycle — full state-machine history for one ticket
+// (KAI-191)
+//
+// Everything here is read, never assembled: the timeline is
+// ticket_state_history rows in seq order, durations_by_state is the
+// ticket_state_durations view, and allowed_transitions comes straight out of
+// getAllowedTransitionsForRole() so the UI never has to guess which actions
+// to offer this caller.
+// ---------------------------------------------------------------------------
+
+interface TicketStateDurationRow {
+  state: string;
+  entered_at: string;
+  exited_at: string | null;
+  duration: string | null;
+}
+
+tickets.get("/:id/lifecycle", async (c) => {
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  const { data: ticket, error: ticketErr } = await supabase
+    .from("tickets")
+    .select("id, status")
+    .eq("id", id)
+    .eq("account_id", ctx.accountId)
+    .single();
+
+  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  const currentState: TicketStatus = isTicketStatus(ticket.status ?? "")
+    ? (ticket.status as TicketStatus)
+    : "open";
+
+  const [{ data: timelineRows, error: timelineErr }, { data: durationRows, error: durationErr }, role] =
+    await Promise.all([
+      supabase
+        .from("ticket_state_history")
+        .select("from_state, to_state, actor_type, actor_ref, trigger, reason, occurred_at")
+        .eq("ticket_id", id)
+        .eq("account_id", ctx.accountId)
+        .order("seq", { ascending: true }),
+      supabase
+        .from("ticket_state_durations")
+        .select("state, entered_at, exited_at, duration")
+        .eq("ticket_id", id)
+        .eq("account_id", ctx.accountId)
+        .order("seq", { ascending: true }),
+      resolveMemberRole(ctx.userId, ctx.accountId),
+    ]);
+
+  if (timelineErr) return c.json({ error: timelineErr.message }, 500);
+  if (durationErr) return c.json({ error: durationErr.message }, 500);
+
+  const durationsByState = (durationRows ?? []) as TicketStateDurationRow[];
+  // The current state is whichever row hasn't exited yet — the view leaves
+  // exited_at NULL for it (LEAD() finds no next row on the window).
+  const currentStateRow = durationsByState.find((row) => row.exited_at === null) ?? durationsByState.at(-1);
+  const currentStateSince = currentStateRow?.entered_at ?? null;
+  const currentStateDuration = currentStateSince
+    ? humanizeDuration(currentStateSince, new Date().toISOString())
+    : null;
+
+  const allowedTransitions = role ? getAllowedTransitionsForRole(currentState, role) : [];
+
+  return c.json({
+    ticket_id: id,
+    current_state: currentState,
+    current_state_since: currentStateSince,
+    current_state_duration: currentStateDuration,
+    timeline: timelineRows ?? [],
+    durations_by_state: durationsByState,
+    allowed_transitions: allowedTransitions,
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -2233,7 +2233,52 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      ticket_state_durations: {
+        Row: {
+          account_id: string | null
+          duration: string | null
+          entered_at: string | null
+          exited_at: string | null
+          seq: number | null
+          state: string | null
+          ticket_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_state_history_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_state_history_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_transition_override_rates: {
+        Row: {
+          account_id: string | null
+          following_ai_or_system: number | null
+          from_state: string | null
+          overridden_by_human: number | null
+          override_rate: number | null
+          to_state: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_state_history_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _assert_draft_access: {

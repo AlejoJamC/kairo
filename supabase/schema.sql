@@ -1689,6 +1689,24 @@ COMMENT ON TABLE "public"."ticket_state_history" IS 'Append-only trail of ticket
 
 
 
+CREATE OR REPLACE VIEW "public"."ticket_state_durations" WITH ("security_invoker"='true') AS
+ SELECT "account_id",
+    "ticket_id",
+    "seq",
+    "to_state" AS "state",
+    "occurred_at" AS "entered_at",
+    "lead"("occurred_at") OVER (PARTITION BY "ticket_id" ORDER BY "seq") AS "exited_at",
+    ("lead"("occurred_at") OVER (PARTITION BY "ticket_id" ORDER BY "seq") - "occurred_at") AS "duration"
+   FROM "public"."ticket_state_history" "h";
+
+
+ALTER VIEW "public"."ticket_state_durations" OWNER TO "postgres";
+
+
+COMMENT ON VIEW "public"."ticket_state_durations" IS 'Per ticket, per state: entered_at/exited_at/duration derived from ticket_state_history via LEAD(occurred_at) OVER (PARTITION BY ticket_id ORDER BY seq). exited_at and duration are NULL for the state the ticket currently occupies.';
+
+
+
 ALTER TABLE "public"."ticket_state_history" ALTER COLUMN "seq" ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME "public"."ticket_state_history_seq_seq"
     START WITH 1
@@ -1708,6 +1726,44 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_tags" (
 
 
 ALTER TABLE "public"."ticket_tags" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "public"."ticket_transition_override_rates" WITH ("security_invoker"='true') AS
+ WITH "transitions" AS (
+         SELECT "h"."account_id",
+            "h"."ticket_id",
+            "h"."seq",
+            "h"."actor_type",
+            "h"."from_state",
+            "h"."to_state",
+            "lag"("h"."actor_type") OVER (PARTITION BY "h"."ticket_id" ORDER BY "h"."seq") AS "prev_actor_type"
+           FROM "public"."ticket_state_history" "h"
+        ), "by_pair" AS (
+         SELECT "t"."account_id",
+            "t"."from_state",
+            "t"."to_state",
+            "count"(*) FILTER (WHERE ("t"."prev_actor_type" = ANY (ARRAY['ai'::"text", 'system'::"text"]))) AS "following_ai_or_system",
+            "count"(*) FILTER (WHERE (("t"."actor_type" = 'human'::"text") AND ("t"."prev_actor_type" = ANY (ARRAY['ai'::"text", 'system'::"text"])))) AS "overridden_by_human"
+           FROM "transitions" "t"
+          GROUP BY "t"."account_id", "t"."from_state", "t"."to_state"
+        )
+ SELECT "account_id",
+    "from_state",
+    "to_state",
+    "following_ai_or_system",
+    "overridden_by_human",
+        CASE
+            WHEN ("following_ai_or_system" > 0) THEN "round"((("overridden_by_human")::numeric / ("following_ai_or_system")::numeric), 4)
+            ELSE NULL::numeric
+        END AS "override_rate"
+   FROM "by_pair";
+
+
+ALTER VIEW "public"."ticket_transition_override_rates" OWNER TO "postgres";
+
+
+COMMENT ON VIEW "public"."ticket_transition_override_rates" IS 'How often a human transition immediately follows one made by ai/system on the same ticket (LAG(actor_type) OVER ticket_id ORDER BY seq), grouped by the (from_state, to_state) pair of the following transition. override_rate = overridden_by_human / following_ai_or_system.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."ticket_transition_rules" (
@@ -3814,6 +3870,12 @@ GRANT ALL ON TABLE "public"."ticket_state_history" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."ticket_state_durations" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_state_durations" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_state_durations" TO "service_role";
+
+
+
 GRANT ALL ON SEQUENCE "public"."ticket_state_history_seq_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."ticket_state_history_seq_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."ticket_state_history_seq_seq" TO "service_role";
@@ -3823,6 +3885,12 @@ GRANT ALL ON SEQUENCE "public"."ticket_state_history_seq_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."ticket_tags" TO "anon";
 GRANT ALL ON TABLE "public"."ticket_tags" TO "authenticated";
 GRANT ALL ON TABLE "public"."ticket_tags" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_transition_override_rates" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_transition_override_rates" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_transition_override_rates" TO "service_role";
 
 
 
