@@ -17,7 +17,7 @@ describe("isTicketStatus", () => {
 
   it("rejects unknown strings", () => {
     expect(isTicketStatus("waiting")).toBe(false);
-    expect(isTicketStatus("closed")).toBe(false);
+    expect(isTicketStatus("archived")).toBe(false);
     expect(isTicketStatus("")).toBe(false);
   });
 });
@@ -46,11 +46,13 @@ describe("isValidTransition — allowed paths", () => {
     ["in_progress",       "escalated"],
     ["resolved",          "open"],
     ["resolved",          "reopened"],       // KAI-221: customer re-opens resolved ticket
+    ["resolved",          "closed"],         // KAI-191: resolved's assertion becoming firm
     ["escalated",         "resolved"],
     ["escalated",         "open"],
     ["escalated",         "reopened"],       // KAI-221
     ["ai_resolved",       "open"],
     ["ai_resolved",       "reopened"],       // KAI-221
+    ["ai_resolved",       "closed"],         // KAI-191
     ["reopened",          "in_progress"],    // KAI-221: agent picks up reopened ticket
     ["reopened",          "resolved"],
     ["reopened",          "escalated"],
@@ -100,6 +102,37 @@ describe("ALLOWED_TRANSITIONS coverage", () => {
         expect(isTicketStatus(t)).toBe(true);
       }
     }
+  });
+});
+
+describe("closed — reachable only from the resolved family (KAI-191)", () => {
+  const legalPredecessors: TicketStatus[] = ["resolved", "ai_resolved"];
+
+  it("resolved → closed is valid", () => {
+    expect(isValidTransition("resolved", "closed")).toBe(true);
+  });
+
+  it("ai_resolved → closed is valid", () => {
+    expect(isValidTransition("ai_resolved", "closed")).toBe(true);
+  });
+
+  for (const s of TICKET_STATUSES) {
+    if (legalPredecessors.includes(s)) continue;
+    it(`${s} → closed is rejected`, () => {
+      expect(isValidTransition(s, "closed")).toBe(false);
+    });
+  }
+});
+
+describe("closed — terminal, no way back (KAI-191)", () => {
+  for (const s of TICKET_STATUSES) {
+    it(`closed → ${s} is rejected`, () => {
+      expect(isValidTransition("closed", s)).toBe(false);
+    });
+  }
+
+  it("ALLOWED_TRANSITIONS.closed has zero outgoing transitions", () => {
+    expect(ALLOWED_TRANSITIONS.closed).toEqual([]);
   });
 });
 

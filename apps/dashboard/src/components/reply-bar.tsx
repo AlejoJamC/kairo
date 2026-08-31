@@ -79,6 +79,7 @@ const IS_ESCALATABLE_STATUS: Record<TicketStatus, boolean> = {
   resolved: false,
   ai_resolved: false,
   escalated: false,
+  closed: false,
 };
 
 const ESCALATABLE_STATUSES: TicketStatus[] = (

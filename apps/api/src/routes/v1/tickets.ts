@@ -993,6 +993,7 @@ const IS_AUTO_AWAITING_SOURCE: Record<TicketStatus, boolean> = {
   resolved: false,
   ai_resolved: false,
   escalated: false,
+  closed: false,
 };
 
 const AUTO_AWAITING_SOURCES: TicketStatus[] = TICKET_STATUSES.filter(

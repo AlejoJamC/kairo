@@ -35,6 +35,7 @@ const STATUS_BUCKET: Record<TicketStatus, StatusBucket> = {
   awaiting_customer: "awaiting",
   resolved:          "final",
   ai_resolved:     "final",
+  closed:            "final",
 };
 
 // Statuses that leave the active triage queue. A status outside TicketStatus
@@ -84,6 +85,7 @@ const IS_EXCLUDED_FROM_INBOX_FETCH: Record<TicketStatus, boolean> = {
   awaiting_customer: true,
   resolved: true,
   ai_resolved: true,
+  closed: true,
 };
 
 export const INBOX_FETCH_EXCLUDED_STATUSES: TicketStatus[] = TICKET_STATUSES.filter(

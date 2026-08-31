@@ -30,7 +30,8 @@ export type TicketStatus =
   | 'resolved'
   | 'ai_resolved'
   | 'escalated'
-  | 'reopened';
+  | 'reopened'
+  | 'closed';
 
 // Exhaustive over TicketStatus by construction: TypeScript rejects this
 // object literal if a member is missing (or if one that no longer exists in
@@ -44,6 +45,7 @@ const TICKET_STATUS_MEMBERSHIP: Record<TicketStatus, true> = {
   ai_resolved: true,
   escalated: true,
   reopened: true,
+  closed: true,
 };
 
 export const TICKET_STATUSES: TicketStatus[] = Object.keys(
@@ -63,6 +65,7 @@ const IS_RESOLVED_STATUS: Record<TicketStatus, boolean> = {
   ai_resolved: true,
   escalated: false,
   reopened: false,
+  closed: true,
 };
 
 export const RESOLVED_STATUSES: TicketStatus[] = TICKET_STATUSES.filter(

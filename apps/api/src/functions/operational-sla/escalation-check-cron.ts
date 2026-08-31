@@ -43,6 +43,7 @@ const IS_OPEN_FOR_ESCALATION_CHECK: Record<TicketStatus, boolean> = {
   resolved: false,
   ai_resolved: false,
   escalated: false,
+  closed: false,
 };
 
 const OPEN_STATUSES: TicketStatus[] = TICKET_STATUSES.filter(
