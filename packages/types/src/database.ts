@@ -1753,6 +1753,75 @@ export type Database = {
           },
         ]
       }
+      ticket_state_history: {
+        Row: {
+          account_id: string
+          actor_ref: string | null
+          actor_type: string
+          actor_user_id: string | null
+          from_state: string | null
+          id: string
+          idempotency_key: string | null
+          metadata: Json | null
+          occurred_at: string
+          reason: string | null
+          recorded_at: string
+          seq: number
+          ticket_id: string
+          to_state: string
+          trigger: string
+        }
+        Insert: {
+          account_id: string
+          actor_ref?: string | null
+          actor_type: string
+          actor_user_id?: string | null
+          from_state?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          occurred_at: string
+          reason?: string | null
+          recorded_at?: string
+          seq?: never
+          ticket_id: string
+          to_state: string
+          trigger: string
+        }
+        Update: {
+          account_id?: string
+          actor_ref?: string | null
+          actor_type?: string
+          actor_user_id?: string | null
+          from_state?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          occurred_at?: string
+          reason?: string | null
+          recorded_at?: string
+          seq?: never
+          ticket_id?: string
+          to_state?: string
+          trigger?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_state_history_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_state_history_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_tags: {
         Row: {
           created_at: string

@@ -1508,6 +1508,47 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_proposals" (
 ALTER TABLE "public"."ticket_proposals" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."ticket_state_history" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "seq" bigint NOT NULL,
+    "from_state" "text",
+    "to_state" "text" NOT NULL,
+    "actor_type" "text" NOT NULL,
+    "actor_user_id" "uuid",
+    "actor_ref" "text",
+    "trigger" "text" NOT NULL,
+    "reason" "text",
+    "occurred_at" timestamp with time zone NOT NULL,
+    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "metadata" "jsonb",
+    "idempotency_key" "text",
+    CONSTRAINT "ticket_state_history_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
+    CONSTRAINT "ticket_state_history_from_state_check" CHECK ((("from_state" IS NULL) OR ("from_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))),
+    CONSTRAINT "ticket_state_history_to_state_check" CHECK (("to_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"]))),
+    CONSTRAINT "ticket_state_history_trigger_check" CHECK (("trigger" = ANY (ARRAY['ticket_created'::"text", 'manual_status_change'::"text", 'agent_reply'::"text", 'agent_reply_resolve'::"text", 'customer_reply'::"text", 'escalate_action'::"text", 'sla_escalation'::"text", 'external_domain_closure'::"text"])))
+);
+
+
+ALTER TABLE "public"."ticket_state_history" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_state_history" IS 'Append-only trail of ticket state transitions. account_id is denormalised on purpose so tenant scoping and metrics need no join back to tickets.';
+
+
+
+ALTER TABLE "public"."ticket_state_history" ALTER COLUMN "seq" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."ticket_state_history_seq_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."ticket_tags" (
     "ticket_id" "uuid" NOT NULL,
     "tag" "text" NOT NULL,
@@ -1915,6 +1956,16 @@ ALTER TABLE ONLY "public"."ticket_proposals"
 
 
 
+ALTER TABLE ONLY "public"."ticket_state_history"
+    ADD CONSTRAINT "ticket_state_history_account_id_idempotency_key_key" UNIQUE ("account_id", "idempotency_key");
+
+
+
+ALTER TABLE ONLY "public"."ticket_state_history"
+    ADD CONSTRAINT "ticket_state_history_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."ticket_tags"
     ADD CONSTRAINT "ticket_tags_pkey" PRIMARY KEY ("ticket_id", "tag");
 
@@ -2246,6 +2297,14 @@ CREATE INDEX "idx_ticket_proposals_model_version" ON "public"."ticket_proposals"
 
 
 CREATE INDEX "idx_ticket_proposals_status" ON "public"."ticket_proposals" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_ticket_state_history_account_occurred" ON "public"."ticket_state_history" USING "btree" ("account_id", "occurred_at");
+
+
+
+CREATE INDEX "idx_ticket_state_history_ticket_seq" ON "public"."ticket_state_history" USING "btree" ("ticket_id", "seq");
 
 
 
@@ -2684,6 +2743,21 @@ ALTER TABLE ONLY "public"."ticket_proposals"
 
 
 
+ALTER TABLE ONLY "public"."ticket_state_history"
+    ADD CONSTRAINT "ticket_state_history_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_state_history"
+    ADD CONSTRAINT "ticket_state_history_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."ticket_state_history"
+    ADD CONSTRAINT "ticket_state_history_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."ticket_tags"
     ADD CONSTRAINT "ticket_tags_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
@@ -3063,6 +3137,17 @@ ALTER TABLE "public"."ticket_proposals" ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "ticket_proposals_access_by_account" ON "public"."ticket_proposals" USING ((EXISTS ( SELECT 1
    FROM "public"."tickets" "t"
   WHERE (("t"."id" = "ticket_proposals"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
+
+
+
+ALTER TABLE "public"."ticket_state_history" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_state_history_insert_by_account" ON "public"."ticket_state_history" FOR INSERT WITH CHECK (("account_id" = "public"."current_account_id"()));
+
+
+
+CREATE POLICY "ticket_state_history_select_by_account" ON "public"."ticket_state_history" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -3459,6 +3544,18 @@ GRANT ALL ON TABLE "public"."ticket_priority_sla_events" TO "service_role";
 GRANT ALL ON TABLE "public"."ticket_proposals" TO "anon";
 GRANT ALL ON TABLE "public"."ticket_proposals" TO "authenticated";
 GRANT ALL ON TABLE "public"."ticket_proposals" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."ticket_state_history_seq_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."ticket_state_history_seq_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."ticket_state_history_seq_seq" TO "service_role";
 
 
 
