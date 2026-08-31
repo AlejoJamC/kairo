@@ -29,7 +29,6 @@ export type TicketStatus =
   | 'in_progress'
   | 'resolved'
   | 'auto_resolved'
-  | 'guided'
   | 'escalated'
   | 'reopened';
 
@@ -43,7 +42,6 @@ const TICKET_STATUS_MEMBERSHIP: Record<TicketStatus, true> = {
   in_progress: true,
   resolved: true,
   auto_resolved: true,
-  guided: true,
   escalated: true,
   reopened: true,
 };
@@ -63,7 +61,6 @@ const IS_RESOLVED_STATUS: Record<TicketStatus, boolean> = {
   in_progress: false,
   resolved: true,
   auto_resolved: true,
-  guided: false,
   escalated: false,
   reopened: false,
 };

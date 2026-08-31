@@ -42,7 +42,6 @@ const IS_OPEN_FOR_ESCALATION_CHECK: Record<TicketStatus, boolean> = {
   reopened: true,
   resolved: false,
   auto_resolved: false,
-  guided: false,
   escalated: false,
 };
 

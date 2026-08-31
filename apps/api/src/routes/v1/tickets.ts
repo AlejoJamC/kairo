@@ -982,7 +982,7 @@ const ReplySchema = z.object({
 // KAI-191 — statuses that auto-transition to `awaiting_customer` when an
 // agent sends a reply. Replying means "now waiting on the customer" —
 // applies to any active state (incl. reopened, KAI-221), not just
-// open/in_progress. Resolved/escalated/guided/awaiting are intentionally
+// open/in_progress. Resolved/escalated/awaiting are intentionally
 // excluded. Exhaustive over TicketStatus so a new status forces an explicit
 // decision here instead of silently being left out (or wrongly included).
 const IS_AUTO_AWAITING_SOURCE: Record<TicketStatus, boolean> = {
@@ -992,7 +992,6 @@ const IS_AUTO_AWAITING_SOURCE: Record<TicketStatus, boolean> = {
   awaiting_customer: false,
   resolved: false,
   auto_resolved: false,
-  guided: false,
   escalated: false,
 };
 

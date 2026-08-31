@@ -96,6 +96,9 @@ export type Database = {
       accounts: {
         Row: {
           brand_color: string | null
+          business_context: string | null
+          business_context_source: string | null
+          business_context_updated_at: string | null
           created_at: string
           help_center_url: string | null
           id: string
@@ -111,6 +114,9 @@ export type Database = {
         }
         Insert: {
           brand_color?: string | null
+          business_context?: string | null
+          business_context_source?: string | null
+          business_context_updated_at?: string | null
           created_at?: string
           help_center_url?: string | null
           id?: string
@@ -126,6 +132,9 @@ export type Database = {
         }
         Update: {
           brand_color?: string | null
+          business_context?: string | null
+          business_context_source?: string | null
+          business_context_updated_at?: string | null
           created_at?: string
           help_center_url?: string | null
           id?: string
@@ -291,45 +300,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      category_confidence_thresholds: {
-        Row: {
-          auto_approval_enabled: boolean
-          category: string
-          created_at: string
-          current_accuracy: number | null
-          current_sample_count: number
-          id: string
-          last_evaluated_at: string | null
-          min_confidence: number
-          min_sample_size: number
-          updated_at: string
-        }
-        Insert: {
-          auto_approval_enabled?: boolean
-          category: string
-          created_at?: string
-          current_accuracy?: number | null
-          current_sample_count?: number
-          id?: string
-          last_evaluated_at?: string | null
-          min_confidence?: number
-          min_sample_size?: number
-          updated_at?: string
-        }
-        Update: {
-          auto_approval_enabled?: boolean
-          category?: string
-          created_at?: string
-          current_accuracy?: number | null
-          current_sample_count?: number
-          id?: string
-          last_evaluated_at?: string | null
-          min_confidence?: number
-          min_sample_size?: number
-          updated_at?: string
-        }
-        Relationships: []
       }
       channel_integrations: {
         Row: {
@@ -1809,6 +1779,56 @@ export type Database = {
           },
         ]
       }
+      ticket_type_auto_approval: {
+        Row: {
+          account_id: string
+          auto_approval_enabled: boolean
+          created_at: string
+          current_precision: number | null
+          current_sample_count: number
+          id: string
+          last_evaluated_at: string | null
+          min_precision: number
+          min_sample_size: number
+          ticket_type: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          auto_approval_enabled?: boolean
+          created_at?: string
+          current_precision?: number | null
+          current_sample_count?: number
+          id?: string
+          last_evaluated_at?: string | null
+          min_precision?: number
+          min_sample_size?: number
+          ticket_type: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          auto_approval_enabled?: boolean
+          created_at?: string
+          current_precision?: number | null
+          current_sample_count?: number
+          id?: string
+          last_evaluated_at?: string | null
+          min_precision?: number
+          min_sample_size?: number
+          ticket_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_type_auto_approval_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tickets: {
         Row: {
           account_id: string
@@ -2220,10 +2240,6 @@ export type Database = {
           p_user_id: string
         }
         Returns: string
-      }
-      recompute_category_confidence_thresholds: {
-        Args: never
-        Returns: undefined
       }
       reject_draft_contact: {
         Args: { p_draft_id: string }

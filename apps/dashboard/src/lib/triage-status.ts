@@ -30,7 +30,6 @@ const STATUS_BUCKET: Record<TicketStatus, StatusBucket> = {
   // than to a separate stage — so it stays in the triage queue rather than
   // disappearing into a view of its own.
   in_progress:       "triage",
-  guided:            "triage",
   reopened:          "triage",
   escalated:         "escalated",
   awaiting_customer: "awaiting",
@@ -80,7 +79,6 @@ export const ESCALATED_STATUSES: TicketStatus[] = (
 const IS_EXCLUDED_FROM_INBOX_FETCH: Record<TicketStatus, boolean> = {
   open: false,
   in_progress: false,
-  guided: false,
   reopened: false,
   escalated: false,
   awaiting_customer: true,

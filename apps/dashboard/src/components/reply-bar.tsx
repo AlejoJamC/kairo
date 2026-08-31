@@ -78,7 +78,6 @@ const IS_ESCALATABLE_STATUS: Record<TicketStatus, boolean> = {
   awaiting_customer: true,
   resolved: false,
   auto_resolved: false,
-  guided: false,
   escalated: false,
 };
 

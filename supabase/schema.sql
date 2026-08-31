@@ -735,49 +735,6 @@ $$;
 ALTER FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."recompute_category_confidence_thresholds"() RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-BEGIN
-  INSERT INTO public.category_confidence_thresholds (
-    category,
-    min_confidence,
-    min_sample_size,
-    current_accuracy,
-    current_sample_count,
-    auto_approval_enabled,
-    last_evaluated_at
-  )
-  SELECT
-    cf.predicted_category                                                  AS category,
-    0.85                                                                   AS min_confidence,
-    50                                                                     AS min_sample_size,
-    COUNT(*) FILTER (WHERE cf.outcome IN ('confirmed', 'auto'))::float
-      / NULLIF(COUNT(*), 0)                                                AS current_accuracy,
-    COUNT(*)                                                               AS current_sample_count,
-    false                                                                  AS auto_approval_enabled,
-    now()                                                                  AS last_evaluated_at
-  FROM public.categorization_feedback cf
-  WHERE cf.predicted_category IS NOT NULL
-  GROUP BY cf.predicted_category
-  ON CONFLICT (category) DO UPDATE SET
-    current_accuracy      = EXCLUDED.current_accuracy,
-    current_sample_count  = EXCLUDED.current_sample_count,
-    -- flip auto_approval_enabled using the stored thresholds, not hardcoded values
-    auto_approval_enabled = (
-      EXCLUDED.current_sample_count  >= category_confidence_thresholds.min_sample_size
-      AND EXCLUDED.current_accuracy  >= category_confidence_thresholds.min_confidence
-    ),
-    last_evaluated_at     = EXCLUDED.last_evaluated_at,
-    updated_at            = now();
-END;
-$$;
-
-
-ALTER FUNCTION "public"."recompute_category_confidence_thresholds"() OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") RETURNS "public"."draft_contact"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -937,7 +894,11 @@ CREATE TABLE IF NOT EXISTS "public"."accounts" (
     "help_center_url" "text",
     "status_url" "text",
     "privacy_url" "text",
-    "unsubscribe_url" "text"
+    "unsubscribe_url" "text",
+    "business_context" "text",
+    "business_context_updated_at" timestamp with time zone,
+    "business_context_source" "text",
+    CONSTRAINT "chk_business_context_source" CHECK ((("business_context_source" IS NULL) OR ("business_context_source" = ANY (ARRAY['derived'::"text", 'manual'::"text"]))))
 );
 
 
@@ -953,6 +914,18 @@ COMMENT ON COLUMN "public"."accounts"."signature_html" IS 'Agent email signature
 
 
 COMMENT ON COLUMN "public"."accounts"."brand_color" IS 'Primary brand color (hex e.g. #5c6bc0) for HTML email wrapper header (KAI-115)';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."business_context" IS 'What this company does, in prose, for the {{business_context}} block of the email-classification rubric. NULL means the rubric renders "(no disponible)". Read only by the backfill stage (tier 2/3, incremental-sync, gmail-poll, reclassify endpoints) -- never by tier 1 (KAI-93).';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."business_context_updated_at" IS 'When business_context last changed. The value is expected to be refined over time; this dates the text that a given classification saw.';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."business_context_source" IS 'derived = inferred by Kairo from the account''s own mail; manual = written by a person. Only "derived" corresponds to what the KAI-93 bench measured.';
 
 
 
@@ -1007,23 +980,6 @@ CREATE TABLE IF NOT EXISTS "public"."categorization_feedback" (
 
 
 ALTER TABLE "public"."categorization_feedback" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "public"."category_confidence_thresholds" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "category" "text" NOT NULL,
-    "min_confidence" double precision DEFAULT 0.85 NOT NULL,
-    "min_sample_size" integer DEFAULT 50 NOT NULL,
-    "current_accuracy" double precision,
-    "current_sample_count" integer DEFAULT 0 NOT NULL,
-    "auto_approval_enabled" boolean DEFAULT false NOT NULL,
-    "last_evaluated_at" timestamp with time zone,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
-);
-
-
-ALTER TABLE "public"."category_confidence_thresholds" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."channel_integrations" (
@@ -1562,6 +1518,35 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_tags" (
 ALTER TABLE "public"."ticket_tags" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."ticket_type_auto_approval" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_type" "text" NOT NULL,
+    "min_precision" double precision DEFAULT 0.90 NOT NULL,
+    "min_sample_size" integer DEFAULT 30 NOT NULL,
+    "current_precision" double precision,
+    "current_sample_count" integer DEFAULT 0 NOT NULL,
+    "auto_approval_enabled" boolean DEFAULT false NOT NULL,
+    "last_evaluated_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "chk_tta_min_precision" CHECK ((("min_precision" >= (0.5)::double precision) AND ("min_precision" <= (1.0)::double precision))),
+    CONSTRAINT "chk_tta_min_sample" CHECK (("min_sample_size" > 0)),
+    CONSTRAINT "chk_tta_ticket_type" CHECK (("ticket_type" = ANY (ARRAY['support'::"text", 'prospect'::"text", 'spam'::"text", 'internal'::"text", 'other'::"text"])))
+);
+
+
+ALTER TABLE "public"."ticket_type_auto_approval" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_type_auto_approval" IS 'Per-account, per-ticket_type permission to let a classification stand without human review. Earned from measured precision over a minimum sample, never set by hand — see ADR-027. The 0.90 default is where all five bench models land on `support`; 30 is the sample below which a perfect run says nothing (granite scored 100% on 4 predictions of `internal`).';
+
+
+
+COMMENT ON COLUMN "public"."ticket_type_auto_approval"."min_precision" IS 'Precision the class must reach before it auto-approves. Precision of the PREDICTION, not the confidence the model reports about itself — that number was measured and does not separate right from wrong (ADR-027).';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "originating_user_id" "uuid",
@@ -1618,7 +1603,7 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     CONSTRAINT "chk_priority_score" CHECK ((("priority_score" IS NULL) OR (("priority_score" >= 0.000) AND ("priority_score" <= 1.000)))),
     CONSTRAINT "chk_sentiment" CHECK ((("sentiment" IS NULL) OR ("sentiment" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_ticket_type" CHECK ((("ticket_type" IS NULL) OR ("ticket_type" = ANY (ARRAY['support'::"text", 'prospect'::"text", 'spam'::"text", 'internal'::"text", 'other'::"text"])))),
-    CONSTRAINT "tickets_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'auto_resolved'::"text", 'guided'::"text", 'escalated'::"text", 'reopened'::"text"])))
+    CONSTRAINT "tickets_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'auto_resolved'::"text", 'escalated'::"text", 'reopened'::"text"])))
 );
 
 
@@ -1717,16 +1702,6 @@ ALTER TABLE ONLY "public"."admin_users"
 
 ALTER TABLE ONLY "public"."categorization_feedback"
     ADD CONSTRAINT "categorization_feedback_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."category_confidence_thresholds"
-    ADD CONSTRAINT "category_confidence_thresholds_category_key" UNIQUE ("category");
-
-
-
-ALTER TABLE ONLY "public"."category_confidence_thresholds"
-    ADD CONSTRAINT "category_confidence_thresholds_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1942,6 +1917,16 @@ ALTER TABLE ONLY "public"."ticket_proposals"
 
 ALTER TABLE ONLY "public"."ticket_tags"
     ADD CONSTRAINT "ticket_tags_pkey" PRIMARY KEY ("ticket_id", "tag");
+
+
+
+ALTER TABLE ONLY "public"."ticket_type_auto_approval"
+    ADD CONSTRAINT "ticket_type_auto_approval_account_type_key" UNIQUE ("account_id", "ticket_type");
+
+
+
+ALTER TABLE ONLY "public"."ticket_type_auto_approval"
+    ADD CONSTRAINT "ticket_type_auto_approval_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2340,10 +2325,6 @@ CREATE INDEX "tickets_group_id_idx" ON "public"."tickets" USING "btree" ("group_
 
 
 
-CREATE OR REPLACE TRIGGER "on_category_confidence_thresholds_updated" BEFORE UPDATE ON "public"."category_confidence_thresholds" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
-
-
-
 CREATE OR REPLACE TRIGGER "on_channel_integrations_updated" BEFORE UPDATE ON "public"."channel_integrations" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
 
 
@@ -2365,6 +2346,10 @@ CREATE OR REPLACE TRIGGER "on_profiles_updated" BEFORE UPDATE ON "public"."profi
 
 
 CREATE OR REPLACE TRIGGER "on_response_templates_updated" BEFORE UPDATE ON "public"."response_templates" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_ticket_type_auto_approval_updated" BEFORE UPDATE ON "public"."ticket_type_auto_approval" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
 
 
 
@@ -2704,6 +2689,11 @@ ALTER TABLE ONLY "public"."ticket_tags"
 
 
 
+ALTER TABLE ONLY "public"."ticket_type_auto_approval"
+    ADD CONSTRAINT "ticket_type_auto_approval_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."tickets"
     ADD CONSTRAINT "tickets_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
@@ -2766,10 +2756,6 @@ CREATE POLICY "Accounts can be managed by owners and admins" ON "public"."accoun
 
 
 CREATE POLICY "Authenticated users can read categorization_feedback" ON "public"."categorization_feedback" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "Authenticated users can read category_confidence_thresholds" ON "public"."category_confidence_thresholds" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
 
 
 
@@ -2847,9 +2833,6 @@ CREATE POLICY "admin_users_self_read" ON "public"."admin_users" FOR SELECT USING
 
 
 ALTER TABLE "public"."categorization_feedback" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."category_confidence_thresholds" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."channel_integrations" ENABLE ROW LEVEL SECURITY;
@@ -2938,6 +2921,12 @@ ALTER TABLE "public"."llm_calls" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "llm_calls_access_by_account" ON "public"."llm_calls" USING (("account_id" = "public"."current_account_id"()));
+
+
+
+CREATE POLICY "members read their account's thresholds" ON "public"."ticket_type_auto_approval" FOR SELECT USING (("account_id" IN ( SELECT "am"."account_id"
+   FROM "public"."account_members" "am"
+  WHERE (("am"."user_id" = "auth"."uid"()) AND ("am"."status" = 'active'::"text")))));
 
 
 
@@ -3084,6 +3073,9 @@ CREATE POLICY "ticket_tags_access_by_account" ON "public"."ticket_tags" USING ((
    FROM "public"."tickets" "t"
   WHERE (("t"."id" = "ticket_tags"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
 
+
+
+ALTER TABLE "public"."ticket_type_auto_approval" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."tickets" ENABLE ROW LEVEL SECURITY;
@@ -3236,12 +3228,6 @@ GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", 
 
 
 
-GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "anon";
-GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "service_role";
-
-
-
 GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "service_role";
@@ -3305,12 +3291,6 @@ GRANT ALL ON TABLE "public"."admin_users" TO "service_role";
 GRANT ALL ON TABLE "public"."categorization_feedback" TO "anon";
 GRANT ALL ON TABLE "public"."categorization_feedback" TO "authenticated";
 GRANT ALL ON TABLE "public"."categorization_feedback" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."category_confidence_thresholds" TO "anon";
-GRANT ALL ON TABLE "public"."category_confidence_thresholds" TO "authenticated";
-GRANT ALL ON TABLE "public"."category_confidence_thresholds" TO "service_role";
 
 
 
@@ -3485,6 +3465,12 @@ GRANT ALL ON TABLE "public"."ticket_proposals" TO "service_role";
 GRANT ALL ON TABLE "public"."ticket_tags" TO "anon";
 GRANT ALL ON TABLE "public"."ticket_tags" TO "authenticated";
 GRANT ALL ON TABLE "public"."ticket_tags" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_type_auto_approval" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_type_auto_approval" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_type_auto_approval" TO "service_role";
 
 
 

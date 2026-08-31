@@ -20,7 +20,7 @@ const SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS = getNumericFlag(
 // "resolved" sums both terminal statuses shown in the Resuelto view (resolved + auto_resolved).
 // "triage" comes from lib/triage-status so the badge counts exactly what the
 // triage list shows — it used to be a hardcoded ["open"], which silently left
-// in_progress/guided/reopened tickets uncounted.
+// in_progress/reopened tickets uncounted.
 export const VIEW_TO_STATUS: Partial<Record<AppView, TicketStatus[]>> = {
   triage:      TRIAGE_COUNTED_STATUSES,
   awaiting:    ["awaiting_customer"],
