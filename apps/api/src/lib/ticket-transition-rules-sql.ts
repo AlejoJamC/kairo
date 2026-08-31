@@ -9,6 +9,13 @@
 // function reads with a lookup, and this file generates the INSERT block
 // embedded in that migration.
 //
+// KAI-191 — ALLOWED_TRANSITIONS edges now also carry `roles` (who may drive
+// the edge through the API). That is enforced at the API layer only: the
+// rules table stays legality-only (from_state, to_state), because the API
+// talks to Postgres with the service role and the database has no way to
+// know the caller's role. Do not add a role column here or pass a role into
+// apply_ticket_transition.
+//
 // This is deliberately NOT run at migration-apply time. It is run once, by
 // hand, whenever ALLOWED_TRANSITIONS changes, to regenerate the INSERT block
 // that gets pasted into a fresh migration file (see
@@ -32,8 +39,8 @@ export const TRANSITION_RULES_END_MARKER = "-- END GENERATED";
 export function generateTransitionRulesSql(): string {
   const rows: string[] = [];
   for (const from of TICKET_STATUSES) {
-    for (const to of ALLOWED_TRANSITIONS[from]) {
-      rows.push(`  ('${from}', '${to}')`);
+    for (const edge of ALLOWED_TRANSITIONS[from]) {
+      rows.push(`  ('${from}', '${edge.to}')`);
     }
   }
   return `INSERT INTO public.ticket_transition_rules (from_state, to_state) VALUES\n${rows.join(",\n")};`;

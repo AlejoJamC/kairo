@@ -3,7 +3,7 @@ import { z } from "zod";
 import { classifyEmailWithMeta, generateEmbedding, extractPromptVersion } from "@kairo/intelligence";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { supabase } from "../../lib/supabase.js";
-import { resolveUserAndAccount } from "../../lib/auth.js";
+import { resolveUserAndAccount, resolveMemberRole } from "../../lib/auth.js";
 import { inngest } from "../../lib/inngest.js";
 import { env } from "../../env.js";
 import {
@@ -31,9 +31,11 @@ import { fileURLToPath } from "url";
 import {
   isValidTransition,
   getTransitionError,
+  isTransitionAllowedForRole,
   isTicketStatus,
   type TicketStatus,
 } from "../../lib/ticket-status-machine.js";
+import { checkTransitionPermission } from "../../lib/ticket-transition-permission.js";
 import { transitionTicketStatus } from "../../lib/ticket-transition.js";
 import { TICKET_STATUSES, RESOLVED_STATUSES } from "@kairo/types";
 import { upsertConversationByThread } from "../../lib/conversations.js";
@@ -650,7 +652,6 @@ tickets.post("/classify-batch", async (c) => {
 // ---------------------------------------------------------------------------
 // GET /v1/tickets/:id/activity — activity feed (KAI-28)
 // Returns ticket_events newest first, paginated by cursor.
-// TODO: restrict to agent/support roles only once role/permission system exists.
 // ---------------------------------------------------------------------------
 
 tickets.get("/:id/activity", async (c) => {
@@ -734,11 +735,13 @@ tickets.patch("/:id/status", async (c) => {
   const fromStatus: TicketStatus = isTicketStatus(ticket.status ?? "") ? ticket.status as TicketStatus : "open";
   const toStatus = parsed.data.status as TicketStatus;
 
-  if (!isValidTransition(fromStatus, toStatus)) {
-    return c.json(
-      { error: getTransitionError(fromStatus, toStatus), code: "INVALID_TRANSITION" },
-      422
-    );
+  // KAI-191: legality (422) and permission (403) are different questions —
+  // a legal transition can still be off-limits for this caller's role (e.g.
+  // resolved -> closed, which no role reaches through the API).
+  const role = await resolveMemberRole(ctx.userId, ctx.accountId);
+  const permission = checkTransitionPermission(fromStatus, toStatus, role);
+  if (!permission.ok) {
+    return c.json(permission.body, permission.httpStatus);
   }
 
   // KAI-191: transitionTicketStatus() is the only place allowed to write
@@ -858,6 +861,17 @@ tickets.post("/:id/escalate", async (c) => {
   let updatedTicket: Record<string, unknown> | null = null;
 
   if (fromStatus !== toEscalated && isValidTransition(fromStatus, toEscalated)) {
+    // KAI-191: escalating is this endpoint's whole purpose, so a role that
+    // can't drive this edge fails the request outright — same 403 contract
+    // as PATCH /status. (Legality was just checked above, so this only ever
+    // resolves to the ok or 403 branch — never 422 — but routing it through
+    // the same single gate keeps the two endpoints' behaviour identical.)
+    const role = await resolveMemberRole(ctx.userId, ctx.accountId);
+    const permission = checkTransitionPermission(fromStatus, toEscalated, role);
+    if (!permission.ok) {
+      return c.json(permission.body, permission.httpStatus);
+    }
+
     // KAI-191: transitionTicketStatus() is the only place allowed to write
     // tickets.status — see the PATCH /status handler above for why the
     // isValidTransition() pre-check is still kept alongside it.
@@ -1055,14 +1069,15 @@ tickets.post("/:id/reply", async (c) => {
   // KAI-247: "Enviar y resolver" transitions the ticket to `resolved` atomically
   // with the enqueue. Validate the transition up front so an invalid resolve
   // never queues an email or touches ticket state.
+  // KAI-191: same reasoning extends to permission — a resolve the caller's
+  // role isn't allowed to drive must also fail before anything is queued.
   const intent = parsed.data.intent;
   if (intent === "resolve") {
     const fromStatus: TicketStatus = isTicketStatus(ticket.status ?? "") ? (ticket.status as TicketStatus) : "open";
-    if (!isValidTransition(fromStatus, "resolved")) {
-      return c.json(
-        { error: getTransitionError(fromStatus, "resolved"), code: "INVALID_TRANSITION" },
-        422,
-      );
+    const role = await resolveMemberRole(ctx.userId, ctx.accountId);
+    const permission = checkTransitionPermission(fromStatus, "resolved", role);
+    if (!permission.ok) {
+      return c.json(permission.body, permission.httpStatus);
     }
   }
 
@@ -1345,17 +1360,30 @@ tickets.post("/:id/reply", async (c) => {
     // 'awaiting_customer' from. Neither should ever disagree with
     // ticket_transition_rules — if one does, that's a real bug to see in
     // logs, not something to paper over here.
-    const transition = await transitionTicketStatus(supabase, {
-      ticketId: id,
-      toState: finalStatus as TicketStatus,
-      actorType: "human",
-      actorUserId: user.id,
-      trigger: intent === "resolve" ? "agent_reply_resolve" : "agent_reply",
-    });
-    if (transition.outcome === "invalid_transition" || transition.outcome === "not_found") {
+    //
+    // KAI-191: resolve's role check already ran above, before the reply was
+    // queued. The awaiting_customer path is derived, not user-selected — by
+    // this point the reply is already queued, so a role that can't drive
+    // this edge just means the ticket doesn't move, not that the request
+    // fails. Same "log, don't paper over" treatment as invalid_transition.
+    const role = await resolveMemberRole(ctx.userId, ctx.accountId);
+    if (!role || !isTransitionAllowedForRole(currentStatus as TicketStatus, finalStatus as TicketStatus, role)) {
       console.error(
-        `[reply] unexpected transition outcome for ticket ${id} (${currentStatus} -> ${finalStatus}): ${transition.outcome}`
+        `[reply] role '${role ?? "none"}' not permitted to transition ticket ${id} from ${currentStatus} to ${finalStatus}; reply queued, status left unchanged`
       );
+    } else {
+      const transition = await transitionTicketStatus(supabase, {
+        ticketId: id,
+        toState: finalStatus as TicketStatus,
+        actorType: "human",
+        actorUserId: user.id,
+        trigger: intent === "resolve" ? "agent_reply_resolve" : "agent_reply",
+      });
+      if (transition.outcome === "invalid_transition" || transition.outcome === "not_found") {
+        console.error(
+          `[reply] unexpected transition outcome for ticket ${id} (${currentStatus} -> ${finalStatus}): ${transition.outcome}`
+        );
+      }
     }
   }
 

@@ -2,11 +2,16 @@ import { describe, it, expect } from "bun:test";
 import {
   isValidTransition,
   getTransitionError,
+  isTransitionAllowedForRole,
+  getAllowedTransitionsForRole,
   isTicketStatus,
   ALLOWED_TRANSITIONS,
   type TicketStatus,
+  type DashboardRole,
 } from "./ticket-status-machine.js";
 import { TICKET_STATUSES } from "@kairo/types";
+
+const ALL_ROLES: DashboardRole[] = ["owner", "admin", "supervisor", "agent"];
 
 describe("isTicketStatus", () => {
   it("accepts all valid statuses", () => {
@@ -97,9 +102,9 @@ describe("ALLOWED_TRANSITIONS coverage", () => {
   });
 
   it("all transition targets are valid statuses", () => {
-    for (const [, targets] of Object.entries(ALLOWED_TRANSITIONS)) {
-      for (const t of targets) {
-        expect(isTicketStatus(t)).toBe(true);
+    for (const [, edges] of Object.entries(ALLOWED_TRANSITIONS)) {
+      for (const edge of edges) {
+        expect(isTicketStatus(edge.to)).toBe(true);
       }
     }
   });
@@ -142,5 +147,81 @@ describe("getTransitionError", () => {
     expect(msg).toContain("resolved");
     expect(msg).toContain("escalated");
     expect(msg).toContain("open");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KAI-191 — role-per-edge permission matrix. Every edge in
+// ALLOWED_TRANSITIONS is exercised against every DashboardRole here, driven
+// straight off the matrix itself, so a future edge is automatically covered
+// instead of relying on a hand-picked sample.
+// ---------------------------------------------------------------------------
+
+describe("isTransitionAllowedForRole — every edge x every role, derived from the matrix", () => {
+  for (const [from, edges] of Object.entries(ALLOWED_TRANSITIONS) as [TicketStatus, typeof ALLOWED_TRANSITIONS[TicketStatus]][]) {
+    for (const edge of edges) {
+      for (const role of ALL_ROLES) {
+        const expected = edge.roles.includes(role);
+        it(`${from} -> ${edge.to} for role '${role}' is ${expected ? "allowed" : "denied"}`, () => {
+          expect(isTransitionAllowedForRole(from, edge.to, role)).toBe(expected);
+        });
+      }
+    }
+  }
+});
+
+describe("isTransitionAllowedForRole — illegal transitions are denied regardless of role", () => {
+  for (const from of TICKET_STATUSES) {
+    for (const to of TICKET_STATUSES) {
+      if (isValidTransition(from, to)) continue;
+      for (const role of ALL_ROLES) {
+        it(`${from} -> ${to} (illegal) denies role '${role}'`, () => {
+          expect(isTransitionAllowedForRole(from, to, role)).toBe(false);
+        });
+      }
+    }
+  }
+});
+
+describe("closed — no role reaches it through the API, but the edge stays legal (KAI-191)", () => {
+  const closedEdges: [TicketStatus, TicketStatus][] = [
+    ["resolved", "closed"],
+    ["ai_resolved", "closed"],
+  ];
+
+  for (const [from, to] of closedEdges) {
+    it(`${from} -> closed is legal in the machine`, () => {
+      expect(isValidTransition(from, to)).toBe(true);
+    });
+
+    for (const role of ALL_ROLES) {
+      it(`${from} -> closed denies role '${role}'`, () => {
+        expect(isTransitionAllowedForRole(from, to, role)).toBe(false);
+      });
+    }
+  }
+});
+
+describe("getAllowedTransitionsForRole", () => {
+  it("returns exactly the .to values of edges whose roles include the given role, per from-state", () => {
+    for (const [from, edges] of Object.entries(ALLOWED_TRANSITIONS) as [TicketStatus, typeof ALLOWED_TRANSITIONS[TicketStatus]][]) {
+      for (const role of ALL_ROLES) {
+        const expected = edges.filter((e) => e.roles.includes(role)).map((e) => e.to);
+        expect(getAllowedTransitionsForRole(from, role)).toEqual(expected);
+      }
+    }
+  });
+
+  it("excludes 'closed' from every role's allowed set out of resolved/ai_resolved", () => {
+    for (const role of ALL_ROLES) {
+      expect(getAllowedTransitionsForRole("resolved", role)).not.toContain("closed");
+      expect(getAllowedTransitionsForRole("ai_resolved", role)).not.toContain("closed");
+    }
+  });
+
+  it("returns an empty list from 'closed' for every role (terminal state)", () => {
+    for (const role of ALL_ROLES) {
+      expect(getAllowedTransitionsForRole("closed", role)).toEqual([]);
+    }
   });
 });
