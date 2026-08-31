@@ -1848,6 +1848,21 @@ export type Database = {
           },
         ]
       }
+      ticket_transition_rules: {
+        Row: {
+          from_state: string
+          to_state: string
+        }
+        Insert: {
+          from_state: string
+          to_state: string
+        }
+        Update: {
+          from_state?: string
+          to_state?: string
+        }
+        Relationships: []
+      }
       ticket_type_auto_approval: {
         Row: {
           account_id: string
@@ -2166,6 +2181,25 @@ export type Database = {
       account_effective_seat_limit: {
         Args: { p_account_id: string }
         Returns: number
+      }
+      apply_ticket_transition: {
+        Args: {
+          p_actor_ref: string
+          p_actor_type: string
+          p_actor_user_id: string
+          p_idempotency_key: string
+          p_metadata: Json
+          p_reason: string
+          p_ticket_id: string
+          p_to_state: string
+          p_trigger: string
+        }
+        Returns: {
+          from_state: string
+          history_id: string
+          outcome: string
+          to_state: string
+        }[]
       }
       bulk_confirm_drafts_by_organization: {
         Args: { p_organization: string }

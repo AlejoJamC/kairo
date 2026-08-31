@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { z } from "zod";
+import { isValidTransition } from "../../lib/ticket-status-machine.js";
 
 // ---------------------------------------------------------------------------
 // KAI-114: POST /v1/tickets/:id/reply — outbox refactor unit tests
@@ -116,6 +117,40 @@ describe("shouldAutoTransition — reply auto-transition guard", () => {
 
   it("does not transition from escalated", () => {
     expect(shouldAutoTransition("escalated")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// intent='resolve' — validated, not forced (KAI-191)
+//
+// POST /:id/reply pre-validates `isValidTransition(fromStatus, "resolved")`
+// before queuing anything, then routes the actual tickets.status write
+// through transitionTicketStatus(), which re-validates against the same
+// ALLOWED_TRANSITIONS table (mirrored 1:1 into ticket_transition_rules — see
+// ticket-transition-rules-sql.test.ts). A resolve request from a state that
+// can't legally reach 'resolved' must be rejected by that same gate, never
+// forced through as a direct write.
+// ---------------------------------------------------------------------------
+
+describe("resolve intent — validated against ALLOWED_TRANSITIONS, not forced", () => {
+  it("open -> resolved is a legal resolve target", () => {
+    expect(isValidTransition("open", "resolved")).toBe(true);
+  });
+
+  it("awaiting_customer -> resolved is a legal resolve target", () => {
+    expect(isValidTransition("awaiting_customer", "resolved")).toBe(true);
+  });
+
+  it("ai_resolved -> resolved is rejected — resolve must not force it", () => {
+    expect(isValidTransition("ai_resolved", "resolved")).toBe(false);
+  });
+
+  it("closed -> resolved is rejected — closed is terminal", () => {
+    expect(isValidTransition("closed", "resolved")).toBe(false);
+  });
+
+  it("resolved -> resolved is rejected — already there, not a transition", () => {
+    expect(isValidTransition("resolved", "resolved")).toBe(false);
   });
 });
 

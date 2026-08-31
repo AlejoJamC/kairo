@@ -34,6 +34,7 @@ import {
   isTicketStatus,
   type TicketStatus,
 } from "../../lib/ticket-status-machine.js";
+import { transitionTicketStatus } from "../../lib/ticket-transition.js";
 import { TICKET_STATUSES, RESOLVED_STATUSES } from "@kairo/types";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { linkMessageToTicket, countTicketMessages } from "../../lib/ticket-messages.js";
@@ -740,14 +741,37 @@ tickets.patch("/:id/status", async (c) => {
     );
   }
 
-  const { data: updatedTicket, error: updateErr } = await supabase
+  // KAI-191: transitionTicketStatus() is the only place allowed to write
+  // tickets.status — it atomically updates the row and records the
+  // ticket_state_history trail. The isValidTransition() check above is kept
+  // for a fast, precise 422 message; the RPC is the authoritative,
+  // race-safe validator (ticket_transition_rules is generated from the same
+  // ALLOWED_TRANSITIONS table, so the two can never disagree).
+  const transition = await transitionTicketStatus(supabase, {
+    ticketId: id,
+    toState: toStatus,
+    actorType: "human",
+    actorUserId: user.id,
+    trigger: "manual_status_change",
+  });
+
+  if (transition.outcome === "not_found") {
+    return c.json({ error: "Ticket not found" }, 404);
+  }
+  if (transition.outcome === "invalid_transition" || transition.outcome === "no_op") {
+    return c.json(
+      { error: getTransitionError(fromStatus, toStatus), code: "INVALID_TRANSITION" },
+      422
+    );
+  }
+
+  const { data: updatedTicket, error: fetchErr2 } = await supabase
     .from("tickets")
-    .update({ status: toStatus })
-    .eq("id", id)
     .select()
+    .eq("id", id)
     .single();
 
-  if (updateErr) return c.json({ error: updateErr.message }, 500);
+  if (fetchErr2) return c.json({ error: fetchErr2.message }, 500);
 
   await emitTicketEvent({
     ticketId: id,
@@ -834,14 +858,19 @@ tickets.post("/:id/escalate", async (c) => {
   let updatedTicket: Record<string, unknown> | null = null;
 
   if (fromStatus !== toEscalated && isValidTransition(fromStatus, toEscalated)) {
-    const { data, error: updateErr } = await supabase
-      .from("tickets")
-      .update({ status: toEscalated })
-      .eq("id", id)
-      .select()
-      .single();
-    if (!updateErr && data) {
-      updatedTicket = data as Record<string, unknown>;
+    // KAI-191: transitionTicketStatus() is the only place allowed to write
+    // tickets.status — see the PATCH /status handler above for why the
+    // isValidTransition() pre-check is still kept alongside it.
+    const transition = await transitionTicketStatus(supabase, {
+      ticketId: id,
+      toState: toEscalated,
+      actorType: "human",
+      actorUserId: user.id,
+      trigger: "escalate_action",
+    });
+    if (transition.outcome === "applied") {
+      const { data } = await supabase.from("tickets").select().eq("id", id).single();
+      updatedTicket = data as Record<string, unknown> | null;
       await emitTicketEvent({
         ticketId: id,
         authorId: user.id,
@@ -1297,15 +1326,38 @@ tickets.post("/:id/reply", async (c) => {
   // KAI-247: "Enviar y resolver" transitions to `resolved` atomically with the enqueue.
   const finalStatus: string = intent === "resolve" ? "resolved" : shouldTransitionToAwaiting ? "awaiting_customer" : currentStatus;
 
+  // last_response_at / first_response_at are unrelated to tickets.status, so
+  // they stay a direct update. KAI-191: transitionTicketStatus() is the only
+  // place allowed to write tickets.status — see below.
   await supabase
     .from("tickets")
     .update({
       last_response_at: nowIso,
       // KAI-168 — first agent response freezes the operational SLA clock.
       ...(ticket.first_response_at ? {} : { first_response_at: nowIso }),
-      ...(finalStatus !== currentStatus ? { status: finalStatus } : {}),
     })
     .eq("id", id);
+
+  if (finalStatus !== currentStatus) {
+    // The resolve path was already validated above (before anything was
+    // queued); the reply/awaiting path is derived from AUTO_AWAITING_SOURCES,
+    // which is exactly the set of states ALLOWED_TRANSITIONS can reach
+    // 'awaiting_customer' from. Neither should ever disagree with
+    // ticket_transition_rules — if one does, that's a real bug to see in
+    // logs, not something to paper over here.
+    const transition = await transitionTicketStatus(supabase, {
+      ticketId: id,
+      toState: finalStatus as TicketStatus,
+      actorType: "human",
+      actorUserId: user.id,
+      trigger: intent === "resolve" ? "agent_reply_resolve" : "agent_reply",
+    });
+    if (transition.outcome === "invalid_transition" || transition.outcome === "not_found") {
+      console.error(
+        `[reply] unexpected transition outcome for ticket ${id} (${currentStatus} -> ${finalStatus}): ${transition.outcome}`
+      );
+    }
+  }
 
   // 7. Emit activity event
   await emitTicketEvent({

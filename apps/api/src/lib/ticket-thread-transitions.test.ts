@@ -3,6 +3,13 @@ import type { EmitTicketEventOptions } from "./ticket-events.js";
 
 // ---------------------------------------------------------------------------
 // KAI-165: ticket-thread-transitions.ts unit tests
+// KAI-191: the actual status write now goes through the real
+// transitionTicketStatus(), which calls client.rpc("apply_ticket_transition",
+// ...) — faked here on the mock client's .rpc(), not by mocking the
+// "./ticket-transition.js" module. mock.module() is process-wide in
+// bun:test, and ticket-transition.test.ts needs the real implementation, so
+// no file may replace that module. The defensive "write anyway for an
+// unknown state" fallback has also been removed from applyCustomerReplyTransition.
 // ---------------------------------------------------------------------------
 
 // Mock emitTicketEvent so we can verify calls without hitting DB
@@ -14,15 +21,22 @@ mock.module("./ticket-events.js", () => ({
 
 const { applyCustomerReplyTransition } = await import("./ticket-thread-transitions.js");
 
-function makeMockClient(updateError: unknown = null) {
+function makeMockClient({
+  updateError = null as unknown,
+  rpcResult = { data: [{ outcome: "applied", from_state: "awaiting_customer", to_state: "open", history_id: "hist-1" }], error: null } as {
+    data: unknown;
+    error: unknown;
+  },
+} = {}) {
   const eqFn = mock(async () => ({ error: updateError }));
   // chain: .from("tickets").update({}).eq("id", id)
   const fromFn = mock(() => ({
     update: mock(() => ({ eq: eqFn })),
   }));
-  return { from: fromFn, _eqFn: eqFn } as unknown as Parameters<
+  const rpcFn = mock(async (_fnName: string, _args: Record<string, unknown>) => rpcResult);
+  return { from: fromFn, rpc: rpcFn, _eqFn: eqFn, _rpcFn: rpcFn } as unknown as Parameters<
     typeof applyCustomerReplyTransition
-  >[0] & { _eqFn: typeof eqFn };
+  >[0] & { _eqFn: typeof eqFn; _rpcFn: typeof rpcFn };
 }
 
 describe("applyCustomerReplyTransition", () => {
@@ -30,10 +44,23 @@ describe("applyCustomerReplyTransition", () => {
     emitMock.mockClear();
   });
 
-  it("transitions awaiting_customer → open", async () => {
-    const client = makeMockClient();
+  it("transitions awaiting_customer → open via transitionTicketStatus", async () => {
+    const client = makeMockClient({
+      rpcResult: { data: [{ outcome: "applied", from_state: "awaiting_customer", to_state: "open", history_id: "hist-1" }], error: null },
+    });
     const result = await applyCustomerReplyTransition(client, "ticket-1", "awaiting_customer");
     expect(result.newStatus).toBe("open");
+
+    expect(client._rpcFn).toHaveBeenCalledTimes(1);
+    const [fnName, args] = client._rpcFn.mock.calls[0];
+    expect(fnName).toBe("apply_ticket_transition");
+    expect(args).toMatchObject({
+      p_ticket_id: "ticket-1",
+      p_to_state: "open",
+      p_actor_type: "customer",
+      p_trigger: "customer_reply",
+    });
+
     // emitTicketEvent called twice: customer_replied + status_change
     expect(emitMock).toHaveBeenCalledTimes(2);
     const [firstCall, secondCall] = emitMock.mock.calls;
@@ -42,8 +69,10 @@ describe("applyCustomerReplyTransition", () => {
     expect(secondCall[0].metadata).toMatchObject({ from: "awaiting_customer", to: "open" });
   });
 
-  it("transitions resolved → reopened", async () => {
-    const client = makeMockClient();
+  it("transitions resolved → reopened via transitionTicketStatus", async () => {
+    const client = makeMockClient({
+      rpcResult: { data: [{ outcome: "applied", from_state: "resolved", to_state: "reopened", history_id: "hist-2" }], error: null },
+    });
     const result = await applyCustomerReplyTransition(client, "ticket-2", "resolved");
     expect(result.newStatus).toBe("reopened");
     expect(emitMock).toHaveBeenCalledTimes(2);
@@ -51,26 +80,51 @@ describe("applyCustomerReplyTransition", () => {
     expect(secondCall[0].metadata).toMatchObject({ from: "resolved", to: "reopened" });
   });
 
-  it("does not transition for open status", async () => {
+  it("does not transition for open status — no RPC call at all", async () => {
     const client = makeMockClient();
     const result = await applyCustomerReplyTransition(client, "ticket-3", "open");
     expect(result.newStatus).toBeNull();
+    expect(client._rpcFn).not.toHaveBeenCalled();
     // Only customer_replied event — no status_change
     expect(emitMock).toHaveBeenCalledTimes(1);
     expect(emitMock.mock.calls[0][0].eventType).toBe("customer_replied");
   });
 
-  it("does not transition for in_progress status", async () => {
+  it("does not transition for in_progress status — no RPC call at all", async () => {
     const client = makeMockClient();
     const result = await applyCustomerReplyTransition(client, "ticket-4", "in_progress");
     expect(result.newStatus).toBeNull();
+    expect(client._rpcFn).not.toHaveBeenCalled();
     expect(emitMock).toHaveBeenCalledTimes(1);
   });
 
-  it("does not transition for null prior status", async () => {
+  it("does not transition for null prior status — no RPC call at all", async () => {
     const client = makeMockClient();
     const result = await applyCustomerReplyTransition(client, "ticket-5", null);
     expect(result.newStatus).toBeNull();
+    expect(client._rpcFn).not.toHaveBeenCalled();
     expect(emitMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not write when the transition comes back no_op — no fallback write (KAI-191)", async () => {
+    const client = makeMockClient({
+      rpcResult: { data: [{ outcome: "no_op", from_state: "awaiting_customer", to_state: "open", history_id: null }], error: null },
+    });
+    const result = await applyCustomerReplyTransition(client, "ticket-6", "awaiting_customer");
+    expect(result.newStatus).toBeNull();
+    expect(client._rpcFn).toHaveBeenCalledTimes(1);
+    // Only customer_replied — no status_change, since nothing actually changed.
+    expect(emitMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not write when the transition comes back invalid — removed defensive fallback (KAI-191)", async () => {
+    const client = makeMockClient({
+      rpcResult: { data: null, error: { code: "KA409", message: "apply_ticket_transition: illegal transition" } },
+    });
+    const result = await applyCustomerReplyTransition(client, "ticket-7", "resolved");
+    expect(result.newStatus).toBeNull();
+    expect(client._rpcFn).toHaveBeenCalledTimes(1);
+    expect(emitMock).toHaveBeenCalledTimes(1);
+    expect(emitMock.mock.calls[0][0].eventType).toBe("customer_replied");
   });
 });

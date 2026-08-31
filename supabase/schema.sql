@@ -92,6 +92,92 @@ $$;
 ALTER FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") RETURNS TABLE("outcome" "text", "from_state" "text", "to_state" "text", "history_id" "uuid")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_from_state         text;
+  v_account_id         uuid;
+  v_history_id         uuid;
+  v_is_creation        boolean;
+  v_history_from_state text;
+BEGIN
+  SELECT t.status, t.account_id
+    INTO v_from_state, v_account_id
+  FROM public.tickets t
+  WHERE t.id = p_ticket_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'apply_ticket_transition: ticket % not found', p_ticket_id
+      USING ERRCODE = 'KA404';
+  END IF;
+
+  v_is_creation := (p_trigger = 'ticket_created');
+
+  -- For a creation trail row, the ticket's current status was already set
+  -- directly by the caller's INSERT (normally 'open') — it is not a real
+  -- prior state, so the history row must record from_state=NULL regardless
+  -- of what tickets.status currently holds.
+  v_history_from_state := CASE WHEN v_is_creation THEN NULL ELSE v_from_state END;
+
+  -- Same-state request: no-op, not an error. Does NOT apply to
+  -- trigger='ticket_created' — that call must always record its trail row
+  -- even though tickets.status already equals p_to_state (it was set
+  -- directly by the INSERT, not by a prior call to this function).
+  IF NOT v_is_creation AND v_from_state IS NOT DISTINCT FROM p_to_state THEN
+    RETURN QUERY SELECT 'no_op'::text, v_from_state, p_to_state, NULL::uuid;
+    RETURN;
+  END IF;
+
+  -- v_history_from_state = NULL either for a creation row (always) or for a
+  -- ticket whose status is genuinely NULL (shouldn't happen post-fix, but
+  -- harmless to allow) — that transition has no rule to look up and is
+  -- always legal. Every other from_state must be validated.
+  IF v_history_from_state IS NOT NULL AND NOT EXISTS (
+    SELECT 1
+    FROM public.ticket_transition_rules r
+    WHERE r.from_state = v_history_from_state
+      AND r.to_state = p_to_state
+  ) THEN
+    RAISE EXCEPTION 'apply_ticket_transition: illegal transition from % to % for ticket %', v_history_from_state, p_to_state, p_ticket_id
+      USING ERRCODE = 'KA409';
+  END IF;
+
+  -- For creation this is a harmless no-change write (status is already
+  -- p_to_state); for every other trigger it is the real transition.
+  UPDATE public.tickets
+     SET status = p_to_state
+   WHERE id = p_ticket_id;
+
+  INSERT INTO public.ticket_state_history (
+    account_id, ticket_id, from_state, to_state, actor_type, actor_user_id,
+    actor_ref, trigger, reason, occurred_at, metadata, idempotency_key
+  ) VALUES (
+    v_account_id, p_ticket_id, v_history_from_state, p_to_state, p_actor_type, p_actor_user_id,
+    p_actor_ref, p_trigger, p_reason, now(), p_metadata, p_idempotency_key
+  )
+  ON CONFLICT ON CONSTRAINT ticket_state_history_account_id_idempotency_key_key DO NOTHING
+  RETURNING id INTO v_history_id;
+
+  IF v_history_id IS NULL THEN
+    -- Only reachable when p_idempotency_key was non-null and already recorded
+    -- (the unique constraint ignores NULL idempotency_key entirely). The
+    -- status UPDATE above still ran, but it applied the same value another
+    -- request already committed, so treat this as a no-op rather than raise.
+    RETURN QUERY SELECT 'no_op'::text, v_history_from_state, p_to_state, NULL::uuid;
+    RETURN;
+  END IF;
+
+  RETURN QUERY SELECT 'applied'::text, v_history_from_state, p_to_state, v_history_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."bulk_confirm_drafts_by_organization"("p_organization" "text") RETURNS integer
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -768,6 +854,19 @@ $$;
 
 
 ALTER FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."reject_ticket_state_history_mutation"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'ticket_state_history is append-only: % is not allowed', TG_OP
+    USING ERRCODE = 'insufficient_privilege';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."reject_ticket_state_history_mutation"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."set_default_plan_id_on_accounts"() RETURNS "trigger"
@@ -1559,6 +1658,21 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_tags" (
 ALTER TABLE "public"."ticket_tags" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."ticket_transition_rules" (
+    "from_state" "text" NOT NULL,
+    "to_state" "text" NOT NULL,
+    CONSTRAINT "ticket_transition_rules_from_state_check" CHECK (("from_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"]))),
+    CONSTRAINT "ticket_transition_rules_to_state_check" CHECK (("to_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))
+);
+
+
+ALTER TABLE "public"."ticket_transition_rules" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_transition_rules" IS 'Mirrors ALLOWED_TRANSITIONS from apps/api/src/lib/ticket-status-machine.ts. Generated by apps/api/src/lib/ticket-transition-rules-sql.ts — never hand-edited. Read by apply_ticket_transition(); ticket-transition-rules-sql.test.ts asserts this seed stays byte-for-byte in sync with the TypeScript table.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."ticket_type_auto_approval" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "account_id" "uuid" NOT NULL,
@@ -1968,6 +2082,11 @@ ALTER TABLE ONLY "public"."ticket_state_history"
 
 ALTER TABLE ONLY "public"."ticket_tags"
     ADD CONSTRAINT "ticket_tags_pkey" PRIMARY KEY ("ticket_id", "tag");
+
+
+
+ALTER TABLE ONLY "public"."ticket_transition_rules"
+    ADD CONSTRAINT "ticket_transition_rules_pkey" PRIMARY KEY ("from_state", "to_state");
 
 
 
@@ -2413,6 +2532,10 @@ CREATE OR REPLACE TRIGGER "on_ticket_type_auto_approval_updated" BEFORE UPDATE O
 
 
 CREATE OR REPLACE TRIGGER "on_tickets_updated" BEFORE UPDATE ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "ticket_state_history_append_only" BEFORE DELETE OR UPDATE ON "public"."ticket_state_history" FOR EACH ROW EXECUTE FUNCTION "public"."reject_ticket_state_history_mutation"();
 
 
 
@@ -3160,6 +3283,13 @@ CREATE POLICY "ticket_tags_access_by_account" ON "public"."ticket_tags" USING ((
 
 
 
+ALTER TABLE "public"."ticket_transition_rules" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_transition_rules_select_all" ON "public"."ticket_transition_rules" FOR SELECT USING (true);
+
+
+
 ALTER TABLE "public"."ticket_type_auto_approval" ENABLE ROW LEVEL SECURITY;
 
 
@@ -3195,6 +3325,13 @@ REVOKE ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "u
 GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") TO "service_role";
 
 
 
@@ -3316,6 +3453,12 @@ GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", 
 GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "anon";
+GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "service_role";
 
 
 
@@ -3562,6 +3705,12 @@ GRANT ALL ON SEQUENCE "public"."ticket_state_history_seq_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."ticket_tags" TO "anon";
 GRANT ALL ON TABLE "public"."ticket_tags" TO "authenticated";
 GRANT ALL ON TABLE "public"."ticket_tags" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_transition_rules" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_transition_rules" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_transition_rules" TO "service_role";
 
 
 

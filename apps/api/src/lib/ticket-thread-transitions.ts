@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitTicketEvent } from "./ticket-events.js";
-import { isValidTransition, isTicketStatus } from "./ticket-status-machine.js";
+import { isValidTransition, isTicketStatus, type TicketStatus } from "./ticket-status-machine.js";
+import { transitionTicketStatus } from "./ticket-transition.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbClient = SupabaseClient<any>;
@@ -30,27 +31,38 @@ export async function applyCustomerReplyTransition(
     candidate = "reopened";
   }
 
-  // Validate against state machine — skip if candidate is not a registered transition
-  if (candidate && isTicketStatus(priorStatus ?? "") && isTicketStatus(candidate)) {
-    if (isValidTransition(priorStatus as never, candidate as never)) {
+  // Validate against the state machine — no fallback path. If priorStatus or
+  // candidate isn't a registered transition, nothing is written (KAI-191:
+  // this used to have a defensive "write anyway" branch for an unknown
+  // state; removed — transitionTicketStatus() is the only writer of
+  // tickets.status and it enforces this the same way regardless).
+  if (
+    candidate &&
+    isTicketStatus(priorStatus ?? "") &&
+    isTicketStatus(candidate) &&
+    isValidTransition(priorStatus as TicketStatus, candidate as TicketStatus)
+  ) {
+    const transition = await transitionTicketStatus(client, {
+      ticketId,
+      toState: candidate as TicketStatus,
+      actorType: "customer",
+      actorRef: "ticket-thread-transitions",
+      trigger: "customer_reply",
+    });
+    if (transition.outcome === "applied") {
       newStatus = candidate;
+    } else if (transition.outcome !== "no_op") {
+      console.error(
+        `[ticket-thread-transitions] unexpected transition outcome for ticket ${ticketId}: ${transition.outcome}`
+      );
     }
-  } else if (candidate) {
-    // priorStatus or candidate not in machine yet — allow direct write (defensive)
-    newStatus = candidate;
   }
 
-  // Always bump last_response_at
-  const updatePayload: Record<string, unknown> = {
-    last_response_at: new Date().toISOString(),
-  };
-  if (newStatus) {
-    updatePayload.status = newStatus;
-  }
-
+  // Always bump last_response_at — unrelated to tickets.status, so it stays
+  // a direct update rather than going through transitionTicketStatus().
   const { error: updateErr } = await client
     .from("tickets")
-    .update(updatePayload)
+    .update({ last_response_at: new Date().toISOString() })
     .eq("id", ticketId);
 
   if (updateErr) {
