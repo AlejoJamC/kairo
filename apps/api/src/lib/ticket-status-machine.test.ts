@@ -36,7 +36,7 @@ describe("isValidTransition — allowed paths", () => {
     ["open",              "in_progress"],
     ["open",              "resolved"],
     ["open",              "escalated"],
-    ["open",              "auto_resolved"],
+    ["open",              "ai_resolved"],
     ["awaiting_customer", "open"],
     ["awaiting_customer", "resolved"],
     ["awaiting_customer", "escalated"],
@@ -49,8 +49,8 @@ describe("isValidTransition — allowed paths", () => {
     ["escalated",         "resolved"],
     ["escalated",         "open"],
     ["escalated",         "reopened"],       // KAI-221
-    ["auto_resolved",     "open"],
-    ["auto_resolved",     "reopened"],       // KAI-221
+    ["ai_resolved",       "open"],
+    ["ai_resolved",       "reopened"],       // KAI-221
     ["reopened",          "in_progress"],    // KAI-221: agent picks up reopened ticket
     ["reopened",          "resolved"],
     ["reopened",          "escalated"],
@@ -68,15 +68,15 @@ describe("isValidTransition — blocked paths", () => {
   const blocked: [TicketStatus, TicketStatus][] = [
     ["resolved",      "awaiting_customer"],
     ["resolved",      "escalated"],
-    ["resolved",      "auto_resolved"],
+    ["resolved",      "ai_resolved"],
     ["resolved",      "in_progress"],
     ["escalated",     "awaiting_customer"],
-    ["escalated",     "auto_resolved"],
+    ["escalated",     "ai_resolved"],
     ["escalated",     "in_progress"],
-    ["auto_resolved", "resolved"],
-    ["auto_resolved", "escalated"],
+    ["ai_resolved",   "resolved"],
+    ["ai_resolved",   "escalated"],
     ["reopened",      "open"],              // KAI-221: direct → open not allowed from reopened
-    ["reopened",      "auto_resolved"],
+    ["reopened",      "ai_resolved"],
   ];
 
   for (const [from, to] of blocked) {

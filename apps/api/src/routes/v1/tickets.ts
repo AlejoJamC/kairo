@@ -214,13 +214,13 @@ tickets.post("/:id/recalculate-score", async (c) => {
 // Primary: pgvector RPC find_similar_tickets filtered to final statuses
 // Fallback: full-text match on from_email or subject keywords when RPC unavailable
 //
-// KAI-108 — "resolved" and "auto_resolved" are both final states (the dashboard
+// KAI-108 — "resolved" and "ai_resolved" are both final states (the dashboard
 // unified them under the "Resuelto" aside entry and excludes both from triage),
 // so historical context must consider both. The RPC takes the list as a
 // comma-separated p_status_filter.
 // ---------------------------------------------------------------------------
 
-// RESOLVED_STATUSES ("resolved", "auto_resolved") comes from @kairo/types —
+// RESOLVED_STATUSES ("resolved", "ai_resolved") comes from @kairo/types —
 // see the import above.
 
 tickets.get("/:id/related-history", async (c) => {
@@ -991,7 +991,7 @@ const IS_AUTO_AWAITING_SOURCE: Record<TicketStatus, boolean> = {
   reopened: true,
   awaiting_customer: false,
   resolved: false,
-  auto_resolved: false,
+  ai_resolved: false,
   escalated: false,
 };
 

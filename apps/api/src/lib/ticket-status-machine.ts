@@ -6,12 +6,12 @@ import { TICKET_STATUSES, type TicketStatus } from '@kairo/types';
 export type { TicketStatus };
 
 export const ALLOWED_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  open:               ['awaiting_customer', 'in_progress', 'resolved', 'escalated', 'auto_resolved'],
+  open:               ['awaiting_customer', 'in_progress', 'resolved', 'escalated', 'ai_resolved'],
   awaiting_customer:  ['open', 'resolved', 'escalated'],
   in_progress:        ['open', 'awaiting_customer', 'resolved', 'escalated'],
   resolved:           ['open', 'reopened'],
   escalated:          ['resolved', 'open', 'reopened'],
-  auto_resolved:      ['open', 'reopened'],
+  ai_resolved:        ['open', 'reopened'],
   reopened:           ['in_progress', 'resolved', 'escalated', 'awaiting_customer'],
 };
 

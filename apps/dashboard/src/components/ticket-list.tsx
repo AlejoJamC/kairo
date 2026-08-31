@@ -441,7 +441,7 @@ export function TicketList() {
     setHistoryDrawerOpen(true);
   }
 
-  // Historical tickets are resolved/auto_resolved, so inbox.tsx's initial
+  // Historical tickets are resolved/ai_resolved, so inbox.tsx's initial
   // fetch never loads them into the store. Fetch the full row directly
   // (same pattern as inbox.tsx) and upsert it so TicketDetail can render it.
   // The list itself filters non-active statuses out via isTriageActive, so

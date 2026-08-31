@@ -16,7 +16,7 @@ describe("isTriageActive", () => {
   });
 
   it("drops awaiting and final statuses out of the queue", () => {
-    for (const status of ["awaiting_customer", "resolved", "auto_resolved"]) {
+    for (const status of ["awaiting_customer", "resolved", "ai_resolved"]) {
       expect(isTriageActive(status)).toBe(false);
     }
   });
@@ -48,7 +48,7 @@ describe("TRIAGE_COUNTED_STATUSES", () => {
   });
 
   it("excludes awaiting and final statuses", () => {
-    for (const status of ["awaiting_customer", "resolved", "auto_resolved"]) {
+    for (const status of ["awaiting_customer", "resolved", "ai_resolved"]) {
       expect(TRIAGE_COUNTED_STATUSES).not.toContain(status);
     }
   });

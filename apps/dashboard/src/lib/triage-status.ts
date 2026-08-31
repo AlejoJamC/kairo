@@ -3,7 +3,7 @@ import { TICKET_STATUSES, type TicketStatus } from "@kairo/types";
 // ---------------------------------------------------------------------------
 // Single source of truth for how a ticket status maps to the dashboard's
 // queues. Before this existed, the triage list declared its own blacklist
-// ("everything except awaiting/resolved/auto_resolved") while the aside badge
+// ("everything except awaiting/resolved/ai_resolved") while the aside badge
 // declared its own whitelist (["open"]). The two drifted silently: a ticket in
 // in_progress showed up in the list but was counted by no badge at all, so the
 // list read 8/8 while the aside read 7.
@@ -34,7 +34,7 @@ const STATUS_BUCKET: Record<TicketStatus, StatusBucket> = {
   escalated:         "escalated",
   awaiting_customer: "awaiting",
   resolved:          "final",
-  auto_resolved:     "final",
+  ai_resolved:     "final",
 };
 
 // Statuses that leave the active triage queue. A status outside TicketStatus
@@ -83,7 +83,7 @@ const IS_EXCLUDED_FROM_INBOX_FETCH: Record<TicketStatus, boolean> = {
   escalated: false,
   awaiting_customer: true,
   resolved: true,
-  auto_resolved: true,
+  ai_resolved: true,
 };
 
 export const INBOX_FETCH_EXCLUDED_STATUSES: TicketStatus[] = TICKET_STATUSES.filter(
@@ -91,5 +91,5 @@ export const INBOX_FETCH_EXCLUDED_STATUSES: TicketStatus[] = TICKET_STATUSES.fil
 );
 
 // Ready-to-use PostgREST `.not("status", "in", ...)` filter value built from
-// the constant above, e.g. "(awaiting_customer,resolved,auto_resolved)".
+// the constant above, e.g. "(awaiting_customer,resolved,ai_resolved)".
 export const INBOX_FETCH_EXCLUDED_STATUSES_FILTER = `(${INBOX_FETCH_EXCLUDED_STATUSES.join(",")})`;

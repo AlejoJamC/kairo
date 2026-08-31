@@ -236,8 +236,8 @@ describe("TicketDetail — read-only historical view (KAI-25)", () => {
     expect(screen.getByText("ticketDetail.readOnlyBanner")).toBeInTheDocument();
   });
 
-  it("hides the ReplyBar and shows the read-only banner for an auto_resolved ticket", () => {
-    mockTicket = { ...mockTicket, status: "auto_resolved" };
+  it("hides the ReplyBar and shows the read-only banner for an ai_resolved ticket", () => {
+    mockTicket = { ...mockTicket, status: "ai_resolved" };
     renderWithProviders(React.createElement(TicketDetail));
     expect(screen.queryByTestId("reply-bar")).not.toBeInTheDocument();
     expect(screen.getByText("ticketDetail.readOnlyBanner")).toBeInTheDocument();
@@ -246,7 +246,7 @@ describe("TicketDetail — read-only historical view (KAI-25)", () => {
 
 // ---------------------------------------------------------------------------
 // KAI-177: auto-clear the selection once the open ticket leaves the active
-// queue (resolved/awaiting_customer/auto_resolved), same delay as replying.
+// queue (resolved/awaiting_customer/ai_resolved), same delay as replying.
 // ---------------------------------------------------------------------------
 
 describe("TicketDetail — auto-clear after leaving the active view (KAI-177)", () => {

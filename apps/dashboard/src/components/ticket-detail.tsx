@@ -426,8 +426,8 @@ export function TicketDetail() {
     return () => clearTimeout(timer);
   }, [scrollToMessageId, messages, clearScrollToMessage]);
 
-  // KAI-25 — resolved/auto_resolved tickets render read-only (no reply/note input).
-  const isReadOnly = ticket ? ticket.status === "resolved" || ticket.status === "auto_resolved" : false;
+  // KAI-25 — resolved/ai_resolved tickets render read-only (no reply/note input).
+  const isReadOnly = ticket ? ticket.status === "resolved" || ticket.status === "ai_resolved" : false;
 
   // Auto-clear the selection on an active->inactive transition for this same
   // ticket (not on tickets already inactive when opened, e.g. browsing Resuelto).

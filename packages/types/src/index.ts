@@ -28,7 +28,7 @@ export type TicketStatus =
   | 'awaiting_customer'
   | 'in_progress'
   | 'resolved'
-  | 'auto_resolved'
+  | 'ai_resolved'
   | 'escalated'
   | 'reopened';
 
@@ -41,7 +41,7 @@ const TICKET_STATUS_MEMBERSHIP: Record<TicketStatus, true> = {
   awaiting_customer: true,
   in_progress: true,
   resolved: true,
-  auto_resolved: true,
+  ai_resolved: true,
   escalated: true,
   reopened: true,
 };
@@ -60,7 +60,7 @@ const IS_RESOLVED_STATUS: Record<TicketStatus, boolean> = {
   awaiting_customer: false,
   in_progress: false,
   resolved: true,
-  auto_resolved: true,
+  ai_resolved: true,
   escalated: false,
   reopened: false,
 };
