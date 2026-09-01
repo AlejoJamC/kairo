@@ -116,25 +116,13 @@ BEGIN
 
   v_is_creation := (p_trigger = 'ticket_created');
 
-  -- For a creation trail row, the ticket's current status was already set
-  -- directly by the caller's INSERT (normally 'open') — it is not a real
-  -- prior state, so the history row must record from_state=NULL regardless
-  -- of what tickets.status currently holds.
   v_history_from_state := CASE WHEN v_is_creation THEN NULL ELSE v_from_state END;
 
-  -- Same-state request: no-op, not an error. Does NOT apply to
-  -- trigger='ticket_created' — that call must always record its trail row
-  -- even though tickets.status already equals p_to_state (it was set
-  -- directly by the INSERT, not by a prior call to this function).
   IF NOT v_is_creation AND v_from_state IS NOT DISTINCT FROM p_to_state THEN
     RETURN QUERY SELECT 'no_op'::text, v_from_state, p_to_state, NULL::uuid;
     RETURN;
   END IF;
 
-  -- v_history_from_state = NULL either for a creation row (always) or for a
-  -- ticket whose status is genuinely NULL (shouldn't happen post-fix, but
-  -- harmless to allow) — that transition has no rule to look up and is
-  -- always legal. Every other from_state must be validated.
   IF v_history_from_state IS NOT NULL AND NOT EXISTS (
     SELECT 1
     FROM public.ticket_transition_rules r
@@ -145,11 +133,16 @@ BEGIN
       USING ERRCODE = 'KA409';
   END IF;
 
-  -- For creation this is a harmless no-change write (status is already
-  -- p_to_state); for every other trigger it is the real transition.
+  -- The only place in the codebase allowed to set this flag. It is
+  -- transaction-local (is_local => true) and cleared immediately after the
+  -- UPDATE, so no other statement in the same transaction inherits it.
+  PERFORM set_config('kairo.allow_status_change', 'true', true);
+
   UPDATE public.tickets
      SET status = p_to_state
    WHERE id = p_ticket_id;
+
+  PERFORM set_config('kairo.allow_status_change', 'false', true);
 
   INSERT INTO public.ticket_state_history (
     account_id, ticket_id, from_state, to_state, actor_type, actor_user_id,
@@ -162,10 +155,6 @@ BEGIN
   RETURNING id INTO v_history_id;
 
   IF v_history_id IS NULL THEN
-    -- Only reachable when p_idempotency_key was non-null and already recorded
-    -- (the unique constraint ignores NULL idempotency_key entirely). The
-    -- status UPDATE above still ran, but it applied the same value another
-    -- request already committed, so treat this as a no-op rather than raise.
     RETURN QUERY SELECT 'no_op'::text, v_history_from_state, p_to_state, NULL::uuid;
     RETURN;
   END IF;
@@ -612,6 +601,24 @@ $$;
 
 
 ALTER FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."guard_tickets_status_change"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    IF current_setting('kairo.allow_status_change', true) IS DISTINCT FROM 'true' THEN
+      RAISE EXCEPTION 'tickets.status can only be changed through apply_ticket_transition()'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."guard_tickets_status_change"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
@@ -1588,7 +1595,7 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_activity_log" (
     "idempotency_key" "text",
     CONSTRAINT "ticket_activity_log_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
     CONSTRAINT "ticket_activity_log_domain_check" CHECK (("domain" = ANY (ARRAY['tickets'::"text", 'deduplication'::"text", 'grouping'::"text", 'ans'::"text", 'escalation'::"text", 'messaging'::"text"]))),
-    CONSTRAINT "ticket_activity_log_event_type_check" CHECK (("event_type" = ANY (ARRAY['assignment'::"text", 'merge'::"text", 'merged_into'::"text", 'grouped'::"text", 'sla_breach'::"text", 'escalated'::"text", 'out_of_hours_auto_reply'::"text"])))
+    CONSTRAINT "ticket_activity_log_event_type_check" CHECK (("event_type" = ANY (ARRAY['assignment'::"text", 'merge'::"text", 'merged_into'::"text", 'grouped'::"text", 'sla_breach'::"text", 'escalated'::"text", 'out_of_hours_auto_reply'::"text", 'customer_reply_on_closed_ticket'::"text"])))
 );
 
 
@@ -2824,6 +2831,10 @@ CREATE INDEX "tickets_group_id_idx" ON "public"."tickets" USING "btree" ("group_
 
 
 
+CREATE OR REPLACE TRIGGER "guard_tickets_status_change" BEFORE UPDATE ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."guard_tickets_status_change"();
+
+
+
 CREATE OR REPLACE TRIGGER "on_channel_integrations_updated" BEFORE UPDATE ON "public"."channel_integrations" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
 
 
@@ -3792,6 +3803,12 @@ GRANT ALL ON FUNCTION "public"."get_sidebar_counts"("p_account_id" "uuid") TO "s
 GRANT ALL ON FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uuid", "p_user_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uuid", "p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uuid", "p_user_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."guard_tickets_status_change"() TO "anon";
+GRANT ALL ON FUNCTION "public"."guard_tickets_status_change"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."guard_tickets_status_change"() TO "service_role";
 
 
 
