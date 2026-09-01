@@ -9,6 +9,15 @@ const mockFetch = mock(async (_url: string, _opts: RequestInit) => ({
 }));
 globalThis.fetch = mockFetch as unknown as typeof fetch;
 
+// Mock supabase so the emitTicketActivity() call inside out-of-hours-reply.ts
+// (KAI-191 follow-up) doesn't hit the real DB — tests assert against this
+// insert instead.
+const activityInsertMock = mock((): Promise<{ error: { message: string } | null }> => Promise.resolve({ error: null }));
+const activityFromMock = mock(() => ({ insert: activityInsertMock }));
+mock.module("./supabase.js", () => ({
+  supabase: { from: activityFromMock },
+}));
+
 const { maybeSendOutOfHoursReply } = await import("./out-of-hours-reply.js");
 
 // Bogota times for the support-hours predicate
@@ -95,7 +104,11 @@ const BASE_ARGS = {
   receivedAt: new Date(monBogota22.getTime() - 60_000).toISOString(), // 1min ago
 };
 
-beforeEach(() => mockFetch.mockClear());
+beforeEach(() => {
+  mockFetch.mockClear();
+  activityInsertMock.mockClear();
+  activityFromMock.mockClear();
+});
 
 describe("maybeSendOutOfHoursReply — guards", () => {
   it("aborts (stale) when receivedAt > 15min before now", async () => {
@@ -186,5 +199,19 @@ describe("maybeSendOutOfHoursReply — happy path", () => {
     expect(state.ticketUpdates.length).toBeGreaterThan(0);
     const lastUpdate = state.ticketUpdates[state.ticketUpdates.length - 1];
     expect((lastUpdate.payload as any).auto_replied_out_of_hours).toBe(true);
+
+    // KAI-191 follow-up: the send is a residual ticket fact and must leave a
+    // trace in ticket_activity_log, same shape as assignment/merge/grouped/etc.
+    expect(activityFromMock).toHaveBeenCalledWith("ticket_activity_log");
+    expect(activityInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        account_id: "acc-1",
+        ticket_id: "tk-1",
+        domain: "messaging",
+        event_type: "out_of_hours_auto_reply",
+        actor_type: "system",
+        actor_ref: "out-of-hours-reply",
+      })
+    );
   });
 });

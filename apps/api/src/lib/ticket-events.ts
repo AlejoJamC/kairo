@@ -21,7 +21,7 @@ import { supabase } from "./supabase.js";
 // merged_into, grouped, escalated).
 // ---------------------------------------------------------------------------
 
-export type TicketActivityDomain = "tickets" | "deduplication" | "grouping" | "ans" | "escalation";
+export type TicketActivityDomain = "tickets" | "deduplication" | "grouping" | "ans" | "escalation" | "messaging";
 
 export type TicketActivityEventType =
   | "assignment"
@@ -29,7 +29,8 @@ export type TicketActivityEventType =
   | "merged_into"
   | "grouped"
   | "sla_breach"
-  | "escalated";
+  | "escalated"
+  | "out_of_hours_auto_reply";
 
 export type TicketActivityActorType = "human" | "ai" | "customer" | "system";
 

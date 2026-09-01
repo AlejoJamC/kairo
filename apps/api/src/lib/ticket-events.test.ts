@@ -80,6 +80,7 @@ describe("emitTicketActivity", () => {
 
   const activityEventTypes = [
     "assignment", "merge", "merged_into", "grouped", "sla_breach", "escalated",
+    "out_of_hours_auto_reply",
   ] as const;
 
   for (const eventType of activityEventTypes) {
