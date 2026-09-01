@@ -23,7 +23,7 @@ import { describe, it, expect, mock } from "bun:test";
 // already mock that module.
 // ---------------------------------------------------------------------------
 
-const activityInsertMock = mock((): Promise<{ error: { message: string } | null }> => Promise.resolve({ error: null }));
+const activityInsertMock = mock((_row: Record<string, unknown>): Promise<{ error: { message: string } | null }> => Promise.resolve({ error: null }));
 const activityFromMock = mock(() => ({ insert: activityInsertMock }));
 mock.module("./supabase.js", () => ({
   supabase: { from: activityFromMock },

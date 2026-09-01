@@ -93,6 +93,19 @@ describe("isValidTransition — blocked paths", () => {
   }
 });
 
+describe("isValidTransition — every illegal pair is rejected (exhaustive)", () => {
+  for (const from of TICKET_STATUSES) {
+    for (const to of TICKET_STATUSES) {
+      if (from === to) continue;
+      const isLegal = ALLOWED_TRANSITIONS[from].some((edge) => edge.to === to);
+      if (isLegal) continue;
+      it(`${from} → ${to} is rejected`, () => {
+        expect(isValidTransition(from, to)).toBe(false);
+      });
+    }
+  }
+});
+
 describe("ALLOWED_TRANSITIONS coverage", () => {
   it("every status has an entry in ALLOWED_TRANSITIONS", () => {
     for (const s of TICKET_STATUSES) {
