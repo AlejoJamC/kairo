@@ -30,7 +30,8 @@ export type TicketActivityEventType =
   | "grouped"
   | "sla_breach"
   | "escalated"
-  | "out_of_hours_auto_reply";
+  | "out_of_hours_auto_reply"
+  | "customer_reply_on_closed_ticket";
 
 export type TicketActivityActorType = "human" | "ai" | "customer" | "system";
 

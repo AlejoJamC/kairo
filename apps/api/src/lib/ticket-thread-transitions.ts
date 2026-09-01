@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isValidTransition, isTicketStatus, type TicketStatus } from "./ticket-status-machine.js";
 import { transitionTicketStatus } from "./ticket-transition.js";
+import { emitTicketActivity } from "./ticket-events.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbClient = SupabaseClient<any>;
@@ -55,6 +56,34 @@ export async function applyCustomerReplyTransition(
     } else if (transition.outcome !== "no_op") {
       console.error(
         `[ticket-thread-transitions] unexpected transition outcome for ticket ${ticketId}: ${transition.outcome}`
+      );
+    }
+  } else if (priorStatus === "closed") {
+    // KAI-191 decision 3: 'closed' is terminal — no candidate exists for it,
+    // so the branch above never even calls transitionTicketStatus(). But a
+    // customer replying to a closed case is signal, not noise, and must not
+    // vanish without a trace. No transition occurs (there is nowhere legal
+    // to go), so this is not a ticket_state_history row — it is an activity
+    // fact, same shape as the other things that happen to a ticket without
+    // moving its state.
+    const { data: closedTicket } = await client
+      .from("tickets")
+      .select("account_id")
+      .eq("id", ticketId)
+      .maybeSingle();
+
+    if (closedTicket?.account_id) {
+      await emitTicketActivity({
+        accountId: closedTicket.account_id,
+        ticketId,
+        domain: "tickets",
+        eventType: "customer_reply_on_closed_ticket",
+        actorType: "customer",
+        actorRef: "ticket-thread-transitions",
+      });
+    } else {
+      console.error(
+        `[ticket-thread-transitions] could not resolve account_id to record closed-ticket reply for ticket ${ticketId}`
       );
     }
   }
