@@ -7,7 +7,7 @@ import {
 } from "../../lib/contact-extraction/worker-run.js";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
-import { emitTicketEvent } from "../../lib/ticket-events.js";
+import { emitTicketActivity } from "../../lib/ticket-events.js";
 
 // ---------------------------------------------------------------------------
 // Thread deduplication backfill (KAI-165)
@@ -196,15 +196,28 @@ export const threadDedupeBackfill = inngest.createFunction(
               }
             }
 
-            // Emit merged_into event on the duplicate
-            await emitTicketEvent({
+            // Emit merged_into activity on the duplicate
+            await emitTicketActivity({
+              accountId: acctId,
               ticketId: d.id,
-              authorId: null,
+              domain: "deduplication",
               eventType: "merged_into",
-              metadata: {
-                canonical_ticket_id: canonical.id,
-                reason: "thread_dedupe_backfill",
-              },
+              actorType: "system",
+              reason: "thread_dedupe_backfill",
+              metadata: { canonical_ticket_id: canonical.id },
+            });
+
+            // Emit merge activity on the canonical ticket — after a merge
+            // there are no longer N tickets, there is one parent that
+            // absorbed the rest, and that must show on its own timeline too.
+            await emitTicketActivity({
+              accountId: acctId,
+              ticketId: canonical.id,
+              domain: "deduplication",
+              eventType: "merge",
+              actorType: "system",
+              reason: "thread_dedupe_backfill",
+              metadata: { absorbed_ticket_id: d.id },
             });
 
             ticketsMerged++;

@@ -18,7 +18,7 @@ import {
 } from "../../lib/scoring.js";
 import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
 import { attachOperationalSla, buildConfigByPriority } from "../../lib/operational-sla.js";
-import { emitTicketEvent } from "../../lib/ticket-events.js";
+import { emitTicketEvent, emitTicketActivity } from "../../lib/ticket-events.js";
 import { fanOutNoteMentions, resolveMentionNames, markOwnMentions } from "../../lib/note-mention-fanout.js";
 import { extractMentionUserIds } from "../../lib/note-mentions.js";
 import { createCompletionProvider, detectEscalationTriggers } from "@kairo/intelligence";
@@ -777,12 +777,9 @@ tickets.patch("/:id/status", async (c) => {
 
   if (fetchErr2) return c.json({ error: fetchErr2.message }, 500);
 
-  await emitTicketEvent({
-    ticketId: id,
-    authorId: user.id,
-    eventType: "status_change",
-    metadata: { from: fromStatus, to: toStatus },
-  });
+  // KAI-191: the transition itself was already recorded in
+  // ticket_state_history by transitionTicketStatus() above — no second copy
+  // in ticket_events.
 
   return c.json({ success: true, ticket: updatedTicket });
 });
@@ -895,10 +892,13 @@ tickets.patch("/:id/assign", async (c) => {
 
   if (updateErr) return c.json({ error: updateErr.message }, 500);
 
-  await emitTicketEvent({
+  await emitTicketActivity({
+    accountId: ctx.accountId,
     ticketId: id,
-    authorId: user.id,
+    domain: "tickets",
     eventType: "assignment",
+    actorType: "human",
+    actorUserId: user.id,
     metadata: { assigned_to: user.id },
   });
 
@@ -965,22 +965,21 @@ tickets.post("/:id/escalate", async (c) => {
     if (transition.outcome === "applied") {
       const { data } = await supabase.from("tickets").select().eq("id", id).single();
       updatedTicket = data as Record<string, unknown> | null;
-      await emitTicketEvent({
-        ticketId: id,
-        authorId: user.id,
-        eventType: "status_change",
-        metadata: { from: fromStatus, to: toEscalated, trigger: "escalate_action" },
-      });
+      // KAI-191: the transition itself was already recorded in
+      // ticket_state_history by transitionTicketStatus() above — no second
+      // copy in ticket_events.
     }
   }
 
-  // Emit escalated event with reason
-  await emitTicketEvent({
+  // Emit escalated activity with reason
+  await emitTicketActivity({
+    accountId: ctx.accountId,
     ticketId: id,
-    authorId: user.id,
+    domain: "escalation",
     eventType: "escalated",
-    body: parsed.data.reason ?? undefined,
-    isInternal: true,
+    actorType: "human",
+    actorUserId: user.id,
+    reason: parsed.data.reason ?? null,
   });
 
   return c.json({ ticket_id: id, escalated: true, ticket: updatedTicket });
@@ -1476,14 +1475,9 @@ tickets.post("/:id/reply", async (c) => {
     metadata: { message_id: outboundMsg.id, delivery_status: "queued" },
   });
 
-  if (finalStatus !== currentStatus) {
-    await emitTicketEvent({
-      ticketId: id,
-      authorId: user.id,
-      eventType: "status_change",
-      metadata: { from: currentStatus, to: finalStatus, trigger: intent === "resolve" ? "reply_resolve" : "reply_sent" },
-    });
-  }
+  // KAI-191: any status change here was already recorded in
+  // ticket_state_history by transitionTicketStatus() — no second copy in
+  // ticket_events.
 
   return c.json(
     {

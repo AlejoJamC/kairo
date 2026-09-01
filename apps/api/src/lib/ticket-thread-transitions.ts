@@ -72,7 +72,9 @@ export async function applyCustomerReplyTransition(
     );
   }
 
-  // Emit customer_replied event
+  // Emit customer_replied event. The status transition itself (if any) was
+  // already recorded in ticket_state_history by transitionTicketStatus()
+  // above — KAI-191: a transition lives in one place, not here too.
   await emitTicketEvent({
     ticketId,
     authorId: null,
@@ -82,20 +84,6 @@ export async function applyCustomerReplyTransition(
       new_status: newStatus,
     },
   });
-
-  // Emit status_change event only if status actually changed
-  if (newStatus) {
-    await emitTicketEvent({
-      ticketId,
-      authorId: null,
-      eventType: "status_change",
-      metadata: {
-        from: priorStatus,
-        to: newStatus,
-        trigger: "customer_replied",
-      },
-    });
-  }
 
   return { newStatus };
 }

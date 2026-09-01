@@ -61,12 +61,12 @@ describe("applyCustomerReplyTransition", () => {
       p_trigger: "customer_reply",
     });
 
-    // emitTicketEvent called twice: customer_replied + status_change
-    expect(emitMock).toHaveBeenCalledTimes(2);
-    const [firstCall, secondCall] = emitMock.mock.calls;
+    // emitTicketEvent called once: customer_replied. The transition itself
+    // (KAI-191) lives only in ticket_state_history, via the rpc call above.
+    expect(emitMock).toHaveBeenCalledTimes(1);
+    const [firstCall] = emitMock.mock.calls;
     expect(firstCall[0].eventType).toBe("customer_replied");
-    expect(secondCall[0].eventType).toBe("status_change");
-    expect(secondCall[0].metadata).toMatchObject({ from: "awaiting_customer", to: "open" });
+    expect(firstCall[0].metadata).toMatchObject({ prior_status: "awaiting_customer", new_status: "open" });
   });
 
   it("transitions resolved → reopened via transitionTicketStatus", async () => {
@@ -75,9 +75,8 @@ describe("applyCustomerReplyTransition", () => {
     });
     const result = await applyCustomerReplyTransition(client, "ticket-2", "resolved");
     expect(result.newStatus).toBe("reopened");
-    expect(emitMock).toHaveBeenCalledTimes(2);
-    const [, secondCall] = emitMock.mock.calls;
-    expect(secondCall[0].metadata).toMatchObject({ from: "resolved", to: "reopened" });
+    expect(emitMock).toHaveBeenCalledTimes(1);
+    expect(emitMock.mock.calls[0][0].metadata).toMatchObject({ prior_status: "resolved", new_status: "reopened" });
   });
 
   it("does not transition for open status — no RPC call at all", async () => {
@@ -85,7 +84,7 @@ describe("applyCustomerReplyTransition", () => {
     const result = await applyCustomerReplyTransition(client, "ticket-3", "open");
     expect(result.newStatus).toBeNull();
     expect(client._rpcFn).not.toHaveBeenCalled();
-    // Only customer_replied event — no status_change
+    // Only customer_replied event
     expect(emitMock).toHaveBeenCalledTimes(1);
     expect(emitMock.mock.calls[0][0].eventType).toBe("customer_replied");
   });

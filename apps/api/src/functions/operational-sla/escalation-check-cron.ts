@@ -16,7 +16,7 @@
 import { inngest } from "../../lib/inngest.js";
 import { supabase } from "../../lib/supabase.js";
 import { getFlag, getNumericFlag } from "@kairo/feature-flags";
-import { emitTicketEvent } from "../../lib/ticket-events.js";
+import { emitTicketActivity } from "../../lib/ticket-events.js";
 import { buildIntervalCronExpression } from "../../lib/cron-interval.js";
 import {
   computeOperationalSlaTiming,
@@ -158,10 +158,12 @@ export const operationalSlaEscalationCron = inngest.createFunction(
             });
           }
 
-          await emitTicketEvent({
+          await emitTicketActivity({
+            accountId,
             ticketId: ticket.id,
-            authorId: null,
+            domain: "ans",
             eventType: "escalated",
+            actorType: "system",
             metadata: { trigger: "priority_sla_escalation", priority },
           });
 

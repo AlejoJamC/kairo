@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { supabase } from "../../lib/supabase.js";
 import { resolveUserAndAccount } from "../../lib/auth.js";
-import { emitTicketEvent } from "../../lib/ticket-events.js";
+import { emitTicketActivity } from "../../lib/ticket-events.js";
 
 export const ticketGroups = new Hono();
 
@@ -87,10 +87,13 @@ ticketGroups.post("/:id/tickets", async (c) => {
 
   await Promise.all(
     parsed.data.ticket_ids.map((ticketId) =>
-      emitTicketEvent({
+      emitTicketActivity({
+        accountId: ctx.accountId,
         ticketId,
-        authorId: ctx.userId,
+        domain: "grouping",
         eventType: "grouped",
+        actorType: "human",
+        actorUserId: ctx.userId,
         metadata: { group_id: groupId },
       })
     )
