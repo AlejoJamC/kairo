@@ -1,7 +1,12 @@
 import { useState, useEffect } from "react";
 import { apiCall } from "@/lib/api-client";
 import { getNumericFlag } from "@/lib/feature-flags";
-import { TRIAGE_COUNTED_STATUSES } from "@/lib/triage-status";
+import {
+  TRIAGE_COUNTED_STATUSES,
+  AWAITING_STATUSES,
+  SIDEBAR_RESOLVED_STATUSES,
+  ESCALATED_STATUSES,
+} from "@/lib/triage-status";
 import type { TicketStatus } from "@kairo/types";
 import type { AppView } from "@/types";
 
@@ -17,15 +22,16 @@ const SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS = getNumericFlag(
 
 // Maps each sidebar AppView to the ticket status bucket(s) returned by the API.
 // Views without a status mapping (in-progress, clients, settings, change-password) show no badge.
-// "resolved" sums both terminal statuses shown in the Resuelto view (resolved + ai_resolved).
-// "triage" comes from lib/triage-status so the badge counts exactly what the
-// triage list shows — it used to be a hardcoded ["open"], which silently left
-// in_progress/reopened tickets uncounted.
+// Every bucket here is derived from lib/triage-status's STATUS_BUCKET (an
+// exhaustive Record<TicketStatus, ...>), so a new TicketStatus member breaks
+// the build until it's classified there instead of silently going uncounted.
+// "resolved" sums both terminal statuses shown in the Resuelto view (resolved
+// + ai_resolved) — see SIDEBAR_RESOLVED_STATUSES for why 'closed' is excluded.
 export const VIEW_TO_STATUS: Partial<Record<AppView, TicketStatus[]>> = {
   triage:      TRIAGE_COUNTED_STATUSES,
-  awaiting:    ["awaiting_customer"],
-  resolved:    ["resolved", "ai_resolved"],
-  escalated:   ["escalated"],
+  awaiting:    AWAITING_STATUSES,
+  resolved:    SIDEBAR_RESOLVED_STATUSES,
+  escalated:   ESCALATED_STATUSES,
 };
 
 export function useSidebarCounts(): SidebarCounts | null {

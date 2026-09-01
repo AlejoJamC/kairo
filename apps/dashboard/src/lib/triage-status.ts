@@ -64,6 +64,40 @@ export const ESCALATED_STATUSES: TicketStatus[] = (
   .filter(([, bucket]) => bucket === "escalated")
   .map(([status]) => status);
 
+// Statuses shown in the Esperando view and counted by its badge. Derived from
+// the same STATUS_BUCKET map above so it can't drift from it.
+export const AWAITING_STATUSES: TicketStatus[] = (
+  Object.entries(STATUS_BUCKET) as [TicketStatus, StatusBucket][]
+)
+  .filter(([, bucket]) => bucket === "awaiting")
+  .map(([status]) => status);
+
+// Statuses shown in the Resuelto view and counted by its badge — resolved +
+// ai_resolved only.
+//
+// KNOWN DISCREPANCY, preserved on purpose: this deliberately excludes
+// 'closed', even though STATUS_BUCKET's "final" bucket above groups closed
+// together with resolved/ai_resolved as terminal states. The Resuelto view
+// has never shown closed tickets. Declared as its own exhaustive Record
+// (rather than derived from STATUS_BUCKET, and not the same set as
+// RESOLVED_STATUSES exported from @kairo/types, which does include closed)
+// so this call site can't silently change behaviour if either of those
+// definitions changes.
+const IS_SIDEBAR_RESOLVED_STATUS: Record<TicketStatus, boolean> = {
+  open: false,
+  in_progress: false,
+  reopened: false,
+  escalated: false,
+  awaiting_customer: false,
+  resolved: true,
+  ai_resolved: true,
+  closed: false,
+};
+
+export const SIDEBAR_RESOLVED_STATUSES: TicketStatus[] = TICKET_STATUSES.filter(
+  (status) => IS_SIDEBAR_RESOLVED_STATUS[status]
+);
+
 // ---------------------------------------------------------------------------
 // KAI-191 — statuses excluded from the Inbox/TicketList initial fetch, i.e.
 // the values inside `.not("status", "in", "(...)")` in inbox.tsx and
