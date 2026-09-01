@@ -1284,47 +1284,6 @@ export type Database = {
           },
         ]
       }
-      ticket_events: {
-        Row: {
-          author_id: string | null
-          body: string | null
-          created_at: string
-          event_type: string
-          id: string
-          is_internal: boolean
-          metadata: Json | null
-          ticket_id: string
-        }
-        Insert: {
-          author_id?: string | null
-          body?: string | null
-          created_at?: string
-          event_type: string
-          id?: string
-          is_internal?: boolean
-          metadata?: Json | null
-          ticket_id: string
-        }
-        Update: {
-          author_id?: string | null
-          body?: string | null
-          created_at?: string
-          event_type?: string
-          id?: string
-          is_internal?: boolean
-          metadata?: Json | null
-          ticket_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ticket_events_ticket_id_fkey"
-            columns: ["ticket_id"]
-            isOneToOne: false
-            referencedRelation: "tickets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       ticket_followers: {
         Row: {
           created_at: string

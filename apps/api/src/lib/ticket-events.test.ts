@@ -1,10 +1,13 @@
 import { describe, it, expect, mock, beforeEach } from "bun:test";
 
 // ---------------------------------------------------------------------------
-// KAI-28: ticket_events emission tests
-// AC: emitTicketEvent helper is typed and shared
-// AC: all ticket state transitions emit corresponding events
-// AC: bun test passes
+// KAI-28: ticket activity/classification emission tests
+// KAI-191: emitTicketEvent/TicketEventType were removed — every event type
+// the old catch-all events table used to carry has moved to a purpose-shaped
+// home (ticket_state_history, ticket_activity_log, ticket_notes,
+// ticket_classification_history) or was dropped outright (reply_sent,
+// customer_replied — duplicates of a fact `messages` already holds). See
+// emitTicketActivity and emitTicketClassification below for what replaced it.
 // ---------------------------------------------------------------------------
 
 // Mock supabase so tests don't hit the real DB
@@ -16,97 +19,7 @@ mock.module("../lib/supabase.js", () => ({
 }));
 
 // Re-import after mocking
-const { emitTicketEvent, emitTicketActivity } = await import("./ticket-events.js");
-
-describe("emitTicketEvent", () => {
-  beforeEach(() => {
-    insertMock.mockClear();
-    fromMock.mockClear();
-  });
-
-  it("inserts into ticket_events table", async () => {
-    await emitTicketEvent({
-      ticketId: "00000000-0000-0000-0000-000000000001",
-      authorId: "00000000-0000-0000-0000-000000000002",
-      eventType: "reply_sent",
-    });
-    expect(fromMock).toHaveBeenCalledWith("ticket_events");
-    expect(insertMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("passes correct fields on classification_corrected", async () => {
-    await emitTicketEvent({
-      ticketId: "tid-1",
-      authorId: "uid-1",
-      eventType: "classification_corrected",
-      metadata: { from_status: "open", to_status: "resolved" },
-    });
-    expect(insertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ticket_id: "tid-1",
-        author_id: "uid-1",
-        event_type: "classification_corrected",
-        metadata: { from_status: "open", to_status: "resolved" },
-      })
-    );
-  });
-
-  it("passes null author_id for AI-emitted events", async () => {
-    await emitTicketEvent({
-      ticketId: "tid-2",
-      authorId: null,
-      eventType: "ai_classified",
-    });
-    expect(insertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ author_id: null, event_type: "ai_classified" })
-    );
-  });
-
-  it("defaults is_internal to false", async () => {
-    await emitTicketEvent({ ticketId: "tid-3", authorId: null, eventType: "reply_sent" });
-    expect(insertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ is_internal: false })
-    );
-  });
-
-  it("sets is_internal true when specified", async () => {
-    await emitTicketEvent({
-      ticketId: "tid-4",
-      authorId: "uid-2",
-      eventType: "internal_note",
-      isInternal: true,
-    });
-    expect(insertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ is_internal: true })
-    );
-  });
-
-  it("does not throw when supabase returns error (non-fatal)", async () => {
-    insertMock.mockImplementationOnce(() => Promise.resolve({ error: { message: "db error" } }));
-    await expect(
-      emitTicketEvent({ ticketId: "tid-5", authorId: null, eventType: "customer_replied" })
-    ).resolves.toBeUndefined();
-  });
-});
-
-describe("event type coverage", () => {
-  const allEventTypes = [
-    "reply_sent", "internal_note",
-    "ai_classified", "human_classified", "ai_proposal", "ai_confirmed",
-    "ai_rejected", "classification_corrected", "customer_replied",
-  ] as const;
-
-  for (const eventType of allEventTypes) {
-    it(`accepts event_type "${eventType}"`, async () => {
-      await emitTicketEvent({ ticketId: "t", authorId: null, eventType });
-      expect(insertMock).toHaveBeenCalledWith(
-        expect.objectContaining({ event_type: eventType })
-      );
-      insertMock.mockClear();
-      fromMock.mockClear();
-    });
-  }
-});
+const { emitTicketActivity, emitTicketClassification } = await import("./ticket-events.js");
 
 describe("emitTicketActivity", () => {
   beforeEach(() => {
@@ -180,6 +93,94 @@ describe("emitTicketActivity", () => {
       });
       expect(insertMock).toHaveBeenCalledWith(
         expect.objectContaining({ event_type: eventType })
+      );
+      insertMock.mockClear();
+      fromMock.mockClear();
+    });
+  }
+});
+
+describe("emitTicketClassification", () => {
+  beforeEach(() => {
+    insertMock.mockClear();
+    fromMock.mockClear();
+  });
+
+  it("inserts into ticket_classification_history table", async () => {
+    await emitTicketClassification({
+      accountId: "acc-1",
+      ticketId: "tid-1",
+      actorType: "ai",
+      actorRef: "tier2-background",
+      dimension: "priority",
+      fromValue: null,
+      toValue: "P1",
+      confidence: 0.92,
+      modelVersion: "test-model",
+    });
+    expect(fromMock).toHaveBeenCalledWith("ticket_classification_history");
+    expect(insertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        account_id: "acc-1",
+        ticket_id: "tid-1",
+        actor_type: "ai",
+        actor_ref: "tier2-background",
+        dimension: "priority",
+        from_value: null,
+        to_value: "P1",
+        confidence: 0.92,
+        model_version: "test-model",
+      })
+    );
+  });
+
+  it("passes actor_user_id for human actors", async () => {
+    await emitTicketClassification({
+      accountId: "acc-1",
+      ticketId: "tid-2",
+      actorType: "human",
+      actorUserId: "uid-1",
+      dimension: "category",
+      fromValue: "billing",
+      toValue: "technical",
+    });
+    expect(insertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor_type: "human",
+        actor_user_id: "uid-1",
+        dimension: "category",
+        from_value: "billing",
+        to_value: "technical",
+      })
+    );
+  });
+
+  it("does not throw when supabase returns error (non-fatal)", async () => {
+    insertMock.mockImplementationOnce(() => Promise.resolve({ error: { message: "db error" } }));
+    await expect(
+      emitTicketClassification({
+        accountId: "acc-1",
+        ticketId: "tid-3",
+        actorType: "ai",
+        dimension: "sentiment",
+        toValue: "frustrated",
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  const dimensions = ["category", "priority", "sentiment", "emotion", "ticket_type"] as const;
+
+  for (const dimension of dimensions) {
+    it(`accepts dimension "${dimension}"`, async () => {
+      await emitTicketClassification({
+        accountId: "acc-1",
+        ticketId: "t",
+        actorType: "ai",
+        dimension,
+        toValue: "x",
+      });
+      expect(insertMock).toHaveBeenCalledWith(
+        expect.objectContaining({ dimension })
       );
       insertMock.mockClear();
       fromMock.mockClear();

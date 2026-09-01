@@ -1,5 +1,4 @@
-import { describe, it, expect, mock, beforeEach } from "bun:test";
-import type { EmitTicketEventOptions } from "./ticket-events.js";
+import { describe, it, expect, mock } from "bun:test";
 
 // ---------------------------------------------------------------------------
 // KAI-165: ticket-thread-transitions.ts unit tests
@@ -10,14 +9,12 @@ import type { EmitTicketEventOptions } from "./ticket-events.js";
 // bun:test, and ticket-transition.test.ts needs the real implementation, so
 // no file may replace that module. The defensive "write anyway for an
 // unknown state" fallback has also been removed from applyCustomerReplyTransition.
+//
+// KAI-191: applyCustomerReplyTransition no longer emits customer_replied —
+// it was a pointer event duplicating a fact `messages` already holds.
+// Nothing replaces it, so there is no emission to mock or assert on here
+// anymore; these tests only exercise the status-transition behavior.
 // ---------------------------------------------------------------------------
-
-// Mock emitTicketEvent so we can verify calls without hitting DB
-const emitMock = mock(async (_opts: EmitTicketEventOptions) => {});
-
-mock.module("./ticket-events.js", () => ({
-  emitTicketEvent: emitMock,
-}));
 
 const { applyCustomerReplyTransition } = await import("./ticket-thread-transitions.js");
 
@@ -40,10 +37,6 @@ function makeMockClient({
 }
 
 describe("applyCustomerReplyTransition", () => {
-  beforeEach(() => {
-    emitMock.mockClear();
-  });
-
   it("transitions awaiting_customer → open via transitionTicketStatus", async () => {
     const client = makeMockClient({
       rpcResult: { data: [{ outcome: "applied", from_state: "awaiting_customer", to_state: "open", history_id: "hist-1" }], error: null },
@@ -60,13 +53,6 @@ describe("applyCustomerReplyTransition", () => {
       p_actor_type: "customer",
       p_trigger: "customer_reply",
     });
-
-    // emitTicketEvent called once: customer_replied. The transition itself
-    // (KAI-191) lives only in ticket_state_history, via the rpc call above.
-    expect(emitMock).toHaveBeenCalledTimes(1);
-    const [firstCall] = emitMock.mock.calls;
-    expect(firstCall[0].eventType).toBe("customer_replied");
-    expect(firstCall[0].metadata).toMatchObject({ prior_status: "awaiting_customer", new_status: "open" });
   });
 
   it("transitions resolved → reopened via transitionTicketStatus", async () => {
@@ -75,8 +61,6 @@ describe("applyCustomerReplyTransition", () => {
     });
     const result = await applyCustomerReplyTransition(client, "ticket-2", "resolved");
     expect(result.newStatus).toBe("reopened");
-    expect(emitMock).toHaveBeenCalledTimes(1);
-    expect(emitMock.mock.calls[0][0].metadata).toMatchObject({ prior_status: "resolved", new_status: "reopened" });
   });
 
   it("does not transition for open status — no RPC call at all", async () => {
@@ -84,9 +68,6 @@ describe("applyCustomerReplyTransition", () => {
     const result = await applyCustomerReplyTransition(client, "ticket-3", "open");
     expect(result.newStatus).toBeNull();
     expect(client._rpcFn).not.toHaveBeenCalled();
-    // Only customer_replied event
-    expect(emitMock).toHaveBeenCalledTimes(1);
-    expect(emitMock.mock.calls[0][0].eventType).toBe("customer_replied");
   });
 
   it("does not transition for in_progress status — no RPC call at all", async () => {
@@ -94,7 +75,6 @@ describe("applyCustomerReplyTransition", () => {
     const result = await applyCustomerReplyTransition(client, "ticket-4", "in_progress");
     expect(result.newStatus).toBeNull();
     expect(client._rpcFn).not.toHaveBeenCalled();
-    expect(emitMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not transition for null prior status — no RPC call at all", async () => {
@@ -102,7 +82,6 @@ describe("applyCustomerReplyTransition", () => {
     const result = await applyCustomerReplyTransition(client, "ticket-5", null);
     expect(result.newStatus).toBeNull();
     expect(client._rpcFn).not.toHaveBeenCalled();
-    expect(emitMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not write when the transition comes back no_op — no fallback write (KAI-191)", async () => {
@@ -112,8 +91,6 @@ describe("applyCustomerReplyTransition", () => {
     const result = await applyCustomerReplyTransition(client, "ticket-6", "awaiting_customer");
     expect(result.newStatus).toBeNull();
     expect(client._rpcFn).toHaveBeenCalledTimes(1);
-    // Only customer_replied — no status_change, since nothing actually changed.
-    expect(emitMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not write when the transition comes back invalid — removed defensive fallback (KAI-191)", async () => {
@@ -123,7 +100,5 @@ describe("applyCustomerReplyTransition", () => {
     const result = await applyCustomerReplyTransition(client, "ticket-7", "resolved");
     expect(result.newStatus).toBeNull();
     expect(client._rpcFn).toHaveBeenCalledTimes(1);
-    expect(emitMock).toHaveBeenCalledTimes(1);
-    expect(emitMock.mock.calls[0][0].eventType).toBe("customer_replied");
   });
 });

@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { emitTicketEvent } from "./ticket-events.js";
 import { isValidTransition, isTicketStatus, type TicketStatus } from "./ticket-status-machine.js";
 import { transitionTicketStatus } from "./ticket-transition.js";
 
@@ -14,7 +13,9 @@ type DbClient = SupabaseClient<any>;
  *   resolved          → reopened
  *   all others        → no change (null)
  *
- * Also bumps tickets.last_response_at and emits ticket_events.
+ * Also bumps tickets.last_response_at. The status transition itself, if any,
+ * is recorded only by transitionTicketStatus() (into ticket_state_history) —
+ * see the KAI-191 note below.
  */
 export async function applyCustomerReplyTransition(
   client: DbClient,
@@ -72,18 +73,11 @@ export async function applyCustomerReplyTransition(
     );
   }
 
-  // Emit customer_replied event. The status transition itself (if any) was
-  // already recorded in ticket_state_history by transitionTicketStatus()
-  // above — KAI-191: a transition lives in one place, not here too.
-  await emitTicketEvent({
-    ticketId,
-    authorId: null,
-    eventType: "customer_replied",
-    metadata: {
-      prior_status: priorStatus,
-      new_status: newStatus,
-    },
-  });
+  // KAI-191: customer_replied used to be emitted here as a pointer event, but
+  // it duplicated a fact `messages` already holds (the inbound reply row has
+  // its own timestamp) — dropped outright, nothing replaces it. The status
+  // transition itself (if any) was already recorded in ticket_state_history
+  // by transitionTicketStatus() above.
 
   return { newStatus };
 }

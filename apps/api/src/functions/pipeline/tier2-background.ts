@@ -12,6 +12,48 @@ import { upsertConversationByThread } from "../../lib/conversations.js";
 import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
+import { emitTicketClassification } from "../../lib/ticket-events.js";
+
+// KAI-191: tier2 writes priority/category onto every ticket it creates, but
+// used to leave no trace of that AI decision — the human correction path did,
+// via classification_feedback/the old events table, this did not. One row per
+// dimension actually set (category is nullable on tickets; priority is not).
+// Only called for brand-new tickets (from_value is always null — an existing
+// ticket's classification is never touched here, per KAI-165 decision #1).
+async function recordAiClassification(
+  accountId: string,
+  ticketId: string,
+  classification: { category: string | null; priority: string; confidence: number },
+  occurredAt: string
+): Promise<void> {
+  const modelVersion = resolveModelVersion();
+  if (classification.category) {
+    await emitTicketClassification({
+      accountId,
+      ticketId,
+      actorType: "ai",
+      actorRef: "tier2-background",
+      dimension: "category",
+      fromValue: null,
+      toValue: classification.category,
+      confidence: classification.confidence,
+      modelVersion,
+      occurredAt,
+    });
+  }
+  await emitTicketClassification({
+    accountId,
+    ticketId,
+    actorType: "ai",
+    actorRef: "tier2-background",
+    dimension: "priority",
+    fromValue: null,
+    toValue: classification.priority,
+    confidence: classification.confidence,
+    modelVersion,
+    occurredAt,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Gmail API types (shared shape with Tier 1)
@@ -445,6 +487,10 @@ export const tier2Background = inngest.createFunction(
                   });
                 }
 
+                if (was_created && ticketId) {
+                  await recordAiClassification(accountId, ticketId, classification, classified_at);
+                }
+
                 if (!was_created) {
                   await applyCustomerReplyTransition(supabase, ticketId, prior_status);
                 }
@@ -480,6 +526,10 @@ export const tier2Background = inngest.createFunction(
                   .select("id")
                   .single();
                 ticketId = fallbackTicket?.id ?? null;
+
+                if (ticketId) {
+                  await recordAiClassification(accountId, ticketId, classification, classified_at);
+                }
 
                 if (proposal?.id && ticketId) {
                   await supabase
@@ -534,6 +584,10 @@ export const tier2Background = inngest.createFunction(
                 .select("id")
                 .single();
               ticketId = bareTicket?.id ?? null;
+
+              if (ticketId) {
+                await recordAiClassification(accountId, ticketId, classification, classified_at);
+              }
 
               if (proposal?.id && ticketId) {
                 await supabase

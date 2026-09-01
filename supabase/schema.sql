@@ -596,16 +596,15 @@ CREATE OR REPLACE FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uui
     AS $$
   SELECT
     t.id AS ticket_id,
-    COUNT(DISTINCT e.id) AS note_count,
+    COUNT(DISTINCT n.id) AS note_count,
     COUNT(DISTINCT m.id) FILTER (
       WHERE m.mentioned_user_id = p_user_id AND m.read_at IS NULL
     ) AS unread_mentions
   FROM public.tickets t
-  JOIN public.ticket_events e
-    ON e.ticket_id = t.id
-   AND e.event_type = 'internal_note'
+  JOIN public.ticket_notes n
+    ON n.ticket_id = t.id
   LEFT JOIN public.ticket_note_mentions m
-    ON m.ticket_event_id = e.id
+    ON m.ticket_note_id = n.id
    AND m.account_id = p_account_id
   WHERE t.account_id = p_account_id
   GROUP BY t.id;
@@ -867,6 +866,19 @@ $$;
 
 
 ALTER FUNCTION "public"."reject_ticket_activity_log_mutation"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."reject_ticket_classification_history_mutation"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'ticket_classification_history is append-only: % is not allowed', TG_OP
+    USING ERRCODE = 'insufficient_privilege';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."reject_ticket_classification_history_mutation"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."reject_ticket_state_history_mutation"() RETURNS "trigger"
@@ -1353,7 +1365,7 @@ CREATE TABLE IF NOT EXISTS "public"."notifications" (
     "body" "text" NOT NULL,
     "read_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "ticket_event_id" "uuid"
+    "ticket_note_id" "uuid"
 );
 
 
@@ -1535,20 +1547,44 @@ ALTER TABLE "public"."ticket_activity_log" ALTER COLUMN "seq" ADD GENERATED ALWA
 
 
 
-CREATE TABLE IF NOT EXISTS "public"."ticket_events" (
+CREATE TABLE IF NOT EXISTS "public"."ticket_classification_history" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
     "ticket_id" "uuid" NOT NULL,
-    "author_id" "uuid",
-    "event_type" "text" NOT NULL,
-    "body" "text",
-    "is_internal" boolean DEFAULT false NOT NULL,
+    "seq" bigint NOT NULL,
+    "actor_type" "text" NOT NULL,
+    "actor_user_id" "uuid",
+    "actor_ref" "text",
+    "dimension" "text" NOT NULL,
+    "from_value" "text",
+    "to_value" "text",
+    "confidence" numeric(3,2),
+    "model_version" "text",
+    "occurred_at" timestamp with time zone NOT NULL,
+    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "metadata" "jsonb",
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "ticket_events_event_type_check" CHECK (("event_type" = ANY (ARRAY['reply_sent'::"text", 'internal_note'::"text", 'ai_classified'::"text", 'human_classified'::"text", 'ai_proposal'::"text", 'ai_confirmed'::"text", 'ai_rejected'::"text", 'classification_corrected'::"text", 'customer_replied'::"text"])))
+    "idempotency_key" "text",
+    CONSTRAINT "ticket_classification_history_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
+    CONSTRAINT "ticket_classification_history_dimension_check" CHECK (("dimension" = ANY (ARRAY['category'::"text", 'priority'::"text", 'sentiment'::"text", 'emotion'::"text", 'ticket_type'::"text"])))
 );
 
 
-ALTER TABLE "public"."ticket_events" OWNER TO "postgres";
+ALTER TABLE "public"."ticket_classification_history" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_classification_history" IS 'Append-only ledger of classification decisions on a ticket''s attributes (category/priority/sentiment/emotion/ticket_type) — one row per (ticket, dimension) change, human corrections included. account_id is denormalised on purpose so tenant scoping and metrics need no join back to tickets.';
+
+
+
+ALTER TABLE "public"."ticket_classification_history" ALTER COLUMN "seq" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."ticket_classification_history_seq_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."ticket_followers" (
@@ -1583,11 +1619,123 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_messages" (
 ALTER TABLE "public"."ticket_messages" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."ticket_notes" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "author_id" "uuid",
+    "body" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."ticket_notes" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_notes" IS 'Internal notes on a ticket, visible only to agents. Content, not an event trail: UPDATE/DELETE stay open for the author. account_id is denormalised on purpose so tenant scoping needs no join back to tickets.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."ticket_state_history" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "seq" bigint NOT NULL,
+    "from_state" "text",
+    "to_state" "text" NOT NULL,
+    "actor_type" "text" NOT NULL,
+    "actor_user_id" "uuid",
+    "actor_ref" "text",
+    "trigger" "text" NOT NULL,
+    "reason" "text",
+    "occurred_at" timestamp with time zone NOT NULL,
+    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "metadata" "jsonb",
+    "idempotency_key" "text",
+    CONSTRAINT "ticket_state_history_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
+    CONSTRAINT "ticket_state_history_from_state_check" CHECK ((("from_state" IS NULL) OR ("from_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))),
+    CONSTRAINT "ticket_state_history_to_state_check" CHECK (("to_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"]))),
+    CONSTRAINT "ticket_state_history_trigger_check" CHECK (("trigger" = ANY (ARRAY['ticket_created'::"text", 'manual_status_change'::"text", 'agent_reply'::"text", 'agent_reply_resolve'::"text", 'customer_reply'::"text", 'escalate_action'::"text", 'sla_escalation'::"text", 'external_domain_closure'::"text"])))
+);
+
+
+ALTER TABLE "public"."ticket_state_history" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_state_history" IS 'Append-only trail of ticket state transitions. account_id is denormalised on purpose so tenant scoping and metrics need no join back to tickets.';
+
+
+
+CREATE OR REPLACE VIEW "public"."ticket_lifecycle_timeline" WITH ("security_invoker"='true') AS
+ SELECT "h"."account_id",
+    "h"."ticket_id",
+    "h"."occurred_at",
+    'state_change'::"text" AS "kind",
+    "h"."actor_type",
+    COALESCE("h"."actor_ref", ("h"."actor_user_id")::"text") AS "actor_ref",
+        CASE
+            WHEN ("h"."from_state" IS NULL) THEN "h"."to_state"
+            ELSE (("h"."from_state" || ' → '::"text") || "h"."to_state")
+        END AS "detail"
+   FROM "public"."ticket_state_history" "h"
+UNION ALL
+ SELECT "a"."account_id",
+    "a"."ticket_id",
+    "a"."occurred_at",
+    'activity'::"text" AS "kind",
+    "a"."actor_type",
+    COALESCE("a"."actor_ref", ("a"."actor_user_id")::"text") AS "actor_ref",
+    "a"."event_type" AS "detail"
+   FROM "public"."ticket_activity_log" "a"
+UNION ALL
+ SELECT "n"."account_id",
+    "n"."ticket_id",
+    "n"."created_at" AS "occurred_at",
+    'note'::"text" AS "kind",
+    'human'::"text" AS "actor_type",
+    ("n"."author_id")::"text" AS "actor_ref",
+        CASE
+            WHEN ("length"("n"."body") > 140) THEN ("left"("n"."body", 140) || '…'::"text")
+            ELSE "n"."body"
+        END AS "detail"
+   FROM "public"."ticket_notes" "n"
+UNION ALL
+ SELECT "c"."account_id",
+    "c"."ticket_id",
+    "c"."occurred_at",
+    'classification'::"text" AS "kind",
+    "c"."actor_type",
+    COALESCE("c"."actor_ref", ("c"."actor_user_id")::"text") AS "actor_ref",
+    (((("c"."dimension" || ': '::"text") || COALESCE("c"."from_value", '—'::"text")) || ' → '::"text") || COALESCE("c"."to_value", '—'::"text")) AS "detail"
+   FROM "public"."ticket_classification_history" "c"
+UNION ALL
+ SELECT "m"."account_id",
+    "tm"."ticket_id",
+    "m"."received_at" AS "occurred_at",
+    'message'::"text" AS "kind",
+        CASE
+            WHEN ("m"."direction" = 'inbound'::"text") THEN 'customer'::"text"
+            ELSE 'human'::"text"
+        END AS "actor_type",
+    "m"."sender_display_name" AS "actor_ref",
+    "m"."direction" AS "detail"
+   FROM ("public"."ticket_messages" "tm"
+     JOIN "public"."messages" "m" ON (("m"."id" = "tm"."message_id")));
+
+
+ALTER VIEW "public"."ticket_lifecycle_timeline" OWNER TO "postgres";
+
+
+COMMENT ON VIEW "public"."ticket_lifecycle_timeline" IS 'One ordered stream per ticket, unioning ticket_state_history, ticket_activity_log, ticket_notes, ticket_classification_history and messages (via ticket_messages). kind distinguishes the source (state_change/activity/note/classification/message); detail is a short per-source summary. Composed in SQL on purpose — never reassembled in an endpoint.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."ticket_note_mentions" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "account_id" "uuid" NOT NULL,
     "ticket_id" "uuid" NOT NULL,
-    "ticket_event_id" "uuid" NOT NULL,
+    "ticket_note_id" "uuid" NOT NULL,
     "mentioned_user_id" "uuid" NOT NULL,
     "notified_at" timestamp with time zone,
     "read_at" timestamp with time zone,
@@ -1657,36 +1805,6 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_proposals" (
 
 
 ALTER TABLE "public"."ticket_proposals" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "public"."ticket_state_history" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "account_id" "uuid" NOT NULL,
-    "ticket_id" "uuid" NOT NULL,
-    "seq" bigint NOT NULL,
-    "from_state" "text",
-    "to_state" "text" NOT NULL,
-    "actor_type" "text" NOT NULL,
-    "actor_user_id" "uuid",
-    "actor_ref" "text",
-    "trigger" "text" NOT NULL,
-    "reason" "text",
-    "occurred_at" timestamp with time zone NOT NULL,
-    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "metadata" "jsonb",
-    "idempotency_key" "text",
-    CONSTRAINT "ticket_state_history_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
-    CONSTRAINT "ticket_state_history_from_state_check" CHECK ((("from_state" IS NULL) OR ("from_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))),
-    CONSTRAINT "ticket_state_history_to_state_check" CHECK (("to_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"]))),
-    CONSTRAINT "ticket_state_history_trigger_check" CHECK (("trigger" = ANY (ARRAY['ticket_created'::"text", 'manual_status_change'::"text", 'agent_reply'::"text", 'agent_reply_resolve'::"text", 'customer_reply'::"text", 'escalate_action'::"text", 'sla_escalation'::"text", 'external_domain_closure'::"text"])))
-);
-
-
-ALTER TABLE "public"."ticket_state_history" OWNER TO "postgres";
-
-
-COMMENT ON TABLE "public"."ticket_state_history" IS 'Append-only trail of ticket state transitions. account_id is denormalised on purpose so tenant scoping and metrics need no join back to tickets.';
-
 
 
 CREATE OR REPLACE VIEW "public"."ticket_state_durations" WITH ("security_invoker"='true') AS
@@ -2133,8 +2251,13 @@ ALTER TABLE ONLY "public"."ticket_activity_log"
 
 
 
-ALTER TABLE ONLY "public"."ticket_events"
-    ADD CONSTRAINT "ticket_events_pkey" PRIMARY KEY ("id");
+ALTER TABLE ONLY "public"."ticket_classification_history"
+    ADD CONSTRAINT "ticket_classification_history_account_id_idempotency_key_key" UNIQUE ("account_id", "idempotency_key");
+
+
+
+ALTER TABLE ONLY "public"."ticket_classification_history"
+    ADD CONSTRAINT "ticket_classification_history_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2154,12 +2277,17 @@ ALTER TABLE ONLY "public"."ticket_messages"
 
 
 ALTER TABLE ONLY "public"."ticket_note_mentions"
-    ADD CONSTRAINT "ticket_note_mentions_event_user_key" UNIQUE ("ticket_event_id", "mentioned_user_id");
+    ADD CONSTRAINT "ticket_note_mentions_note_user_key" UNIQUE ("ticket_note_id", "mentioned_user_id");
 
 
 
 ALTER TABLE ONLY "public"."ticket_note_mentions"
     ADD CONSTRAINT "ticket_note_mentions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_notes"
+    ADD CONSTRAINT "ticket_notes_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2489,15 +2617,11 @@ CREATE INDEX "idx_ticket_activity_log_ticket_seq" ON "public"."ticket_activity_l
 
 
 
-CREATE INDEX "idx_ticket_events_author_id" ON "public"."ticket_events" USING "btree" ("author_id");
+CREATE INDEX "idx_ticket_classification_history_account_occurred" ON "public"."ticket_classification_history" USING "btree" ("account_id", "occurred_at");
 
 
 
-CREATE INDEX "idx_ticket_events_event_type" ON "public"."ticket_events" USING "btree" ("event_type");
-
-
-
-CREATE INDEX "idx_ticket_events_ticket_id" ON "public"."ticket_events" USING "btree" ("ticket_id");
+CREATE INDEX "idx_ticket_classification_history_ticket_seq" ON "public"."ticket_classification_history" USING "btree" ("ticket_id", "seq");
 
 
 
@@ -2514,6 +2638,14 @@ CREATE INDEX "idx_ticket_note_mentions_ticket" ON "public"."ticket_note_mentions
 
 
 CREATE INDEX "idx_ticket_note_mentions_user" ON "public"."ticket_note_mentions" USING "btree" ("mentioned_user_id", "read_at");
+
+
+
+CREATE INDEX "idx_ticket_notes_account_created" ON "public"."ticket_notes" USING "btree" ("account_id", "created_at");
+
+
+
+CREATE INDEX "idx_ticket_notes_ticket" ON "public"."ticket_notes" USING "btree" ("ticket_id", "created_at");
 
 
 
@@ -2653,6 +2785,10 @@ CREATE OR REPLACE TRIGGER "on_response_templates_updated" BEFORE UPDATE ON "publ
 
 
 
+CREATE OR REPLACE TRIGGER "on_ticket_notes_updated" BEFORE UPDATE ON "public"."ticket_notes" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
 CREATE OR REPLACE TRIGGER "on_ticket_type_auto_approval_updated" BEFORE UPDATE ON "public"."ticket_type_auto_approval" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
 
 
@@ -2662,6 +2798,10 @@ CREATE OR REPLACE TRIGGER "on_tickets_updated" BEFORE UPDATE ON "public"."ticket
 
 
 CREATE OR REPLACE TRIGGER "ticket_activity_log_append_only" BEFORE DELETE OR UPDATE ON "public"."ticket_activity_log" FOR EACH ROW EXECUTE FUNCTION "public"."reject_ticket_activity_log_mutation"();
+
+
+
+CREATE OR REPLACE TRIGGER "ticket_classification_history_append_only" BEFORE DELETE OR UPDATE ON "public"."ticket_classification_history" FOR EACH ROW EXECUTE FUNCTION "public"."reject_ticket_classification_history_mutation"();
 
 
 
@@ -2852,12 +2992,12 @@ ALTER TABLE ONLY "public"."notifications"
 
 
 ALTER TABLE ONLY "public"."notifications"
-    ADD CONSTRAINT "notifications_ticket_event_id_fkey" FOREIGN KEY ("ticket_event_id") REFERENCES "public"."ticket_events"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "notifications_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
 
 ALTER TABLE ONLY "public"."notifications"
-    ADD CONSTRAINT "notifications_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "notifications_ticket_note_id_fkey" FOREIGN KEY ("ticket_note_id") REFERENCES "public"."ticket_notes"("id") ON DELETE CASCADE;
 
 
 
@@ -2926,13 +3066,18 @@ ALTER TABLE ONLY "public"."ticket_activity_log"
 
 
 
-ALTER TABLE ONLY "public"."ticket_events"
-    ADD CONSTRAINT "ticket_events_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+ALTER TABLE ONLY "public"."ticket_classification_history"
+    ADD CONSTRAINT "ticket_classification_history_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id");
 
 
 
-ALTER TABLE ONLY "public"."ticket_events"
-    ADD CONSTRAINT "ticket_events_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."ticket_classification_history"
+    ADD CONSTRAINT "ticket_classification_history_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."ticket_classification_history"
+    ADD CONSTRAINT "ticket_classification_history_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
 
@@ -2972,12 +3117,27 @@ ALTER TABLE ONLY "public"."ticket_note_mentions"
 
 
 ALTER TABLE ONLY "public"."ticket_note_mentions"
-    ADD CONSTRAINT "ticket_note_mentions_ticket_event_id_fkey" FOREIGN KEY ("ticket_event_id") REFERENCES "public"."ticket_events"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "ticket_note_mentions_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
 
 ALTER TABLE ONLY "public"."ticket_note_mentions"
-    ADD CONSTRAINT "ticket_note_mentions_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "ticket_note_mentions_ticket_note_id_fkey" FOREIGN KEY ("ticket_note_id") REFERENCES "public"."ticket_notes"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ticket_notes"
+    ADD CONSTRAINT "ticket_notes_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_notes"
+    ADD CONSTRAINT "ticket_notes_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."ticket_notes"
+    ADD CONSTRAINT "ticket_notes_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
 
@@ -3355,12 +3515,14 @@ CREATE POLICY "ticket_activity_log_select_by_account" ON "public"."ticket_activi
 
 
 
-ALTER TABLE "public"."ticket_events" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."ticket_classification_history" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "ticket_events_access_by_account" ON "public"."ticket_events" USING ((EXISTS ( SELECT 1
-   FROM "public"."tickets" "t"
-  WHERE (("t"."id" = "ticket_events"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
+CREATE POLICY "ticket_classification_history_insert_by_account" ON "public"."ticket_classification_history" FOR INSERT WITH CHECK (("account_id" = "public"."current_account_id"()));
+
+
+
+CREATE POLICY "ticket_classification_history_select_by_account" ON "public"."ticket_classification_history" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -3393,6 +3555,13 @@ ALTER TABLE "public"."ticket_note_mentions" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "ticket_note_mentions_access_by_account" ON "public"."ticket_note_mentions" USING (("account_id" = "public"."current_account_id"()));
+
+
+
+ALTER TABLE "public"."ticket_notes" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_notes_access_by_account" ON "public"."ticket_notes" USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -3618,6 +3787,12 @@ GRANT ALL ON FUNCTION "public"."reject_ticket_activity_log_mutation"() TO "servi
 
 
 
+GRANT ALL ON FUNCTION "public"."reject_ticket_classification_history_mutation"() TO "anon";
+GRANT ALL ON FUNCTION "public"."reject_ticket_classification_history_mutation"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reject_ticket_classification_history_mutation"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "anon";
 GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "service_role";
@@ -3816,9 +3991,15 @@ GRANT ALL ON SEQUENCE "public"."ticket_activity_log_seq_seq" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."ticket_events" TO "anon";
-GRANT ALL ON TABLE "public"."ticket_events" TO "authenticated";
-GRANT ALL ON TABLE "public"."ticket_events" TO "service_role";
+GRANT ALL ON TABLE "public"."ticket_classification_history" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_classification_history" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_classification_history" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."ticket_classification_history_seq_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."ticket_classification_history_seq_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."ticket_classification_history_seq_seq" TO "service_role";
 
 
 
@@ -3837,6 +4018,24 @@ GRANT ALL ON TABLE "public"."ticket_groups" TO "service_role";
 GRANT ALL ON TABLE "public"."ticket_messages" TO "anon";
 GRANT ALL ON TABLE "public"."ticket_messages" TO "authenticated";
 GRANT ALL ON TABLE "public"."ticket_messages" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_notes" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_notes" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_notes" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_lifecycle_timeline" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_lifecycle_timeline" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_lifecycle_timeline" TO "service_role";
 
 
 
@@ -3861,12 +4060,6 @@ GRANT ALL ON TABLE "public"."ticket_priority_sla_events" TO "service_role";
 GRANT ALL ON TABLE "public"."ticket_proposals" TO "anon";
 GRANT ALL ON TABLE "public"."ticket_proposals" TO "authenticated";
 GRANT ALL ON TABLE "public"."ticket_proposals" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."ticket_state_history" TO "anon";
-GRANT ALL ON TABLE "public"."ticket_state_history" TO "authenticated";
-GRANT ALL ON TABLE "public"."ticket_state_history" TO "service_role";
 
 
 

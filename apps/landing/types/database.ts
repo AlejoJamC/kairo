@@ -29,9 +29,6 @@ export type TicketUpdate = Database["public"]["Tables"]["tickets"]["Update"];
 export type TicketMessageRow    = Database["public"]["Tables"]["ticket_messages"]["Row"];
 export type TicketMessageInsert = Database["public"]["Tables"]["ticket_messages"]["Insert"];
 
-export type TicketEventRow    = Database["public"]["Tables"]["ticket_events"]["Row"];
-export type TicketEventInsert = Database["public"]["Tables"]["ticket_events"]["Insert"];
-
 export type TicketFollowerRow    = Database["public"]["Tables"]["ticket_followers"]["Row"];
 export type TicketFollowerInsert = Database["public"]["Tables"]["ticket_followers"]["Insert"];
 

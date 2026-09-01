@@ -18,7 +18,7 @@ import {
 } from "../../lib/scoring.js";
 import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
 import { attachOperationalSla, buildConfigByPriority } from "../../lib/operational-sla.js";
-import { emitTicketEvent, emitTicketActivity } from "../../lib/ticket-events.js";
+import { emitTicketActivity, emitTicketClassification, type ClassificationDimension } from "../../lib/ticket-events.js";
 import { fanOutNoteMentions, resolveMentionNames, markOwnMentions } from "../../lib/note-mention-fanout.js";
 import { extractMentionUserIds } from "../../lib/note-mentions.js";
 import { createCompletionProvider, detectEscalationTriggers } from "@kairo/intelligence";
@@ -356,7 +356,7 @@ tickets.post("/:id/classify", async (c) => {
 
   const { data: ticket, error: fetchError } = await supabase
     .from("tickets")
-    .select("id, subject, body_plain, from_email")
+    .select("id, subject, body_plain, from_email, ticket_type, priority, category, sentiment")
     .eq("id", id)
     .single();
 
@@ -436,12 +436,31 @@ tickets.post("/:id/classify", async (c) => {
     );
   }
 
-  await emitTicketEvent({
-    ticketId: id,
-    authorId: source === "human" ? user.id : null,
-    eventType: source === "human" ? "human_classified" : "ai_classified",
-    metadata: { type: classification.type, priority: classification.priority },
-  });
+  // KAI-191: ai_classified/human_classified moved from the old events
+  // table to ticket_classification_history — one row per dimension actually changed.
+  const classifyModelVersion = resolveModelVersion();
+  const classifyDimensionChanges: [ClassificationDimension, string | null, string | null][] = [
+    ["ticket_type", ticket.ticket_type ?? null, classification.type],
+    ["priority", ticket.priority ?? null, classification.priority],
+    ["category", ticket.category ?? null, classification.category],
+    ["sentiment", ticket.sentiment ?? null, classification.tone],
+  ];
+  for (const [dimension, fromValue, toValue] of classifyDimensionChanges) {
+    if (fromValue === toValue) continue;
+    await emitTicketClassification({
+      accountId: ctx.accountId,
+      ticketId: id,
+      actorType: source === "human" ? "human" : "ai",
+      actorUserId: source === "human" ? user.id : null,
+      actorRef: "tickets.classify",
+      dimension,
+      fromValue,
+      toValue,
+      confidence: classification.confidence,
+      modelVersion: classifyModelVersion,
+      occurredAt: classified_at,
+    });
+  }
 
   return c.json({
     ticket_id: id,
@@ -652,7 +671,12 @@ tickets.post("/classify-batch", async (c) => {
 
 // ---------------------------------------------------------------------------
 // GET /v1/tickets/:id/activity — activity feed (KAI-28)
-// Returns ticket_events newest first, paginated by cursor.
+// Returns ticket_lifecycle_timeline newest first, paginated by cursor.
+// (KAI-191: the old catch-all events table this used to read from has been
+// dropped; ticket_lifecycle_timeline unions its five purpose-shaped
+// successors — ticket_state_history, ticket_activity_log, ticket_notes,
+// ticket_classification_history, messages — into the same one ordered
+// stream per ticket.)
 // ---------------------------------------------------------------------------
 
 tickets.get("/:id/activity", async (c) => {
@@ -674,17 +698,17 @@ tickets.get("/:id/activity", async (c) => {
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
   let query = supabase
-    .from("ticket_events")
+    .from("ticket_lifecycle_timeline")
     .select("*")
     .eq("ticket_id", id)
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
+    .eq("account_id", ctx.accountId)
+    .order("occurred_at", { ascending: false })
     .limit(limit);
 
   if (cursor) {
     try {
-      const { created_at, id: cursorId } = JSON.parse(atob(cursor)) as { created_at: string; id: string };
-      query = query.or(`created_at.lt.${created_at},and(created_at.eq.${created_at},id.lt.${cursorId})`);
+      const { occurred_at } = JSON.parse(atob(cursor)) as { occurred_at: string };
+      query = query.lt("occurred_at", occurred_at);
     } catch {
       return c.json({ error: "Invalid cursor" }, 400);
     }
@@ -697,7 +721,7 @@ tickets.get("/:id/activity", async (c) => {
   const last = items.at(-1);
   const nextCursor =
     items.length === limit && last
-      ? btoa(JSON.stringify({ created_at: last.created_at, id: last.id }))
+      ? btoa(JSON.stringify({ occurred_at: last.occurred_at }))
       : null;
 
   return c.json({ events: items, next_cursor: nextCursor, count: items.length });
@@ -779,7 +803,7 @@ tickets.patch("/:id/status", async (c) => {
 
   // KAI-191: the transition itself was already recorded in
   // ticket_state_history by transitionTicketStatus() above — no second copy
-  // in ticket_events.
+  // anywhere else.
 
   return c.json({ success: true, ticket: updatedTicket });
 });
@@ -967,7 +991,7 @@ tickets.post("/:id/escalate", async (c) => {
       updatedTicket = data as Record<string, unknown> | null;
       // KAI-191: the transition itself was already recorded in
       // ticket_state_history by transitionTicketStatus() above — no second
-      // copy in ticket_events.
+      // copy anywhere else.
     }
   }
 
@@ -987,9 +1011,10 @@ tickets.post("/:id/escalate", async (c) => {
 
 // ---------------------------------------------------------------------------
 // POST /v1/tickets/:id/notes — add an internal note (KAI-221)
-// Internal notes are visible only to agents. Stored as ticket_events with
-// event_type=internal_note, is_internal=true. Also returned as a synthetic
-// ThreadMessage so the UI can append it optimistically.
+// Internal notes are visible only to agents. Stored as ticket_notes (KAI-191:
+// notes are content an author can still edit or retract, not an append-only
+// event). Also returned as a synthetic ThreadMessage so the UI can append it
+// optimistically.
 // ---------------------------------------------------------------------------
 
 // KAI-232: 2000 chars, matching the design spec (rule F.9). The composer shows
@@ -1036,31 +1061,30 @@ tickets.post("/:id/notes", async (c) => {
 
   const now = new Date().toISOString();
 
-  // Insert note into ticket_events
-  const { data: eventRow, error: insertErr } = await supabase
-    .from("ticket_events")
+  // Insert note into ticket_notes (KAI-191)
+  const { data: noteRow, error: insertErr } = await supabase
+    .from("ticket_notes")
     .insert({
+      account_id: ctx.accountId,
       ticket_id: id,
       author_id: user.id,
-      event_type: "internal_note",
       body: parsed.data.body,
-      is_internal: true,
     })
     .select("id, created_at")
     .single();
 
-  if (insertErr || !eventRow) {
+  if (insertErr || !noteRow) {
     return c.json({ error: insertErr?.message ?? "Failed to insert note" }, 500);
   }
 
-  const createdEvent = eventRow as { id: string; created_at: string };
+  const createdNote = noteRow as { id: string; created_at: string };
 
   // KAI-232: mention fan-out. Non-fatal by contract — a failed notification
   // must never fail the note the agent just wrote.
   const mentions = await fanOutNoteMentions({
     accountId: ctx.accountId,
     ticketId: id,
-    ticketEventId: createdEvent.id,
+    ticketNoteId: createdNote.id,
     authorId: user.id,
     body: parsed.data.body,
   });
@@ -1068,14 +1092,14 @@ tickets.post("/:id/notes", async (c) => {
   // Return a ThreadMessage-shaped object (direction="internal") so the UI
   // can append it to the thread without a full reload.
   const note = {
-    id: createdEvent.id,
+    id: createdNote.id,
     direction: "internal" as const,
     sender_external_id: agentEmail,
     sender_display_name: agentName,
     body_plain: parsed.data.body,
     body_html: null,
     snippet: parsed.data.body.substring(0, 120),
-    received_at: createdEvent.created_at ?? now,
+    received_at: createdNote.created_at ?? now,
     is_origin: false,
     delivery_status: null,
     send_error: null,
@@ -1466,18 +1490,14 @@ tickets.post("/:id/reply", async (c) => {
     }
   }
 
-  // 7. Emit activity event
-  await emitTicketEvent({
-    ticketId: id,
-    authorId: user.id,
-    eventType: "reply_sent",
-    body: parsed.data.body,
-    metadata: { message_id: outboundMsg.id, delivery_status: "queued" },
-  });
+  // KAI-191: reply_sent used to be emitted here as a pointer event carrying
+  // metadata.message_id, but the reply already exists as its own row in
+  // `messages` (inserted above, with its own timestamp) — dropped outright,
+  // nothing replaces it.
 
   // KAI-191: any status change here was already recorded in
-  // ticket_state_history by transitionTicketStatus() — no second copy in
-  // ticket_events.
+  // ticket_state_history by transitionTicketStatus() — no second copy
+  // anywhere else.
 
   return c.json(
     {
@@ -1534,12 +1554,12 @@ tickets.get("/:id/messages", async (c) => {
     } as Record<string, unknown>))
     .filter((m) => Boolean(m["id"])); // skip orphans
 
-  // Fetch internal notes from ticket_events and merge into thread (KAI-221)
+  // Fetch internal notes from ticket_notes and merge into thread (KAI-221,
+  // repointed off the old events table by KAI-191)
   const { data: noteEvents } = await supabase
-    .from("ticket_events")
+    .from("ticket_notes")
     .select("id, author_id, body, created_at")
     .eq("ticket_id", id)
-    .eq("event_type", "internal_note")
     .order("created_at", { ascending: true });
 
   if (noteEvents && noteEvents.length > 0) {
@@ -1572,14 +1592,14 @@ tickets.get("/:id/messages", async (c) => {
     // state, so it can only be resolved here, not derived from the body.
     const { data: unreadRows } = await supabase
       .from("ticket_note_mentions")
-      .select("ticket_event_id")
+      .select("ticket_note_id")
       .eq("account_id", ctx.accountId)
       .eq("mentioned_user_id", ctx.userId)
       .is("read_at", null)
-      .in("ticket_event_id", typedNotes.map((e) => e.id));
+      .in("ticket_note_id", typedNotes.map((e) => e.id));
 
     const unreadEventIds = new Set(
-      ((unreadRows ?? []) as { ticket_event_id: string }[]).map((r) => r.ticket_event_id),
+      ((unreadRows ?? []) as { ticket_note_id: string }[]).map((r) => r.ticket_note_id),
     );
 
     for (const evt of typedNotes) {
@@ -1650,7 +1670,7 @@ tickets.post("/:id/classify-approve", async (c) => {
 
   if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
-  const { error: proposalErr } = await supabase
+  const { data: updatedProposal, error: proposalErr } = await supabase
     .from("ticket_proposals")
     .update({
       status: parsed.data.action === "confirm" ? "confirmed" : "rejected",
@@ -1658,16 +1678,40 @@ tickets.post("/:id/classify-approve", async (c) => {
       reviewed_by: user.id,
     })
     .eq("id", parsed.data.proposal_id)
-    .eq("ticket_id", id);
+    .eq("ticket_id", id)
+    .select("proposed_category, proposed_priority, proposed_type, proposed_sentiment, proposed_emotion, confidence_score, model_version")
+    .single();
 
   if (proposalErr) return c.json({ error: proposalErr.message }, 500);
 
-  await emitTicketEvent({
-    ticketId: id,
-    authorId: user.id,
-    eventType: parsed.data.action === "confirm" ? "ai_confirmed" : "ai_rejected",
-    metadata: { proposal_id: parsed.data.proposal_id },
-  });
+  // KAI-191: ai_confirmed/ai_rejected moved from the old events table to
+  // ticket_classification_history — one row per dimension the AI proposed
+  // that this human review decision touched. Confirm/reject reviews a
+  // decision already applied to the ticket at proposal time; the review
+  // itself carries no new from/to value, so from_value stays unset here.
+  const reviewOutcome = parsed.data.action === "confirm" ? "confirmed" : "rejected";
+  const proposedDimensions: [ClassificationDimension, string | null][] = [
+    ["category", updatedProposal?.proposed_category ?? null],
+    ["priority", updatedProposal?.proposed_priority ?? null],
+    ["ticket_type", updatedProposal?.proposed_type ?? null],
+    ["sentiment", updatedProposal?.proposed_sentiment ?? null],
+    ["emotion", updatedProposal?.proposed_emotion ?? null],
+  ];
+  for (const [dimension, proposedValue] of proposedDimensions) {
+    if (proposedValue === null) continue;
+    await emitTicketClassification({
+      accountId: ctx.accountId,
+      ticketId: id,
+      actorType: "human",
+      actorUserId: user.id,
+      actorRef: "tickets.classify-approve",
+      dimension,
+      toValue: proposedValue,
+      confidence: updatedProposal?.confidence_score ?? null,
+      modelVersion: updatedProposal?.model_version ?? null,
+      metadata: { proposal_id: parsed.data.proposal_id, review_outcome: reviewOutcome },
+    });
+  }
 
   return c.json({ ticket_id: id, proposal_id: parsed.data.proposal_id, action: parsed.data.action });
 });
@@ -2311,15 +2355,31 @@ tickets.post("/:id/correct-classification", async (c) => {
 
   if (updateErr) return c.json({ error: "Correction saved but ticket update failed" }, 500);
 
-  await emitTicketEvent({
-    ticketId,
-    authorId: user.id,
-    eventType: "classification_corrected",
-    metadata: {
-      feedback_id:   feedback.id,
-      corrections:   ticketPatch,
-    },
-  });
+  // KAI-191: classification_corrected moved from the old events table to
+  // ticket_classification_history — one row per dimension actually changed
+  // by this human correction. ticketPatch keys already match dimension names
+  // (ticket_type/priority/category/sentiment) 1:1.
+  const correctionBeforeValues: Record<string, string | null> = {
+    ticket_type: ticket.ticket_type ?? null,
+    priority: ticket.priority ?? null,
+    category: ticket.category ?? null,
+    sentiment: ticket.sentiment ?? null,
+  };
+  for (const [dimension, toValue] of Object.entries(ticketPatch) as [ClassificationDimension, string][]) {
+    const fromValue = correctionBeforeValues[dimension] ?? null;
+    if (fromValue === toValue) continue;
+    await emitTicketClassification({
+      accountId: ctx.accountId,
+      ticketId,
+      actorType: "human",
+      actorUserId: user.id,
+      actorRef: "tickets.correct-classification",
+      dimension,
+      fromValue,
+      toValue,
+      metadata: { feedback_id: feedback.id },
+    });
+  }
 
   return c.json({ feedback_id: feedback.id, ticket: updatedTicket });
 });
