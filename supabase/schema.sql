@@ -859,6 +859,26 @@ CREATE OR REPLACE FUNCTION "public"."reject_ticket_activity_log_mutation"() RETU
     LANGUAGE "plpgsql"
     AS $$
 BEGIN
+  IF TG_OP = 'UPDATE'
+     AND NEW.actor_user_id IS NULL
+     AND OLD.actor_user_id IS NOT NULL
+     AND NEW.id = OLD.id
+     AND NEW.account_id = OLD.account_id
+     AND NEW.ticket_id = OLD.ticket_id
+     AND NEW.seq = OLD.seq
+     AND NEW.domain = OLD.domain
+     AND NEW.event_type = OLD.event_type
+     AND NEW.actor_type = OLD.actor_type
+     AND NEW.actor_ref IS NOT DISTINCT FROM OLD.actor_ref
+     AND NEW.reason IS NOT DISTINCT FROM OLD.reason
+     AND NEW.occurred_at = OLD.occurred_at
+     AND NEW.recorded_at = OLD.recorded_at
+     AND NEW.metadata IS NOT DISTINCT FROM OLD.metadata
+     AND NEW.idempotency_key IS NOT DISTINCT FROM OLD.idempotency_key
+  THEN
+    RETURN NEW;
+  END IF;
+
   RAISE EXCEPTION 'ticket_activity_log is append-only: % is not allowed', TG_OP
     USING ERRCODE = 'insufficient_privilege';
 END;
@@ -872,6 +892,28 @@ CREATE OR REPLACE FUNCTION "public"."reject_ticket_classification_history_mutati
     LANGUAGE "plpgsql"
     AS $$
 BEGIN
+  IF TG_OP = 'UPDATE'
+     AND NEW.actor_user_id IS NULL
+     AND OLD.actor_user_id IS NOT NULL
+     AND NEW.id = OLD.id
+     AND NEW.account_id = OLD.account_id
+     AND NEW.ticket_id = OLD.ticket_id
+     AND NEW.seq = OLD.seq
+     AND NEW.actor_type = OLD.actor_type
+     AND NEW.actor_ref IS NOT DISTINCT FROM OLD.actor_ref
+     AND NEW.dimension = OLD.dimension
+     AND NEW.from_value IS NOT DISTINCT FROM OLD.from_value
+     AND NEW.to_value IS NOT DISTINCT FROM OLD.to_value
+     AND NEW.confidence IS NOT DISTINCT FROM OLD.confidence
+     AND NEW.model_version IS NOT DISTINCT FROM OLD.model_version
+     AND NEW.occurred_at = OLD.occurred_at
+     AND NEW.recorded_at = OLD.recorded_at
+     AND NEW.metadata IS NOT DISTINCT FROM OLD.metadata
+     AND NEW.idempotency_key IS NOT DISTINCT FROM OLD.idempotency_key
+  THEN
+    RETURN NEW;
+  END IF;
+
   RAISE EXCEPTION 'ticket_classification_history is append-only: % is not allowed', TG_OP
     USING ERRCODE = 'insufficient_privilege';
 END;
@@ -885,6 +927,27 @@ CREATE OR REPLACE FUNCTION "public"."reject_ticket_state_history_mutation"() RET
     LANGUAGE "plpgsql"
     AS $$
 BEGIN
+  IF TG_OP = 'UPDATE'
+     AND NEW.actor_user_id IS NULL
+     AND OLD.actor_user_id IS NOT NULL
+     AND NEW.id = OLD.id
+     AND NEW.account_id = OLD.account_id
+     AND NEW.ticket_id = OLD.ticket_id
+     AND NEW.seq = OLD.seq
+     AND NEW.from_state IS NOT DISTINCT FROM OLD.from_state
+     AND NEW.to_state = OLD.to_state
+     AND NEW.actor_type = OLD.actor_type
+     AND NEW.actor_ref IS NOT DISTINCT FROM OLD.actor_ref
+     AND NEW."trigger" = OLD."trigger"
+     AND NEW.reason IS NOT DISTINCT FROM OLD.reason
+     AND NEW.occurred_at = OLD.occurred_at
+     AND NEW.recorded_at = OLD.recorded_at
+     AND NEW.metadata IS NOT DISTINCT FROM OLD.metadata
+     AND NEW.idempotency_key IS NOT DISTINCT FROM OLD.idempotency_key
+  THEN
+    RETURN NEW;
+  END IF;
+
   RAISE EXCEPTION 'ticket_state_history is append-only: % is not allowed', TG_OP
     USING ERRCODE = 'insufficient_privilege';
 END;
@@ -1524,8 +1587,8 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_activity_log" (
     "metadata" "jsonb",
     "idempotency_key" "text",
     CONSTRAINT "ticket_activity_log_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
-    CONSTRAINT "ticket_activity_log_domain_check" CHECK (("domain" = ANY (ARRAY['tickets'::"text", 'deduplication'::"text", 'grouping'::"text", 'ans'::"text", 'escalation'::"text"]))),
-    CONSTRAINT "ticket_activity_log_event_type_check" CHECK (("event_type" = ANY (ARRAY['assignment'::"text", 'merge'::"text", 'merged_into'::"text", 'grouped'::"text", 'sla_breach'::"text", 'escalated'::"text"])))
+    CONSTRAINT "ticket_activity_log_domain_check" CHECK (("domain" = ANY (ARRAY['tickets'::"text", 'deduplication'::"text", 'grouping'::"text", 'ans'::"text", 'escalation'::"text", 'messaging'::"text"]))),
+    CONSTRAINT "ticket_activity_log_event_type_check" CHECK (("event_type" = ANY (ARRAY['assignment'::"text", 'merge'::"text", 'merged_into'::"text", 'grouped'::"text", 'sla_breach'::"text", 'escalated'::"text", 'out_of_hours_auto_reply'::"text"])))
 );
 
 
