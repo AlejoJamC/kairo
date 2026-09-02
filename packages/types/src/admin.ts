@@ -3,7 +3,8 @@
 // but with the role field narrowed to the enum and changes typed precisely.
 // See ADR-018 and supabase/migrations/20260409000000_create_admin_users.sql
 
-export type AdminRole = 'admin' | 'superadmin';
+export const ADMIN_ROLES = ['admin', 'superadmin'] as const;
+export type AdminRole = (typeof ADMIN_ROLES)[number];
 
 export interface AdminUser {
   id: string;
