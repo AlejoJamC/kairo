@@ -17,6 +17,15 @@ type DbClient = SupabaseClient<any>;
 
 export type TicketTransitionActorType = "human" | "ai" | "customer" | "system";
 
+// The one legitimate call site for this trigger is tickets-by-thread.ts,
+// right after inserting a brand-new ticket. apply_ticket_transition() no
+// longer special-cases this string (it derives "is this a creation" from
+// whether ticket_state_history already has rows for the ticket — see
+// supabase/migrations/20260901201619_guard_tickets_status_column.sql), so
+// this constant exists only so there's one spelling of the string, not a
+// second copy-pasted literal that could drift.
+export const TICKET_CREATED_TRIGGER = "ticket_created";
+
 export interface TransitionTicketStatusArgs {
   ticketId: string;
   toState: TicketStatus;

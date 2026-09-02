@@ -34,6 +34,15 @@ export interface TransitionEdge {
 // handlers.
 const ALL_ROLES: DashboardRole[] = ['owner', 'admin', 'supervisor', 'agent'];
 
+// KAI-191 correction (2026-09-02) — `open` is an entry-only state: a ticket
+// is 'open' exactly once, the moment it's created/synced. Nothing else ever
+// returns a ticket to 'open' — once a human (or the system) has touched it,
+// the return path is 'in_progress' (from awaiting_customer) or 'reopened'
+// (from the resolved family / escalated). The five `-> open` edges this
+// table used to carry (awaiting_customer, in_progress, resolved, ai_resolved,
+// escalated) were wrong and are removed; see
+// apps/api/src/lib/ticket-thread-transitions.ts for the one live call site
+// that depended on the wrong awaiting_customer -> open edge.
 export const ALLOWED_TRANSITIONS: Record<TicketStatus, TransitionEdge[]> = {
   open: [
     { to: 'awaiting_customer', roles: ALL_ROLES },
@@ -43,18 +52,20 @@ export const ALLOWED_TRANSITIONS: Record<TicketStatus, TransitionEdge[]> = {
     { to: 'ai_resolved',       roles: ALL_ROLES },
   ],
   awaiting_customer: [
-    { to: 'open',      roles: ALL_ROLES },
-    { to: 'resolved',  roles: ALL_ROLES },
-    { to: 'escalated', roles: ALL_ROLES },
+    // KAI-191 correction — was 'open'. A ticket waiting on the customer is
+    // already owned (a human took it, or it auto-moved here after a reply);
+    // a customer reply resumes work, it doesn't drop the ticket back to an
+    // unowned queue.
+    { to: 'in_progress', roles: ALL_ROLES },
+    { to: 'resolved',    roles: ALL_ROLES },
+    { to: 'escalated',   roles: ALL_ROLES },
   ],
   in_progress: [
-    { to: 'open',              roles: ALL_ROLES },
     { to: 'awaiting_customer', roles: ALL_ROLES },
     { to: 'resolved',          roles: ALL_ROLES },
     { to: 'escalated',         roles: ALL_ROLES },
   ],
   resolved: [
-    { to: 'open',     roles: ALL_ROLES },
     { to: 'reopened', roles: ALL_ROLES },
     // KAI-191 — no human role reaches 'closed' through the API. The edge
     // stays legal in the machine because the closure domain (KAI-182) calls
@@ -63,12 +74,12 @@ export const ALLOWED_TRANSITIONS: Record<TicketStatus, TransitionEdge[]> = {
     { to: 'closed',   roles: [] },
   ],
   escalated: [
-    { to: 'resolved',  roles: ALL_ROLES },
-    { to: 'open',      roles: ALL_ROLES },
-    { to: 'reopened',  roles: ALL_ROLES },
+    { to: 'resolved',          roles: ALL_ROLES },
+    { to: 'in_progress',       roles: ALL_ROLES },
+    { to: 'awaiting_customer', roles: ALL_ROLES },
+    { to: 'reopened',          roles: ALL_ROLES },
   ],
   ai_resolved: [
-    { to: 'open',     roles: ALL_ROLES },
     { to: 'reopened', roles: ALL_ROLES },
     // KAI-191 — same as resolved -> closed above.
     { to: 'closed',   roles: [] },

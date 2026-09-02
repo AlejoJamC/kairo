@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
-import { transitionTicketStatus } from "./ticket-transition.js";
+import { transitionTicketStatus, TICKET_CREATED_TRIGGER } from "./ticket-transition.js";
 
 // ---------------------------------------------------------------------------
 // KAI-191 — four DB-level guarantees that were verified by hand while
@@ -400,5 +400,60 @@ describe("ai_resolved invariant (KAI-191)", () => {
     const statusIsAiResolved = ticket?.status === "ai_resolved";
     const lastTransitionWasAi = lastResolvedFamilyRow?.actor_type === "ai";
     expect(statusIsAiResolved).toBe(lastTransitionWasAi);
+  });
+});
+
+describe("apply_ticket_transition — creation detection is state-based, not trigger-string-based (KAI-191 code review)", () => {
+  // Regression test for a bug found in code review: v_is_creation used to be
+  // `p_trigger = 'ticket_created'` — a caller-supplied string, not a fact
+  // about the ticket. Anyone passing trigger: TICKET_CREATED_TRIGGER against
+  // a ticket that already had history could skip both the no-op guard and
+  // the ticket_transition_rules check (see
+  // supabase/migrations/20260901201619_guard_tickets_status_column.sql).
+  // Fixed to derive v_is_creation from whether ticket_state_history already
+  // has rows for the ticket, not from the trigger string. This proves the
+  // fix: reusing TICKET_CREATED_TRIGGER against a ticket with existing
+  // history must not bypass validation.
+  it("rejects an otherwise-illegal transition even when trigger is TICKET_CREATED_TRIGGER, once the ticket has history", async () => {
+    const ticketId = await createTestTicket("creation-detection-bypass");
+    createdTicketIds.push(ticketId);
+
+    // Give the ticket real history first (open -> in_progress), so it is no
+    // longer "creation" by any honest definition.
+    const first = await transitionTicketStatus(admin, {
+      ticketId,
+      toState: "in_progress",
+      actorType: "human",
+      actorRef: "integration-test",
+      trigger: "manual_status_change",
+      idempotencyKey: randomUUID(),
+    });
+    expect(first.outcome).toBe("applied");
+
+    // in_progress -> closed is illegal in ALLOWED_TRANSITIONS. Before the
+    // fix, passing trigger: TICKET_CREATED_TRIGGER made apply_ticket_transition
+    // treat this as a from_state=NULL creation row and skip the
+    // ticket_transition_rules check entirely, applying it anyway.
+    const bypassAttempt = await transitionTicketStatus(admin, {
+      ticketId,
+      toState: "closed",
+      actorType: "system",
+      actorRef: "integration-test",
+      trigger: TICKET_CREATED_TRIGGER,
+      idempotencyKey: randomUUID(),
+    });
+
+    expect(bypassAttempt.outcome).toBe("invalid_transition");
+
+    const { data: ticket } = await admin.from("tickets").select("status").eq("id", ticketId).single();
+    expect(ticket?.status).toBe("in_progress");
+
+    // And the illegal attempt left no false from_state=NULL row in the trail.
+    const { data: historyRows } = await admin
+      .from("ticket_state_history")
+      .select("from_state, to_state")
+      .eq("ticket_id", ticketId)
+      .order("seq", { ascending: true });
+    expect(historyRows?.some((row) => row.to_state === "closed")).toBe(false);
   });
 });

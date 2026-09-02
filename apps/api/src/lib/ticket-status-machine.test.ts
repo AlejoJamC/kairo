@@ -42,20 +42,18 @@ describe("isValidTransition — allowed paths", () => {
     ["open",              "resolved"],
     ["open",              "escalated"],
     ["open",              "ai_resolved"],
-    ["awaiting_customer", "open"],
+    ["awaiting_customer", "in_progress"],    // KAI-191 correction: was 'open'
     ["awaiting_customer", "resolved"],
     ["awaiting_customer", "escalated"],
-    ["in_progress",       "open"],
     ["in_progress",       "awaiting_customer"],
     ["in_progress",       "resolved"],
     ["in_progress",       "escalated"],
-    ["resolved",          "open"],
     ["resolved",          "reopened"],       // KAI-221: customer re-opens resolved ticket
     ["resolved",          "closed"],         // KAI-191: resolved's assertion becoming firm
     ["escalated",         "resolved"],
-    ["escalated",         "open"],
+    ["escalated",         "in_progress"],       // KAI-191 correction (2026-09-02): was blocked, wrongly
+    ["escalated",         "awaiting_customer"], // KAI-191 correction (2026-09-02): was blocked, wrongly
     ["escalated",         "reopened"],       // KAI-221
-    ["ai_resolved",       "open"],
     ["ai_resolved",       "reopened"],       // KAI-221
     ["ai_resolved",       "closed"],         // KAI-191
     ["reopened",          "in_progress"],    // KAI-221: agent picks up reopened ticket
@@ -77,13 +75,18 @@ describe("isValidTransition — blocked paths", () => {
     ["resolved",      "escalated"],
     ["resolved",      "ai_resolved"],
     ["resolved",      "in_progress"],
-    ["escalated",     "awaiting_customer"],
     ["escalated",     "ai_resolved"],
-    ["escalated",     "in_progress"],
     ["ai_resolved",   "resolved"],
     ["ai_resolved",   "escalated"],
     ["reopened",      "open"],              // KAI-221: direct → open not allowed from reopened
     ["reopened",      "ai_resolved"],
+    // KAI-191 correction (2026-09-02): 'open' is entry-only — nothing
+    // returns to it once a ticket leaves it.
+    ["awaiting_customer", "open"],
+    ["in_progress",       "open"],
+    ["resolved",           "open"],
+    ["ai_resolved",        "open"],
+    ["escalated",          "open"],
   ];
 
   for (const [from, to] of blocked) {

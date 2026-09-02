@@ -114,7 +114,16 @@ BEGIN
       USING ERRCODE = 'KA404';
   END IF;
 
-  v_is_creation := (p_trigger = 'ticket_created');
+  -- A ticket is genuinely being created exactly when it has no prior rows in
+  -- ticket_state_history — that fact lives in the table being written, not
+  -- in a string the caller happens to pass. (Not `p_trigger = 'ticket_created'`:
+  -- trigger is caller-supplied free text, and keying creation-detection off
+  -- it would let any future caller bypass both the no-op guard and the
+  -- ticket_transition_rules check below by reusing that string against an
+  -- existing ticket.)
+  v_is_creation := NOT EXISTS (
+    SELECT 1 FROM public.ticket_state_history WHERE ticket_id = p_ticket_id
+  );
 
   v_history_from_state := CASE WHEN v_is_creation THEN NULL ELSE v_from_state END;
 

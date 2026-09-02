@@ -33,7 +33,7 @@ const { applyCustomerReplyTransition } = await import("./ticket-thread-transitio
 
 function makeMockClient({
   updateError = null as unknown,
-  rpcResult = { data: [{ outcome: "applied", from_state: "awaiting_customer", to_state: "open", history_id: "hist-1" }], error: null } as {
+  rpcResult = { data: [{ outcome: "applied", from_state: "awaiting_customer", to_state: "in_progress", history_id: "hist-1" }], error: null } as {
     data: unknown;
     error: unknown;
   },
@@ -67,19 +67,19 @@ function makeMockClient({
 }
 
 describe("applyCustomerReplyTransition", () => {
-  it("transitions awaiting_customer → open via transitionTicketStatus", async () => {
+  it("transitions awaiting_customer → in_progress via transitionTicketStatus (KAI-191 correction)", async () => {
     const client = makeMockClient({
-      rpcResult: { data: [{ outcome: "applied", from_state: "awaiting_customer", to_state: "open", history_id: "hist-1" }], error: null },
+      rpcResult: { data: [{ outcome: "applied", from_state: "awaiting_customer", to_state: "in_progress", history_id: "hist-1" }], error: null },
     });
     const result = await applyCustomerReplyTransition(client, "ticket-1", "awaiting_customer");
-    expect(result.newStatus).toBe("open");
+    expect(result.newStatus).toBe("in_progress");
 
     expect(client._rpcFn).toHaveBeenCalledTimes(1);
     const [fnName, args] = client._rpcFn.mock.calls[0];
     expect(fnName).toBe("apply_ticket_transition");
     expect(args).toMatchObject({
       p_ticket_id: "ticket-1",
-      p_to_state: "open",
+      p_to_state: "in_progress",
       p_actor_type: "customer",
       p_trigger: "customer_reply",
     });
@@ -116,7 +116,7 @@ describe("applyCustomerReplyTransition", () => {
 
   it("does not write when the transition comes back no_op — no fallback write (KAI-191)", async () => {
     const client = makeMockClient({
-      rpcResult: { data: [{ outcome: "no_op", from_state: "awaiting_customer", to_state: "open", history_id: null }], error: null },
+      rpcResult: { data: [{ outcome: "no_op", from_state: "awaiting_customer", to_state: "in_progress", history_id: null }], error: null },
     });
     const result = await applyCustomerReplyTransition(client, "ticket-6", "awaiting_customer");
     expect(result.newStatus).toBeNull();

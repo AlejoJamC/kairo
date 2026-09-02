@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { transitionTicketStatus } from "./ticket-transition.js";
+import { transitionTicketStatus, TICKET_CREATED_TRIGGER } from "./ticket-transition.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbClient = SupabaseClient<any>;
@@ -164,7 +164,7 @@ export async function findOrCreateTicketForThread(
     toState: "open",
     actorType: "system",
     actorRef: "tickets-by-thread",
-    trigger: "ticket_created",
+    trigger: TICKET_CREATED_TRIGGER,
   });
   if (transition.outcome !== "applied") {
     console.error(

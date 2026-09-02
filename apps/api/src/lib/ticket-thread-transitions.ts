@@ -9,8 +9,10 @@ type DbClient = SupabaseClient<any>;
 /**
  * Status transitions when a customer replies to a ticket thread.
  *
- * Rules (KAI-165 decision #2):
- *   awaiting_customer → open
+ * Rules (KAI-165 decision #2, corrected KAI-191 2026-09-02):
+ *   awaiting_customer → in_progress  (was 'open' — wrong: the ticket is
+ *                                      already owned, waiting on the
+ *                                      customer isn't the same as unowned)
  *   resolved          → reopened
  *   all others        → no change (null)
  *
@@ -28,7 +30,7 @@ export async function applyCustomerReplyTransition(
   // Determine candidate transition
   let candidate: string | null = null;
   if (priorStatus === "awaiting_customer") {
-    candidate = "open";
+    candidate = "in_progress";
   } else if (priorStatus === "resolved") {
     candidate = "reopened";
   }
