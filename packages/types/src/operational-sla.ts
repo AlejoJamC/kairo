@@ -20,7 +20,8 @@
 // this one function.
 // ---------------------------------------------------------------------------
 
-export type TicketPriority = "P1" | "P2" | "P3";
+import { TICKET_PRIORITIES, type TicketPriority } from './classification.js';
+export type { TicketPriority };
 
 export interface PrioritySlaConfig {
   maxResponseSeconds: number;
@@ -154,7 +155,7 @@ export function buildConfigByPriority(
 ): Record<TicketPriority, PrioritySlaConfig> {
   const byPriority = new Map(rows.map((row) => [row.priority, row]));
   const result = {} as Record<TicketPriority, PrioritySlaConfig>;
-  for (const priority of ["P1", "P2", "P3"] as TicketPriority[]) {
+  for (const priority of TICKET_PRIORITIES) {
     const row = byPriority.get(priority);
     result[priority] = row
       ? {

@@ -1,12 +1,22 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flag=\"$CLAUDE_PROJECT_DIR/.claude/.commit-authorized\"; prompt=$(jq -r '.prompt // \"\"'); if printf '%s' \"$prompt\" | grep -qiE '\\b(commit|push)\\b'; then date +%s > \"$flag\"; else rm -f \"$flag\"; fi"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "cmd=$(jq -r '.tool_input.command // \"\"'); if printf '%s' \"$cmd\" | grep -qE '(^|[;&|()])[[:space:]]*git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+(commit|push|reset|rebase|revert|cherry-pick|filter-branch|stash[[:space:]]+drop|branch[[:space:]]+-[dD]|tag[[:space:]]+-d)\\b'; then printf '%s' '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"ask\", \"permissionDecisionReason\": \"Git command that writes or rewrites history. Approve only if you asked for it in this message.\"}}'; fi"
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"'); if printf '%s' \"$cmd\" | grep -qE '(^|[;&|()])[[:space:]]*git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+(commit|push|reset|rebase|revert|cherry-pick|filter-branch|stash[[:space:]]+drop|branch[[:space:]]+-[dD]|tag[[:space:]]+-d)\\b'; then flag=\"$CLAUDE_PROJECT_DIR/.claude/.commit-authorized\"; now=$(date +%s); ts=$(cat \"$flag\" 2>/dev/null || echo 0); age=$(( now - ts )); if [ -f \"$flag\" ] && [ \"$age\" -le 600 ]; then rm -f \"$flag\"; printf '%s' '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"allow\", \"permissionDecisionReason\": \"commit/push found verbatim in the current user message (mechanically checked, not by the agent).\"}}'; else printf '%s' '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"No commit/push instruction detected in the current user message. Say commit or push explicitly, or run it yourself.\"}}'; fi; fi"
           }
         ]
       },

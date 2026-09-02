@@ -183,3 +183,6 @@ kairo-internal/*
 
 # Supabase CLI local branch state — auto-generated, never commit
 supabase/.branches
+
+# Commit-intent flag written by .claude/settings.json's UserPromptSubmit hook
+.claude/.commit-authorized

@@ -3,16 +3,18 @@ import { useTranslation } from "react-i18next";
 import { Dialog } from "radix-ui";
 import { X, Loader2 } from "lucide-react";
 import { apiCall } from "@/lib/api-client";
-import type { Ticket } from "@kairo/types";
+import { TICKET_PRIORITIES, TICKET_TYPES, TICKET_CATEGORIES, TICKET_TONES, type Ticket } from "@kairo/types";
 
 // ---------------------------------------------------------------------------
-// Option lists — must stay in sync with DB CHECK constraints
+// Option lists — the canonical vocabulary lives in @kairo/types, which the
+// DB CHECK constraints and packages/intelligence's ClassificationSchema both
+// derive from too.
 // ---------------------------------------------------------------------------
 
-const PRIORITY_OPTIONS   = ["P1", "P2", "P3"] as const;
-const TYPE_OPTIONS       = ["support", "prospect", "spam", "internal", "other"] as const;
-const CATEGORY_OPTIONS   = ["technical", "billing", "account", "general", "not_applicable"] as const;
-const SENTIMENT_OPTIONS  = ["aggressive", "frustrated", "neutral", "positive"] as const;
+const PRIORITY_OPTIONS   = TICKET_PRIORITIES;
+const TYPE_OPTIONS       = TICKET_TYPES;
+const CATEGORY_OPTIONS   = TICKET_CATEGORIES;
+const SENTIMENT_OPTIONS  = TICKET_TONES;
 
 // ---------------------------------------------------------------------------
 // Types

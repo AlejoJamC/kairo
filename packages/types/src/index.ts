@@ -1,5 +1,6 @@
 export * from './database.js';
 export * from './admin.js';
+export * from './classification.js';
 export * from './operational-sla.js';
 
 import type { Tables } from './database.js';
