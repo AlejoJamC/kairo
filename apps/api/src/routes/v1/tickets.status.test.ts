@@ -161,6 +161,34 @@ describe("PATCH /v1/tickets/:id/status", () => {
 
     expect(rpcMock).not.toHaveBeenCalled();
   });
+
+  it("RPC reports no_op (a race landed the ticket on the target state already): 200, not INVALID_TRANSITION (code review finding #1)", async () => {
+    // checkTransitionPermission() only sees fromStatus = 'open' (the read
+    // above), so it treats open -> in_progress as legal and lets the RPC
+    // run. This models the RPC's own fresh read finding the ticket already
+    // at in_progress by the time it runs — a narrow but real race, not
+    // reachable by passing status === current status directly (that is
+    // rejected by checkTransitionPermission before the RPC is ever called,
+    // see the illegal-transition test above).
+    state.ticket = { id: TICKET_ID, status: "open" };
+    state.updatedTicket = { id: TICKET_ID, status: "in_progress" };
+    state.rpcResult = {
+      data: [{ outcome: "no_op", from_state: "in_progress", to_state: "in_progress", history_id: null }],
+      error: null,
+    };
+
+    const res = await authedRequest(`/${TICKET_ID}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "in_progress" }),
+    });
+
+    // no_op means the ticket is already at the requested state — that is
+    // success from the caller's point of view, not INVALID_TRANSITION.
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.code).not.toBe("INVALID_TRANSITION");
+    expect((body.ticket as { status: string }).status).toBe("in_progress");
+  });
 });
 
 describe("POST /v1/tickets/:id/escalate", () => {

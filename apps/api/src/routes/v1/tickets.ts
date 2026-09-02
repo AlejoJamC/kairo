@@ -800,12 +800,23 @@ tickets.patch("/:id/status", async (c) => {
   if (transition.outcome === "not_found") {
     return c.json({ error: "Ticket not found" }, 404);
   }
-  if (transition.outcome === "invalid_transition" || transition.outcome === "no_op") {
+  if (transition.outcome === "invalid_transition") {
     return c.json(
       { error: getTransitionError(fromStatus, toStatus), code: "INVALID_TRANSITION" },
       422
     );
   }
+  // KAI-191 fix (code review finding #1): "applied" and "no_op" are both
+  // success outcomes — the ticket ends up in toStatus either way. no_op
+  // only happens here via a narrow race (the app-level checkTransitionPermission
+  // call above already rejects a same-state request before the RPC is ever
+  // called, so the only way apply_ticket_transition() itself reports no_op
+  // is a concurrent request landing the ticket on toStatus between this
+  // handler's read and the RPC's own re-read). It is not an error, and this
+  // route used to report it as INVALID_TRANSITION — misleading the caller
+  // about a request that in fact succeeded. Every other caller of
+  // transitionTicketStatus() already treats no_op as fine; this route now
+  // matches them.
 
   const { data: updatedTicket, error: fetchErr2 } = await supabase
     .from("tickets")
