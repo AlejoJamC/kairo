@@ -3,7 +3,7 @@ import { Mail, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
 import { TicketHeader } from "./ticket-header";
-import { isTriageActive } from "@/lib/triage-status";
+import { isTriageActive, isTicketReadOnly } from "@/lib/triage-status";
 import { useTriageStore } from "@/stores/triage-store";
 import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
@@ -427,7 +427,7 @@ export function TicketDetail() {
   }, [scrollToMessageId, messages, clearScrollToMessage]);
 
   // KAI-25 — resolved/ai_resolved tickets render read-only (no reply/note input).
-  const isReadOnly = ticket ? ticket.status === "resolved" || ticket.status === "ai_resolved" : false;
+  const isReadOnly = ticket ? isTicketReadOnly(ticket.status) : false;
 
   // Auto-clear the selection on an active->inactive transition for this same
   // ticket (not on tickets already inactive when opened, e.g. browsing Resuelto).

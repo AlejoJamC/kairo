@@ -98,6 +98,13 @@ export const SIDEBAR_RESOLVED_STATUSES: TicketStatus[] = TICKET_STATUSES.filter(
   (status) => IS_SIDEBAR_RESOLVED_STATUS[status]
 );
 
+// A ticket in one of SIDEBAR_RESOLVED_STATUSES (resolved/ai_resolved) renders
+// read-only in the detail view — same set as the Resuelto badge above, kept
+// as one function so the two can't drift apart independently.
+export function isTicketReadOnly(status: string | null | undefined): boolean {
+  return IS_SIDEBAR_RESOLVED_STATUS[status as TicketStatus] === true;
+}
+
 // ---------------------------------------------------------------------------
 // KAI-191 — statuses excluded from the Inbox/TicketList initial fetch, i.e.
 // the values inside `.not("status", "in", "(...)")` in inbox.tsx and

@@ -189,6 +189,17 @@ describe("PATCH /v1/tickets/:id/status", () => {
     expect(body.code).not.toBe("INVALID_TRANSITION");
     expect((body.ticket as { status: string }).status).toBe("in_progress");
   });
+
+  it("rejects a status outside the TicketStatus vocabulary before ever reading the ticket (real UpdateStatusSchema, not a hand-copied one)", async () => {
+    const res = await authedRequest(`/${TICKET_ID}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "archived" }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /v1/tickets/:id/escalate", () => {

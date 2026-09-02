@@ -215,51 +215,14 @@ describe("activity feed pagination logic", () => {
   });
 });
 
-describe("request schema validation", () => {
-  it("UpdateStatusSchema accepts valid statuses", () => {
-    const { z } = require("zod");
-    const schema = z.object({
-      status: z.enum(["open", "in_progress", "waiting", "resolved", "closed"]),
-    });
-    for (const s of ["open", "in_progress", "waiting", "resolved", "closed"]) {
-      expect(schema.safeParse({ status: s }).success).toBe(true);
-    }
-  });
-
-  it("UpdateStatusSchema rejects unknown status", () => {
-    const { z } = require("zod");
-    const schema = z.object({
-      status: z.enum(["open", "in_progress", "waiting", "resolved", "closed"]),
-    });
-    expect(schema.safeParse({ status: "archived" }).success).toBe(false);
-  });
-
-  it("ClassifyApproveSchema accepts confirm and reject", () => {
-    const { z } = require("zod");
-    const schema = z.object({
-      proposal_id: z.string().uuid(),
-      action: z.enum(["confirm", "reject"]),
-    });
-    const id = "00000000-0000-4000-8000-000000000001";
-    expect(schema.safeParse({ proposal_id: id, action: "confirm" }).success).toBe(true);
-    expect(schema.safeParse({ proposal_id: id, action: "reject" }).success).toBe(true);
-  });
-
-  it("ClassifyApproveSchema rejects invalid action", () => {
-    const { z } = require("zod");
-    const schema = z.object({
-      proposal_id: z.string().uuid(),
-      action: z.enum(["confirm", "reject"]),
-    });
-    const id = "00000000-0000-4000-8000-000000000001";
-    expect(schema.safeParse({ proposal_id: id, action: "approve" }).success).toBe(false);
-  });
-
-  it("ReplySchema requires non-empty body", () => {
-    const { z } = require("zod");
-    const schema = z.object({ body: z.string().min(1), is_internal: z.boolean().default(false) });
-    expect(schema.safeParse({ body: "" }).success).toBe(false);
-    expect(schema.safeParse({ body: "hello" }).success).toBe(true);
-  });
-});
+// KAI-191: the "request schema validation" block that used to live here
+// tested fabricated, disconnected copies of tickets.ts's zod schemas —
+// UpdateStatusSchema's copy had drifted to ["open","in_progress","waiting",
+// "resolved","closed"], a status list that was never real (no "waiting",
+// missing awaiting_customer/reopened/escalated/ai_resolved). The real
+// schemas already have real coverage against the real endpoints:
+// tickets.status.test.ts, tickets.classify-approve.test.ts and
+// tickets.reply.test.ts. Removed rather than fixed in place — a second,
+// hand-maintained copy of a schema that already has real tests is exactly
+// the kind of thing that drifts silently.
 
