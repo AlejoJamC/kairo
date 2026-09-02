@@ -8,7 +8,7 @@
 -- =====================================================
 
 -- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
 
 -- =====================================================
 -- 1. PROFILES TABLE
@@ -31,7 +31,7 @@ COMMENT ON TABLE public.profiles IS 'Extended user profile data for Kairo users'
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS public.gmail_accounts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   access_token TEXT,

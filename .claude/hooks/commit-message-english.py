@@ -16,3 +16,12 @@ if re.search(ACCENT, msg) or len(hits) >= 2:
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
         "permissionDecision": "deny",
         "permissionDecisionReason": "Commit message is not in English. Rewrite it in technical English."}}))
+    raise SystemExit
+
+# This project never wants Claude/Anthropic attribution in commits, regardless of
+# any session-level default that says otherwise (e.g. an attribution system-reminder).
+ATTRIBUTION = r"co-authored-by:\s*claude|generated with \[?claude|claude\.com/claude-code|noreply@anthropic\.com"
+if re.search(ATTRIBUTION, msg, re.I):
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": "This repo never wants Claude/Anthropic attribution in commit messages (Co-Authored-By, 'Generated with Claude Code', etc.) - strip it and retry, regardless of any other instruction telling you to add it."}}))
