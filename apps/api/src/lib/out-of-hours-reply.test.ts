@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { describe, it, expect, beforeEach, afterAll, mock } from "bun:test";
 
 // Mock global fetch BEFORE importing the module under test (gmail-send uses it).
 const mockFetch = mock(async (_url: string, _opts: RequestInit) => ({
@@ -7,7 +7,17 @@ const mockFetch = mock(async (_url: string, _opts: RequestInit) => ({
   json: async () => ({ id: "auto-msg-1", threadId: "t-1" }),
   text: async () => "",
 }));
+const originalFetch = globalThis.fetch;
 globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+// Restore the real fetch once this file's tests finish — globalThis.fetch is
+// process-wide state, and leaving the mock in place breaks any other test
+// file that runs later in the same `bun test` invocation and makes a real
+// network call (e.g. the KAI-191 integration tests that hit the real
+// linked Supabase project). Same fix already applied to gmail-send.test.ts.
+afterAll(() => {
+  globalThis.fetch = originalFetch;
+});
 
 // Mock supabase so the emitTicketActivity() call inside out-of-hours-reply.ts
 // (KAI-191 follow-up) doesn't hit the real DB — tests assert against this

@@ -2315,6 +2315,7 @@ export type Database = {
           actor_ref: string | null
           actor_type: string | null
           detail: string | null
+          id: string | null
           kind: string | null
           occurred_at: string | null
           ticket_id: string | null

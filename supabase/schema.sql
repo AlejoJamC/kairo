@@ -1747,7 +1747,8 @@ CREATE OR REPLACE VIEW "public"."ticket_lifecycle_timeline" WITH ("security_invo
         CASE
             WHEN ("h"."from_state" IS NULL) THEN "h"."to_state"
             ELSE (("h"."from_state" || ' → '::"text") || "h"."to_state")
-        END AS "detail"
+        END AS "detail",
+    "h"."id"
    FROM "public"."ticket_state_history" "h"
 UNION ALL
  SELECT "a"."account_id",
@@ -1756,7 +1757,8 @@ UNION ALL
     'activity'::"text" AS "kind",
     "a"."actor_type",
     COALESCE("a"."actor_ref", ("a"."actor_user_id")::"text") AS "actor_ref",
-    "a"."event_type" AS "detail"
+    "a"."event_type" AS "detail",
+    "a"."id"
    FROM "public"."ticket_activity_log" "a"
 UNION ALL
  SELECT "n"."account_id",
@@ -1768,7 +1770,8 @@ UNION ALL
         CASE
             WHEN ("length"("n"."body") > 140) THEN ("left"("n"."body", 140) || '…'::"text")
             ELSE "n"."body"
-        END AS "detail"
+        END AS "detail",
+    "n"."id"
    FROM "public"."ticket_notes" "n"
 UNION ALL
  SELECT "c"."account_id",
@@ -1777,7 +1780,8 @@ UNION ALL
     'classification'::"text" AS "kind",
     "c"."actor_type",
     COALESCE("c"."actor_ref", ("c"."actor_user_id")::"text") AS "actor_ref",
-    (((("c"."dimension" || ': '::"text") || COALESCE("c"."from_value", '—'::"text")) || ' → '::"text") || COALESCE("c"."to_value", '—'::"text")) AS "detail"
+    (((("c"."dimension" || ': '::"text") || COALESCE("c"."from_value", '—'::"text")) || ' → '::"text") || COALESCE("c"."to_value", '—'::"text")) AS "detail",
+    "c"."id"
    FROM "public"."ticket_classification_history" "c"
 UNION ALL
  SELECT "m"."account_id",
@@ -1789,7 +1793,8 @@ UNION ALL
             ELSE 'human'::"text"
         END AS "actor_type",
     "m"."sender_display_name" AS "actor_ref",
-    "m"."direction" AS "detail"
+    "m"."direction" AS "detail",
+    "m"."id"
    FROM ("public"."ticket_messages" "tm"
      JOIN "public"."messages" "m" ON (("m"."id" = "tm"."message_id")));
 
@@ -1797,7 +1802,7 @@ UNION ALL
 ALTER VIEW "public"."ticket_lifecycle_timeline" OWNER TO "postgres";
 
 
-COMMENT ON VIEW "public"."ticket_lifecycle_timeline" IS 'One ordered stream per ticket, unioning ticket_state_history, ticket_activity_log, ticket_notes, ticket_classification_history and messages (via ticket_messages). kind distinguishes the source (state_change/activity/note/classification/message); detail is a short per-source summary. Composed in SQL on purpose — never reassembled in an endpoint.';
+COMMENT ON VIEW "public"."ticket_lifecycle_timeline" IS 'One ordered stream per ticket, unioning ticket_state_history, ticket_activity_log, ticket_notes, ticket_classification_history and messages (via ticket_messages). kind distinguishes the source (state_change/activity/note/classification/message); detail is a short per-source summary; id is each row''s own source-table primary key, exposed only as a stable pagination tie-break for occurred_at ties — it carries no meaning across sources. Composed in SQL on purpose — never reassembled in an endpoint.';
 
 
 

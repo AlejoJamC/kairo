@@ -697,18 +697,32 @@ tickets.get("/:id/activity", async (c) => {
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
+  // KAI-191 fix: ticket_lifecycle_timeline unions five sources with no
+  // shared, globally ordered key, so two rows can share an identical
+  // occurred_at (recordAiClassification() itself writes such a pair on
+  // purpose). Paginating on occurred_at alone can then silently drop
+  // whichever row of a tied pair falls on the wrong side of a page
+  // boundary. `id` (each row's own source-table primary key — meaningless
+  // across sources, but globally unique) breaks the tie so the same
+  // boundary can never split across two pages.
   let query = supabase
     .from("ticket_lifecycle_timeline")
     .select("*")
     .eq("ticket_id", id)
     .eq("account_id", ctx.accountId)
     .order("occurred_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(limit);
 
   if (cursor) {
     try {
-      const { occurred_at } = JSON.parse(atob(cursor)) as { occurred_at: string };
-      query = query.lt("occurred_at", occurred_at);
+      const { occurred_at, id: cursorId } = JSON.parse(atob(cursor)) as {
+        occurred_at: string;
+        id: string;
+      };
+      query = query.or(
+        `occurred_at.lt.${occurred_at},and(occurred_at.eq.${occurred_at},id.lt.${cursorId})`
+      );
     } catch {
       return c.json({ error: "Invalid cursor" }, 400);
     }
@@ -721,7 +735,7 @@ tickets.get("/:id/activity", async (c) => {
   const last = items.at(-1);
   const nextCursor =
     items.length === limit && last
-      ? btoa(JSON.stringify({ occurred_at: last.occurred_at }))
+      ? btoa(JSON.stringify({ occurred_at: last.occurred_at, id: last.id }))
       : null;
 
   return c.json({ events: items, next_cursor: nextCursor, count: items.length });
