@@ -95,6 +95,16 @@ export interface EmitTicketClassificationOptions {
   dimension: ClassificationDimension;
   fromValue?: string | null;
   toValue?: string | null;
+  /**
+   * Whether toValue actually became the ticket's attribute. No default on
+   * purpose: this is the fact that distinguishes a rejected AI proposal
+   * from an applied one, so every caller states it explicitly rather than
+   * inheriting a silent assumption. true for a classification pass or a
+   * human correction (both write real, applied values); false for a
+   * rejected AI proposal — toValue still records what was proposed and
+   * rejected, it just never took effect on the ticket.
+   */
+  applied: boolean;
   confidence?: number | null;
   modelVersion?: string | null;
   occurredAt?: string;
@@ -112,6 +122,7 @@ export async function emitTicketClassification(opts: EmitTicketClassificationOpt
     dimension: opts.dimension,
     from_value: opts.fromValue ?? null,
     to_value: opts.toValue ?? null,
+    applied: opts.applied,
     confidence: opts.confidence ?? null,
     model_version: opts.modelVersion ?? null,
     occurred_at: opts.occurredAt ?? new Date().toISOString(),

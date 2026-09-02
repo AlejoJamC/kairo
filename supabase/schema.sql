@@ -1634,6 +1634,7 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_classification_history" (
     "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "metadata" "jsonb",
     "idempotency_key" "text",
+    "applied" boolean NOT NULL,
     CONSTRAINT "ticket_classification_history_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
     CONSTRAINT "ticket_classification_history_dimension_check" CHECK (("dimension" = ANY (ARRAY['category'::"text", 'priority'::"text", 'sentiment'::"text", 'emotion'::"text", 'ticket_type'::"text"])))
 );
@@ -1643,6 +1644,10 @@ ALTER TABLE "public"."ticket_classification_history" OWNER TO "postgres";
 
 
 COMMENT ON TABLE "public"."ticket_classification_history" IS 'Append-only ledger of classification decisions on a ticket''s attributes (category/priority/sentiment/emotion/ticket_type) — one row per (ticket, dimension) change, human corrections included. account_id is denormalised on purpose so tenant scoping and metrics need no join back to tickets.';
+
+
+
+COMMENT ON COLUMN "public"."ticket_classification_history"."applied" IS 'Whether to_value actually became the ticket''s attribute. true for every AI classification pass and every human correction (both write real, applied values); false only for a rejected AI proposal reviewed via POST /:id/classify-approve, where to_value still records what was proposed and rejected.';
 
 
 

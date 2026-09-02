@@ -191,6 +191,7 @@ describe("ticket_lifecycle_timeline pagination — no row lost across a same-tim
       actorType: "ai",
       actorRef: "pagination-test-tied-a",
       dimension: "category",
+      applied: true,
       toValue: "billing",
       occurredAt: tiedTimestamp,
     });
@@ -200,6 +201,7 @@ describe("ticket_lifecycle_timeline pagination — no row lost across a same-tim
       actorType: "ai",
       actorRef: "pagination-test-tied-b",
       dimension: "priority",
+      applied: true,
       toValue: "P2",
       occurredAt: tiedTimestamp,
     });

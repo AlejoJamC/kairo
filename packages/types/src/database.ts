@@ -1468,6 +1468,7 @@ export type Database = {
           actor_ref: string | null
           actor_type: string
           actor_user_id: string | null
+          applied: boolean
           confidence: number | null
           dimension: string
           from_value: string | null
@@ -1486,6 +1487,7 @@ export type Database = {
           actor_ref?: string | null
           actor_type: string
           actor_user_id?: string | null
+          applied: boolean
           confidence?: number | null
           dimension: string
           from_value?: string | null
@@ -1504,6 +1506,7 @@ export type Database = {
           actor_ref?: string | null
           actor_type?: string
           actor_user_id?: string | null
+          applied?: boolean
           confidence?: number | null
           dimension?: string
           from_value?: string | null

@@ -114,6 +114,7 @@ describe("emitTicketClassification", () => {
       actorType: "ai",
       actorRef: "tier2-background",
       dimension: "priority",
+      applied: true,
       fromValue: null,
       toValue: "P1",
       confidence: 0.92,
@@ -142,6 +143,7 @@ describe("emitTicketClassification", () => {
       actorType: "human",
       actorUserId: "uid-1",
       dimension: "category",
+      applied: true,
       fromValue: "billing",
       toValue: "technical",
     });
@@ -164,6 +166,7 @@ describe("emitTicketClassification", () => {
         ticketId: "tid-3",
         actorType: "ai",
         dimension: "sentiment",
+        applied: true,
         toValue: "frustrated",
       })
     ).resolves.toBeUndefined();
@@ -178,6 +181,7 @@ describe("emitTicketClassification", () => {
         ticketId: "t",
         actorType: "ai",
         dimension,
+        applied: true,
         toValue: "x",
       });
       expect(insertMock).toHaveBeenCalledWith(

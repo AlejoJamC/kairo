@@ -454,6 +454,7 @@ tickets.post("/:id/classify", async (c) => {
       actorUserId: source === "human" ? user.id : null,
       actorRef: "tickets.classify",
       dimension,
+      applied: true,
       fromValue,
       toValue,
       confidence: classification.confidence,
@@ -1711,10 +1712,26 @@ tickets.post("/:id/classify-approve", async (c) => {
 
   // KAI-191: ai_confirmed/ai_rejected moved from the old events table to
   // ticket_classification_history — one row per dimension the AI proposed
-  // that this human review decision touched. Confirm/reject reviews a
-  // decision already applied to the ticket at proposal time; the review
-  // itself carries no new from/to value, so from_value stays unset here.
-  const reviewOutcome = parsed.data.action === "confirm" ? "confirmed" : "rejected";
+  // that this human review decision touched. The review itself carries no
+  // new from/to value, so from_value stays unset here.
+  //
+  // Code review finding #3 fix: this endpoint does not write tickets.category
+  // etc. in EITHER branch — the AI's proposed value was already written to
+  // the ticket at classification time (tier1's auto-approve), and reject
+  // does not revert it. So `applied` here cannot mean "this action wrote the
+  // ticket column" the way it does for /classify and /correct-classification
+  // below — neither branch does that. It means the narrower, review-scoped
+  // fact this table exists to record: does this human's decision leave the
+  // proposal standing as the ticket's classification of record. confirm ->
+  // true, reject -> false, regardless of what tickets.category currently
+  // holds.
+  //
+  // Separate, unresolved product question surfaced by writing this comment,
+  // not fixed here: should a reject actually revert tickets.category (etc.)
+  // to something else? Nothing does that today. That is a live-data write
+  // with its own product decision behind it — not a table-hygiene fix — and
+  // is out of scope for this change.
+  const isConfirmed = parsed.data.action === "confirm";
   const proposedDimensions: [ClassificationDimension, string | null][] = [
     ["category", updatedProposal?.proposed_category ?? null],
     ["priority", updatedProposal?.proposed_priority ?? null],
@@ -1732,9 +1749,10 @@ tickets.post("/:id/classify-approve", async (c) => {
       actorRef: "tickets.classify-approve",
       dimension,
       toValue: proposedValue,
+      applied: isConfirmed,
       confidence: updatedProposal?.confidence_score ?? null,
       modelVersion: updatedProposal?.model_version ?? null,
-      metadata: { proposal_id: parsed.data.proposal_id, review_outcome: reviewOutcome },
+      metadata: { proposal_id: parsed.data.proposal_id },
     });
   }
 
@@ -2400,6 +2418,7 @@ tickets.post("/:id/correct-classification", async (c) => {
       actorUserId: user.id,
       actorRef: "tickets.correct-classification",
       dimension,
+      applied: true,
       fromValue,
       toValue,
       metadata: { feedback_id: feedback.id },
