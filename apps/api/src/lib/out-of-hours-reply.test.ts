@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { describe, it, expect, beforeEach, afterAll, mock } from "bun:test";
 
 // Mock global fetch BEFORE importing the module under test (gmail-send uses it).
 const mockFetch = mock(async (_url: string, _opts: RequestInit) => ({
@@ -7,7 +7,26 @@ const mockFetch = mock(async (_url: string, _opts: RequestInit) => ({
   json: async () => ({ id: "auto-msg-1", threadId: "t-1" }),
   text: async () => "",
 }));
+const originalFetch = globalThis.fetch;
 globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+// Restore the real fetch once this file's tests finish — globalThis.fetch is
+// process-wide state, and leaving the mock in place breaks any other test
+// file that runs later in the same `bun test` invocation and makes a real
+// network call (e.g. the KAI-191 integration tests that hit the real
+// linked Supabase project). Same fix already applied to gmail-send.test.ts.
+afterAll(() => {
+  globalThis.fetch = originalFetch;
+});
+
+// Mock supabase so the emitTicketActivity() call inside out-of-hours-reply.ts
+// (KAI-191 follow-up) doesn't hit the real DB — tests assert against this
+// insert instead.
+const activityInsertMock = mock((): Promise<{ error: { message: string } | null }> => Promise.resolve({ error: null }));
+const activityFromMock = mock(() => ({ insert: activityInsertMock }));
+mock.module("./supabase.js", () => ({
+  supabase: { from: activityFromMock },
+}));
 
 const { maybeSendOutOfHoursReply } = await import("./out-of-hours-reply.js");
 
@@ -95,7 +114,11 @@ const BASE_ARGS = {
   receivedAt: new Date(monBogota22.getTime() - 60_000).toISOString(), // 1min ago
 };
 
-beforeEach(() => mockFetch.mockClear());
+beforeEach(() => {
+  mockFetch.mockClear();
+  activityInsertMock.mockClear();
+  activityFromMock.mockClear();
+});
 
 describe("maybeSendOutOfHoursReply — guards", () => {
   it("aborts (stale) when receivedAt > 15min before now", async () => {
@@ -186,5 +209,19 @@ describe("maybeSendOutOfHoursReply — happy path", () => {
     expect(state.ticketUpdates.length).toBeGreaterThan(0);
     const lastUpdate = state.ticketUpdates[state.ticketUpdates.length - 1];
     expect((lastUpdate.payload as any).auto_replied_out_of_hours).toBe(true);
+
+    // KAI-191 follow-up: the send is a residual ticket fact and must leave a
+    // trace in ticket_activity_log, same shape as assignment/merge/grouped/etc.
+    expect(activityFromMock).toHaveBeenCalledWith("ticket_activity_log");
+    expect(activityInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        account_id: "acc-1",
+        ticket_id: "tk-1",
+        domain: "messaging",
+        event_type: "out_of_hours_auto_reply",
+        actor_type: "system",
+        actor_ref: "out-of-hours-reply",
+      })
+    );
   });
 });

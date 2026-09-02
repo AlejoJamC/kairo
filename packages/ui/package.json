@@ -17,6 +17,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@kairo/types": "workspace:*",
     "@tamagui/config": "^1.144.3",
     "@tamagui/core": "^1.144.3",
     "@tamagui/input": "^1.144.3",

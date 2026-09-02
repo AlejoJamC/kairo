@@ -2,11 +2,16 @@ import { describe, it, expect } from "bun:test";
 import {
   isValidTransition,
   getTransitionError,
+  isTransitionAllowedForRole,
+  getAllowedTransitionsForRole,
   isTicketStatus,
   ALLOWED_TRANSITIONS,
-  TICKET_STATUSES,
   type TicketStatus,
+  type DashboardRole,
 } from "./ticket-status-machine.js";
+import { TICKET_STATUSES } from "@kairo/types";
+
+const ALL_ROLES: DashboardRole[] = ["owner", "admin", "supervisor", "agent"];
 
 describe("isTicketStatus", () => {
   it("accepts all valid statuses", () => {
@@ -17,7 +22,7 @@ describe("isTicketStatus", () => {
 
   it("rejects unknown strings", () => {
     expect(isTicketStatus("waiting")).toBe(false);
-    expect(isTicketStatus("closed")).toBe(false);
+    expect(isTicketStatus("archived")).toBe(false);
     expect(isTicketStatus("")).toBe(false);
   });
 });
@@ -36,23 +41,21 @@ describe("isValidTransition — allowed paths", () => {
     ["open",              "in_progress"],
     ["open",              "resolved"],
     ["open",              "escalated"],
-    ["open",              "guided"],
-    ["open",              "auto_resolved"],
-    ["awaiting_customer", "open"],
+    ["open",              "ai_resolved"],
+    ["awaiting_customer", "in_progress"],    // KAI-191 correction: was 'open'
     ["awaiting_customer", "resolved"],
     ["awaiting_customer", "escalated"],
-    ["in_progress",       "open"],
     ["in_progress",       "awaiting_customer"],
     ["in_progress",       "resolved"],
     ["in_progress",       "escalated"],
-    ["resolved",          "open"],
     ["resolved",          "reopened"],       // KAI-221: customer re-opens resolved ticket
+    ["resolved",          "closed"],         // KAI-191: resolved's assertion becoming firm
     ["escalated",         "resolved"],
-    ["escalated",         "open"],
+    ["escalated",         "in_progress"],       // KAI-191 correction (2026-09-02): was blocked, wrongly
+    ["escalated",         "awaiting_customer"], // KAI-191 correction (2026-09-02): was blocked, wrongly
     ["escalated",         "reopened"],       // KAI-221
-    ["guided",            "resolved"],
-    ["auto_resolved",     "open"],
-    ["auto_resolved",     "reopened"],       // KAI-221
+    ["ai_resolved",       "reopened"],       // KAI-221
+    ["ai_resolved",       "closed"],         // KAI-191
     ["reopened",          "in_progress"],    // KAI-221: agent picks up reopened ticket
     ["reopened",          "resolved"],
     ["reopened",          "escalated"],
@@ -70,28 +73,39 @@ describe("isValidTransition — blocked paths", () => {
   const blocked: [TicketStatus, TicketStatus][] = [
     ["resolved",      "awaiting_customer"],
     ["resolved",      "escalated"],
-    ["resolved",      "guided"],
-    ["resolved",      "auto_resolved"],
+    ["resolved",      "ai_resolved"],
     ["resolved",      "in_progress"],
-    ["escalated",     "awaiting_customer"],
-    ["escalated",     "guided"],
-    ["escalated",     "auto_resolved"],
-    ["escalated",     "in_progress"],
-    ["guided",        "open"],
-    ["guided",        "escalated"],
-    ["guided",        "awaiting_customer"],
-    ["auto_resolved", "resolved"],
-    ["auto_resolved", "escalated"],
-    ["auto_resolved", "guided"],
+    ["escalated",     "ai_resolved"],
+    ["ai_resolved",   "resolved"],
+    ["ai_resolved",   "escalated"],
     ["reopened",      "open"],              // KAI-221: direct → open not allowed from reopened
-    ["reopened",      "guided"],
-    ["reopened",      "auto_resolved"],
+    ["reopened",      "ai_resolved"],
+    // KAI-191 correction (2026-09-02): 'open' is entry-only — nothing
+    // returns to it once a ticket leaves it.
+    ["awaiting_customer", "open"],
+    ["in_progress",       "open"],
+    ["resolved",           "open"],
+    ["ai_resolved",        "open"],
+    ["escalated",          "open"],
   ];
 
   for (const [from, to] of blocked) {
     it(`${from} → ${to} is blocked`, () => {
       expect(isValidTransition(from, to)).toBe(false);
     });
+  }
+});
+
+describe("isValidTransition — every illegal pair is rejected (exhaustive)", () => {
+  for (const from of TICKET_STATUSES) {
+    for (const to of TICKET_STATUSES) {
+      if (from === to) continue;
+      const isLegal = ALLOWED_TRANSITIONS[from].some((edge) => edge.to === to);
+      if (isLegal) continue;
+      it(`${from} → ${to} is rejected`, () => {
+        expect(isValidTransition(from, to)).toBe(false);
+      });
+    }
   }
 });
 
@@ -104,11 +118,42 @@ describe("ALLOWED_TRANSITIONS coverage", () => {
   });
 
   it("all transition targets are valid statuses", () => {
-    for (const [, targets] of Object.entries(ALLOWED_TRANSITIONS)) {
-      for (const t of targets) {
-        expect(isTicketStatus(t)).toBe(true);
+    for (const [, edges] of Object.entries(ALLOWED_TRANSITIONS)) {
+      for (const edge of edges) {
+        expect(isTicketStatus(edge.to)).toBe(true);
       }
     }
+  });
+});
+
+describe("closed — reachable only from the resolved family (KAI-191)", () => {
+  const legalPredecessors: TicketStatus[] = ["resolved", "ai_resolved"];
+
+  it("resolved → closed is valid", () => {
+    expect(isValidTransition("resolved", "closed")).toBe(true);
+  });
+
+  it("ai_resolved → closed is valid", () => {
+    expect(isValidTransition("ai_resolved", "closed")).toBe(true);
+  });
+
+  for (const s of TICKET_STATUSES) {
+    if (legalPredecessors.includes(s)) continue;
+    it(`${s} → closed is rejected`, () => {
+      expect(isValidTransition(s, "closed")).toBe(false);
+    });
+  }
+});
+
+describe("closed — terminal, no way back (KAI-191)", () => {
+  for (const s of TICKET_STATUSES) {
+    it(`closed → ${s} is rejected`, () => {
+      expect(isValidTransition("closed", s)).toBe(false);
+    });
+  }
+
+  it("ALLOWED_TRANSITIONS.closed has zero outgoing transitions", () => {
+    expect(ALLOWED_TRANSITIONS.closed).toEqual([]);
   });
 });
 
@@ -118,5 +163,81 @@ describe("getTransitionError", () => {
     expect(msg).toContain("resolved");
     expect(msg).toContain("escalated");
     expect(msg).toContain("open");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KAI-191 — role-per-edge permission matrix. Every edge in
+// ALLOWED_TRANSITIONS is exercised against every DashboardRole here, driven
+// straight off the matrix itself, so a future edge is automatically covered
+// instead of relying on a hand-picked sample.
+// ---------------------------------------------------------------------------
+
+describe("isTransitionAllowedForRole — every edge x every role, derived from the matrix", () => {
+  for (const [from, edges] of Object.entries(ALLOWED_TRANSITIONS) as [TicketStatus, typeof ALLOWED_TRANSITIONS[TicketStatus]][]) {
+    for (const edge of edges) {
+      for (const role of ALL_ROLES) {
+        const expected = edge.roles.includes(role);
+        it(`${from} -> ${edge.to} for role '${role}' is ${expected ? "allowed" : "denied"}`, () => {
+          expect(isTransitionAllowedForRole(from, edge.to, role)).toBe(expected);
+        });
+      }
+    }
+  }
+});
+
+describe("isTransitionAllowedForRole — illegal transitions are denied regardless of role", () => {
+  for (const from of TICKET_STATUSES) {
+    for (const to of TICKET_STATUSES) {
+      if (isValidTransition(from, to)) continue;
+      for (const role of ALL_ROLES) {
+        it(`${from} -> ${to} (illegal) denies role '${role}'`, () => {
+          expect(isTransitionAllowedForRole(from, to, role)).toBe(false);
+        });
+      }
+    }
+  }
+});
+
+describe("closed — no role reaches it through the API, but the edge stays legal (KAI-191)", () => {
+  const closedEdges: [TicketStatus, TicketStatus][] = [
+    ["resolved", "closed"],
+    ["ai_resolved", "closed"],
+  ];
+
+  for (const [from, to] of closedEdges) {
+    it(`${from} -> closed is legal in the machine`, () => {
+      expect(isValidTransition(from, to)).toBe(true);
+    });
+
+    for (const role of ALL_ROLES) {
+      it(`${from} -> closed denies role '${role}'`, () => {
+        expect(isTransitionAllowedForRole(from, to, role)).toBe(false);
+      });
+    }
+  }
+});
+
+describe("getAllowedTransitionsForRole", () => {
+  it("returns exactly the .to values of edges whose roles include the given role, per from-state", () => {
+    for (const [from, edges] of Object.entries(ALLOWED_TRANSITIONS) as [TicketStatus, typeof ALLOWED_TRANSITIONS[TicketStatus]][]) {
+      for (const role of ALL_ROLES) {
+        const expected = edges.filter((e) => e.roles.includes(role)).map((e) => e.to);
+        expect(getAllowedTransitionsForRole(from, role)).toEqual(expected);
+      }
+    }
+  });
+
+  it("excludes 'closed' from every role's allowed set out of resolved/ai_resolved", () => {
+    for (const role of ALL_ROLES) {
+      expect(getAllowedTransitionsForRole("resolved", role)).not.toContain("closed");
+      expect(getAllowedTransitionsForRole("ai_resolved", role)).not.toContain("closed");
+    }
+  });
+
+  it("returns an empty list from 'closed' for every role (terminal state)", () => {
+    for (const role of ALL_ROLES) {
+      expect(getAllowedTransitionsForRole("closed", role)).toEqual([]);
+    }
   });
 });

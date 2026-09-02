@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, mock, afterEach } from "bun:test";
+import { describe, it, expect, beforeEach, mock, afterEach, afterAll } from "bun:test";
 import { GmailSendException } from "./gmail-send.js";
 
 // ---------------------------------------------------------------------------
@@ -37,7 +37,17 @@ const mockFetch = mock(async (url: string, _opts: RequestInit): Promise<FakeFetc
 });
 
 // Patch global fetch before importing the module
+const originalFetch = globalThis.fetch;
 globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+// bun:test's mock.module / global patches are process-wide (see the note in
+// gmail-poll-cron.test.ts) — without restoring this, every test file that
+// runs later in the same `bun test` invocation inherits this stub instead
+// of the real fetch, including ones that make real network calls (e.g.
+// ticket-state-history.integration.test.ts).
+afterAll(() => {
+  globalThis.fetch = originalFetch;
+});
 
 const { sendGmailReply } = await import("./gmail-send.js");
 

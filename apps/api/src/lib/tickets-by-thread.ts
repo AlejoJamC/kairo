@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { transitionTicketStatus, TICKET_CREATED_TRIGGER } from "./ticket-transition.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbClient = SupabaseClient<any>;
@@ -102,6 +103,17 @@ export async function findOrCreateTicketForThread(
       classification_tier: classificationTier,
       priority_score: priorityScore,
       score_computed_at: classifiedAt,
+      // KAI-191: the ticket must be valid and visible the instant it exists
+      // — status filters (`.not("status", "in", (...))`, the SLA cron's
+      // `.in("status", OPEN_STATUSES)`) evaluate to NULL, not TRUE, against a
+      // NULL status, so a NULL-status ticket is invisible everywhere. This
+      // INSERT and the transitionTicketStatus() call below are two separate
+      // round trips with no shared transaction, so status is set to 'open'
+      // here directly rather than left NULL for the RPC to fill in — if the
+      // trail-row call below fails, the ticket is still open and visible;
+      // only its t0 history row is missing (apply_ticket_transition()
+      // special-cases trigger='ticket_created' to still record that row even
+      // though status already equals 'open').
       status: "open",
     })
     .select("id, ticket_number")
@@ -136,6 +148,28 @@ export async function findOrCreateTicketForThread(
 
   if (!inserted) {
     throw new Error("[tickets-by-thread] insert returned no data");
+  }
+
+  // Only a genuinely new ticket (this branch, not the 23505 race re-read
+  // above) records a creation row: from_state=NULL, to_state='open'.
+  //
+  // The ticket row above is already committed with status='open' — it is
+  // valid and visible regardless of what happens next. If this call fails
+  // (network, timeout, RPC error), do not throw: that would turn a merely
+  // degraded write (ticket visible, missing its t0 trail row — the same gap
+  // every ticket had before KAI-191) into a failed ingestion for a ticket
+  // that in fact exists and is fine. Log it and return the usable ticket.
+  const transition = await transitionTicketStatus(client, {
+    ticketId: inserted.id,
+    toState: "open",
+    actorType: "system",
+    actorRef: "tickets-by-thread",
+    trigger: TICKET_CREATED_TRIGGER,
+  });
+  if (transition.outcome !== "applied") {
+    console.error(
+      `[tickets-by-thread] failed to record ticket_created trail row for ${inserted.id}: ${transition.outcome}`
+    );
   }
 
   return {

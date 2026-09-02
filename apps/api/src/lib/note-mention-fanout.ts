@@ -8,7 +8,7 @@ import { extractMentionUserIds, renderMentionsAsPlainText } from "./note-mention
 // row and an in-app `notifications` row (kind='mention'). In-app only: no
 // email, no push, no Twilio (explicit product decision in KAI-232).
 //
-// The whole fan-out is NON-FATAL — same contract as `emitTicketEvent`: a
+// The whole fan-out is NON-FATAL — same contract as `emitTicketActivity`: a
 // notification failure must never fail the note the agent just wrote.
 // ---------------------------------------------------------------------------
 
@@ -29,7 +29,7 @@ export interface ResolvedMention {
 export interface FanOutMentionsOptions {
   accountId: string;
   ticketId: string;
-  ticketEventId: string;
+  ticketNoteId: string;
   authorId: string;
   body: string;
 }
@@ -150,7 +150,7 @@ export async function fanOutNoteMentions(
         recipient_user_id: m.user_id,
         kind: "mention",
         ticket_id: opts.ticketId,
-        ticket_event_id: opts.ticketEventId,
+        ticket_note_id: opts.ticketNoteId,
         title,
         body: excerpt,
       })),
@@ -158,7 +158,7 @@ export async function fanOutNoteMentions(
 
     if (notifErr) {
       console.error("[note-mentions] notification insert failed", {
-        ticketEventId: opts.ticketEventId,
+        ticketNoteId: opts.ticketNoteId,
         error: notifErr.message,
       });
     }
@@ -169,7 +169,7 @@ export async function fanOutNoteMentions(
       recipients.map((m) => ({
         account_id: opts.accountId,
         ticket_id: opts.ticketId,
-        ticket_event_id: opts.ticketEventId,
+        ticket_note_id: opts.ticketNoteId,
         mentioned_user_id: m.user_id,
         notified_at: notifiedAt,
       })),
@@ -177,7 +177,7 @@ export async function fanOutNoteMentions(
 
     if (mentionErr) {
       console.error("[note-mentions] mention insert failed", {
-        ticketEventId: opts.ticketEventId,
+        ticketNoteId: opts.ticketNoteId,
         error: mentionErr.message,
       });
     }
@@ -186,7 +186,7 @@ export async function fanOutNoteMentions(
   } catch (err) {
     // Non-fatal by contract — the note write already succeeded.
     console.error("[note-mentions] fan-out failed", {
-      ticketEventId: opts.ticketEventId,
+      ticketNoteId: opts.ticketNoteId,
       error: err instanceof Error ? err.message : String(err),
     });
     return [];

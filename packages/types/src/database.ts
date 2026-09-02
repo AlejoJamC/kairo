@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   public: {
     Tables: {
       account_invitations: {
@@ -96,6 +91,9 @@ export type Database = {
       accounts: {
         Row: {
           brand_color: string | null
+          business_context: string | null
+          business_context_source: string | null
+          business_context_updated_at: string | null
           created_at: string
           help_center_url: string | null
           id: string
@@ -111,6 +109,9 @@ export type Database = {
         }
         Insert: {
           brand_color?: string | null
+          business_context?: string | null
+          business_context_source?: string | null
+          business_context_updated_at?: string | null
           created_at?: string
           help_center_url?: string | null
           id?: string
@@ -126,6 +127,9 @@ export type Database = {
         }
         Update: {
           brand_color?: string | null
+          business_context?: string | null
+          business_context_source?: string | null
+          business_context_updated_at?: string | null
           created_at?: string
           help_center_url?: string | null
           id?: string
@@ -291,45 +295,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      category_confidence_thresholds: {
-        Row: {
-          auto_approval_enabled: boolean
-          category: string
-          created_at: string
-          current_accuracy: number | null
-          current_sample_count: number
-          id: string
-          last_evaluated_at: string | null
-          min_confidence: number
-          min_sample_size: number
-          updated_at: string
-        }
-        Insert: {
-          auto_approval_enabled?: boolean
-          category: string
-          created_at?: string
-          current_accuracy?: number | null
-          current_sample_count?: number
-          id?: string
-          last_evaluated_at?: string | null
-          min_confidence?: number
-          min_sample_size?: number
-          updated_at?: string
-        }
-        Update: {
-          auto_approval_enabled?: boolean
-          category?: string
-          created_at?: string
-          current_accuracy?: number | null
-          current_sample_count?: number
-          id?: string
-          last_evaluated_at?: string | null
-          min_confidence?: number
-          min_sample_size?: number
-          updated_at?: string
-        }
-        Relationships: []
       }
       channel_integrations: {
         Row: {
@@ -1049,8 +1014,8 @@ export type Database = {
           kind: string
           read_at: string | null
           recipient_user_id: string
-          ticket_event_id: string | null
           ticket_id: string | null
+          ticket_note_id: string | null
           title: string
         }
         Insert: {
@@ -1061,8 +1026,8 @@ export type Database = {
           kind: string
           read_at?: string | null
           recipient_user_id: string
-          ticket_event_id?: string | null
           ticket_id?: string | null
+          ticket_note_id?: string | null
           title: string
         }
         Update: {
@@ -1073,8 +1038,8 @@ export type Database = {
           kind?: string
           read_at?: string | null
           recipient_user_id?: string
-          ticket_event_id?: string | null
           ticket_id?: string | null
+          ticket_note_id?: string | null
           title?: string
         }
         Relationships: [
@@ -1086,17 +1051,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "notifications_ticket_event_id_fkey"
-            columns: ["ticket_event_id"]
-            isOneToOne: false
-            referencedRelation: "ticket_events"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "notifications_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_ticket_note_id_fkey"
+            columns: ["ticket_note_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_notes"
             referencedColumns: ["id"]
           },
         ]
@@ -1426,40 +1391,140 @@ export type Database = {
           },
         ]
       }
-      ticket_events: {
+      ticket_activity_log: {
         Row: {
-          author_id: string | null
-          body: string | null
-          created_at: string
+          account_id: string
+          actor_ref: string | null
+          actor_type: string
+          actor_user_id: string | null
+          domain: string
           event_type: string
           id: string
-          is_internal: boolean
+          idempotency_key: string | null
           metadata: Json | null
+          occurred_at: string
+          reason: string | null
+          recorded_at: string
+          seq: number
           ticket_id: string
         }
         Insert: {
-          author_id?: string | null
-          body?: string | null
-          created_at?: string
+          account_id: string
+          actor_ref?: string | null
+          actor_type: string
+          actor_user_id?: string | null
+          domain: string
           event_type: string
           id?: string
-          is_internal?: boolean
+          idempotency_key?: string | null
           metadata?: Json | null
+          occurred_at: string
+          reason?: string | null
+          recorded_at?: string
+          seq?: never
           ticket_id: string
         }
         Update: {
-          author_id?: string | null
-          body?: string | null
-          created_at?: string
+          account_id?: string
+          actor_ref?: string | null
+          actor_type?: string
+          actor_user_id?: string | null
+          domain?: string
           event_type?: string
           id?: string
-          is_internal?: boolean
+          idempotency_key?: string | null
           metadata?: Json | null
+          occurred_at?: string
+          reason?: string | null
+          recorded_at?: string
+          seq?: never
           ticket_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "ticket_events_ticket_id_fkey"
+            foreignKeyName: "ticket_activity_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_activity_log_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_classification_history: {
+        Row: {
+          account_id: string
+          actor_ref: string | null
+          actor_type: string
+          actor_user_id: string | null
+          applied: boolean
+          confidence: number | null
+          dimension: string
+          from_value: string | null
+          id: string
+          idempotency_key: string | null
+          metadata: Json | null
+          model_version: string | null
+          occurred_at: string
+          recorded_at: string
+          seq: number
+          ticket_id: string
+          to_value: string | null
+        }
+        Insert: {
+          account_id: string
+          actor_ref?: string | null
+          actor_type: string
+          actor_user_id?: string | null
+          applied: boolean
+          confidence?: number | null
+          dimension: string
+          from_value?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          model_version?: string | null
+          occurred_at: string
+          recorded_at?: string
+          seq?: never
+          ticket_id: string
+          to_value?: string | null
+        }
+        Update: {
+          account_id?: string
+          actor_ref?: string | null
+          actor_type?: string
+          actor_user_id?: string | null
+          applied?: boolean
+          confidence?: number | null
+          dimension?: string
+          from_value?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          model_version?: string | null
+          occurred_at?: string
+          recorded_at?: string
+          seq?: never
+          ticket_id?: string
+          to_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_classification_history_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_classification_history_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
@@ -1566,8 +1631,8 @@ export type Database = {
           mentioned_user_id: string
           notified_at: string | null
           read_at: string | null
-          ticket_event_id: string
           ticket_id: string
+          ticket_note_id: string
         }
         Insert: {
           account_id: string
@@ -1576,8 +1641,8 @@ export type Database = {
           mentioned_user_id: string
           notified_at?: string | null
           read_at?: string | null
-          ticket_event_id: string
           ticket_id: string
+          ticket_note_id: string
         }
         Update: {
           account_id?: string
@@ -1586,8 +1651,8 @@ export type Database = {
           mentioned_user_id?: string
           notified_at?: string | null
           read_at?: string | null
-          ticket_event_id?: string
           ticket_id?: string
+          ticket_note_id?: string
         }
         Relationships: [
           {
@@ -1598,14 +1663,59 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "ticket_note_mentions_ticket_event_id_fkey"
-            columns: ["ticket_event_id"]
+            foreignKeyName: "ticket_note_mentions_ticket_id_fkey"
+            columns: ["ticket_id"]
             isOneToOne: false
-            referencedRelation: "ticket_events"
+            referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "ticket_note_mentions_ticket_id_fkey"
+            foreignKeyName: "ticket_note_mentions_ticket_note_id_fkey"
+            columns: ["ticket_note_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_notes: {
+        Row: {
+          account_id: string
+          author_id: string | null
+          body: string
+          created_at: string
+          id: string
+          ticket_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          author_id?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          ticket_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          ticket_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_notes_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
@@ -1783,6 +1893,75 @@ export type Database = {
           },
         ]
       }
+      ticket_state_history: {
+        Row: {
+          account_id: string
+          actor_ref: string | null
+          actor_type: string
+          actor_user_id: string | null
+          from_state: string | null
+          id: string
+          idempotency_key: string | null
+          metadata: Json | null
+          occurred_at: string
+          reason: string | null
+          recorded_at: string
+          seq: number
+          ticket_id: string
+          to_state: string
+          trigger: string
+        }
+        Insert: {
+          account_id: string
+          actor_ref?: string | null
+          actor_type: string
+          actor_user_id?: string | null
+          from_state?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          occurred_at: string
+          reason?: string | null
+          recorded_at?: string
+          seq?: never
+          ticket_id: string
+          to_state: string
+          trigger: string
+        }
+        Update: {
+          account_id?: string
+          actor_ref?: string | null
+          actor_type?: string
+          actor_user_id?: string | null
+          from_state?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          occurred_at?: string
+          reason?: string | null
+          recorded_at?: string
+          seq?: never
+          ticket_id?: string
+          to_state?: string
+          trigger?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_state_history_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_state_history_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_tags: {
         Row: {
           created_at: string
@@ -1805,6 +1984,71 @@ export type Database = {
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_transition_rules: {
+        Row: {
+          from_state: string
+          to_state: string
+        }
+        Insert: {
+          from_state: string
+          to_state: string
+        }
+        Update: {
+          from_state?: string
+          to_state?: string
+        }
+        Relationships: []
+      }
+      ticket_type_auto_approval: {
+        Row: {
+          account_id: string
+          auto_approval_enabled: boolean
+          created_at: string
+          current_precision: number | null
+          current_sample_count: number
+          id: string
+          last_evaluated_at: string | null
+          min_precision: number
+          min_sample_size: number
+          ticket_type: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          auto_approval_enabled?: boolean
+          created_at?: string
+          current_precision?: number | null
+          current_sample_count?: number
+          id?: string
+          last_evaluated_at?: string | null
+          min_precision?: number
+          min_sample_size?: number
+          ticket_type: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          auto_approval_enabled?: boolean
+          created_at?: string
+          current_precision?: number | null
+          current_sample_count?: number
+          id?: string
+          last_evaluated_at?: string | null
+          min_precision?: number
+          min_sample_size?: number
+          ticket_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_type_auto_approval_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -2063,7 +2307,65 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      ticket_lifecycle_timeline: {
+        Row: {
+          account_id: string | null
+          actor_ref: string | null
+          actor_type: string | null
+          detail: string | null
+          id: string | null
+          kind: string | null
+          occurred_at: string | null
+          ticket_id: string | null
+        }
+        Relationships: []
+      }
+      ticket_state_durations: {
+        Row: {
+          account_id: string | null
+          duration: string | null
+          entered_at: string | null
+          exited_at: string | null
+          seq: number | null
+          state: string | null
+          ticket_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_state_history_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_state_history_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_transition_override_rates: {
+        Row: {
+          account_id: string | null
+          following_ai_or_system: number | null
+          from_state: string | null
+          overridden_by_human: number | null
+          override_rate: number | null
+          to_state: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_state_history_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _assert_draft_access: {
@@ -2077,6 +2379,25 @@ export type Database = {
       account_effective_seat_limit: {
         Args: { p_account_id: string }
         Returns: number
+      }
+      apply_ticket_transition: {
+        Args: {
+          p_actor_ref: string
+          p_actor_type: string
+          p_actor_user_id: string
+          p_idempotency_key: string
+          p_metadata: Json
+          p_reason: string
+          p_ticket_id: string
+          p_to_state: string
+          p_trigger: string
+        }
+        Returns: {
+          from_state: string
+          history_id: string
+          outcome: string
+          to_state: string
+        }[]
       }
       bulk_confirm_drafts_by_organization: {
         Args: { p_organization: string }
@@ -2220,10 +2541,6 @@ export type Database = {
           p_user_id: string
         }
         Returns: string
-      }
-      recompute_category_confidence_thresholds: {
-        Args: never
-        Returns: undefined
       }
       reject_draft_contact: {
         Args: { p_draft_id: string }
@@ -2434,3 +2751,4 @@ export const Constants = {
     },
   },
 } as const
+

@@ -16,13 +16,14 @@
 import { inngest } from "../../lib/inngest.js";
 import { supabase } from "../../lib/supabase.js";
 import { getFlag, getNumericFlag } from "@kairo/feature-flags";
-import { emitTicketEvent } from "../../lib/ticket-events.js";
+import { emitTicketActivity } from "../../lib/ticket-events.js";
 import { buildIntervalCronExpression } from "../../lib/cron-interval.js";
 import {
   computeOperationalSlaTiming,
   buildConfigByPriority,
   type TicketPriority,
 } from "../../lib/operational-sla.js";
+import { TICKET_STATUSES, type TicketStatus } from "@kairo/types";
 
 const intervalMinutes = Math.max(
   1,
@@ -30,7 +31,24 @@ const intervalMinutes = Math.max(
 );
 const CRON_EXPRESSION = buildIntervalCronExpression(intervalMinutes);
 
-const OPEN_STATUSES = ["open", "in_progress", "awaiting_customer", "reopened"];
+// KAI-191 — which statuses this cron treats as "still open" and therefore
+// eligible for an escalation notification. Exhaustive over TicketStatus so a
+// new status forces an explicit decision here instead of silently being
+// skipped (or wrongly notified on) by this cron.
+const IS_OPEN_FOR_ESCALATION_CHECK: Record<TicketStatus, boolean> = {
+  open: true,
+  in_progress: true,
+  awaiting_customer: true,
+  reopened: true,
+  resolved: false,
+  ai_resolved: false,
+  escalated: false,
+  closed: false,
+};
+
+const OPEN_STATUSES: TicketStatus[] = TICKET_STATUSES.filter(
+  (status) => IS_OPEN_FOR_ESCALATION_CHECK[status]
+);
 
 interface OpenTicketRow {
   id: string;
@@ -140,10 +158,12 @@ export const operationalSlaEscalationCron = inngest.createFunction(
             });
           }
 
-          await emitTicketEvent({
+          await emitTicketActivity({
+            accountId,
             ticketId: ticket.id,
-            authorId: null,
+            domain: "ans",
             eventType: "escalated",
+            actorType: "system",
             metadata: { trigger: "priority_sla_escalation", priority },
           });
 

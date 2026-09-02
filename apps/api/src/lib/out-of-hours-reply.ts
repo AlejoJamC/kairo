@@ -21,6 +21,7 @@ import {
   type SupportScheduleEntry,
 } from "./support-hours.js";
 import { buildOutOfHoursReply, type Locale } from "./out-of-hours-template.js";
+import { emitTicketActivity } from "./ticket-events.js";
 
 const FRESHNESS_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -132,6 +133,16 @@ export async function maybeSendOutOfHoursReply(
       auto_replied_at: now.toISOString(),
     })
     .eq("id", args.ticketId);
+
+  await emitTicketActivity({
+    accountId: args.accountId,
+    ticketId: args.ticketId,
+    domain: "messaging",
+    eventType: "out_of_hours_auto_reply",
+    actorType: "system",
+    actorRef: "out-of-hours-reply",
+    occurredAt: now.toISOString(),
+  });
 
   return { sent: true };
 }

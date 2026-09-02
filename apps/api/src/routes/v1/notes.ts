@@ -82,7 +82,7 @@ notes.patch("/mentions/read", async (c) => {
     .eq("account_id", ctx.accountId)
     .eq("mentioned_user_id", ctx.userId)
     .is("read_at", null)
-    .in("ticket_event_id", eventIds);
+    .in("ticket_note_id", eventIds);
 
   if (error) return c.json({ error: error.message }, 500);
 
@@ -94,7 +94,7 @@ notes.patch("/mentions/read", async (c) => {
     .eq("recipient_user_id", ctx.userId)
     .eq("kind", "mention")
     .is("read_at", null)
-    .in("ticket_event_id", eventIds);
+    .in("ticket_note_id", eventIds);
 
   if (notifErr) {
     console.error("[notes] mention notification read sync failed", { error: notifErr.message });

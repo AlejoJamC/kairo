@@ -1,12 +1,15 @@
+import type { TicketPriority, TicketTone, TicketType as CanonicalTicketType } from "@kairo/types";
+
 /**
  * Kairo Triage Design Tokens
  *
- * Single source of truth for all triage color systems.
+ * Single source of truth for all triage COLOR systems (the value vocabulary
+ * itself — which priorities/tones/types exist — comes from @kairo/types).
  * Import from @kairo/ui — never hardcode these in app components.
  *
  * TWO DISTINCT SYSTEMS (must not conflict visually):
  *
- * 1. PRIORITY — business severity (P1–P4), drives header bg + card border shade
+ * 1. PRIORITY — business severity (P1–P3), drives header bg + card border shade
  * 2. EMOTION  — customer tone semaphore (aggressive→frustrated→neutral→positive)
  * 3. TICKET TYPE — classification badge (support / prospect / internal / spam / other)
  *
@@ -15,11 +18,11 @@
  */
 
 // ---------------------------------------------------------------------------
-// Priority tokens — P1 (critical) → P4 (low)
+// Priority tokens — P1 (critical) → P3 (low)
 // Used by: center panel header bg, ticket card border accent, priority badge
 // ---------------------------------------------------------------------------
 
-export type PriorityLevel = "P1" | "P2" | "P3" | "P4";
+export type PriorityLevel = TicketPriority;
 
 export interface PriorityTokens {
   /** Left border on ticket card */
@@ -39,7 +42,7 @@ export interface PriorityTokens {
 }
 
 /**
- * Priority semaphore: P1 (red/critical) → P2 (orange/high) → P3 (blue/normal) → P4 (gray/low)
+ * Priority semaphore: P1 (red/critical) → P2 (orange/high) → P3 (blue/normal)
  * NEVER reorder — severity decreases top to bottom.
  */
 export const PRIORITY_TOKENS: Record<PriorityLevel, PriorityTokens> = {
@@ -70,15 +73,6 @@ export const PRIORITY_TOKENS: Record<PriorityLevel, PriorityTokens> = {
     badgeBorder: "border-blue-200",
     label:       "Normal",
   },
-  P4: {
-    cardBorder:  "border-l-zinc-300",
-    headerBg:    "bg-zinc-50",
-    headerText:  "text-zinc-700",
-    badgeBg:     "bg-gray-100",
-    badgeText:   "text-gray-600",
-    badgeBorder: "border-gray-300",
-    label:       "Low",
-  },
 };
 
 export function getPriorityTokens(priority: string | null | undefined): PriorityTokens | null {
@@ -98,7 +92,7 @@ export function getPriorityTokens(priority: string | null | undefined): Priority
 // null / unknown → FALLBACK (zinc border, no emoji) — MUST NOT throw or break
 // ---------------------------------------------------------------------------
 
-export type EmotionTone = "aggressive" | "frustrated" | "neutral" | "positive";
+export type EmotionTone = TicketTone;
 
 export interface EmotionTokens {
   /** Left border on ticket card */
@@ -145,7 +139,7 @@ export function getEmotionTokens(emotion: string | null | undefined): EmotionTok
 // Used by: ticket list filter chips, ticket card type badge
 // ---------------------------------------------------------------------------
 
-export type TicketType = "support" | "prospect" | "internal" | "spam" | "other";
+export type TicketType = CanonicalTicketType;
 
 export interface TicketTypeTokens {
   badgeBg:     string;

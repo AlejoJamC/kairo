@@ -9,10 +9,10 @@ import { AiAssistant } from "@/components/ai-assistant";
 import { TicketCard } from "@/components/ticket-card";
 import type { AppView } from "@/types";
 import type { Ticket } from "@kairo/types";
+import { ESCALATED_STATUSES } from "@/lib/triage-status";
 
 // Own bucket in triage-status.ts (STATUS_BUCKET), counted by the Escalado
 // badge and not by Triage — mirrors ResolvedView's setup one status down.
-const ESCALATED_STATUSES = ["escalated"] as const;
 
 interface EscalatedViewProps {
   onViewChange: (view: AppView) => void;

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { classifyEmailWithMeta, generateEmbedding, extractPromptVersion } from "@kairo/intelligence";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { supabase } from "../../lib/supabase.js";
-import { resolveUserAndAccount } from "../../lib/auth.js";
+import { resolveUserAndAccount, resolveMemberRole } from "../../lib/auth.js";
 import { inngest } from "../../lib/inngest.js";
 import { env } from "../../env.js";
 import {
@@ -18,7 +18,7 @@ import {
 } from "../../lib/scoring.js";
 import { computeSlaDeadline, normalizePlanTier } from "../../lib/sla.js";
 import { attachOperationalSla, buildConfigByPriority } from "../../lib/operational-sla.js";
-import { emitTicketEvent } from "../../lib/ticket-events.js";
+import { emitTicketActivity, emitTicketClassification, type ClassificationDimension } from "../../lib/ticket-events.js";
 import { fanOutNoteMentions, resolveMentionNames, markOwnMentions } from "../../lib/note-mention-fanout.js";
 import { extractMentionUserIds } from "../../lib/note-mentions.js";
 import { createCompletionProvider, detectEscalationTriggers } from "@kairo/intelligence";
@@ -31,9 +31,14 @@ import { fileURLToPath } from "url";
 import {
   isValidTransition,
   getTransitionError,
+  isTransitionAllowedForRole,
+  getAllowedTransitionsForRole,
   isTicketStatus,
   type TicketStatus,
 } from "../../lib/ticket-status-machine.js";
+import { checkTransitionPermission } from "../../lib/ticket-transition-permission.js";
+import { transitionTicketStatus } from "../../lib/ticket-transition.js";
+import { TICKET_STATUSES, RESOLVED_STATUSES } from "@kairo/types";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { linkMessageToTicket, countTicketMessages } from "../../lib/ticket-messages.js";
 import { appendKairoToken, buildKairoToken } from "../../lib/ticket-traceability.js";
@@ -213,13 +218,14 @@ tickets.post("/:id/recalculate-score", async (c) => {
 // Primary: pgvector RPC find_similar_tickets filtered to final statuses
 // Fallback: full-text match on from_email or subject keywords when RPC unavailable
 //
-// KAI-108 — "resolved" and "auto_resolved" are both final states (the dashboard
+// KAI-108 — "resolved" and "ai_resolved" are both final states (the dashboard
 // unified them under the "Resuelto" aside entry and excludes both from triage),
 // so historical context must consider both. The RPC takes the list as a
 // comma-separated p_status_filter.
 // ---------------------------------------------------------------------------
 
-const RESOLVED_STATUSES = ["resolved", "auto_resolved"] as const;
+// RESOLVED_STATUSES ("resolved", "ai_resolved") comes from @kairo/types —
+// see the import above.
 
 tickets.get("/:id/related-history", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
@@ -350,7 +356,7 @@ tickets.post("/:id/classify", async (c) => {
 
   const { data: ticket, error: fetchError } = await supabase
     .from("tickets")
-    .select("id, subject, body_plain, from_email")
+    .select("id, subject, body_plain, from_email, ticket_type, priority, category, sentiment")
     .eq("id", id)
     .single();
 
@@ -430,12 +436,32 @@ tickets.post("/:id/classify", async (c) => {
     );
   }
 
-  await emitTicketEvent({
-    ticketId: id,
-    authorId: source === "human" ? user.id : null,
-    eventType: source === "human" ? "human_classified" : "ai_classified",
-    metadata: { type: classification.type, priority: classification.priority },
-  });
+  // KAI-191: ai_classified/human_classified moved from the old events
+  // table to ticket_classification_history — one row per dimension actually changed.
+  const classifyModelVersion = resolveModelVersion();
+  const classifyDimensionChanges: [ClassificationDimension, string | null, string | null][] = [
+    ["ticket_type", ticket.ticket_type ?? null, classification.type],
+    ["priority", ticket.priority ?? null, classification.priority],
+    ["category", ticket.category ?? null, classification.category],
+    ["sentiment", ticket.sentiment ?? null, classification.tone],
+  ];
+  for (const [dimension, fromValue, toValue] of classifyDimensionChanges) {
+    if (fromValue === toValue) continue;
+    await emitTicketClassification({
+      accountId: ctx.accountId,
+      ticketId: id,
+      actorType: source === "human" ? "human" : "ai",
+      actorUserId: source === "human" ? user.id : null,
+      actorRef: "tickets.classify",
+      dimension,
+      applied: true,
+      fromValue,
+      toValue,
+      confidence: classification.confidence,
+      modelVersion: classifyModelVersion,
+      occurredAt: classified_at,
+    });
+  }
 
   return c.json({
     ticket_id: id,
@@ -646,8 +672,12 @@ tickets.post("/classify-batch", async (c) => {
 
 // ---------------------------------------------------------------------------
 // GET /v1/tickets/:id/activity — activity feed (KAI-28)
-// Returns ticket_events newest first, paginated by cursor.
-// TODO: restrict to agent/support roles only once role/permission system exists.
+// Returns ticket_lifecycle_timeline newest first, paginated by cursor.
+// (KAI-191: the old catch-all events table this used to read from has been
+// dropped; ticket_lifecycle_timeline unions its five purpose-shaped
+// successors — ticket_state_history, ticket_activity_log, ticket_notes,
+// ticket_classification_history, messages — into the same one ordered
+// stream per ticket.)
 // ---------------------------------------------------------------------------
 
 tickets.get("/:id/activity", async (c) => {
@@ -668,18 +698,32 @@ tickets.get("/:id/activity", async (c) => {
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
+  // KAI-191 fix: ticket_lifecycle_timeline unions five sources with no
+  // shared, globally ordered key, so two rows can share an identical
+  // occurred_at (recordAiClassification() itself writes such a pair on
+  // purpose). Paginating on occurred_at alone can then silently drop
+  // whichever row of a tied pair falls on the wrong side of a page
+  // boundary. `id` (each row's own source-table primary key — meaningless
+  // across sources, but globally unique) breaks the tie so the same
+  // boundary can never split across two pages.
   let query = supabase
-    .from("ticket_events")
+    .from("ticket_lifecycle_timeline")
     .select("*")
     .eq("ticket_id", id)
-    .order("created_at", { ascending: false })
+    .eq("account_id", ctx.accountId)
+    .order("occurred_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(limit);
 
   if (cursor) {
     try {
-      const { created_at, id: cursorId } = JSON.parse(atob(cursor)) as { created_at: string; id: string };
-      query = query.or(`created_at.lt.${created_at},and(created_at.eq.${created_at},id.lt.${cursorId})`);
+      const { occurred_at, id: cursorId } = JSON.parse(atob(cursor)) as {
+        occurred_at: string;
+        id: string;
+      };
+      query = query.or(
+        `occurred_at.lt.${occurred_at},and(occurred_at.eq.${occurred_at},id.lt.${cursorId})`
+      );
     } catch {
       return c.json({ error: "Invalid cursor" }, 400);
     }
@@ -692,7 +736,7 @@ tickets.get("/:id/activity", async (c) => {
   const last = items.at(-1);
   const nextCursor =
     items.length === limit && last
-      ? btoa(JSON.stringify({ created_at: last.created_at, id: last.id }))
+      ? btoa(JSON.stringify({ occurred_at: last.occurred_at, id: last.id }))
       : null;
 
   return c.json({ events: items, next_cursor: nextCursor, count: items.length });
@@ -703,16 +747,7 @@ tickets.get("/:id/activity", async (c) => {
 // ---------------------------------------------------------------------------
 
 const UpdateStatusSchema = z.object({
-  status: z.enum([
-    "open",
-    "awaiting_customer",
-    "in_progress",
-    "resolved",
-    "auto_resolved",
-    "guided",
-    "escalated",
-    "reopened",
-  ]),
+  status: z.enum(TICKET_STATUSES as [TicketStatus, ...TicketStatus[]]),
 });
 
 tickets.patch("/:id/status", async (c) => {
@@ -740,30 +775,142 @@ tickets.patch("/:id/status", async (c) => {
   const fromStatus: TicketStatus = isTicketStatus(ticket.status ?? "") ? ticket.status as TicketStatus : "open";
   const toStatus = parsed.data.status as TicketStatus;
 
-  if (!isValidTransition(fromStatus, toStatus)) {
+  // KAI-191: legality (422) and permission (403) are different questions —
+  // a legal transition can still be off-limits for this caller's role (e.g.
+  // resolved -> closed, which no role reaches through the API).
+  const role = await resolveMemberRole(ctx.userId, ctx.accountId);
+  const permission = checkTransitionPermission(fromStatus, toStatus, role);
+  if (!permission.ok) {
+    return c.json(permission.body, permission.httpStatus);
+  }
+
+  // KAI-191: transitionTicketStatus() is the only place allowed to write
+  // tickets.status — it atomically updates the row and records the
+  // ticket_state_history trail. The isValidTransition() check above is kept
+  // for a fast, precise 422 message; the RPC is the authoritative,
+  // race-safe validator (ticket_transition_rules is generated from the same
+  // ALLOWED_TRANSITIONS table, so the two can never disagree).
+  const transition = await transitionTicketStatus(supabase, {
+    ticketId: id,
+    toState: toStatus,
+    actorType: "human",
+    actorUserId: user.id,
+    trigger: "manual_status_change",
+  });
+
+  if (transition.outcome === "not_found") {
+    return c.json({ error: "Ticket not found" }, 404);
+  }
+  if (transition.outcome === "invalid_transition") {
     return c.json(
       { error: getTransitionError(fromStatus, toStatus), code: "INVALID_TRANSITION" },
       422
     );
   }
+  // KAI-191 fix (code review finding #1): "applied" and "no_op" are both
+  // success outcomes — the ticket ends up in toStatus either way. no_op
+  // only happens here via a narrow race (the app-level checkTransitionPermission
+  // call above already rejects a same-state request before the RPC is ever
+  // called, so the only way apply_ticket_transition() itself reports no_op
+  // is a concurrent request landing the ticket on toStatus between this
+  // handler's read and the RPC's own re-read). It is not an error, and this
+  // route used to report it as INVALID_TRANSITION — misleading the caller
+  // about a request that in fact succeeded. Every other caller of
+  // transitionTicketStatus() already treats no_op as fine; this route now
+  // matches them.
 
-  const { data: updatedTicket, error: updateErr } = await supabase
+  const { data: updatedTicket, error: fetchErr2 } = await supabase
     .from("tickets")
-    .update({ status: toStatus })
-    .eq("id", id)
     .select()
+    .eq("id", id)
     .single();
 
-  if (updateErr) return c.json({ error: updateErr.message }, 500);
+  if (fetchErr2) return c.json({ error: fetchErr2.message }, 500);
 
-  await emitTicketEvent({
-    ticketId: id,
-    authorId: user.id,
-    eventType: "status_change",
-    metadata: { from: fromStatus, to: toStatus },
-  });
+  // KAI-191: the transition itself was already recorded in
+  // ticket_state_history by transitionTicketStatus() above — no second copy
+  // anywhere else.
 
   return c.json({ success: true, ticket: updatedTicket });
+});
+
+// ---------------------------------------------------------------------------
+// GET /v1/tickets/:id/lifecycle — full state-machine history for one ticket
+// (KAI-191)
+//
+// Everything here is read, never assembled: the timeline is
+// ticket_state_history rows in seq order, durations_by_state is the
+// ticket_state_durations view, and allowed_transitions comes straight out of
+// getAllowedTransitionsForRole() so the UI never has to guess which actions
+// to offer this caller.
+// ---------------------------------------------------------------------------
+
+interface TicketStateDurationRow {
+  state: string;
+  entered_at: string;
+  exited_at: string | null;
+  duration: string | null;
+}
+
+tickets.get("/:id/lifecycle", async (c) => {
+  const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
+  if (!ctx) return c.json({ error: "Unauthorized" }, 401);
+
+  const id = c.req.param("id");
+
+  const { data: ticket, error: ticketErr } = await supabase
+    .from("tickets")
+    .select("id, status")
+    .eq("id", id)
+    .eq("account_id", ctx.accountId)
+    .single();
+
+  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
+
+  const currentState: TicketStatus = isTicketStatus(ticket.status ?? "")
+    ? (ticket.status as TicketStatus)
+    : "open";
+
+  const [{ data: timelineRows, error: timelineErr }, { data: durationRows, error: durationErr }, role] =
+    await Promise.all([
+      supabase
+        .from("ticket_state_history")
+        .select("from_state, to_state, actor_type, actor_ref, trigger, reason, occurred_at")
+        .eq("ticket_id", id)
+        .eq("account_id", ctx.accountId)
+        .order("seq", { ascending: true }),
+      supabase
+        .from("ticket_state_durations")
+        .select("state, entered_at, exited_at, duration")
+        .eq("ticket_id", id)
+        .eq("account_id", ctx.accountId)
+        .order("seq", { ascending: true }),
+      resolveMemberRole(ctx.userId, ctx.accountId),
+    ]);
+
+  if (timelineErr) return c.json({ error: timelineErr.message }, 500);
+  if (durationErr) return c.json({ error: durationErr.message }, 500);
+
+  const durationsByState = (durationRows ?? []) as TicketStateDurationRow[];
+  // The current state is whichever row hasn't exited yet — the view leaves
+  // exited_at NULL for it (LEAD() finds no next row on the window).
+  const currentStateRow = durationsByState.find((row) => row.exited_at === null) ?? durationsByState.at(-1);
+  const currentStateSince = currentStateRow?.entered_at ?? null;
+  const currentStateDuration = currentStateSince
+    ? humanizeDuration(currentStateSince, new Date().toISOString())
+    : null;
+
+  const allowedTransitions = role ? getAllowedTransitionsForRole(currentState, role) : [];
+
+  return c.json({
+    ticket_id: id,
+    current_state: currentState,
+    current_state_since: currentStateSince,
+    current_state_duration: currentStateDuration,
+    timeline: timelineRows ?? [],
+    durations_by_state: durationsByState,
+    allowed_transitions: allowedTransitions,
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -795,10 +942,13 @@ tickets.patch("/:id/assign", async (c) => {
 
   if (updateErr) return c.json({ error: updateErr.message }, 500);
 
-  await emitTicketEvent({
+  await emitTicketActivity({
+    accountId: ctx.accountId,
     ticketId: id,
-    authorId: user.id,
+    domain: "tickets",
     eventType: "assignment",
+    actorType: "human",
+    actorUserId: user.id,
     metadata: { assigned_to: user.id },
   });
 
@@ -841,30 +991,45 @@ tickets.post("/:id/escalate", async (c) => {
   let updatedTicket: Record<string, unknown> | null = null;
 
   if (fromStatus !== toEscalated && isValidTransition(fromStatus, toEscalated)) {
-    const { data, error: updateErr } = await supabase
-      .from("tickets")
-      .update({ status: toEscalated })
-      .eq("id", id)
-      .select()
-      .single();
-    if (!updateErr && data) {
-      updatedTicket = data as Record<string, unknown>;
-      await emitTicketEvent({
-        ticketId: id,
-        authorId: user.id,
-        eventType: "status_change",
-        metadata: { from: fromStatus, to: toEscalated, trigger: "escalate_action" },
-      });
+    // KAI-191: escalating is this endpoint's whole purpose, so a role that
+    // can't drive this edge fails the request outright — same 403 contract
+    // as PATCH /status. (Legality was just checked above, so this only ever
+    // resolves to the ok or 403 branch — never 422 — but routing it through
+    // the same single gate keeps the two endpoints' behaviour identical.)
+    const role = await resolveMemberRole(ctx.userId, ctx.accountId);
+    const permission = checkTransitionPermission(fromStatus, toEscalated, role);
+    if (!permission.ok) {
+      return c.json(permission.body, permission.httpStatus);
+    }
+
+    // KAI-191: transitionTicketStatus() is the only place allowed to write
+    // tickets.status — see the PATCH /status handler above for why the
+    // isValidTransition() pre-check is still kept alongside it.
+    const transition = await transitionTicketStatus(supabase, {
+      ticketId: id,
+      toState: toEscalated,
+      actorType: "human",
+      actorUserId: user.id,
+      trigger: "escalate_action",
+    });
+    if (transition.outcome === "applied") {
+      const { data } = await supabase.from("tickets").select().eq("id", id).single();
+      updatedTicket = data as Record<string, unknown> | null;
+      // KAI-191: the transition itself was already recorded in
+      // ticket_state_history by transitionTicketStatus() above — no second
+      // copy anywhere else.
     }
   }
 
-  // Emit escalated event with reason
-  await emitTicketEvent({
+  // Emit escalated activity with reason
+  await emitTicketActivity({
+    accountId: ctx.accountId,
     ticketId: id,
-    authorId: user.id,
+    domain: "escalation",
     eventType: "escalated",
-    body: parsed.data.reason ?? undefined,
-    isInternal: true,
+    actorType: "human",
+    actorUserId: user.id,
+    reason: parsed.data.reason ?? null,
   });
 
   return c.json({ ticket_id: id, escalated: true, ticket: updatedTicket });
@@ -872,9 +1037,10 @@ tickets.post("/:id/escalate", async (c) => {
 
 // ---------------------------------------------------------------------------
 // POST /v1/tickets/:id/notes — add an internal note (KAI-221)
-// Internal notes are visible only to agents. Stored as ticket_events with
-// event_type=internal_note, is_internal=true. Also returned as a synthetic
-// ThreadMessage so the UI can append it optimistically.
+// Internal notes are visible only to agents. Stored as ticket_notes (KAI-191:
+// notes are content an author can still edit or retract, not an append-only
+// event). Also returned as a synthetic ThreadMessage so the UI can append it
+// optimistically.
 // ---------------------------------------------------------------------------
 
 // KAI-232: 2000 chars, matching the design spec (rule F.9). The composer shows
@@ -921,31 +1087,30 @@ tickets.post("/:id/notes", async (c) => {
 
   const now = new Date().toISOString();
 
-  // Insert note into ticket_events
-  const { data: eventRow, error: insertErr } = await supabase
-    .from("ticket_events")
+  // Insert note into ticket_notes (KAI-191)
+  const { data: noteRow, error: insertErr } = await supabase
+    .from("ticket_notes")
     .insert({
+      account_id: ctx.accountId,
       ticket_id: id,
       author_id: user.id,
-      event_type: "internal_note",
       body: parsed.data.body,
-      is_internal: true,
     })
     .select("id, created_at")
     .single();
 
-  if (insertErr || !eventRow) {
+  if (insertErr || !noteRow) {
     return c.json({ error: insertErr?.message ?? "Failed to insert note" }, 500);
   }
 
-  const createdEvent = eventRow as { id: string; created_at: string };
+  const createdNote = noteRow as { id: string; created_at: string };
 
   // KAI-232: mention fan-out. Non-fatal by contract — a failed notification
   // must never fail the note the agent just wrote.
   const mentions = await fanOutNoteMentions({
     accountId: ctx.accountId,
     ticketId: id,
-    ticketEventId: createdEvent.id,
+    ticketNoteId: createdNote.id,
     authorId: user.id,
     body: parsed.data.body,
   });
@@ -953,14 +1118,14 @@ tickets.post("/:id/notes", async (c) => {
   // Return a ThreadMessage-shaped object (direction="internal") so the UI
   // can append it to the thread without a full reload.
   const note = {
-    id: createdEvent.id,
+    id: createdNote.id,
     direction: "internal" as const,
     sender_external_id: agentEmail,
     sender_display_name: agentName,
     body_plain: parsed.data.body,
     body_html: null,
     snippet: parsed.data.body.substring(0, 120),
-    received_at: createdEvent.created_at ?? now,
+    received_at: createdNote.created_at ?? now,
     is_origin: false,
     delivery_status: null,
     send_error: null,
@@ -985,6 +1150,27 @@ const ReplySchema = z.object({
   templateId: z.string().uuid().optional(),
   intent: z.enum(["reply", "resolve"]).default("reply"),
 });
+
+// KAI-191 — statuses that auto-transition to `awaiting_customer` when an
+// agent sends a reply. Replying means "now waiting on the customer" —
+// applies to any active state (incl. reopened, KAI-221), not just
+// open/in_progress. Resolved/escalated/awaiting are intentionally
+// excluded. Exhaustive over TicketStatus so a new status forces an explicit
+// decision here instead of silently being left out (or wrongly included).
+const IS_AUTO_AWAITING_SOURCE: Record<TicketStatus, boolean> = {
+  open: true,
+  in_progress: true,
+  reopened: true,
+  awaiting_customer: false,
+  resolved: false,
+  ai_resolved: false,
+  escalated: false,
+  closed: false,
+};
+
+const AUTO_AWAITING_SOURCES: TicketStatus[] = TICKET_STATUSES.filter(
+  (status) => IS_AUTO_AWAITING_SOURCE[status]
+);
 
 tickets.post("/:id/reply", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
@@ -1012,14 +1198,15 @@ tickets.post("/:id/reply", async (c) => {
   // KAI-247: "Enviar y resolver" transitions the ticket to `resolved` atomically
   // with the enqueue. Validate the transition up front so an invalid resolve
   // never queues an email or touches ticket state.
+  // KAI-191: same reasoning extends to permission — a resolve the caller's
+  // role isn't allowed to drive must also fail before anything is queued.
   const intent = parsed.data.intent;
   if (intent === "resolve") {
     const fromStatus: TicketStatus = isTicketStatus(ticket.status ?? "") ? (ticket.status as TicketStatus) : "open";
-    if (!isValidTransition(fromStatus, "resolved")) {
-      return c.json(
-        { error: getTransitionError(fromStatus, "resolved"), code: "INVALID_TRANSITION" },
-        422,
-      );
+    const role = await resolveMemberRole(ctx.userId, ctx.accountId);
+    const permission = checkTransitionPermission(fromStatus, "resolved", role);
+    if (!permission.ok) {
+      return c.json(permission.body, permission.httpStatus);
     }
   }
 
@@ -1277,43 +1464,66 @@ tickets.post("/:id/reply", async (c) => {
   // 6. Update ticket: last_response_at + status transition.
   // Optimistic — the agent has responded; delivery is tracked independently via delivery_status.
   const currentStatus = ticket.status ?? "open";
-  // Replying means "now waiting on the customer" — applies to any active state
-  // (incl. reopened, KAI-221), not just open/in_progress. Resolved/awaiting are
-  // intentionally excluded.
-  const AUTO_AWAITING_SOURCES: TicketStatus[] = ["open", "in_progress", "reopened"];
   const shouldTransitionToAwaiting =
     intent === "reply" && isTicketStatus(currentStatus) && AUTO_AWAITING_SOURCES.includes(currentStatus as TicketStatus);
 
   // KAI-247: "Enviar y resolver" transitions to `resolved` atomically with the enqueue.
   const finalStatus: string = intent === "resolve" ? "resolved" : shouldTransitionToAwaiting ? "awaiting_customer" : currentStatus;
 
+  // last_response_at / first_response_at are unrelated to tickets.status, so
+  // they stay a direct update. KAI-191: transitionTicketStatus() is the only
+  // place allowed to write tickets.status — see below.
   await supabase
     .from("tickets")
     .update({
       last_response_at: nowIso,
       // KAI-168 — first agent response freezes the operational SLA clock.
       ...(ticket.first_response_at ? {} : { first_response_at: nowIso }),
-      ...(finalStatus !== currentStatus ? { status: finalStatus } : {}),
     })
     .eq("id", id);
 
-  // 7. Emit activity event
-  await emitTicketEvent({
-    ticketId: id,
-    authorId: user.id,
-    eventType: "reply_sent",
-    body: parsed.data.body,
-    metadata: { message_id: outboundMsg.id, delivery_status: "queued" },
-  });
-
   if (finalStatus !== currentStatus) {
-    await emitTicketEvent({
-      ticketId: id,
-      authorId: user.id,
-      eventType: "status_change",
-      metadata: { from: currentStatus, to: finalStatus, trigger: intent === "resolve" ? "reply_resolve" : "reply_sent" },
-    });
+    // The resolve path was already validated above (before anything was
+    // queued); the reply/awaiting path is derived from AUTO_AWAITING_SOURCES,
+    // which is exactly the set of states ALLOWED_TRANSITIONS can reach
+    // 'awaiting_customer' from. Neither should ever disagree with
+    // ticket_transition_rules — if one does, that's a real bug to see in
+    // logs, not something to paper over here.
+    //
+    // KAI-191: resolve's role check already ran above, before the reply was
+    // queued. The awaiting_customer path is derived, not user-selected — by
+    // this point the reply is already queued, so a role that can't drive
+    // this edge just means the ticket doesn't move, not that the request
+    // fails. Same "log, don't paper over" treatment as invalid_transition.
+    const role = await resolveMemberRole(ctx.userId, ctx.accountId);
+    if (!role || !isTransitionAllowedForRole(currentStatus as TicketStatus, finalStatus as TicketStatus, role)) {
+      console.error(
+        `[reply] role '${role ?? "none"}' not permitted to transition ticket ${id} from ${currentStatus} to ${finalStatus}; reply queued, status left unchanged`
+      );
+    } else {
+      const transition = await transitionTicketStatus(supabase, {
+        ticketId: id,
+        toState: finalStatus as TicketStatus,
+        actorType: "human",
+        actorUserId: user.id,
+        trigger: intent === "resolve" ? "agent_reply_resolve" : "agent_reply",
+      });
+      if (transition.outcome === "invalid_transition" || transition.outcome === "not_found") {
+        console.error(
+          `[reply] unexpected transition outcome for ticket ${id} (${currentStatus} -> ${finalStatus}): ${transition.outcome}`
+        );
+      }
+    }
   }
+
+  // KAI-191: reply_sent used to be emitted here as a pointer event carrying
+  // metadata.message_id, but the reply already exists as its own row in
+  // `messages` (inserted above, with its own timestamp) — dropped outright,
+  // nothing replaces it.
+
+  // KAI-191: any status change here was already recorded in
+  // ticket_state_history by transitionTicketStatus() — no second copy
+  // anywhere else.
 
   return c.json(
     {
@@ -1370,12 +1580,12 @@ tickets.get("/:id/messages", async (c) => {
     } as Record<string, unknown>))
     .filter((m) => Boolean(m["id"])); // skip orphans
 
-  // Fetch internal notes from ticket_events and merge into thread (KAI-221)
+  // Fetch internal notes from ticket_notes and merge into thread (KAI-221,
+  // repointed off the old events table by KAI-191)
   const { data: noteEvents } = await supabase
-    .from("ticket_events")
+    .from("ticket_notes")
     .select("id, author_id, body, created_at")
     .eq("ticket_id", id)
-    .eq("event_type", "internal_note")
     .order("created_at", { ascending: true });
 
   if (noteEvents && noteEvents.length > 0) {
@@ -1408,14 +1618,14 @@ tickets.get("/:id/messages", async (c) => {
     // state, so it can only be resolved here, not derived from the body.
     const { data: unreadRows } = await supabase
       .from("ticket_note_mentions")
-      .select("ticket_event_id")
+      .select("ticket_note_id")
       .eq("account_id", ctx.accountId)
       .eq("mentioned_user_id", ctx.userId)
       .is("read_at", null)
-      .in("ticket_event_id", typedNotes.map((e) => e.id));
+      .in("ticket_note_id", typedNotes.map((e) => e.id));
 
     const unreadEventIds = new Set(
-      ((unreadRows ?? []) as { ticket_event_id: string }[]).map((r) => r.ticket_event_id),
+      ((unreadRows ?? []) as { ticket_note_id: string }[]).map((r) => r.ticket_note_id),
     );
 
     for (const evt of typedNotes) {
@@ -1486,7 +1696,7 @@ tickets.post("/:id/classify-approve", async (c) => {
 
   if (fetchErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
-  const { error: proposalErr } = await supabase
+  const { data: updatedProposal, error: proposalErr } = await supabase
     .from("ticket_proposals")
     .update({
       status: parsed.data.action === "confirm" ? "confirmed" : "rejected",
@@ -1494,16 +1704,57 @@ tickets.post("/:id/classify-approve", async (c) => {
       reviewed_by: user.id,
     })
     .eq("id", parsed.data.proposal_id)
-    .eq("ticket_id", id);
+    .eq("ticket_id", id)
+    .select("proposed_category, proposed_priority, proposed_type, proposed_sentiment, proposed_emotion, confidence_score, model_version")
+    .single();
 
   if (proposalErr) return c.json({ error: proposalErr.message }, 500);
 
-  await emitTicketEvent({
-    ticketId: id,
-    authorId: user.id,
-    eventType: parsed.data.action === "confirm" ? "ai_confirmed" : "ai_rejected",
-    metadata: { proposal_id: parsed.data.proposal_id },
-  });
+  // KAI-191: ai_confirmed/ai_rejected moved from the old events table to
+  // ticket_classification_history — one row per dimension the AI proposed
+  // that this human review decision touched. The review itself carries no
+  // new from/to value, so from_value stays unset here.
+  //
+  // Code review finding #3 fix: this endpoint does not write tickets.category
+  // etc. in EITHER branch — the AI's proposed value was already written to
+  // the ticket at classification time (tier1's auto-approve), and reject
+  // does not revert it. So `applied` here cannot mean "this action wrote the
+  // ticket column" the way it does for /classify and /correct-classification
+  // below — neither branch does that. It means the narrower, review-scoped
+  // fact this table exists to record: does this human's decision leave the
+  // proposal standing as the ticket's classification of record. confirm ->
+  // true, reject -> false, regardless of what tickets.category currently
+  // holds.
+  //
+  // Separate, unresolved product question surfaced by writing this comment,
+  // not fixed here: should a reject actually revert tickets.category (etc.)
+  // to something else? Nothing does that today. That is a live-data write
+  // with its own product decision behind it — not a table-hygiene fix — and
+  // is out of scope for this change.
+  const isConfirmed = parsed.data.action === "confirm";
+  const proposedDimensions: [ClassificationDimension, string | null][] = [
+    ["category", updatedProposal?.proposed_category ?? null],
+    ["priority", updatedProposal?.proposed_priority ?? null],
+    ["ticket_type", updatedProposal?.proposed_type ?? null],
+    ["sentiment", updatedProposal?.proposed_sentiment ?? null],
+    ["emotion", updatedProposal?.proposed_emotion ?? null],
+  ];
+  for (const [dimension, proposedValue] of proposedDimensions) {
+    if (proposedValue === null) continue;
+    await emitTicketClassification({
+      accountId: ctx.accountId,
+      ticketId: id,
+      actorType: "human",
+      actorUserId: user.id,
+      actorRef: "tickets.classify-approve",
+      dimension,
+      toValue: proposedValue,
+      applied: isConfirmed,
+      confidence: updatedProposal?.confidence_score ?? null,
+      modelVersion: updatedProposal?.model_version ?? null,
+      metadata: { proposal_id: parsed.data.proposal_id },
+    });
+  }
 
   return c.json({ ticket_id: id, proposal_id: parsed.data.proposal_id, action: parsed.data.action });
 });
@@ -2147,15 +2398,32 @@ tickets.post("/:id/correct-classification", async (c) => {
 
   if (updateErr) return c.json({ error: "Correction saved but ticket update failed" }, 500);
 
-  await emitTicketEvent({
-    ticketId,
-    authorId: user.id,
-    eventType: "classification_corrected",
-    metadata: {
-      feedback_id:   feedback.id,
-      corrections:   ticketPatch,
-    },
-  });
+  // KAI-191: classification_corrected moved from the old events table to
+  // ticket_classification_history — one row per dimension actually changed
+  // by this human correction. ticketPatch keys already match dimension names
+  // (ticket_type/priority/category/sentiment) 1:1.
+  const correctionBeforeValues: Record<string, string | null> = {
+    ticket_type: ticket.ticket_type ?? null,
+    priority: ticket.priority ?? null,
+    category: ticket.category ?? null,
+    sentiment: ticket.sentiment ?? null,
+  };
+  for (const [dimension, toValue] of Object.entries(ticketPatch) as [ClassificationDimension, string][]) {
+    const fromValue = correctionBeforeValues[dimension] ?? null;
+    if (fromValue === toValue) continue;
+    await emitTicketClassification({
+      accountId: ctx.accountId,
+      ticketId,
+      actorType: "human",
+      actorUserId: user.id,
+      actorRef: "tickets.correct-classification",
+      dimension,
+      applied: true,
+      fromValue,
+      toValue,
+      metadata: { feedback_id: feedback.id },
+    });
+  }
 
   return c.json({ feedback_id: feedback.id, ticket: updatedTicket });
 });

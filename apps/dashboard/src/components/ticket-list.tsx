@@ -6,7 +6,7 @@ import { useTriageStore, pickPreferredGroupId, type Ticket } from "@/stores/tria
 import { TicketCard } from "@/components/ticket-card";
 import { RelatedHistoryDrawer, type RelatedHistoryItem } from "@/components/related-history-drawer";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
-import { isTriageActive } from "@/lib/triage-status";
+import { isTriageActive, INBOX_FETCH_EXCLUDED_STATUSES_FILTER } from "@/lib/triage-status";
 import { apiCall } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/auth-context";
@@ -441,7 +441,7 @@ export function TicketList() {
     setHistoryDrawerOpen(true);
   }
 
-  // Historical tickets are resolved/auto_resolved, so inbox.tsx's initial
+  // Historical tickets are resolved/ai_resolved, so inbox.tsx's initial
   // fetch never loads them into the store. Fetch the full row directly
   // (same pattern as inbox.tsx) and upsert it so TicketDetail can render it.
   // The list itself filters non-active statuses out via isTriageActive, so
@@ -556,7 +556,7 @@ export function TicketList() {
         .from("tickets")
         .select("*")
         .eq("account_id", accountId!)
-        .not("status", "in", "(awaiting_customer,resolved,auto_resolved)")
+        .not("status", "in", INBOX_FETCH_EXCLUDED_STATUSES_FILTER)
         .order("priority_score", { ascending: false, nullsFirst: false })
         .limit(200);
       if (fresh) setTickets(fresh as Ticket[]);

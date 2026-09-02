@@ -92,6 +92,90 @@ $$;
 ALTER FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") RETURNS TABLE("outcome" "text", "from_state" "text", "to_state" "text", "history_id" "uuid")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_from_state         text;
+  v_account_id         uuid;
+  v_history_id         uuid;
+  v_is_creation        boolean;
+  v_history_from_state text;
+BEGIN
+  SELECT t.status, t.account_id
+    INTO v_from_state, v_account_id
+  FROM public.tickets t
+  WHERE t.id = p_ticket_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'apply_ticket_transition: ticket % not found', p_ticket_id
+      USING ERRCODE = 'KA404';
+  END IF;
+
+  -- A ticket is genuinely being created exactly when it has no prior rows in
+  -- ticket_state_history — that fact lives in the table being written, not
+  -- in a string the caller happens to pass. (Not `p_trigger = 'ticket_created'`:
+  -- trigger is caller-supplied free text, and keying creation-detection off
+  -- it would let any future caller bypass both the no-op guard and the
+  -- ticket_transition_rules check below by reusing that string against an
+  -- existing ticket.)
+  v_is_creation := NOT EXISTS (
+    SELECT 1 FROM public.ticket_state_history WHERE ticket_id = p_ticket_id
+  );
+
+  v_history_from_state := CASE WHEN v_is_creation THEN NULL ELSE v_from_state END;
+
+  IF NOT v_is_creation AND v_from_state IS NOT DISTINCT FROM p_to_state THEN
+    RETURN QUERY SELECT 'no_op'::text, v_from_state, p_to_state, NULL::uuid;
+    RETURN;
+  END IF;
+
+  IF v_history_from_state IS NOT NULL AND NOT EXISTS (
+    SELECT 1
+    FROM public.ticket_transition_rules r
+    WHERE r.from_state = v_history_from_state
+      AND r.to_state = p_to_state
+  ) THEN
+    RAISE EXCEPTION 'apply_ticket_transition: illegal transition from % to % for ticket %', v_history_from_state, p_to_state, p_ticket_id
+      USING ERRCODE = 'KA409';
+  END IF;
+
+  -- The only place in the codebase allowed to set this flag. It is
+  -- transaction-local (is_local => true) and cleared immediately after the
+  -- UPDATE, so no other statement in the same transaction inherits it.
+  PERFORM set_config('kairo.allow_status_change', 'true', true);
+
+  UPDATE public.tickets
+     SET status = p_to_state
+   WHERE id = p_ticket_id;
+
+  PERFORM set_config('kairo.allow_status_change', 'false', true);
+
+  INSERT INTO public.ticket_state_history (
+    account_id, ticket_id, from_state, to_state, actor_type, actor_user_id,
+    actor_ref, trigger, reason, occurred_at, metadata, idempotency_key
+  ) VALUES (
+    v_account_id, p_ticket_id, v_history_from_state, p_to_state, p_actor_type, p_actor_user_id,
+    p_actor_ref, p_trigger, p_reason, now(), p_metadata, p_idempotency_key
+  )
+  ON CONFLICT ON CONSTRAINT ticket_state_history_account_id_idempotency_key_key DO NOTHING
+  RETURNING id INTO v_history_id;
+
+  IF v_history_id IS NULL THEN
+    RETURN QUERY SELECT 'no_op'::text, v_history_from_state, p_to_state, NULL::uuid;
+    RETURN;
+  END IF;
+
+  RETURN QUERY SELECT 'applied'::text, v_history_from_state, p_to_state, v_history_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."bulk_confirm_drafts_by_organization"("p_organization" "text") RETURNS integer
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -510,16 +594,15 @@ CREATE OR REPLACE FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uui
     AS $$
   SELECT
     t.id AS ticket_id,
-    COUNT(DISTINCT e.id) AS note_count,
+    COUNT(DISTINCT n.id) AS note_count,
     COUNT(DISTINCT m.id) FILTER (
       WHERE m.mentioned_user_id = p_user_id AND m.read_at IS NULL
     ) AS unread_mentions
   FROM public.tickets t
-  JOIN public.ticket_events e
-    ON e.ticket_id = t.id
-   AND e.event_type = 'internal_note'
+  JOIN public.ticket_notes n
+    ON n.ticket_id = t.id
   LEFT JOIN public.ticket_note_mentions m
-    ON m.ticket_event_id = e.id
+    ON m.ticket_note_id = n.id
    AND m.account_id = p_account_id
   WHERE t.account_id = p_account_id
   GROUP BY t.id;
@@ -527,6 +610,24 @@ $$;
 
 
 ALTER FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."guard_tickets_status_change"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    IF current_setting('kairo.allow_status_change', true) IS DISTINCT FROM 'true' THEN
+      RAISE EXCEPTION 'tickets.status can only be changed through apply_ticket_transition()'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."guard_tickets_status_change"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
@@ -735,49 +836,6 @@ $$;
 ALTER FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."recompute_category_confidence_thresholds"() RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-BEGIN
-  INSERT INTO public.category_confidence_thresholds (
-    category,
-    min_confidence,
-    min_sample_size,
-    current_accuracy,
-    current_sample_count,
-    auto_approval_enabled,
-    last_evaluated_at
-  )
-  SELECT
-    cf.predicted_category                                                  AS category,
-    0.85                                                                   AS min_confidence,
-    50                                                                     AS min_sample_size,
-    COUNT(*) FILTER (WHERE cf.outcome IN ('confirmed', 'auto'))::float
-      / NULLIF(COUNT(*), 0)                                                AS current_accuracy,
-    COUNT(*)                                                               AS current_sample_count,
-    false                                                                  AS auto_approval_enabled,
-    now()                                                                  AS last_evaluated_at
-  FROM public.categorization_feedback cf
-  WHERE cf.predicted_category IS NOT NULL
-  GROUP BY cf.predicted_category
-  ON CONFLICT (category) DO UPDATE SET
-    current_accuracy      = EXCLUDED.current_accuracy,
-    current_sample_count  = EXCLUDED.current_sample_count,
-    -- flip auto_approval_enabled using the stored thresholds, not hardcoded values
-    auto_approval_enabled = (
-      EXCLUDED.current_sample_count  >= category_confidence_thresholds.min_sample_size
-      AND EXCLUDED.current_accuracy  >= category_confidence_thresholds.min_confidence
-    ),
-    last_evaluated_at     = EXCLUDED.last_evaluated_at,
-    updated_at            = now();
-END;
-$$;
-
-
-ALTER FUNCTION "public"."recompute_category_confidence_thresholds"() OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") RETURNS "public"."draft_contact"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -811,6 +869,108 @@ $$;
 
 
 ALTER FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."reject_ticket_activity_log_mutation"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  IF TG_OP = 'UPDATE'
+     AND NEW.actor_user_id IS NULL
+     AND OLD.actor_user_id IS NOT NULL
+     AND NEW.id = OLD.id
+     AND NEW.account_id = OLD.account_id
+     AND NEW.ticket_id = OLD.ticket_id
+     AND NEW.seq = OLD.seq
+     AND NEW.domain = OLD.domain
+     AND NEW.event_type = OLD.event_type
+     AND NEW.actor_type = OLD.actor_type
+     AND NEW.actor_ref IS NOT DISTINCT FROM OLD.actor_ref
+     AND NEW.reason IS NOT DISTINCT FROM OLD.reason
+     AND NEW.occurred_at = OLD.occurred_at
+     AND NEW.recorded_at = OLD.recorded_at
+     AND NEW.metadata IS NOT DISTINCT FROM OLD.metadata
+     AND NEW.idempotency_key IS NOT DISTINCT FROM OLD.idempotency_key
+  THEN
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION 'ticket_activity_log is append-only: % is not allowed', TG_OP
+    USING ERRCODE = 'insufficient_privilege';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."reject_ticket_activity_log_mutation"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."reject_ticket_classification_history_mutation"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  IF TG_OP = 'UPDATE'
+     AND NEW.actor_user_id IS NULL
+     AND OLD.actor_user_id IS NOT NULL
+     AND NEW.id = OLD.id
+     AND NEW.account_id = OLD.account_id
+     AND NEW.ticket_id = OLD.ticket_id
+     AND NEW.seq = OLD.seq
+     AND NEW.actor_type = OLD.actor_type
+     AND NEW.actor_ref IS NOT DISTINCT FROM OLD.actor_ref
+     AND NEW.dimension = OLD.dimension
+     AND NEW.from_value IS NOT DISTINCT FROM OLD.from_value
+     AND NEW.to_value IS NOT DISTINCT FROM OLD.to_value
+     AND NEW.confidence IS NOT DISTINCT FROM OLD.confidence
+     AND NEW.model_version IS NOT DISTINCT FROM OLD.model_version
+     AND NEW.occurred_at = OLD.occurred_at
+     AND NEW.recorded_at = OLD.recorded_at
+     AND NEW.metadata IS NOT DISTINCT FROM OLD.metadata
+     AND NEW.idempotency_key IS NOT DISTINCT FROM OLD.idempotency_key
+  THEN
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION 'ticket_classification_history is append-only: % is not allowed', TG_OP
+    USING ERRCODE = 'insufficient_privilege';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."reject_ticket_classification_history_mutation"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."reject_ticket_state_history_mutation"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  IF TG_OP = 'UPDATE'
+     AND NEW.actor_user_id IS NULL
+     AND OLD.actor_user_id IS NOT NULL
+     AND NEW.id = OLD.id
+     AND NEW.account_id = OLD.account_id
+     AND NEW.ticket_id = OLD.ticket_id
+     AND NEW.seq = OLD.seq
+     AND NEW.from_state IS NOT DISTINCT FROM OLD.from_state
+     AND NEW.to_state = OLD.to_state
+     AND NEW.actor_type = OLD.actor_type
+     AND NEW.actor_ref IS NOT DISTINCT FROM OLD.actor_ref
+     AND NEW."trigger" = OLD."trigger"
+     AND NEW.reason IS NOT DISTINCT FROM OLD.reason
+     AND NEW.occurred_at = OLD.occurred_at
+     AND NEW.recorded_at = OLD.recorded_at
+     AND NEW.metadata IS NOT DISTINCT FROM OLD.metadata
+     AND NEW.idempotency_key IS NOT DISTINCT FROM OLD.idempotency_key
+  THEN
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION 'ticket_state_history is append-only: % is not allowed', TG_OP
+    USING ERRCODE = 'insufficient_privilege';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."reject_ticket_state_history_mutation"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."set_default_plan_id_on_accounts"() RETURNS "trigger"
@@ -937,7 +1097,11 @@ CREATE TABLE IF NOT EXISTS "public"."accounts" (
     "help_center_url" "text",
     "status_url" "text",
     "privacy_url" "text",
-    "unsubscribe_url" "text"
+    "unsubscribe_url" "text",
+    "business_context" "text",
+    "business_context_updated_at" timestamp with time zone,
+    "business_context_source" "text",
+    CONSTRAINT "chk_business_context_source" CHECK ((("business_context_source" IS NULL) OR ("business_context_source" = ANY (ARRAY['derived'::"text", 'manual'::"text"]))))
 );
 
 
@@ -953,6 +1117,18 @@ COMMENT ON COLUMN "public"."accounts"."signature_html" IS 'Agent email signature
 
 
 COMMENT ON COLUMN "public"."accounts"."brand_color" IS 'Primary brand color (hex e.g. #5c6bc0) for HTML email wrapper header (KAI-115)';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."business_context" IS 'What this company does, in prose, for the {{business_context}} block of the email-classification rubric. NULL means the rubric renders "(no disponible)". Read only by the backfill stage (tier 2/3, incremental-sync, gmail-poll, reclassify endpoints) -- never by tier 1 (KAI-93).';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."business_context_updated_at" IS 'When business_context last changed. The value is expected to be refined over time; this dates the text that a given classification saw.';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."business_context_source" IS 'derived = inferred by Kairo from the account''s own mail; manual = written by a person. Only "derived" corresponds to what the KAI-93 bench measured.';
 
 
 
@@ -1007,23 +1183,6 @@ CREATE TABLE IF NOT EXISTS "public"."categorization_feedback" (
 
 
 ALTER TABLE "public"."categorization_feedback" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "public"."category_confidence_thresholds" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "category" "text" NOT NULL,
-    "min_confidence" double precision DEFAULT 0.85 NOT NULL,
-    "min_sample_size" integer DEFAULT 50 NOT NULL,
-    "current_accuracy" double precision,
-    "current_sample_count" integer DEFAULT 0 NOT NULL,
-    "auto_approval_enabled" boolean DEFAULT false NOT NULL,
-    "last_evaluated_at" timestamp with time zone,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
-);
-
-
-ALTER TABLE "public"."category_confidence_thresholds" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."channel_integrations" (
@@ -1285,7 +1444,7 @@ CREATE TABLE IF NOT EXISTS "public"."notifications" (
     "body" "text" NOT NULL,
     "read_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "ticket_event_id" "uuid"
+    "ticket_note_id" "uuid"
 );
 
 
@@ -1428,20 +1587,88 @@ CREATE TABLE IF NOT EXISTS "public"."tenant_sla_rules" (
 ALTER TABLE "public"."tenant_sla_rules" OWNER TO "postgres";
 
 
-CREATE TABLE IF NOT EXISTS "public"."ticket_events" (
+CREATE TABLE IF NOT EXISTS "public"."ticket_activity_log" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
     "ticket_id" "uuid" NOT NULL,
-    "author_id" "uuid",
+    "seq" bigint NOT NULL,
+    "domain" "text" NOT NULL,
     "event_type" "text" NOT NULL,
-    "body" "text",
-    "is_internal" boolean DEFAULT false NOT NULL,
+    "actor_type" "text" NOT NULL,
+    "actor_user_id" "uuid",
+    "actor_ref" "text",
+    "reason" "text",
+    "occurred_at" timestamp with time zone NOT NULL,
+    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "metadata" "jsonb",
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "ticket_events_event_type_check" CHECK (("event_type" = ANY (ARRAY['reply_sent'::"text", 'internal_note'::"text", 'status_change'::"text", 'assignment'::"text", 'merge'::"text", 'ai_classified'::"text", 'human_classified'::"text", 'ai_proposal'::"text", 'ai_confirmed'::"text", 'ai_rejected'::"text", 'sla_breach'::"text", 'escalated'::"text", 'grouped'::"text", 'classification_corrected'::"text", 'customer_replied'::"text", 'merged_into'::"text"])))
+    "idempotency_key" "text",
+    CONSTRAINT "ticket_activity_log_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
+    CONSTRAINT "ticket_activity_log_domain_check" CHECK (("domain" = ANY (ARRAY['tickets'::"text", 'deduplication'::"text", 'grouping'::"text", 'ans'::"text", 'escalation'::"text", 'messaging'::"text"]))),
+    CONSTRAINT "ticket_activity_log_event_type_check" CHECK (("event_type" = ANY (ARRAY['assignment'::"text", 'merge'::"text", 'merged_into'::"text", 'grouped'::"text", 'sla_breach'::"text", 'escalated'::"text", 'out_of_hours_auto_reply'::"text", 'customer_reply_on_closed_ticket'::"text"])))
 );
 
 
-ALTER TABLE "public"."ticket_events" OWNER TO "postgres";
+ALTER TABLE "public"."ticket_activity_log" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_activity_log" IS 'Append-only log of non-state ticket facts (assignment, merge, grouping, SLA breach, escalation) shared across domains. account_id is denormalised on purpose so tenant scoping and metrics need no join back to tickets.';
+
+
+
+ALTER TABLE "public"."ticket_activity_log" ALTER COLUMN "seq" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."ticket_activity_log_seq_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."ticket_classification_history" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "seq" bigint NOT NULL,
+    "actor_type" "text" NOT NULL,
+    "actor_user_id" "uuid",
+    "actor_ref" "text",
+    "dimension" "text" NOT NULL,
+    "from_value" "text",
+    "to_value" "text",
+    "confidence" numeric(3,2),
+    "model_version" "text",
+    "occurred_at" timestamp with time zone NOT NULL,
+    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "metadata" "jsonb",
+    "idempotency_key" "text",
+    "applied" boolean NOT NULL,
+    CONSTRAINT "ticket_classification_history_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
+    CONSTRAINT "ticket_classification_history_dimension_check" CHECK (("dimension" = ANY (ARRAY['category'::"text", 'priority'::"text", 'sentiment'::"text", 'emotion'::"text", 'ticket_type'::"text"])))
+);
+
+
+ALTER TABLE "public"."ticket_classification_history" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_classification_history" IS 'Append-only ledger of classification decisions on a ticket''s attributes (category/priority/sentiment/emotion/ticket_type) — one row per (ticket, dimension) change, human corrections included. account_id is denormalised on purpose so tenant scoping and metrics need no join back to tickets.';
+
+
+
+COMMENT ON COLUMN "public"."ticket_classification_history"."applied" IS 'Whether to_value actually became the ticket''s attribute. true for every AI classification pass and every human correction (both write real, applied values); false only for a rejected AI proposal reviewed via POST /:id/classify-approve, where to_value still records what was proposed and rejected.';
+
+
+
+ALTER TABLE "public"."ticket_classification_history" ALTER COLUMN "seq" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."ticket_classification_history_seq_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."ticket_followers" (
@@ -1476,11 +1703,128 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_messages" (
 ALTER TABLE "public"."ticket_messages" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."ticket_notes" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "author_id" "uuid",
+    "body" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."ticket_notes" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_notes" IS 'Internal notes on a ticket, visible only to agents. Content, not an event trail: UPDATE/DELETE stay open for the author. account_id is denormalised on purpose so tenant scoping needs no join back to tickets.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."ticket_state_history" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "seq" bigint NOT NULL,
+    "from_state" "text",
+    "to_state" "text" NOT NULL,
+    "actor_type" "text" NOT NULL,
+    "actor_user_id" "uuid",
+    "actor_ref" "text",
+    "trigger" "text" NOT NULL,
+    "reason" "text",
+    "occurred_at" timestamp with time zone NOT NULL,
+    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "metadata" "jsonb",
+    "idempotency_key" "text",
+    CONSTRAINT "ticket_state_history_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
+    CONSTRAINT "ticket_state_history_from_state_check" CHECK ((("from_state" IS NULL) OR ("from_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))),
+    CONSTRAINT "ticket_state_history_to_state_check" CHECK (("to_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"]))),
+    CONSTRAINT "ticket_state_history_trigger_check" CHECK (("trigger" = ANY (ARRAY['ticket_created'::"text", 'manual_status_change'::"text", 'agent_reply'::"text", 'agent_reply_resolve'::"text", 'customer_reply'::"text", 'escalate_action'::"text", 'sla_escalation'::"text", 'external_domain_closure'::"text"])))
+);
+
+
+ALTER TABLE "public"."ticket_state_history" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_state_history" IS 'Append-only trail of ticket state transitions. account_id is denormalised on purpose so tenant scoping and metrics need no join back to tickets.';
+
+
+
+CREATE OR REPLACE VIEW "public"."ticket_lifecycle_timeline" WITH ("security_invoker"='true') AS
+ SELECT "h"."account_id",
+    "h"."ticket_id",
+    "h"."occurred_at",
+    'state_change'::"text" AS "kind",
+    "h"."actor_type",
+    COALESCE("h"."actor_ref", ("h"."actor_user_id")::"text") AS "actor_ref",
+        CASE
+            WHEN ("h"."from_state" IS NULL) THEN "h"."to_state"
+            ELSE (("h"."from_state" || ' → '::"text") || "h"."to_state")
+        END AS "detail",
+    "h"."id"
+   FROM "public"."ticket_state_history" "h"
+UNION ALL
+ SELECT "a"."account_id",
+    "a"."ticket_id",
+    "a"."occurred_at",
+    'activity'::"text" AS "kind",
+    "a"."actor_type",
+    COALESCE("a"."actor_ref", ("a"."actor_user_id")::"text") AS "actor_ref",
+    "a"."event_type" AS "detail",
+    "a"."id"
+   FROM "public"."ticket_activity_log" "a"
+UNION ALL
+ SELECT "n"."account_id",
+    "n"."ticket_id",
+    "n"."created_at" AS "occurred_at",
+    'note'::"text" AS "kind",
+    'human'::"text" AS "actor_type",
+    ("n"."author_id")::"text" AS "actor_ref",
+        CASE
+            WHEN ("length"("n"."body") > 140) THEN ("left"("n"."body", 140) || '…'::"text")
+            ELSE "n"."body"
+        END AS "detail",
+    "n"."id"
+   FROM "public"."ticket_notes" "n"
+UNION ALL
+ SELECT "c"."account_id",
+    "c"."ticket_id",
+    "c"."occurred_at",
+    'classification'::"text" AS "kind",
+    "c"."actor_type",
+    COALESCE("c"."actor_ref", ("c"."actor_user_id")::"text") AS "actor_ref",
+    (((("c"."dimension" || ': '::"text") || COALESCE("c"."from_value", '—'::"text")) || ' → '::"text") || COALESCE("c"."to_value", '—'::"text")) AS "detail",
+    "c"."id"
+   FROM "public"."ticket_classification_history" "c"
+UNION ALL
+ SELECT "m"."account_id",
+    "tm"."ticket_id",
+    "m"."received_at" AS "occurred_at",
+    'message'::"text" AS "kind",
+        CASE
+            WHEN ("m"."direction" = 'inbound'::"text") THEN 'customer'::"text"
+            ELSE 'human'::"text"
+        END AS "actor_type",
+    "m"."sender_display_name" AS "actor_ref",
+    "m"."direction" AS "detail",
+    "m"."id"
+   FROM ("public"."ticket_messages" "tm"
+     JOIN "public"."messages" "m" ON (("m"."id" = "tm"."message_id")));
+
+
+ALTER VIEW "public"."ticket_lifecycle_timeline" OWNER TO "postgres";
+
+
+COMMENT ON VIEW "public"."ticket_lifecycle_timeline" IS 'One ordered stream per ticket, unioning ticket_state_history, ticket_activity_log, ticket_notes, ticket_classification_history and messages (via ticket_messages). kind distinguishes the source (state_change/activity/note/classification/message); detail is a short per-source summary; id is each row''s own source-table primary key, exposed only as a stable pagination tie-break for occurred_at ties — it carries no meaning across sources. Composed in SQL on purpose — never reassembled in an endpoint.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."ticket_note_mentions" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "account_id" "uuid" NOT NULL,
     "ticket_id" "uuid" NOT NULL,
-    "ticket_event_id" "uuid" NOT NULL,
+    "ticket_note_id" "uuid" NOT NULL,
     "mentioned_user_id" "uuid" NOT NULL,
     "notified_at" timestamp with time zone,
     "read_at" timestamp with time zone,
@@ -1552,6 +1896,35 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_proposals" (
 ALTER TABLE "public"."ticket_proposals" OWNER TO "postgres";
 
 
+CREATE OR REPLACE VIEW "public"."ticket_state_durations" WITH ("security_invoker"='true') AS
+ SELECT "account_id",
+    "ticket_id",
+    "seq",
+    "to_state" AS "state",
+    "occurred_at" AS "entered_at",
+    "lead"("occurred_at") OVER (PARTITION BY "ticket_id" ORDER BY "seq") AS "exited_at",
+    ("lead"("occurred_at") OVER (PARTITION BY "ticket_id" ORDER BY "seq") - "occurred_at") AS "duration"
+   FROM "public"."ticket_state_history" "h";
+
+
+ALTER VIEW "public"."ticket_state_durations" OWNER TO "postgres";
+
+
+COMMENT ON VIEW "public"."ticket_state_durations" IS 'Per ticket, per state: entered_at/exited_at/duration derived from ticket_state_history via LEAD(occurred_at) OVER (PARTITION BY ticket_id ORDER BY seq). exited_at and duration are NULL for the state the ticket currently occupies.';
+
+
+
+ALTER TABLE "public"."ticket_state_history" ALTER COLUMN "seq" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."ticket_state_history_seq_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."ticket_tags" (
     "ticket_id" "uuid" NOT NULL,
     "tag" "text" NOT NULL,
@@ -1560,6 +1933,88 @@ CREATE TABLE IF NOT EXISTS "public"."ticket_tags" (
 
 
 ALTER TABLE "public"."ticket_tags" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "public"."ticket_transition_override_rates" WITH ("security_invoker"='true') AS
+ WITH "transitions" AS (
+         SELECT "h"."account_id",
+            "h"."ticket_id",
+            "h"."seq",
+            "h"."actor_type",
+            "h"."from_state",
+            "h"."to_state",
+            "lag"("h"."actor_type") OVER (PARTITION BY "h"."ticket_id" ORDER BY "h"."seq") AS "prev_actor_type"
+           FROM "public"."ticket_state_history" "h"
+        ), "by_pair" AS (
+         SELECT "t"."account_id",
+            "t"."from_state",
+            "t"."to_state",
+            "count"(*) FILTER (WHERE ("t"."prev_actor_type" = ANY (ARRAY['ai'::"text", 'system'::"text"]))) AS "following_ai_or_system",
+            "count"(*) FILTER (WHERE (("t"."actor_type" = 'human'::"text") AND ("t"."prev_actor_type" = ANY (ARRAY['ai'::"text", 'system'::"text"])))) AS "overridden_by_human"
+           FROM "transitions" "t"
+          GROUP BY "t"."account_id", "t"."from_state", "t"."to_state"
+        )
+ SELECT "account_id",
+    "from_state",
+    "to_state",
+    "following_ai_or_system",
+    "overridden_by_human",
+        CASE
+            WHEN ("following_ai_or_system" > 0) THEN "round"((("overridden_by_human")::numeric / ("following_ai_or_system")::numeric), 4)
+            ELSE NULL::numeric
+        END AS "override_rate"
+   FROM "by_pair";
+
+
+ALTER VIEW "public"."ticket_transition_override_rates" OWNER TO "postgres";
+
+
+COMMENT ON VIEW "public"."ticket_transition_override_rates" IS 'How often a human transition immediately follows one made by ai/system on the same ticket (LAG(actor_type) OVER ticket_id ORDER BY seq), grouped by the (from_state, to_state) pair of the following transition. override_rate = overridden_by_human / following_ai_or_system.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."ticket_transition_rules" (
+    "from_state" "text" NOT NULL,
+    "to_state" "text" NOT NULL,
+    CONSTRAINT "ticket_transition_rules_from_state_check" CHECK (("from_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"]))),
+    CONSTRAINT "ticket_transition_rules_to_state_check" CHECK (("to_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))
+);
+
+
+ALTER TABLE "public"."ticket_transition_rules" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_transition_rules" IS 'Mirrors ALLOWED_TRANSITIONS from apps/api/src/lib/ticket-status-machine.ts. Generated by apps/api/src/lib/ticket-transition-rules-sql.ts — never hand-edited. Read by apply_ticket_transition(); ticket-transition-rules-sql.test.ts asserts this seed stays byte-for-byte in sync with the TypeScript table.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."ticket_type_auto_approval" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_type" "text" NOT NULL,
+    "min_precision" double precision DEFAULT 0.90 NOT NULL,
+    "min_sample_size" integer DEFAULT 30 NOT NULL,
+    "current_precision" double precision,
+    "current_sample_count" integer DEFAULT 0 NOT NULL,
+    "auto_approval_enabled" boolean DEFAULT false NOT NULL,
+    "last_evaluated_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "chk_tta_min_precision" CHECK ((("min_precision" >= (0.5)::double precision) AND ("min_precision" <= (1.0)::double precision))),
+    CONSTRAINT "chk_tta_min_sample" CHECK (("min_sample_size" > 0)),
+    CONSTRAINT "chk_tta_ticket_type" CHECK (("ticket_type" = ANY (ARRAY['support'::"text", 'prospect'::"text", 'spam'::"text", 'internal'::"text", 'other'::"text"])))
+);
+
+
+ALTER TABLE "public"."ticket_type_auto_approval" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_type_auto_approval" IS 'Per-account, per-ticket_type permission to let a classification stand without human review. Earned from measured precision over a minimum sample, never set by hand — see ADR-027. The 0.90 default is where all five bench models land on `support`; 30 is the sample below which a perfect run says nothing (granite scored 100% on 4 predictions of `internal`).';
+
+
+
+COMMENT ON COLUMN "public"."ticket_type_auto_approval"."min_precision" IS 'Precision the class must reach before it auto-approves. Precision of the PREDICTION, not the confidence the model reports about itself — that number was measured and does not separate right from wrong (ADR-027).';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."tickets" (
@@ -1618,7 +2073,7 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     CONSTRAINT "chk_priority_score" CHECK ((("priority_score" IS NULL) OR (("priority_score" >= 0.000) AND ("priority_score" <= 1.000)))),
     CONSTRAINT "chk_sentiment" CHECK ((("sentiment" IS NULL) OR ("sentiment" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_ticket_type" CHECK ((("ticket_type" IS NULL) OR ("ticket_type" = ANY (ARRAY['support'::"text", 'prospect'::"text", 'spam'::"text", 'internal'::"text", 'other'::"text"])))),
-    CONSTRAINT "tickets_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'auto_resolved'::"text", 'guided'::"text", 'escalated'::"text", 'reopened'::"text"])))
+    CONSTRAINT "tickets_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))
 );
 
 
@@ -1717,16 +2172,6 @@ ALTER TABLE ONLY "public"."admin_users"
 
 ALTER TABLE ONLY "public"."categorization_feedback"
     ADD CONSTRAINT "categorization_feedback_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."category_confidence_thresholds"
-    ADD CONSTRAINT "category_confidence_thresholds_category_key" UNIQUE ("category");
-
-
-
-ALTER TABLE ONLY "public"."category_confidence_thresholds"
-    ADD CONSTRAINT "category_confidence_thresholds_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1885,8 +2330,23 @@ ALTER TABLE ONLY "public"."tenant_sla_rules"
 
 
 
-ALTER TABLE ONLY "public"."ticket_events"
-    ADD CONSTRAINT "ticket_events_pkey" PRIMARY KEY ("id");
+ALTER TABLE ONLY "public"."ticket_activity_log"
+    ADD CONSTRAINT "ticket_activity_log_account_id_idempotency_key_key" UNIQUE ("account_id", "idempotency_key");
+
+
+
+ALTER TABLE ONLY "public"."ticket_activity_log"
+    ADD CONSTRAINT "ticket_activity_log_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_classification_history"
+    ADD CONSTRAINT "ticket_classification_history_account_id_idempotency_key_key" UNIQUE ("account_id", "idempotency_key");
+
+
+
+ALTER TABLE ONLY "public"."ticket_classification_history"
+    ADD CONSTRAINT "ticket_classification_history_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1906,12 +2366,17 @@ ALTER TABLE ONLY "public"."ticket_messages"
 
 
 ALTER TABLE ONLY "public"."ticket_note_mentions"
-    ADD CONSTRAINT "ticket_note_mentions_event_user_key" UNIQUE ("ticket_event_id", "mentioned_user_id");
+    ADD CONSTRAINT "ticket_note_mentions_note_user_key" UNIQUE ("ticket_note_id", "mentioned_user_id");
 
 
 
 ALTER TABLE ONLY "public"."ticket_note_mentions"
     ADD CONSTRAINT "ticket_note_mentions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_notes"
+    ADD CONSTRAINT "ticket_notes_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1940,8 +2405,33 @@ ALTER TABLE ONLY "public"."ticket_proposals"
 
 
 
+ALTER TABLE ONLY "public"."ticket_state_history"
+    ADD CONSTRAINT "ticket_state_history_account_id_idempotency_key_key" UNIQUE ("account_id", "idempotency_key");
+
+
+
+ALTER TABLE ONLY "public"."ticket_state_history"
+    ADD CONSTRAINT "ticket_state_history_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."ticket_tags"
     ADD CONSTRAINT "ticket_tags_pkey" PRIMARY KEY ("ticket_id", "tag");
+
+
+
+ALTER TABLE ONLY "public"."ticket_transition_rules"
+    ADD CONSTRAINT "ticket_transition_rules_pkey" PRIMARY KEY ("from_state", "to_state");
+
+
+
+ALTER TABLE ONLY "public"."ticket_type_auto_approval"
+    ADD CONSTRAINT "ticket_type_auto_approval_account_type_key" UNIQUE ("account_id", "ticket_type");
+
+
+
+ALTER TABLE ONLY "public"."ticket_type_auto_approval"
+    ADD CONSTRAINT "ticket_type_auto_approval_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2208,15 +2698,19 @@ CREATE INDEX "idx_tenant_sla_rules_account_id" ON "public"."tenant_sla_rules" US
 
 
 
-CREATE INDEX "idx_ticket_events_author_id" ON "public"."ticket_events" USING "btree" ("author_id");
+CREATE INDEX "idx_ticket_activity_log_account_occurred" ON "public"."ticket_activity_log" USING "btree" ("account_id", "occurred_at");
 
 
 
-CREATE INDEX "idx_ticket_events_event_type" ON "public"."ticket_events" USING "btree" ("event_type");
+CREATE INDEX "idx_ticket_activity_log_ticket_seq" ON "public"."ticket_activity_log" USING "btree" ("ticket_id", "seq");
 
 
 
-CREATE INDEX "idx_ticket_events_ticket_id" ON "public"."ticket_events" USING "btree" ("ticket_id");
+CREATE INDEX "idx_ticket_classification_history_account_occurred" ON "public"."ticket_classification_history" USING "btree" ("account_id", "occurred_at");
+
+
+
+CREATE INDEX "idx_ticket_classification_history_ticket_seq" ON "public"."ticket_classification_history" USING "btree" ("ticket_id", "seq");
 
 
 
@@ -2233,6 +2727,14 @@ CREATE INDEX "idx_ticket_note_mentions_ticket" ON "public"."ticket_note_mentions
 
 
 CREATE INDEX "idx_ticket_note_mentions_user" ON "public"."ticket_note_mentions" USING "btree" ("mentioned_user_id", "read_at");
+
+
+
+CREATE INDEX "idx_ticket_notes_account_created" ON "public"."ticket_notes" USING "btree" ("account_id", "created_at");
+
+
+
+CREATE INDEX "idx_ticket_notes_ticket" ON "public"."ticket_notes" USING "btree" ("ticket_id", "created_at");
 
 
 
@@ -2261,6 +2763,14 @@ CREATE INDEX "idx_ticket_proposals_model_version" ON "public"."ticket_proposals"
 
 
 CREATE INDEX "idx_ticket_proposals_status" ON "public"."ticket_proposals" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_ticket_state_history_account_occurred" ON "public"."ticket_state_history" USING "btree" ("account_id", "occurred_at");
+
+
+
+CREATE INDEX "idx_ticket_state_history_ticket_seq" ON "public"."ticket_state_history" USING "btree" ("ticket_id", "seq");
 
 
 
@@ -2340,7 +2850,7 @@ CREATE INDEX "tickets_group_id_idx" ON "public"."tickets" USING "btree" ("group_
 
 
 
-CREATE OR REPLACE TRIGGER "on_category_confidence_thresholds_updated" BEFORE UPDATE ON "public"."category_confidence_thresholds" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+CREATE OR REPLACE TRIGGER "guard_tickets_status_change" BEFORE UPDATE ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."guard_tickets_status_change"();
 
 
 
@@ -2368,7 +2878,27 @@ CREATE OR REPLACE TRIGGER "on_response_templates_updated" BEFORE UPDATE ON "publ
 
 
 
+CREATE OR REPLACE TRIGGER "on_ticket_notes_updated" BEFORE UPDATE ON "public"."ticket_notes" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_ticket_type_auto_approval_updated" BEFORE UPDATE ON "public"."ticket_type_auto_approval" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
 CREATE OR REPLACE TRIGGER "on_tickets_updated" BEFORE UPDATE ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "ticket_activity_log_append_only" BEFORE DELETE OR UPDATE ON "public"."ticket_activity_log" FOR EACH ROW EXECUTE FUNCTION "public"."reject_ticket_activity_log_mutation"();
+
+
+
+CREATE OR REPLACE TRIGGER "ticket_classification_history_append_only" BEFORE DELETE OR UPDATE ON "public"."ticket_classification_history" FOR EACH ROW EXECUTE FUNCTION "public"."reject_ticket_classification_history_mutation"();
+
+
+
+CREATE OR REPLACE TRIGGER "ticket_state_history_append_only" BEFORE DELETE OR UPDATE ON "public"."ticket_state_history" FOR EACH ROW EXECUTE FUNCTION "public"."reject_ticket_state_history_mutation"();
 
 
 
@@ -2555,12 +3085,12 @@ ALTER TABLE ONLY "public"."notifications"
 
 
 ALTER TABLE ONLY "public"."notifications"
-    ADD CONSTRAINT "notifications_ticket_event_id_fkey" FOREIGN KEY ("ticket_event_id") REFERENCES "public"."ticket_events"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "notifications_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
 
 ALTER TABLE ONLY "public"."notifications"
-    ADD CONSTRAINT "notifications_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "notifications_ticket_note_id_fkey" FOREIGN KEY ("ticket_note_id") REFERENCES "public"."ticket_notes"("id") ON DELETE CASCADE;
 
 
 
@@ -2614,13 +3144,33 @@ ALTER TABLE ONLY "public"."tenant_sla_rules"
 
 
 
-ALTER TABLE ONLY "public"."ticket_events"
-    ADD CONSTRAINT "ticket_events_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+ALTER TABLE ONLY "public"."ticket_activity_log"
+    ADD CONSTRAINT "ticket_activity_log_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id");
 
 
 
-ALTER TABLE ONLY "public"."ticket_events"
-    ADD CONSTRAINT "ticket_events_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."ticket_activity_log"
+    ADD CONSTRAINT "ticket_activity_log_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."ticket_activity_log"
+    ADD CONSTRAINT "ticket_activity_log_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ticket_classification_history"
+    ADD CONSTRAINT "ticket_classification_history_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_classification_history"
+    ADD CONSTRAINT "ticket_classification_history_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."ticket_classification_history"
+    ADD CONSTRAINT "ticket_classification_history_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
 
@@ -2660,12 +3210,27 @@ ALTER TABLE ONLY "public"."ticket_note_mentions"
 
 
 ALTER TABLE ONLY "public"."ticket_note_mentions"
-    ADD CONSTRAINT "ticket_note_mentions_ticket_event_id_fkey" FOREIGN KEY ("ticket_event_id") REFERENCES "public"."ticket_events"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "ticket_note_mentions_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
 
 ALTER TABLE ONLY "public"."ticket_note_mentions"
-    ADD CONSTRAINT "ticket_note_mentions_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "ticket_note_mentions_ticket_note_id_fkey" FOREIGN KEY ("ticket_note_id") REFERENCES "public"."ticket_notes"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ticket_notes"
+    ADD CONSTRAINT "ticket_notes_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_notes"
+    ADD CONSTRAINT "ticket_notes_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."ticket_notes"
+    ADD CONSTRAINT "ticket_notes_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
 
 
 
@@ -2699,8 +3264,28 @@ ALTER TABLE ONLY "public"."ticket_proposals"
 
 
 
+ALTER TABLE ONLY "public"."ticket_state_history"
+    ADD CONSTRAINT "ticket_state_history_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_state_history"
+    ADD CONSTRAINT "ticket_state_history_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."ticket_state_history"
+    ADD CONSTRAINT "ticket_state_history_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."ticket_tags"
     ADD CONSTRAINT "ticket_tags_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ticket_type_auto_approval"
+    ADD CONSTRAINT "ticket_type_auto_approval_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
 
 
@@ -2766,10 +3351,6 @@ CREATE POLICY "Accounts can be managed by owners and admins" ON "public"."accoun
 
 
 CREATE POLICY "Authenticated users can read categorization_feedback" ON "public"."categorization_feedback" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
-
-
-
-CREATE POLICY "Authenticated users can read category_confidence_thresholds" ON "public"."category_confidence_thresholds" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
 
 
 
@@ -2847,9 +3428,6 @@ CREATE POLICY "admin_users_self_read" ON "public"."admin_users" FOR SELECT USING
 
 
 ALTER TABLE "public"."categorization_feedback" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."category_confidence_thresholds" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."channel_integrations" ENABLE ROW LEVEL SECURITY;
@@ -2941,6 +3519,12 @@ CREATE POLICY "llm_calls_access_by_account" ON "public"."llm_calls" USING (("acc
 
 
 
+CREATE POLICY "members read their account's thresholds" ON "public"."ticket_type_auto_approval" FOR SELECT USING (("account_id" IN ( SELECT "am"."account_id"
+   FROM "public"."account_members" "am"
+  WHERE (("am"."user_id" = "auth"."uid"()) AND ("am"."status" = 'active'::"text")))));
+
+
+
 ALTER TABLE "public"."messages" ENABLE ROW LEVEL SECURITY;
 
 
@@ -3013,12 +3597,25 @@ CREATE POLICY "tenant_sla_rules_access_by_account" ON "public"."tenant_sla_rules
 
 
 
-ALTER TABLE "public"."ticket_events" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."ticket_activity_log" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "ticket_events_access_by_account" ON "public"."ticket_events" USING ((EXISTS ( SELECT 1
-   FROM "public"."tickets" "t"
-  WHERE (("t"."id" = "ticket_events"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
+CREATE POLICY "ticket_activity_log_insert_by_account" ON "public"."ticket_activity_log" FOR INSERT WITH CHECK (("account_id" = "public"."current_account_id"()));
+
+
+
+CREATE POLICY "ticket_activity_log_select_by_account" ON "public"."ticket_activity_log" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
+
+
+
+ALTER TABLE "public"."ticket_classification_history" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_classification_history_insert_by_account" ON "public"."ticket_classification_history" FOR INSERT WITH CHECK (("account_id" = "public"."current_account_id"()));
+
+
+
+CREATE POLICY "ticket_classification_history_select_by_account" ON "public"."ticket_classification_history" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -3054,6 +3651,13 @@ CREATE POLICY "ticket_note_mentions_access_by_account" ON "public"."ticket_note_
 
 
 
+ALTER TABLE "public"."ticket_notes" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_notes_access_by_account" ON "public"."ticket_notes" USING (("account_id" = "public"."current_account_id"()));
+
+
+
 ALTER TABLE "public"."ticket_priority_sla_config" ENABLE ROW LEVEL SECURITY;
 
 
@@ -3077,6 +3681,17 @@ CREATE POLICY "ticket_proposals_access_by_account" ON "public"."ticket_proposals
 
 
 
+ALTER TABLE "public"."ticket_state_history" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_state_history_insert_by_account" ON "public"."ticket_state_history" FOR INSERT WITH CHECK (("account_id" = "public"."current_account_id"()));
+
+
+
+CREATE POLICY "ticket_state_history_select_by_account" ON "public"."ticket_state_history" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
+
+
+
 ALTER TABLE "public"."ticket_tags" ENABLE ROW LEVEL SECURITY;
 
 
@@ -3084,6 +3699,16 @@ CREATE POLICY "ticket_tags_access_by_account" ON "public"."ticket_tags" USING ((
    FROM "public"."tickets" "t"
   WHERE (("t"."id" = "ticket_tags"."ticket_id") AND ("t"."account_id" = "public"."current_account_id"())))));
 
+
+
+ALTER TABLE "public"."ticket_transition_rules" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_transition_rules_select_all" ON "public"."ticket_transition_rules" FOR SELECT USING (true);
+
+
+
+ALTER TABLE "public"."ticket_type_auto_approval" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."tickets" ENABLE ROW LEVEL SECURITY;
@@ -3118,6 +3743,13 @@ REVOKE ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "u
 GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") TO "service_role";
 
 
 
@@ -3193,6 +3825,12 @@ GRANT ALL ON FUNCTION "public"."get_ticket_note_counts"("p_account_id" "uuid", "
 
 
 
+GRANT ALL ON FUNCTION "public"."guard_tickets_status_change"() TO "anon";
+GRANT ALL ON FUNCTION "public"."guard_tickets_status_change"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."guard_tickets_status_change"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
@@ -3236,15 +3874,27 @@ GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", 
 
 
 
-GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "anon";
-GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."recompute_category_confidence_thresholds"() TO "service_role";
-
-
-
 GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."reject_ticket_activity_log_mutation"() TO "anon";
+GRANT ALL ON FUNCTION "public"."reject_ticket_activity_log_mutation"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reject_ticket_activity_log_mutation"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."reject_ticket_classification_history_mutation"() TO "anon";
+GRANT ALL ON FUNCTION "public"."reject_ticket_classification_history_mutation"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reject_ticket_classification_history_mutation"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "anon";
+GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "service_role";
 
 
 
@@ -3305,12 +3955,6 @@ GRANT ALL ON TABLE "public"."admin_users" TO "service_role";
 GRANT ALL ON TABLE "public"."categorization_feedback" TO "anon";
 GRANT ALL ON TABLE "public"."categorization_feedback" TO "authenticated";
 GRANT ALL ON TABLE "public"."categorization_feedback" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."category_confidence_thresholds" TO "anon";
-GRANT ALL ON TABLE "public"."category_confidence_thresholds" TO "authenticated";
-GRANT ALL ON TABLE "public"."category_confidence_thresholds" TO "service_role";
 
 
 
@@ -3434,9 +4078,27 @@ GRANT ALL ON TABLE "public"."tenant_sla_rules" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."ticket_events" TO "anon";
-GRANT ALL ON TABLE "public"."ticket_events" TO "authenticated";
-GRANT ALL ON TABLE "public"."ticket_events" TO "service_role";
+GRANT ALL ON TABLE "public"."ticket_activity_log" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_activity_log" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_activity_log" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."ticket_activity_log_seq_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."ticket_activity_log_seq_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."ticket_activity_log_seq_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_classification_history" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_classification_history" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_classification_history" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."ticket_classification_history_seq_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."ticket_classification_history_seq_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."ticket_classification_history_seq_seq" TO "service_role";
 
 
 
@@ -3455,6 +4117,24 @@ GRANT ALL ON TABLE "public"."ticket_groups" TO "service_role";
 GRANT ALL ON TABLE "public"."ticket_messages" TO "anon";
 GRANT ALL ON TABLE "public"."ticket_messages" TO "authenticated";
 GRANT ALL ON TABLE "public"."ticket_messages" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_notes" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_notes" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_notes" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_lifecycle_timeline" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_lifecycle_timeline" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_lifecycle_timeline" TO "service_role";
 
 
 
@@ -3482,9 +4162,39 @@ GRANT ALL ON TABLE "public"."ticket_proposals" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."ticket_state_durations" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_state_durations" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_state_durations" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."ticket_state_history_seq_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."ticket_state_history_seq_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."ticket_state_history_seq_seq" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."ticket_tags" TO "anon";
 GRANT ALL ON TABLE "public"."ticket_tags" TO "authenticated";
 GRANT ALL ON TABLE "public"."ticket_tags" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_transition_override_rates" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_transition_override_rates" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_transition_override_rates" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_transition_rules" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_transition_rules" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_transition_rules" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_type_auto_approval" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_type_auto_approval" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_type_auto_approval" TO "service_role";
 
 
 

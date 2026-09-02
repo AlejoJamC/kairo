@@ -9,6 +9,7 @@ import { TicketList } from "./ticket-list";
 import { TicketDetail } from "./ticket-detail";
 import { AiAssistant } from "./ai-assistant";
 import type { Ticket, TicketPriority, PrioritySlaConfig } from "@kairo/types";
+import { INBOX_FETCH_EXCLUDED_STATUSES_FILTER } from "@/lib/triage-status";
 
 export function Inbox() {
   const { user, accountId } = useAuth();
@@ -52,7 +53,7 @@ export function Inbox() {
       let query = supabase
         .from("tickets")
         .select("*")
-        .not("status", "in", "(awaiting_customer,resolved,auto_resolved)")
+        .not("status", "in", INBOX_FETCH_EXCLUDED_STATUSES_FILTER)
         .order("priority_score", { ascending: false, nullsFirst: false })
         .limit(200);
 

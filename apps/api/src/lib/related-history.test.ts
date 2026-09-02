@@ -76,17 +76,17 @@ describe("related-history response shape", () => {
 // ---------------------------------------------------------------------------
 
 describe("related-history final-state filter (KAI-108)", () => {
-  const RESOLVED_STATUSES = ["resolved", "auto_resolved"] as const;
+  const RESOLVED_STATUSES = ["resolved", "ai_resolved"] as const;
 
   it("passes both final states to the RPC as a comma-separated filter", () => {
-    expect(RESOLVED_STATUSES.join(",")).toBe("resolved,auto_resolved");
+    expect(RESOLVED_STATUSES.join(",")).toBe("resolved,ai_resolved");
   });
 
-  it("the comma-list predicate matches auto_resolved, not just resolved", () => {
+  it("the comma-list predicate matches ai_resolved, not just resolved", () => {
     // Mirrors: t.status = ANY(string_to_array(p_status_filter, ','))
     const allowed = RESOLVED_STATUSES.join(",").split(",");
     expect(allowed.includes("resolved")).toBe(true);
-    expect(allowed.includes("auto_resolved")).toBe(true);
+    expect(allowed.includes("ai_resolved")).toBe(true);
   });
 
   it("does not let non-final statuses through", () => {

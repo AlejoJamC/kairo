@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ClassificationSchema } from "@kairo/intelligence";
+import { ClassificationSchema, TICKET_TYPE, PRIORITY, CATEGORY, TONE } from "@kairo/intelligence";
 
 // Canonical classification contract lives in @kairo/intelligence.
 // Re-export so apps/api consumers have a single import surface.
@@ -77,10 +77,10 @@ export type ClassifyBatchAsyncResponse = z.infer<typeof ClassifyBatchAsyncRespon
 // ---------------------------------------------------------------------------
 
 export const CorrectClassificationSchema = z.object({
-  correct_ticket_type: z.enum(["support", "prospect", "spam", "internal", "other"]).optional(),
-  correct_priority:    z.enum(["P1", "P2", "P3"]).optional(),
-  correct_category:    z.enum(["technical", "billing", "account", "general", "not_applicable"]).optional(),
-  correct_sentiment:   z.enum(["aggressive", "frustrated", "neutral", "positive"]).optional(),
+  correct_ticket_type: z.enum(TICKET_TYPE).optional(),
+  correct_priority:    z.enum(PRIORITY).optional(),
+  correct_category:    z.enum(CATEGORY).optional(),
+  correct_sentiment:   z.enum(TONE).optional(),
   notes:               z.string().max(2000).optional(),
 }).refine(
   (v) => v.correct_ticket_type || v.correct_priority || v.correct_category || v.correct_sentiment,

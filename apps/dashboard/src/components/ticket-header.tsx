@@ -67,7 +67,7 @@ function TypeBadge({ type }: { type: string | null | undefined }) {
 interface TicketHeaderProps {
   ticket: Ticket;
   // KAI-25 — true for historical tickets opened from the related-history
-  // drawer (resolved/auto_resolved). Hides mutation actions (assign,
+  // drawer (resolved/ai_resolved). Hides mutation actions (assign,
   // correction) so the header matches the read-only detail view.
   readOnly?: boolean;
 }

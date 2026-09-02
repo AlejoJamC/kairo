@@ -20,9 +20,13 @@ notifications.get("/", async (c) => {
   // KAI-232: `tickets(short_id)` is embedded so a mention row can show the
   // ticket reference as its own mono chip instead of having it baked into the
   // server-rendered title string.
+  // KAI-191: notifications.ticket_event_id was renamed to ticket_note_id
+  // (the column now points at ticket_notes, not the old events table).
+  // Aliased back to ticket_event_id here so the response shape — and the
+  // dashboard code that reads it — doesn't need to change.
   const { data, error } = await supabase
     .from("notifications")
-    .select("id, kind, ticket_id, ticket_event_id, title, body, read_at, created_at, tickets(short_id)")
+    .select("id, kind, ticket_id, ticket_event_id:ticket_note_id, title, body, read_at, created_at, tickets(short_id)")
     .eq("account_id", ctx.accountId)
     .eq("recipient_user_id", ctx.userId)
     .order("created_at", { ascending: false })
@@ -87,7 +91,7 @@ notifications.patch("/:id/read", async (c) => {
     .eq("id", id)
     .eq("account_id", ctx.accountId)
     .eq("recipient_user_id", ctx.userId)
-    .select("kind, ticket_event_id")
+    .select("kind, ticket_note_id")
     .maybeSingle();
 
   if (error) return c.json({ error: error.message }, 500);
@@ -95,12 +99,12 @@ notifications.patch("/:id/read", async (c) => {
   // KAI-232: reading a mention notification also closes the mention itself,
   // which is what response-latency reporting is measured from. Non-fatal —
   // the notification is already marked read.
-  const row = updated as { kind: string; ticket_event_id: string | null } | null;
-  if (row?.kind === "mention" && row.ticket_event_id) {
+  const row = updated as { kind: string; ticket_note_id: string | null } | null;
+  if (row?.kind === "mention" && row.ticket_note_id) {
     const { error: mentionErr } = await supabase
       .from("ticket_note_mentions")
       .update({ read_at: readAt })
-      .eq("ticket_event_id", row.ticket_event_id)
+      .eq("ticket_note_id", row.ticket_note_id)
       .eq("mentioned_user_id", ctx.userId)
       .is("read_at", null);
 

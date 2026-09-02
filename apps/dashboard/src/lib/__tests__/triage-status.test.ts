@@ -10,13 +10,13 @@ import { isTriageActive, TRIAGE_COUNTED_STATUSES } from "../triage-status";
 
 describe("isTriageActive", () => {
   it("keeps every worked status in the triage queue", () => {
-    for (const status of ["open", "in_progress", "guided", "reopened"]) {
+    for (const status of ["open", "in_progress", "reopened"]) {
       expect(isTriageActive(status)).toBe(true);
     }
   });
 
   it("drops awaiting and final statuses out of the queue", () => {
-    for (const status of ["awaiting_customer", "resolved", "auto_resolved"]) {
+    for (const status of ["awaiting_customer", "resolved", "ai_resolved"]) {
       expect(isTriageActive(status)).toBe(false);
     }
   });
@@ -39,7 +39,7 @@ describe("TRIAGE_COUNTED_STATUSES", () => {
 
   it("counts every worked status, not just open", () => {
     expect([...TRIAGE_COUNTED_STATUSES].sort()).toEqual(
-      ["guided", "in_progress", "open", "reopened"],
+      ["in_progress", "open", "reopened"],
     );
   });
 
@@ -48,7 +48,7 @@ describe("TRIAGE_COUNTED_STATUSES", () => {
   });
 
   it("excludes awaiting and final statuses", () => {
-    for (const status of ["awaiting_customer", "resolved", "auto_resolved"]) {
+    for (const status of ["awaiting_customer", "resolved", "ai_resolved"]) {
       expect(TRIAGE_COUNTED_STATUSES).not.toContain(status);
     }
   });
