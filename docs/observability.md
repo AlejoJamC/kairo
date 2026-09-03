@@ -18,11 +18,14 @@ normally with tracing disabled (see `packages/env/index.ts`).
    echo "LANGFUSE_NEXTAUTH_SECRET=$(openssl rand -hex 32)" >> .env.local
    ```
 
-2. Start the stack:
+2. Start the stack (detached — no dedicated terminal needed, unlike `bun dev` /
+   `bun run dev:inngest`):
 
    ```bash
-   docker compose -f docker-compose.observability.yml --env-file .env.local up -d
+   bun run dev:observability
    ```
+
+   To stop it: `bun run dev:observability:down`.
 
 3. Wait for health checks, then open:
    - Langfuse UI: http://localhost:3002 — create an account, an org, and a project.
