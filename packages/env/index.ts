@@ -26,6 +26,13 @@ export const env = createEnv({
         // Kelan backoffice — optional comma-separated admin email allowlist
         KELAN_ADMIN_EMAILS: z.string().optional(),
         GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+        // KAI-126: Langfuse (self-hosted) LLM tracing. Unset → tracing is a no-op.
+        LANGFUSE_BASE_URL: z.string().url().optional(),
+        LANGFUSE_PUBLIC_KEY: z.string().min(1).optional(),
+        LANGFUSE_SECRET_KEY: z.string().min(1).optional(),
+        // KAI-126: ClickStack (OpenTelemetry) app observability. Unset → OTel SDK disabled.
+        OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+        OTEL_SERVICE_NAME: z.string().min(1).default("kairo-api"),
         // Inngest event-sending credentials (landing BFF → Inngest cloud).
         // Optional: when unset, dispatch is skipped (e.g. local dev without Inngest).
         INNGEST_EVENT_KEY: z.string().min(1).optional(),

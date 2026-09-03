@@ -1,3 +1,4 @@
+import { startObservation } from '@langfuse/tracing';
 import { createCompletionProvider } from '../config/providers';
 import { ClassificationSchema, type ClassificationResult } from './schema';
 import { buildPrompt, getPromptVersion, type PromptLang, DEFAULT_LANG } from './prompt';
@@ -31,9 +32,34 @@ export async function classifyEmailWithMeta(
   const prompt = await buildPrompt(message, lang);
   const promptVersion = await getPromptVersion(lang);
 
-  const { data, ...meta } = await provider.completeJSONWithMeta(prompt, ClassificationSchema, {
-    ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-  });
+  // KAI-126: Langfuse generation trace. A no-op when LANGFUSE_* env vars are
+  // unset (OTel API falls back to a no-op tracer), so this never blocks
+  // classification.
+  const generation = startObservation(
+    'email-classification',
+    { model: provider.model, input: prompt, metadata: { promptVersion } },
+    { asType: 'generation' },
+  );
 
-  return { result: data, meta, prompt, promptVersion };
+  try {
+    const { data, ...meta } = await provider.completeJSONWithMeta(prompt, ClassificationSchema, {
+      ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+    });
+
+    const usageDetails: Record<string, number> = {};
+    if (meta.usage.promptTokens != null) usageDetails.input = meta.usage.promptTokens;
+    if (meta.usage.completionTokens != null) usageDetails.output = meta.usage.completionTokens;
+
+    generation.update({
+      output: meta.rawText,
+      ...(Object.keys(usageDetails).length > 0 ? { usageDetails } : {}),
+    });
+
+    return { result: data, meta, prompt, promptVersion };
+  } catch (err) {
+    generation.update({ level: 'ERROR', statusMessage: err instanceof Error ? err.message : String(err) });
+    throw err;
+  } finally {
+    generation.end();
+  }
 }
