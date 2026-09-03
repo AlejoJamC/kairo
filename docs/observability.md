@@ -1,12 +1,21 @@
 # Observability stack (KAI-126, Phase 1 — local)
 
-Two independent systems, both self-hosted locally via Docker:
+Two products, self-hosted locally via Docker, sharing **one ClickHouse server**
+(separate databases — `langfuse` and `default`) instead of running two:
 
-- **Langfuse** — LLM/AI tracing (email classification, embeddings).
-- **ClickStack (HyperDX)** — general app observability via OpenTelemetry.
+- **Langfuse** — LLM/AI tracing (email classification, embeddings). Own database
+  `langfuse` on the shared server.
+- **ClickStack (HyperDX)** — general app observability via OpenTelemetry. Database
+  `default` on the same server.
 
-Both are optional at runtime: if their env vars are unset, the app starts and runs
-normally with tracing disabled (see `packages/env/index.ts`).
+This mirrors the intended end-state: eventually both point at the same ClickHouse
+Cloud service instead of a local container. Uses ClickStack's individual-services
+compose (`clickstack-otel-collector` + `clickstack-app` + `clickstack-mongo`, app
+metadata only), not the `hyperdx-all-in-one` image — that one bundles its own
+ClickHouse with no way to point it at an external server.
+
+Both products are optional at runtime: if their env vars are unset, the app starts
+and runs normally with tracing disabled (see `packages/env/index.ts`).
 
 ## First-time setup
 
@@ -36,7 +45,9 @@ normally with tracing disabled (see `packages/env/index.ts`).
      LANGFUSE_SECRET_KEY=sk-lf-...
      ```
    - HyperDX UI: http://localhost:8080 — first run walks you through creating a
-     local user and a data source. `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`
+     local user; the "Local ClickHouse" connection and its 4 sources (Logs, Traces,
+     Metrics, Sessions) are pre-provisioned via `DEFAULT_CONNECTIONS`/`DEFAULT_SOURCES`
+     in the compose file, no manual wiring needed. `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`
      already matches the compose file's exposed port, no extra setup needed on
      the app side.
 
@@ -83,8 +94,10 @@ Not yet instrumented (deferred, see KAI-126 for scope):
   `start`/`build:api` scripts don't preload `instrumentation.ts` yet; wire that up when
   prod infra for both products actually exists.
 
-## Known limitation
+## Resource usage
 
-The ClickStack `hyperdx-all-in-one` container has no volume configured in
-`docker-compose.observability.yml`, so its data does not survive `docker compose down`.
-Fine for Phase 1 (recollection POC); revisit if local trace history needs to persist.
+9 containers total (`clickhouse`, 5 Langfuse services, `clickstack-otel-collector`,
+`clickstack-app`, `clickstack-mongo`). More containers than the all-in-one image, but
+the heaviest one (ClickHouse) is deduplicated instead of running twice. Budget at
+least 2GB of RAM for Docker Desktop — under ~1GB, ClickHouse/MinIO start failing
+health checks under memory pressure (observed directly while building this).

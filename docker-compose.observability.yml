@@ -1,9 +1,13 @@
 # Local telemetry/observability stack for Kairo (KAI-126, Phase 1 — local only).
 #
-# Two independent stacks:
+# ONE shared ClickHouse server (`clickhouse` service) for both products, in
+# separate databases — mirrors the intended end-state where both eventually
+# point at a single ClickHouse Cloud service:
 #   - Langfuse (self-hosted, adapted from docker.langfuse.com/langfuse/langfuse-*:4's
-#     official docker-compose.yml) — LLM/AI tracing.
-#   - ClickStack all-in-one (HyperDX) — general app observability via OpenTelemetry.
+#     official docker-compose.yml) — LLM/AI tracing, database `langfuse`.
+#   - ClickStack (individual-services compose from github.com/ClickHouse/clickstack,
+#     not the all-in-one image — that one bundles its own unreachable ClickHouse) —
+#     general app observability via OpenTelemetry, database `default`.
 #
 # Ports are remapped to avoid the Supabase CLI (54320-54329, 8083) and app dev ports
 # (landing/kelan :3000, api :3001, dashboard :5173).
@@ -13,7 +17,32 @@
 
 services:
   # ---------------------------------------------------------------------------
-  # Langfuse (self-hosted) — LLM telemetry
+  # Shared ClickHouse — one server, two databases (langfuse / default)
+  # ---------------------------------------------------------------------------
+  clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:25.12
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse} # CHANGEME
+    volumes:
+      - observability_clickhouse_data:/var/lib/clickhouse
+      - observability_clickhouse_logs:/var/log/clickhouse-server
+      - ./docker/clickhouse-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:8124:8123"
+      - "127.0.0.1:9001:9000"
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+
+  # ---------------------------------------------------------------------------
+  # Langfuse (self-hosted) — LLM telemetry, database `langfuse` on `clickhouse`
   # ---------------------------------------------------------------------------
   langfuse-worker:
     image: docker.langfuse.com/langfuse/langfuse-worker:4
@@ -25,7 +54,7 @@ services:
         condition: service_healthy
       langfuse-redis:
         condition: service_healthy
-      langfuse-clickhouse:
+      clickhouse:
         condition: service_healthy
     environment: &langfuse-worker-env
       NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3002}
@@ -33,10 +62,13 @@ services:
       SALT: ${LANGFUSE_SALT:?set LANGFUSE_SALT in .env.local, see docs/observability.md} # CHANGEME
       ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:?set LANGFUSE_ENCRYPTION_KEY in .env.local, see docs/observability.md} # CHANGEME
       TELEMETRY_ENABLED: "false"
-      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
-      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: clickhouse
       CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse} # CHANGEME
+      # Own database on the shared server — keeps Langfuse's schema
+      # (traces/observations/scores) out of ClickStack's `default` database.
+      CLICKHOUSE_DB: langfuse
       # Single-node ClickHouse, no Zookeeper — must stay false or migrations
       # try `ON CLUSTER` / ReplicatedMergeTree and fail to start.
       CLICKHOUSE_CLUSTER_ENABLED: "false"
@@ -69,27 +101,6 @@ services:
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:?set LANGFUSE_NEXTAUTH_SECRET in .env.local, see docs/observability.md} # CHANGEME
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://localhost:9090
       LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://langfuse-minio:9000
-
-  langfuse-clickhouse:
-    image: docker.io/clickhouse/clickhouse-server:25.12
-    restart: unless-stopped
-    user: "101:101"
-    environment:
-      CLICKHOUSE_DB: default
-      CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse} # CHANGEME
-    volumes:
-      - langfuse_clickhouse_data:/var/lib/clickhouse
-      - langfuse_clickhouse_logs:/var/log/clickhouse-server
-    ports:
-      - "127.0.0.1:8124:8123"
-      - "127.0.0.1:9001:9000"
-    healthcheck:
-      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 1s
 
   langfuse-minio:
     image: cgr.dev/chainguard/minio
@@ -147,24 +158,70 @@ services:
       - langfuse_postgres_data:/var/lib/postgresql/data
 
   # ---------------------------------------------------------------------------
-  # ClickStack (HyperDX all-in-one) — app observability via OpenTelemetry
+  # ClickStack (individual services) — app observability via OpenTelemetry,
+  # database `default` on the shared `clickhouse` server. Image names/tags
+  # from github.com/ClickHouse/clickstack's own .env (CODE_VERSION 2.19.0).
   # ---------------------------------------------------------------------------
-  clickstack:
-    image: docker.hyperdx.io/hyperdx/hyperdx-all-in-one
+  clickstack-otel-collector:
+    image: docker.clickhouse.com/clickhouse/clickstack-otel-collector:2
     restart: unless-stopped
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      CLICKHOUSE_ENDPOINT: "tcp://clickhouse:${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}@clickhouse:9000?dial_timeout=10s"
+      HYPERDX_OTEL_EXPORTER_CLICKHOUSE_DATABASE: default
+      HYPERDX_LOG_LEVEL: info
+      OPAMP_SERVER_URL: http://clickstack-app:4320
+      HYPERDX_OTEL_EXPORTER_CREATE_LEGACY_SCHEMA: "true"
     ports:
-      - "8080:8080" # HyperDX UI
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP
+
+  clickstack-app:
+    image: docker.hyperdx.io/hyperdx/hyperdx:2
+    restart: unless-stopped
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      clickstack-mongo:
+        condition: service_started
+    ports:
+      - "8080:8080" # HyperDX UI
+      - "8000:8000" # HyperDX API
+    environment:
+      FRONTEND_URL: http://localhost:8080
+      HYPERDX_API_PORT: "8000"
+      HYPERDX_APP_PORT: "8080"
+      HYPERDX_APP_URL: http://localhost
+      HYPERDX_LOG_LEVEL: info
+      MONGO_URI: mongodb://clickstack-mongo:27017/hyperdx
+      SERVER_URL: http://127.0.0.1:8000
+      OPAMP_PORT: "4320"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack-otel-collector:4318
+      OTEL_SERVICE_NAME: hdx-oss-app
+      USAGE_STATS_ENABLED: "false"
+      DEFAULT_CONNECTIONS: >-
+        [{"name":"Local ClickHouse","host":"http://clickhouse:8123","username":"clickhouse","password":"${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}"}]
+      DEFAULT_SOURCES: >-
+        [{"from":{"databaseName":"default","tableName":"otel_logs"},"kind":"log","timestampValueExpression":"TimestampTime","name":"Logs","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","connection":"Local ClickHouse","traceSourceId":"Traces","sessionSourceId":"Sessions","metricSourceId":"Metrics"},{"from":{"databaseName":"default","tableName":"otel_traces"},"kind":"trace","timestampValueExpression":"Timestamp","name":"Traces","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"SpanName","serviceNameExpression":"ServiceName","eventAttributesExpression":"SpanAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName","traceIdExpression":"TraceId","spanIdExpression":"SpanId","durationExpression":"Duration","durationPrecision":9,"parentSpanIdExpression":"ParentSpanId","spanNameExpression":"SpanName","spanKindExpression":"SpanKind","statusCodeExpression":"StatusCode","statusMessageExpression":"StatusMessage","connection":"Local ClickHouse","logSourceId":"Logs","sessionSourceId":"Sessions","metricSourceId":"Metrics"},{"from":{"databaseName":"default","tableName":""},"kind":"metric","timestampValueExpression":"TimeUnix","name":"Metrics","resourceAttributesExpression":"ResourceAttributes","metricTables":{"gauge":"otel_metrics_gauge","histogram":"otel_metrics_histogram","sum":"otel_metrics_sum"},"connection":"Local ClickHouse","logSourceId":"Logs","traceSourceId":"Traces","sessionSourceId":"Sessions"},{"from":{"databaseName":"default","tableName":"hyperdx_sessions"},"kind":"session","timestampValueExpression":"TimestampTime","name":"Sessions","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","connection":"Local ClickHouse","logSourceId":"Logs","traceSourceId":"Traces","metricSourceId":"Metrics"}]
+
+  clickstack-mongo:
+    image: docker.io/mongo:5.0.32-focal
+    restart: unless-stopped
+    volumes:
+      - observability_mongo_data:/data/db
 
 volumes:
   langfuse_postgres_data:
     driver: local
-  langfuse_clickhouse_data:
+  observability_clickhouse_data:
     driver: local
-  langfuse_clickhouse_logs:
+  observability_clickhouse_logs:
     driver: local
   langfuse_minio_data:
     driver: local
   langfuse_redis_data:
+    driver: local
+  observability_mongo_data:
     driver: local
