@@ -1,7 +1,7 @@
 {
   "name": "kairo-monorepo",
   "devDependencies": {
-    "turbo": "^2.9.9",
+    "turbo": "^2.10.12",
     "typescript": "~6.0.3"
   },
   "engines": {
