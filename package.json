@@ -13,7 +13,7 @@
   "scripts": {
     "predev": "bash scripts/check-local-deps.sh",
     "dev": "turbo run dev --filter=@kairo/dashboard --filter=@kairo/landing --filter=@kairo/api --filter=@kairo/kelan",
-    "dev:inngest": "npx --yes inngest-cli@latest dev -u http://localhost:3001/api/inngest",
+    "dev:inngest": "$(command -v npx) --yes inngest-cli@latest dev -u http://localhost:3001/api/inngest",
     "dev:observability": "docker compose -f docker-compose.observability.yml --env-file .env.local up -d",
     "dev:observability:down": "docker compose -f docker-compose.observability.yml --env-file .env.local down",
     "build": "turbo run build",

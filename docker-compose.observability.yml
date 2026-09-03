@@ -57,7 +57,7 @@ services:
       clickhouse:
         condition: service_healthy
     environment: &langfuse-worker-env
-      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3002}
+      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3003}
       DATABASE_URL: postgresql://postgres:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@langfuse-postgres:5432/postgres
       SALT: ${LANGFUSE_SALT:?set LANGFUSE_SALT in .env.local, see docs/observability.md} # CHANGEME
       ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:?set LANGFUSE_ENCRYPTION_KEY in .env.local, see docs/observability.md} # CHANGEME
@@ -95,7 +95,7 @@ services:
     restart: unless-stopped
     depends_on: *langfuse-depends-on
     ports:
-      - "3002:3000"
+      - "3003:3000"
     environment:
       <<: *langfuse-worker-env
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:?set LANGFUSE_NEXTAUTH_SECRET in .env.local, see docs/observability.md} # CHANGEME

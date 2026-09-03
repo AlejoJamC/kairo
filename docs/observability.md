@@ -37,10 +37,10 @@ and runs normally with tracing disabled (see `packages/env/index.ts`).
    To stop it: `bun run dev:observability:down`.
 
 3. Wait for health checks, then open:
-   - Langfuse UI: http://localhost:3002 — create an account, an org, and a project.
+   - Langfuse UI: http://localhost:3003 — create an account, an org, and a project.
      Under project settings, create an API key pair and add to `.env.local`:
      ```
-     LANGFUSE_BASE_URL=http://localhost:3002
+     LANGFUSE_BASE_URL=http://localhost:3003
      LANGFUSE_PUBLIC_KEY=pk-lf-...
      LANGFUSE_SECRET_KEY=sk-lf-...
      ```
@@ -70,7 +70,7 @@ Trigger a real classification (e.g. run the app's Gmail sync/pipeline, or
 Both products ship an MCP server; register them once real API keys exist:
 
 ```bash
-claude mcp add --transport http langfuse http://localhost:3002/api/public/mcp \
+claude mcp add --transport http langfuse http://localhost:3003/api/public/mcp \
   --header "Authorization: Basic $(echo -n "$LANGFUSE_PUBLIC_KEY:$LANGFUSE_SECRET_KEY" | base64)"
 
 claude mcp add --transport http clickstack http://localhost:8080/api/mcp \
