@@ -21,6 +21,8 @@ export const env = createEnv({
         NEXT_PUBLIC_APP_URL: z.string().url(),
         NEXT_PUBLIC_DASHBOARD_URL: z.string().default("/dashboard"),
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: z.string().optional(),
+        // KAI-126/KAI-189: browser-side OTel tracing. Unset -> disabled.
+        NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
     },
     runtimeEnv: {
         GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
@@ -34,6 +36,7 @@ export const env = createEnv({
         NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
         NEXT_PUBLIC_DASHBOARD_URL: process.env.NEXT_PUBLIC_DASHBOARD_URL,
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+        NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT: process.env.NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT,
     },
     skipValidation: !!process.env.SKIP_ENV_VALIDATION,
     emptyStringAsUndefined: true,

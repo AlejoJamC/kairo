@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import './_instrumentation-client';
 
 export const metadata: Metadata = {
   title: 'Kelan — Kairo Backoffice',

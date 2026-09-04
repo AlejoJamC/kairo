@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./_instrumentation-client";
 import { LanguageProvider } from "@/lib/i18n";
 
 export const metadata: Metadata = {
