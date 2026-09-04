@@ -62,7 +62,24 @@ and runs normally with tracing disabled (see `packages/env/index.ts`).
      `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` already matches the
      compose file's exposed port.
 
-5. Restart `apps/api`'s and `apps/dashboard`'s dev servers (`bun dev`) so the new
+5. **Required — ingestion auth.** ClickStack's OTel collector rejects every
+   export with a silent 401 unless callers send the Ingestion API key as a
+   raw `authorization` header (no `Bearer ` prefix — confirmed against a live
+   instance). `HYPERDX_API_KEY` in the compose file does **not** set this key
+   — HyperDX generates its own in Mongo, independent of that env var. After
+   the first HyperDX signup, go to Team Settings → API & Agents → "Ingestion
+   API key" → reveal it, then set it on every app that emits traces:
+   ```bash
+   echo "OTEL_EXPORTER_OTLP_HEADERS=authorization=<ingestion-key>" >> .env.local  # apps/api
+   echo "VITE_HYPERDX_INGESTION_API_KEY=<ingestion-key>" >> .env.local            # apps/dashboard
+   echo "NEXT_PUBLIC_HYPERDX_INGESTION_API_KEY=<ingestion-key>" >> .env.local     # apps/landing, apps/kelan
+   echo "EXPO_PUBLIC_HYPERDX_INGESTION_API_KEY=<ingestion-key>" >> .env.local     # apps/mobile
+   ```
+   Without this, dashboards look like "no traffic yet" instead of "broken" —
+   the OTel SDK swallows exporter errors by default (set `OTEL_LOG_LEVEL=debug`
+   to see the real `401 Unauthorized` if traces still don't show up).
+
+6. Restart `apps/api`'s and `apps/dashboard`'s dev servers (`bun dev`) so the new
    env vars are picked up.
 
 ## Verifying traces show up
@@ -155,35 +172,46 @@ directly), not something `@kairo/observability` needs to own.
 
 **Every app in the monorepo, including `apps/mobile`:**
 
-- `classifyEmailWithMeta` (`packages/intelligence/src/classification/classify.ts`) —
-  covers all 3 pipeline tiers (`tier1-fast-path`, `tier2-background`, `tier3-deferred`),
-  since they all call through this one function.
-- `generateEmbedding` / `generateEmbeddings` (`packages/intelligence/src/embeddings/embed.ts`)
-  — covers both `ticket-embedding.ts` and `kb-embedding.ts`.
-- `apps/api` — general HTTP/fetch traffic via `@opentelemetry/auto-instrumentations-node`
-  (Inngest pipeline functions run in the same process, so they're covered too).
-- `apps/dashboard` — fetch calls from the browser, via `@kairo/observability/web`
-  in `src/main.tsx`.
-- `apps/landing` — server-side via `@vercel/otel` (`instrumentation.ts`), browser
-  fetch via `@kairo/observability/web` (`app/_instrumentation-client.tsx`,
-  imported from `app/layout.tsx`).
-- `apps/kelan` — same two-sided pattern as `landing`.
-- `apps/mobile` — `@kairo/observability/mobile` (`app/_layout.tsx`), a bare
-  `BasicTracerProvider` + `OTLPTraceExporter`, no auto-instrumentation. Real
-  RN OTel distros (Splunk's, Honeycomb's) add auto-instrumentation via a
-  **native module** that requires an **EAS development build** (breaks Expo
-  Go) — this is the manual-spans-only alternative that doesn't need either:
-  `trace.getTracer('kairo-mobile')` is ready to call from anywhere the moment
-  the app has a real event worth tracing. It doesn't have one yet —
-  `apps/mobile/app/index.tsx` is still a single static screen — so
-  `initMobileTelemetry()` runs at startup but nothing calls `startSpan()`
-  anywhere yet.
-  **Unverified**: `apps/mobile` has no `app.json`/dev script to actually boot
-  it (pre-existing gap, unrelated to this) — the OTLP exporter's fetch-based
-  transport is expected to bundle under Metro (the same package works under
-  Vite in `web.ts`) but that's untested. If Metro can't resolve it, swap the
-  exporter in `packages/observability/src/mobile.ts` for a plain `fetch()`
-  POST of OTLP JSON — nothing else in the file would need to change.
+| App | Instrumentation | Verified with real data in ClickHouse? |
+|---|---|---|
+| `packages/intelligence` (Langfuse) | `startObservation` spans in classify.ts/embed.ts | Yes — Langfuse dashboard shows real generations |
+| `apps/api` | `@hono/otel` middleware | Yes — `GET /api/v1/health` (200) and `GET /api/v1/sidebar/counts` (401) both landed with correct `http.route`/status |
+| `apps/landing` | `@vercel/otel` (server) + `@kairo/observability/web` (browser) | Yes — server spans + a real browser `fetch('/')` span, `url.full` matched |
+| `apps/kelan` | same as `landing` | Yes — 500+ spans from a real authenticated session (server + browser) |
+| `apps/dashboard` | `@kairo/observability/web` in `main.tsx` | No — code identical to landing/kelan's browser side, but its initial load races an auth redirect before firing a fetch. Not independently confirmed live. |
+| `apps/mobile` | `@kairo/observability/mobile`, manual spans only | No — app still can't boot (no `app.json`/dev script, pre-existing gap) |
+
+`apps/api` note: `@opentelemetry/auto-instrumentations-node` (bundled in
+`@kairo/observability/node`) patches Node's `http`/`undici` modules — Bun's
+native server and `fetch` never go through either, so it silently created
+**zero** spans regardless of the ingestion-auth fix. Fixed by adding
+`@hono/otel`'s `httpInstrumentationMiddleware` in `src/index.ts`, which
+instruments at the Hono middleware level instead — works on any runtime
+(Bun, Node, edge). `initNodeTelemetry()` is still required alongside it: it's
+what registers the tracer provider/exporter the middleware attaches spans to,
+and it's still how Langfuse's `LangfuseSpanProcessor` gets registered.
+
+`apps/landing`/`apps/kelan` note: the browser side is
+`@kairo/observability/web` rendered as `<InstrumentationClient />` in
+`app/layout.tsx` — **must be rendered, not just imported**: a side-effect-only
+`import './_instrumentation-client'` from the Server Component layout isn't
+guaranteed to survive Next.js's client bundling, and was silently dropped
+until it became an actually-rendered component (returns `null`).
+
+`apps/mobile` note: `@kairo/observability/mobile` (`app/_layout.tsx`), a bare
+`BasicTracerProvider` + `OTLPTraceExporter`, no auto-instrumentation. Real RN
+OTel distros (Splunk's, Honeycomb's) add auto-instrumentation via a **native
+module** that requires an **EAS development build** (breaks Expo Go) — this
+is the manual-spans-only alternative that doesn't need either:
+`trace.getTracer('kairo-mobile')` is ready to call from anywhere the moment
+the app has a real event worth tracing. It doesn't have one yet —
+`apps/mobile/app/index.tsx` is still a single static screen — so
+`initMobileTelemetry()` runs at startup but nothing calls `startSpan()`
+anywhere yet. The OTLP exporter's fetch-based transport is expected to bundle
+under Metro (the same package works under Vite in `web.ts`) but that's
+untested. If Metro can't resolve it, swap the exporter in
+`packages/observability/src/mobile.ts` for a plain `fetch()` POST of OTLP
+JSON — nothing else in the file would need to change.
 
 Deferred, unrelated to the instrumentation work itself:
 - Structured per-provider logs/metrics for embeddings (KAI-214, separate ticket).
