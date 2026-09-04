@@ -15,6 +15,7 @@ import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { BatchSpanProcessor, WebTracerProvider } from '@opentelemetry/sdk-trace-web';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { otlpTracesUrl } from './shared';
 
 export interface WebTelemetryConfig {
   serviceName: string;
@@ -30,7 +31,7 @@ export function initWebTelemetry(config: WebTelemetryConfig): void {
   const provider = new WebTracerProvider({
     resource: resourceFromAttributes({ 'service.name': config.serviceName }),
     spanProcessors: [
-      new BatchSpanProcessor(new OTLPTraceExporter({ url: `${config.otlpEndpoint}/v1/traces` })),
+      new BatchSpanProcessor(new OTLPTraceExporter({ url: otlpTracesUrl(config.otlpEndpoint) })),
     ],
   });
 

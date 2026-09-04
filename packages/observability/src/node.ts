@@ -16,6 +16,7 @@ import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentation
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { BatchSpanProcessor, type SpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { otlpTracesUrl } from './shared';
 
 export interface NodeTelemetryConfig {
   serviceName: string;
@@ -30,7 +31,7 @@ export function initNodeTelemetry(config: NodeTelemetryConfig): NodeSDK | null {
 
   if (config.otlpEndpoint) {
     spanProcessors.push(
-      new BatchSpanProcessor(new OTLPTraceExporter({ url: `${config.otlpEndpoint}/v1/traces` })),
+      new BatchSpanProcessor(new OTLPTraceExporter({ url: otlpTracesUrl(config.otlpEndpoint) })),
     );
   }
 
