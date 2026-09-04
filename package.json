@@ -16,6 +16,7 @@
     "dev:inngest": "$(command -v npx) --yes inngest-cli@latest dev -u http://localhost:3001/api/inngest",
     "dev:observability": "docker compose -f docker-compose.observability.yml --env-file .env.local up -d",
     "dev:observability:down": "docker compose -f docker-compose.observability.yml --env-file .env.local down",
+    "observability:provision": "bun scripts/observability/langfuse-dashboards.ts && bun scripts/observability/hyperdx-dashboard.ts",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "SKIP_LLM_INTEGRATION=1 bun test apps/api packages/intelligence scripts/eval && turbo run test --filter=@kairo/dashboard",

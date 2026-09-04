@@ -1,4 +1,4 @@
-# Observability stack (KAI-126, Phase 1 — local)
+# Observability stack (KAI-126)
 
 Two products, self-hosted locally via Docker, sharing **one ClickHouse server**
 (separate databases — `langfuse` and `default`) instead of running two:
@@ -27,7 +27,21 @@ and runs normally with tracing disabled (see `packages/env/index.ts`).
    echo "LANGFUSE_NEXTAUTH_SECRET=$(openssl rand -hex 32)" >> .env.local
    ```
 
-2. Start the stack (detached — no dedicated terminal needed, unlike `bun dev` /
+2. Langfuse headless-inits an org/project/user/API-key pair on first boot (KAI-189)
+   — pick the key pair yourself and add everything to `.env.local` *before*
+   first `up`, so the values match on both sides:
+
+   ```bash
+   echo "LANGFUSE_INIT_PROJECT_PUBLIC_KEY=pk-lf-$(openssl rand -hex 16)" >> .env.local
+   echo "LANGFUSE_INIT_PROJECT_SECRET_KEY=sk-lf-$(openssl rand -hex 16)" >> .env.local
+   echo "LANGFUSE_INIT_USER_PASSWORD=$(openssl rand -hex 12)" >> .env.local
+   echo "HYPERDX_API_KEY=$(openssl rand -hex 16)" >> .env.local
+   ```
+   Then copy the `LANGFUSE_INIT_PROJECT_*` values into `LANGFUSE_PUBLIC_KEY`/
+   `LANGFUSE_SECRET_KEY` too (same key pair, two purposes: one bootstraps the
+   Langfuse container, the other is what `apps/api` reads to send traces).
+
+3. Start the stack (detached — no dedicated terminal needed, unlike `bun dev` /
    `bun run dev:inngest`):
 
    ```bash
@@ -36,22 +50,19 @@ and runs normally with tracing disabled (see `packages/env/index.ts`).
 
    To stop it: `bun run dev:observability:down`.
 
-3. Wait for health checks, then open:
-   - Langfuse UI: http://localhost:3003 — create an account, an org, and a project.
-     Under project settings, create an API key pair and add to `.env.local`:
-     ```
-     LANGFUSE_BASE_URL=http://localhost:3003
-     LANGFUSE_PUBLIC_KEY=pk-lf-...
-     LANGFUSE_SECRET_KEY=sk-lf-...
-     ```
-   - HyperDX UI: http://localhost:8080 — first run walks you through creating a
-     local user; the "Local ClickHouse" connection and its 4 sources (Logs, Traces,
-     Metrics, Sessions) are pre-provisioned via `DEFAULT_CONNECTIONS`/`DEFAULT_SOURCES`
-     in the compose file, no manual wiring needed. `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`
-     already matches the compose file's exposed port, no extra setup needed on
-     the app side.
+4. Open:
+   - Langfuse UI: http://localhost:3003 — sign in with `LANGFUSE_INIT_USER_EMAIL`
+     (default `local@kairo.dev`) / `LANGFUSE_INIT_USER_PASSWORD`. No manual
+     org/project/API-key creation — headless init already did it.
+   - HyperDX UI: http://localhost:8080 — **does** need a manual first-run
+     signup (no headless-init equivalent here) at http://localhost:8080/join.
+     The "Local ClickHouse" connection and its 4 sources (Logs, Traces, Metrics,
+     Sessions) are pre-provisioned via `DEFAULT_CONNECTIONS`/`DEFAULT_SOURCES`
+     in the compose file, no manual wiring needed there.
+     `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` already matches the
+     compose file's exposed port.
 
-4. Restart `apps/api`'s and `apps/dashboard`'s dev servers (`bun dev`) so the new
+5. Restart `apps/api`'s and `apps/dashboard`'s dev servers (`bun dev`) so the new
    env vars are picked up.
 
 ## Verifying traces show up
@@ -75,6 +86,39 @@ claude mcp add --transport http langfuse http://localhost:3003/api/public/mcp \
 claude mcp add --transport http clickstack http://localhost:8080/api/mcp \
   --header "Authorization: Bearer <HyperDX Personal API Access Key, from Team Settings>"
 ```
+
+## Dashboards (KAI-189, Phase 3)
+
+Both products expose their dashboards as code via REST API — provisioned, not
+manually clicked together:
+
+```bash
+bun run observability:provision
+```
+
+Runs both:
+- `scripts/observability/langfuse-dashboards.ts` — reads `LANGFUSE_BASE_URL`/
+  `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`. Creates "Kairo — LLM
+  Observability": generation count/p95 latency/cost/error-level, all grouped
+  by generation name (`email-classification`, `embedding`, `embedding-batch`).
+- `scripts/observability/hyperdx-dashboard.ts` — reads `HYPERDX_API_URL`
+  (`http://localhost:8000`, the API port — not the UI's `:8080`) and
+  `HYPERDX_PERSONAL_API_KEY`. **Not** the `HYPERDX_API_KEY` env var from the
+  compose file — that one only authenticates telemetry ingestion. Get the
+  Personal API access key from Team Settings → API & Agents, after the manual
+  HyperDX signup (step 4 above — HyperDX has no headless-init env vars).
+  Creates "Kairo — App Observability": request count + p95 duration.
+
+Neither script is idempotent — re-running creates duplicates. Meant to run
+once against a fresh instance.
+
+**Known gap**: an error-rate tile (filtering HyperDX traces by `StatusCode`)
+isn't in the HyperDX dashboard — neither `select[].where` nor
+`select[].aggCondition` persisted through the v2 API in testing (silently
+dropped, no validation error). The v2 tile-filter field is undocumented;
+revisit once confirmed. Alerts (both products can alert on dashboard tiles)
+are also not provisioned yet — they need a notification channel (Slack/email)
+configured first, which local dev doesn't have.
 
 ## `packages/observability`
 
