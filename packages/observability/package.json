@@ -1,0 +1,27 @@
+{
+  "name": "@kairo/observability",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./node": "./src/node.ts",
+    "./web": "./src/web.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@langfuse/otel": "^5.11.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.80.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/instrumentation": "^0.222.0",
+    "@opentelemetry/instrumentation-fetch": "^0.222.0",
+    "@opentelemetry/resources": "^2.11.0",
+    "@opentelemetry/sdk-node": "^0.222.0",
+    "@opentelemetry/sdk-trace-base": "^2.11.0",
+    "@opentelemetry/sdk-trace-web": "^2.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "~6.0.3"
+  }
+}

@@ -51,9 +51,8 @@ and runs normally with tracing disabled (see `packages/env/index.ts`).
      already matches the compose file's exposed port, no extra setup needed on
      the app side.
 
-4. Restart `apps/api`'s dev server (`bun run dev`, root or `apps/api/`) so the new
-   env vars are picked up by `src/instrumentation.ts` (preloaded before `src/index.ts`,
-   see `apps/api/package.json`).
+4. Restart `apps/api`'s and `apps/dashboard`'s dev servers (`bun dev`) so the new
+   env vars are picked up.
 
 ## Verifying traces show up
 
@@ -77,6 +76,29 @@ claude mcp add --transport http clickstack http://localhost:8080/api/mcp \
   --header "Authorization: Bearer <HyperDX Personal API Access Key, from Team Settings>"
 ```
 
+## `packages/observability`
+
+One shared package, two runtime-specific entry points — not a single universal
+SDK (impossible: OpenTelemetry itself splits Node vs browser SDKs), and not one
+package per runtime either (that would scatter the same config surface across
+the repo). A single package, split by subpath export:
+
+- `@kairo/observability/node` — `initNodeTelemetry()`, a thin wrapper around
+  `NodeSDK` + `LangfuseSpanProcessor` + `OTLPTraceExporter`. Used by `apps/api`'s
+  `src/instrumentation.ts`.
+- `@kairo/observability/web` — `initWebTelemetry()`, `WebTracerProvider` +
+  `FetchInstrumentation` + `OTLPTraceExporter`. Used by `apps/dashboard`'s
+  `src/main.tsx`, before the app renders. No `ZoneContextManager` (it requires
+  transpiling to ES2015, which conflicts with this monorepo's ES2022 target) —
+  spans are correct per-fetch-call; deeply nested async parent/child linking
+  across awaits isn't guaranteed. Revisit if that becomes a real need.
+
+Extract a *new* runtime-family package (e.g. `@kairo/observability` gains a
+`./nextjs` export, or a dedicated one) only when a second app in that same
+runtime family needs it — e.g. if `landing`/`kelan` (both Next.js) both need
+server-side tracing. Not before; that would be premature abstraction with no
+second consumer.
+
 ## What's instrumented today
 
 - `classifyEmailWithMeta` (`packages/intelligence/src/classification/classify.ts`) —
@@ -86,10 +108,14 @@ claude mcp add --transport http clickstack http://localhost:8080/api/mcp \
   — covers both `ticket-embedding.ts` and `kb-embedding.ts`.
 - General `apps/api` HTTP/fetch traffic, via `@opentelemetry/auto-instrumentations-node`
   (Inngest pipeline functions run in the same process, so they're covered too).
+- `apps/dashboard` — fetch calls from the browser (the actual product surface
+  support agents use), via `@kairo/observability/web` in `src/main.tsx`.
 
 Not yet instrumented (deferred, see KAI-126 for scope):
 - Structured per-provider logs/metrics for embeddings (KAI-214, separate ticket).
-- Dashboard (browser-side) tracing — a different SDK (OTel Web), not requested yet.
+- `apps/landing` / `apps/kelan` (Next.js server + browser) — different
+  instrumentation pattern (`@vercel/otel` server-side), not done yet.
+- `apps/mobile` — placeholder app today, nothing to instrument.
 - Production deployment (Phase 2 of KAI-126) — this doc covers local only. `apps/api`'s
   `start`/`build:api` scripts don't preload `instrumentation.ts` yet; wire that up when
   prod infra for both products actually exists.
