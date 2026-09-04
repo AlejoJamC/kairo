@@ -62,7 +62,19 @@ and runs normally with tracing disabled (see `packages/env/index.ts`).
      `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` already matches the
      compose file's exposed port.
 
-5. **Required — ingestion auth.** ClickStack's OTel collector rejects every
+5. **Required — the endpoint var itself.** Every `*OTEL_EXPORTER_OTLP_ENDPOINT`
+   var is `optional()` in each app's `env.ts` — unset means telemetry silently
+   no-ops (by design, so the app works with zero observability config). That
+   also means a missing var doesn't error, it just produces "no traffic",
+   easy to mistake for a real bug. Set it explicitly per app:
+   ```bash
+   echo "OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318" >> .env.local             # apps/api
+   echo "VITE_OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318" >> .env.local        # apps/dashboard
+   echo "NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318" >> .env.local  # apps/landing, apps/kelan
+   echo "EXPO_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318" >> .env.local  # apps/mobile
+   ```
+
+6. **Required — ingestion auth.** ClickStack's OTel collector rejects every
    export with a silent 401 unless callers send the Ingestion API key as a
    raw `authorization` header (no `Bearer ` prefix — confirmed against a live
    instance). `HYPERDX_API_KEY` in the compose file does **not** set this key
@@ -79,8 +91,9 @@ and runs normally with tracing disabled (see `packages/env/index.ts`).
    the OTel SDK swallows exporter errors by default (set `OTEL_LOG_LEVEL=debug`
    to see the real `401 Unauthorized` if traces still don't show up).
 
-6. Restart `apps/api`'s and `apps/dashboard`'s dev servers (`bun dev`) so the new
-   env vars are picked up.
+7. Restart every app's dev server (`bun dev`) so the new env vars are picked up
+   — Vite/Next bake `VITE_*`/`NEXT_PUBLIC_*` vars in at dev-server start, a
+   page reload alone is not enough.
 
 ## Verifying traces show up
 
@@ -178,7 +191,7 @@ directly), not something `@kairo/observability` needs to own.
 | `apps/api` | `@hono/otel` middleware | Yes — `GET /api/v1/health` (200) and `GET /api/v1/sidebar/counts` (401) both landed with correct `http.route`/status |
 | `apps/landing` | `@vercel/otel` (server) + `@kairo/observability/web` (browser) | Yes — server spans + a real browser `fetch('/')` span, `url.full` matched |
 | `apps/kelan` | same as `landing` | Yes — 500+ spans from a real authenticated session (server + browser) |
-| `apps/dashboard` | `@kairo/observability/web` in `main.tsx` | No — code identical to landing/kelan's browser side, but its initial load races an auth redirect before firing a fetch. Not independently confirmed live. |
+| `apps/dashboard` | `@kairo/observability/web` in `main.tsx` | Yes — real browser session (ticket detail view, Supabase REST calls) landed 58 spans with correct `url.full`/status |
 | `apps/mobile` | `@kairo/observability/mobile`, manual spans only | No — app still can't boot (no `app.json`/dev script, pre-existing gap) |
 
 `apps/api` note: `@opentelemetry/auto-instrumentations-node` (bundled in
@@ -190,6 +203,13 @@ instruments at the Hono middleware level instead — works on any runtime
 (Bun, Node, edge). `initNodeTelemetry()` is still required alongside it: it's
 what registers the tracer provider/exporter the middleware attaches spans to,
 and it's still how Langfuse's `LangfuseSpanProcessor` gets registered.
+
+`apps/dashboard` note: not a code bug — a missing env var. Its browser-side
+`initWebTelemetry()` call is a no-op whenever `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`
+is unset (it's `optional()` by design in `env.ts`), and a local `.env.local`
+had `VITE_HYPERDX_INGESTION_API_KEY` set but not this one — no error, just
+silent "no traffic". Fixed by adding the missing var and restarting the Vite
+dev server (see step 5 above).
 
 `apps/landing`/`apps/kelan` note: the browser side is
 `@kairo/observability/web` rendered as `<InstrumentationClient />` in
