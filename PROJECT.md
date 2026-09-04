@@ -63,6 +63,7 @@ emails, and routes/responds based on learned behavior per client.
 | Database    | Supabase (Postgres + Auth)        |
 | AI          | Claude API (prod) / Ollama (local)|
 | Email       | Gmail API (OAuth, sync active)    |
+| Observability | Langfuse (LLM tracing) + ClickStack/HyperDX (OTel app tracing) — self-hosted local, see `docs/observability.md` |
 | Deploy      | Vercel                            |
 | Language    | TypeScript (strict, no `any`)     |
 | Tests       | Vitest                            |

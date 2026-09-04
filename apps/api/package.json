@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run --watch --env-file ../../.env.local src/index.ts",
+    "dev": "bun run --watch --env-file ../../.env.local --preload ./src/instrumentation.ts src/index.ts",
     "build:api": "bun build src/index.ts --outdir dist --target bun",
     "start": "bun run --env-file ../../.env.local dist/index.js",
     "test": "bun test src/lib/email/pre-filter.test.ts",
@@ -16,6 +16,7 @@
     "@kairo/feature-flags": "workspace:*",
     "@kairo/identity": "workspace:*",
     "@kairo/intelligence": "workspace:*",
+    "@kairo/observability": "workspace:*",
     "@kairo/types": "workspace:*",
     "inngest": "^4.3.0",
     "@supabase/supabase-js": "^2.105.3",

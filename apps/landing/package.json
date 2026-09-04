@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "NODE_OPTIONS=--disable-warning=DEP0205 next dev --port 3000",
     "build:dashboard": "mkdir -p public/dashboard && rm -rf public/dashboard && cp -r ../dashboard/dist public/dashboard",
     "build": "bun run build:dashboard && next build",
     "start": "next start",

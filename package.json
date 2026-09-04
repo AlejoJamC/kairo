@@ -1,7 +1,7 @@
 {
   "name": "kairo-monorepo",
   "devDependencies": {
-    "turbo": "^2.9.9",
+    "turbo": "^2.10.12",
     "typescript": "~6.0.3"
   },
   "engines": {
@@ -13,6 +13,9 @@
   "scripts": {
     "predev": "bash scripts/check-local-deps.sh",
     "dev": "turbo run dev --filter=@kairo/dashboard --filter=@kairo/landing --filter=@kairo/api --filter=@kairo/kelan",
+    "dev:inngest": "$(command -v npx) --yes inngest-cli@latest dev -u http://localhost:3001/api/inngest",
+    "dev:observability": "docker compose -f docker-compose.observability.yml --env-file .env.local up -d",
+    "dev:observability:down": "docker compose -f docker-compose.observability.yml --env-file .env.local down",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "SKIP_LLM_INTEGRATION=1 bun test apps/api packages/intelligence scripts/eval && turbo run test --filter=@kairo/dashboard",
