@@ -19,6 +19,7 @@ import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 import { extractKairoToken, findTicketByKairoToken } from "../../lib/ticket-traceability.js";
+import { createSemaphore } from "../../lib/semaphore.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -214,6 +215,26 @@ export const tier1FastPath = inngest.createFunction(
         );
       }
 
+      // Tier 1 is the onboarding fast-path — it must run at most ONCE per
+      // account, ever. The intended gate lives in apps/landing's auth
+      // callback (only dispatch for a brand-new account), but that is a
+      // caller-side check outside this function's control. This is the
+      // structural backstop: `messages` is the first table Tier 1 ever
+      // writes to for an account, so any pre-existing row there proves
+      // onboarding already ran — abort before touching Gmail/the LLM at all.
+      const { data: anyExistingMessage } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("account_id", accountId)
+        .limit(1)
+        .maybeSingle();
+      if (anyExistingMessage) {
+        throw new NonRetriableError(
+          `tier1-fast-path: account ${accountId} was already onboarded — refusing to re-run. ` +
+          "This event should never have been dispatched for an existing account; check /auth/callback's dispatch gate."
+        );
+      }
+
       const token = await getFreshGmailToken(accountId);
       const [profile, msgs] = await Promise.all([
         fetchGmailProfile(token),
@@ -252,6 +273,9 @@ export const tier1FastPath = inngest.createFunction(
 
       const classificationPromises: Promise<void>[] = [];
       let relevantDispatched = 0;
+      // Throttle only the LLM call itself, not the ticket-creation work
+      // after it — the slot frees the instant classification resolves.
+      const llmSemaphore = createSemaphore(env.FAST_PATH_LLM_CONCURRENCY);
 
       for (const message of messages) {
         const headers = message.payload?.headers ?? [];
@@ -327,7 +351,14 @@ export const tier1FastPath = inngest.createFunction(
         pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } })
+        const promise = (async () => {
+          const release = await llmSemaphore.acquire();
+          try {
+            return await classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } });
+          } finally {
+            release();
+          }
+        })()
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",

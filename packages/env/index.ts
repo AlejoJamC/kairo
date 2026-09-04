@@ -18,6 +18,21 @@ export const env = createEnv({
         // Does NOT cap how many emails Tier 1 classifies — that's FAST_PATH_SCAN_SIZE.
         FAST_PATH_CONTINUE_THRESHOLD: z.coerce.number().int().positive().default(3),
         FAST_PATH_CONCURRENCY: z.coerce.number().int().positive().default(3),
+        // Caps concurrent classifyEmailWithMeta calls WITHIN a single tier1/
+        // tier2/tier3 run — distinct from FAST_PATH_CONCURRENCY, which caps
+        // concurrent *runs* of the whole Inngest function (e.g. two accounts
+        // onboarding at once). Without this, a single run fires every scanned
+        // message's classification at once via Promise.allSettled, with no cap
+        // at all. Anthropic's
+        // per-minute rate limits (RPM/ITPM/OTPM) comfortably absorb that fan-out
+        // (verified: even Sonnet 4.x's lowest "Start" tier is 1,000 RPM / 2M ITPM —
+        // 30 requests isn't close), so this exists for local Ollama, where the real
+        // ceiling is OLLAMA_NUM_PARALLEL (Ollama's own internal per-model parallel
+        // request limit, which defaults to 1-4 depending on available RAM) — exceed
+        // it and requests queue inside Ollama or time out client-side. Default is
+        // deliberately conservative for local dev; raise it per-environment once
+        // measured (see docs/observability.md-style benchmarking, not guessed).
+        FAST_PATH_LLM_CONCURRENCY: z.coerce.number().int().positive().default(2),
         BACKGROUND_CONCURRENCY: z.coerce.number().int().positive().default(3),
         TIER_2_WINDOW_DAYS: z.coerce.number().int().positive().default(15),
         MAX_EMAIL_AGE_DAYS: z.coerce.number().int().positive().default(90),

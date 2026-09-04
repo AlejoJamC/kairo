@@ -13,6 +13,7 @@ import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 import { emitTicketClassification } from "../../lib/ticket-events.js";
+import { createSemaphore } from "../../lib/semaphore.js";
 
 // KAI-191: tier2 writes priority/category onto every ticket it creates, but
 // used to leave no trace of that AI decision — the human correction path did,
@@ -304,6 +305,9 @@ export const tier2Background = inngest.createFunction(
       const channelIntegrationId: string | null = channelRow?.id ?? null;
 
       const classificationPromises: Promise<void>[] = [];
+      // Throttle only the LLM call itself, not the ticket-creation work
+      // after it — see tier1-fast-path.ts for the full rationale.
+      const llmSemaphore = createSemaphore(env.FAST_PATH_LLM_CONCURRENCY);
 
       for (const message of unprocessed) {
         const headers = message.payload?.headers ?? [];
@@ -358,7 +362,14 @@ export const tier2Background = inngest.createFunction(
           .slice(0, CLASSIFIER_BODY_MAX_CHARS);
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } })
+        const promise = (async () => {
+          const release = await llmSemaphore.acquire();
+          try {
+            return await classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } });
+          } finally {
+            release();
+          }
+        })()
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",
