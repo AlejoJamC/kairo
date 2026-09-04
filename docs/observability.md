@@ -137,29 +137,49 @@ the repo). A single package, split by subpath export:
   spans are correct per-fetch-call; deeply nested async parent/child linking
   across awaits isn't guaranteed. Revisit if that becomes a real need.
 
-Extract a *new* runtime-family package (e.g. `@kairo/observability` gains a
-`./nextjs` export, or a dedicated one) only when a second app in that same
-runtime family needs it — e.g. if `landing`/`kelan` (both Next.js) both need
-server-side tracing. Not before; that would be premature abstraction with no
-second consumer.
+`landing` and `kelan` (both Next.js) needed the same server-side pattern
+(`@vercel/otel`), so that's now `apps/{landing,kelan}/instrumentation.ts` —
+still using `@kairo/observability/web` for their browser side, same as
+dashboard. `packages/observability` didn't need a new export for this: Next.js
+server-side tracing is `@vercel/otel` itself (a thin wrapper apps call
+directly), not something `@kairo/observability` needs to own.
 
 ## What's instrumented today
+
+**Every app in the monorepo, including `apps/mobile`:**
 
 - `classifyEmailWithMeta` (`packages/intelligence/src/classification/classify.ts`) —
   covers all 3 pipeline tiers (`tier1-fast-path`, `tier2-background`, `tier3-deferred`),
   since they all call through this one function.
 - `generateEmbedding` / `generateEmbeddings` (`packages/intelligence/src/embeddings/embed.ts`)
   — covers both `ticket-embedding.ts` and `kb-embedding.ts`.
-- General `apps/api` HTTP/fetch traffic, via `@opentelemetry/auto-instrumentations-node`
+- `apps/api` — general HTTP/fetch traffic via `@opentelemetry/auto-instrumentations-node`
   (Inngest pipeline functions run in the same process, so they're covered too).
-- `apps/dashboard` — fetch calls from the browser (the actual product surface
-  support agents use), via `@kairo/observability/web` in `src/main.tsx`.
+- `apps/dashboard` — fetch calls from the browser, via `@kairo/observability/web`
+  in `src/main.tsx`.
+- `apps/landing` — server-side via `@vercel/otel` (`instrumentation.ts`), browser
+  fetch via `@kairo/observability/web` (`app/_instrumentation-client.tsx`,
+  imported from `app/layout.tsx`).
+- `apps/kelan` — same two-sided pattern as `landing`.
+- `apps/mobile` — `@kairo/observability/mobile` (`app/_layout.tsx`), a bare
+  `BasicTracerProvider` + `OTLPTraceExporter`, no auto-instrumentation. Real
+  RN OTel distros (Splunk's, Honeycomb's) add auto-instrumentation via a
+  **native module** that requires an **EAS development build** (breaks Expo
+  Go) — this is the manual-spans-only alternative that doesn't need either:
+  `trace.getTracer('kairo-mobile')` is ready to call from anywhere the moment
+  the app has a real event worth tracing. It doesn't have one yet —
+  `apps/mobile/app/index.tsx` is still a single static screen — so
+  `initMobileTelemetry()` runs at startup but nothing calls `startSpan()`
+  anywhere yet.
+  **Unverified**: `apps/mobile` has no `app.json`/dev script to actually boot
+  it (pre-existing gap, unrelated to this) — the OTLP exporter's fetch-based
+  transport is expected to bundle under Metro (the same package works under
+  Vite in `web.ts`) but that's untested. If Metro can't resolve it, swap the
+  exporter in `packages/observability/src/mobile.ts` for a plain `fetch()`
+  POST of OTLP JSON — nothing else in the file would need to change.
 
-Not yet instrumented (deferred, see KAI-126 for scope):
+Deferred, unrelated to the instrumentation work itself:
 - Structured per-provider logs/metrics for embeddings (KAI-214, separate ticket).
-- `apps/landing` / `apps/kelan` (Next.js server + browser) — different
-  instrumentation pattern (`@vercel/otel` server-side), not done yet.
-- `apps/mobile` — placeholder app today, nothing to instrument.
 - Production deployment (Phase 2 of KAI-126) — this doc covers local only. `apps/api`'s
   `start`/`build:api` scripts don't preload `instrumentation.ts` yet; wire that up when
   prod infra for both products actually exists.
