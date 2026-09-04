@@ -2,32 +2,39 @@ import { readFile, writeFile, mkdir, access } from 'fs/promises';
 import { join } from 'path';
 import { computeFieldMetrics, computeBaseline } from './lib/metrics';
 import { computeCalibration } from './lib/calibration';
+import { computeAgreement } from './lib/agreement';
+import type { FieldAgreement } from './lib/agreement';
 import type { CalibrationEntry } from './lib/calibration';
-import { computeToneInflation, computeDifficultyBreakdown } from './lib/spanish-analysis';
+import { computeToneInflation, computeDifficultyBreakdown, DIFFICULTY_LEVELS } from './lib/spanish-analysis';
 import type { AnalysisRow } from './lib/spanish-analysis';
 import { writeReports } from './lib/report-writer';
 import type { EvalReport, PerEmailDiff, FieldDiff } from './lib/report-writer';
 import { resolveRunLabel } from './lib/run-label';
+import { resolveCorpus } from './lib/corpus';
+import { PIPELINE_OUTPUT } from './lib/run-files';
 // The eval validates against the same enums the pipeline emits — one source
 import {
   TICKET_TYPE, PRIORITY, CATEGORY, TONE, URGENCY,
-} from '@kairo/intelligence';
+} from '../../packages/intelligence/src/index';
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
 const SCRIPT_DIR = new URL('.', import.meta.url).pathname;
-const INPUT_DIR = join(SCRIPT_DIR, 'data/input');
+
+// The corpus decides both halves at once: the labels and where the predictions
+// for those same emails were written. Selecting them separately would let a run
+// be scored against another corpus's ground truth.
+const CORPUS = resolveCorpus();
 
 // Metrics run against ONE model's pipeline output, resolved from the same
 // env vars the pipeline run used (or pass the run directory name as argv[2],
 // e.g. `bun run eval:metrics ollama-granite4.1-3b`). Reports land next to
 // the pipeline output they measure — runs never share or overwrite files.
 const RUN_SLUG = process.argv[2] ?? resolveRunLabel().slug;
-const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', RUN_SLUG);
+const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', CORPUS.outputSubdir, RUN_SLUG);
 
-const GT_FILE = join(INPUT_DIR, 'ground_truth_50.csv');
-const PIPELINE_FILE = join(OUTPUT_DIR, 'pipeline_output_50.csv');
-const META_FILE = join(INPUT_DIR, '_meta.json');
+const GT_FILE = join(SCRIPT_DIR, CORPUS.groundTruth);
+const PIPELINE_FILE = join(OUTPUT_DIR, PIPELINE_OUTPUT);
 const JSON_OUT = join(OUTPUT_DIR, 'eval_report.json');
 const MD_OUT = join(OUTPUT_DIR, 'eval_report.md');
 
@@ -113,18 +120,95 @@ export function parseCsv(content: string): CsvParseResult {
 // the adapter still does is structural:
 //   - rename the Spanish consensus columns to the canonical field names
 //   - drop Excel-export ghost rows with an empty email_id
-//   - derive `difficulty`, which has no consensus column of its own: the harder
-//     of the two annotators wins, since disagreement on difficulty is itself a
-//     sign of ambiguity
 // Values pass through verbatim and are checked against the same enums the
 // pipeline emits. A value outside them is reported, never silently coerced —
 // coercion is how a business decision ends up buried in scoring code.
 
+// ─── Sheet schemas ───────────────────────────────────────────────────────────
+// Two annotator sheets exist and they name their columns differently. The
+// original grew a column at a time and ended up half in Spanish; anything
+// written from now on is in English like the rest of the repo.
+//
+// They are not interchangeable, and one collision makes that dangerous:
+// `alexandra_tone` exists in both. In the legacy sheet it is the original
+// four-class pass, annotated before the insistence rule was written down, on
+// which the two annotators agreed 12% of the time. In an English sheet it is
+// the live pass. Reading one as the other would score a run against labels
+// nobody stands behind, and nothing downstream could tell.
+//
+// So detection keys on the consensus column for `ticket_type`, whose two
+// spellings cannot both be right, and a sheet carrying both is refused rather
+// than guessed at.
+
+interface SheetSchema {
+  name: string;
+  /** Canonical field -> the column holding the resolved label. */
+  final: Record<string, string>;
+  /** Canonical field -> the two annotators' own columns. */
+  annotators: Record<string, [string, string]>;
+}
+
+const ENGLISH_SHEET: SheetSchema = {
+  name: 'english',
+  final: {
+    ticket_type: 'ticket_type_final',
+    priority: 'priority_final',
+    category: 'category_final',
+    tone: 'tone_final',
+    urgency: 'urgency_final',
+    difficulty: 'difficulty_final',
+  },
+  annotators: {
+    ticket_type: ['alexandra_ticket_type', 'alejandro_ticket_type'],
+    priority: ['alexandra_priority', 'alejandro_priority'],
+    category: ['alexandra_category', 'alejandro_category'],
+    tone: ['alexandra_tone', 'alejandro_tone'],
+    urgency: ['alexandra_urgency', 'alejandro_urgency'],
+    difficulty: ['alexandra_difficulty', 'alejandro_difficulty'],
+  },
+};
+
+const LEGACY_SHEET: SheetSchema = {
+  name: 'legacy (mixed es/en)',
+  final: {
+    ticket_type: 'tipo_ticket_final',
+    priority: 'prioridad_final',
+    category: 'categoria_final',
+    // The v1.3.0 pass, and only it. The sheet also carries the original
+    // four-class pass and an intermediate binary one; neither describes a label
+    // anything reads.
+    tone: 'tono_final_v130',
+    urgency: 'urgencia_final',
+    difficulty: 'difficulty_final',
+  },
+  annotators: {
+    ticket_type: ['alexandra_ticket_type', 'alejandro_ticket_type'],
+    priority: ['alexandra_priority', 'alejandro_priority'],
+    category: ['alexandra_category', 'alejandro_category'],
+    tone: ['alexandra_tono_v130', 'alejandro_tono_v130'],
+    urgency: ['alexandra_urgency', 'alejandro_urgency'],
+    difficulty: ['alexandra_dificultad', 'alejandro_dificultad'],
+  },
+};
+
+/** The schema a sheet is written in, or undefined when it is already canonical. */
+export function detectSheet(headers: string[]): SheetSchema | undefined {
+  const english = headers.includes(ENGLISH_SHEET.final['ticket_type']!);
+  const legacy = headers.includes(LEGACY_SHEET.final['ticket_type']!);
+  if (english && legacy) {
+    throw new Error(
+      'Ground truth carries both sheet schemas. `alexandra_tone` means a ' +
+      'different pass in each, so which one to read cannot be inferred. Keep one.',
+    );
+  }
+  if (english) return ENGLISH_SHEET;
+  if (legacy) return LEGACY_SHEET;
+  return undefined;
+}
+
 const CANONICAL_GT_HEADERS = [
   'email_id', 'ticket_type', 'priority', 'category', 'tone', 'urgency', 'difficulty',
 ];
-
-const DIFFICULTY_ORDER = ['easy', 'ambiguous', 'hard'];
 
 const CANONICAL_VALUES: Record<string, readonly string[]> = {
   ticket_type: TICKET_TYPE,
@@ -132,7 +216,7 @@ const CANONICAL_VALUES: Record<string, readonly string[]> = {
   category: CATEGORY,
   tone: TONE,
   urgency: URGENCY,
-  difficulty: DIFFICULTY_ORDER,
+  difficulty: DIFFICULTY_LEVELS,
 };
 
 // "field: value" → occurrences, reported after adaptation so nothing outside
@@ -155,38 +239,68 @@ export function canonicalEmailId(raw: string): string {
   return raw.trim().replace(/^0+(?=\d)/, '');
 }
 
-function deriveDifficulty(alexandra: string, alejandro: string): string {
-  const a = gtValue('difficulty', alexandra);
-  const b = gtValue('difficulty', alejandro);
-  const rankA = DIFFICULTY_ORDER.indexOf(a);
-  const rankB = DIFFICULTY_ORDER.indexOf(b);
-  if (rankA === -1 && rankB === -1) return '';
-  return rankB > rankA ? b : a;
-}
-
 export function adaptGroundTruth(parsed: CsvParseResult): CsvParseResult {
   // Already-canonical files pass through untouched
-  if (!parsed.headers.includes('tipo_ticket_final')) return parsed;
+  const sheet = detectSheet(parsed.headers);
+  if (!sheet) return parsed;
+
+  // A missing consensus column would leave every row's value empty and the
+  // field would report an F1 computed from nothing, silently. Say so instead.
+  for (const [field, column] of Object.entries(sheet.final)) {
+    if (!parsed.headers.includes(column)) {
+      console.warn(
+        `⚠  Ground truth has no "${column}" column — ${field} metrics will be empty.`,
+      );
+    }
+  }
 
   const rows: CsvRow[] = [];
   for (const r of parsed.rows) {
     const id = canonicalEmailId(r['email_id'] ?? '');
     if (!id) continue; // Excel-export ghost row
-    rows.push({
-      email_id: id,
-      ticket_type: gtValue('ticket_type', r['tipo_ticket_final'] ?? ''),
-      priority: gtValue('priority', r['prioridad_final'] ?? ''),
-      category: gtValue('category', r['categoria_final'] ?? ''),
-      tone: gtValue('tone', r['tono_final'] ?? ''),
-      urgency: gtValue('urgency', r['urgencia_final'] ?? ''),
-      difficulty: deriveDifficulty(
-        r['alexandra_dificultad'] ?? '',
-        r['alejandro_dificultad'] ?? '',
-      ),
-    });
+    const row: CsvRow = { email_id: id };
+    for (const [field, column] of Object.entries(sheet.final)) {
+      row[field] = gtValue(field, r[column] ?? '');
+    }
+    rows.push(row);
   }
 
   return { headers: [...CANONICAL_GT_HEADERS], rows };
+}
+
+// ─── Agreement between the two annotators ───────────────────────────────────
+
+/**
+ * Agreement per field, read straight off the raw annotator sheet, using the
+ * column names of whichever schema that sheet is written in.
+ *
+ * `difficulty` is in here although it is not a classifier field: the verdict is
+ * macro F1 over the emails both annotators called easy, so how well they agree
+ * on that decides which subset the headline number is measured over.
+ *
+ * Undefined when the sheet carries no annotator columns at all -- an
+ * already-canonical ground truth, or another tenant's corpus. Absent is the
+ * honest answer there; a zero would read as "they never agreed".
+ */
+export function computeAnnotatorAgreement(
+  parsed: CsvParseResult,
+): Record<string, FieldAgreement> | undefined {
+  const sheet = detectSheet(parsed.headers);
+  if (!sheet) return undefined;
+
+  const present = Object.entries(sheet.annotators).filter(
+    ([, [a, b]]) => parsed.headers.includes(a) && parsed.headers.includes(b),
+  );
+  if (present.length === 0) return undefined;
+
+  const out: Record<string, FieldAgreement> = {};
+  for (const [field, [colA, colB]] of present) {
+    out[field] = computeAgreement(
+      parsed.rows.map((r) => r[colA] ?? ''),
+      parsed.rows.map((r) => r[colB] ?? ''),
+    );
+  }
+  return out;
 }
 
 export function reportNonCanonicalGtValues(): void {
@@ -274,7 +388,7 @@ async function main(): Promise<void> {
     pipeline.headers,
     ['email_id', 'predicted_ticket_type', 'predicted_priority', 'predicted_category',
      'predicted_tone', 'predicted_urgency', 'confidence', 'error'],
-    'pipeline_output_50.csv',
+    PIPELINE_OUTPUT,
   );
 
   // ── 3. Join on email_id ───────────────────────────────────────────────────
@@ -300,6 +414,7 @@ async function main(): Promise<void> {
 
   console.log('Kairo Eval Metrics — KAI-97');
   console.log(`Run:              ${runProvider ?? '?'} / ${runModel ?? '?'} (${RUN_SLUG})`);
+  console.log(`Corpus:           ${CORPUS.id}`);
   console.log(`Ground truth:     ${GT_FILE} (${gt.rows.length} rows)`);
   console.log(`Pipeline output:  ${PIPELINE_FILE} (${pipeline.rows.length} rows)`);
 
@@ -320,18 +435,20 @@ async function main(): Promise<void> {
   console.log(`Emails evaluated: ${evaluated.length} (${skipped.length} skipped — errors)`);
   console.log('─'.repeat(44));
 
-  // ── 5. Read optional _meta.json ───────────────────────────────────────────
-  let interAnnotatorAgreement: number | undefined;
-  if (await fileExists(META_FILE)) {
-    try {
-      const metaContent = await readFile(META_FILE, 'utf-8');
-      const meta = JSON.parse(metaContent) as Record<string, unknown>;
-      if (typeof meta['inter_annotator_agreement'] === 'number') {
-        interAnnotatorAgreement = meta['inter_annotator_agreement'];
-      }
-    } catch {
-      // Silently skip malformed meta file
+  // ── 5. Agreement between the two annotators ───────────────────────────────
+  // Computed from the sheet rather than read from a hand-written file. It is a
+  // property of the ground truth, and it qualifies every F1 below it: a field
+  // the annotators do not reproduce has no stable target to score against.
+  const annotatorAgreement = computeAnnotatorAgreement(gtParsed);
+  if (annotatorAgreement) {
+    console.log('Annotator agreement (raw, and above chance):');
+    for (const [field, a] of Object.entries(annotatorAgreement)) {
+      console.log(
+        `  ${field.padEnd(14)} ${(a.observed * 100).toFixed(0).padStart(3)}%` +
+        `   kappa ${a.kappa >= 0 ? '+' : ''}${a.kappa.toFixed(3)}   n=${a.n}`,
+      );
     }
+    console.log('─'.repeat(44));
   }
 
   // ── 6. Compute field metrics ──────────────────────────────────────────────
@@ -364,7 +481,7 @@ async function main(): Promise<void> {
       predictions.push(pRow[predCol] ?? '');
     }
 
-    const metrics = computeFieldMetrics(truths, predictions);
+    const metrics = computeFieldMetrics(truths, predictions, CANONICAL_VALUES[key]);
     const baseline = computeBaseline(truths);
     fieldMetrics[key] = metrics;
     baselines[key] = baseline;
@@ -376,10 +493,20 @@ async function main(): Promise<void> {
       `   baseline: ${baseline.macro_f1.toFixed(2)} (${baseline.majority_label})` +
       `   ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}${flag}`,
     );
-    if (metrics.off_rubric_predictions > 0) {
+    // Two different things, deliberately reported apart. The first is a gap in
+    // the corpus: a class the rubric allows but this corpus never exercises.
+    // The second is a defect in the model: a value the prompt never offered.
+    if (metrics.off_ground_truth_predictions > 0) {
       console.log(
-        `  ${' '.repeat(14)} off-rubric: ${metrics.off_rubric_predictions} prediction(s) ` +
-        `on ${metrics.off_rubric_labels.join(', ')} — excluded from the macro`,
+        `  ${' '.repeat(14)} off-ground-truth: ${metrics.off_ground_truth_predictions} prediction(s) ` +
+        `on ${metrics.off_ground_truth_labels.join(', ')} — allowed by the rubric, absent from ` +
+        `this corpus. No F1 of their own, but still counted as false negatives`,
+      );
+    }
+    if (metrics.off_contract_predictions > 0) {
+      console.log(
+        `  ${' '.repeat(14)} ⚠ off-contract: ${metrics.off_contract_predictions} prediction(s) ` +
+        `on ${metrics.off_contract_labels.join(', ')} — outside the enum the model was given`,
       );
     }
   }
@@ -483,7 +610,7 @@ async function main(): Promise<void> {
       total_emails: total,
       emails_evaluated: evaluated.length,
       emails_skipped_due_to_error: skipped.length,
-      ...(interAnnotatorAgreement !== undefined ? { inter_annotator_agreement: interAnnotatorAgreement } : {}),
+      ...(annotatorAgreement ? { annotator_agreement: annotatorAgreement } : {}),
     },
     field_metrics: {
       ticket_type: fieldMetrics['ticket_type']!,

@@ -29,6 +29,19 @@ describe('getPromptVersion', () => {
   it('keeps ES and EN on the same version', async () => {
     expect(await getPromptVersion('en')).toBe((await getPromptVersion('es'))!);
   });
+
+  // The major is frozen at 1 until this ships. It was pushed to 2.0.0 and then
+  // 3.0.0 during development and reset to 1.2.0 in 1c0a2e8; that reset is the
+  // intended state, not a regression to undo. A prompt edit never touches the
+  // first number. The rule lives here and not only in prompts/README.md because
+  // a rule nobody runs is a rule that gets re-litigated. Minor vs patch is in
+  // that README: minor changes the value some email comes back with, patch
+  // does not.
+  it('never moves the major off 1', async () => {
+    for (const lang of ['es', 'en'] as const) {
+      expect((await getPromptVersion(lang))!.split('.')[0]).toBe('1');
+    }
+  });
 });
 
 describe('buildPrompt', () => {
@@ -221,7 +234,11 @@ describe.skipIf(skipLlm)('classifyEmail with real prompt', () => {
     expect(meta.usage).toHaveProperty('promptTokens');
     expect(meta.usage).toHaveProperty('completionTokens');
     expect(prompt).toContain('user@client.com');
-    expect(promptVersion).toBe('1.0.0');
+    // Not a pinned number: that fires on every deliberate bump, and this one
+    // sat stale at 1.0.0 through two of them. What must hold is that the
+    // version reported alongside a classification is the one the prompt file
+    // actually carries -- that is the column every eval row is stamped with.
+    expect(promptVersion).toBe(await getPromptVersion('es'));
   });
 });
 
@@ -250,10 +267,17 @@ describe('tenant context', () => {
     expect(out).toContain('A qué se dedica: (no disponible)');
   });
 
-  it('makes internal the default rather than a sender check', async () => {
+  // `internal` used to be declared the default class, and the decision order
+  // ended on it. `other` was defined at the bottom but no route reached it, so
+  // it was unreachable by construction — 0 of 100 annotations used it while
+  // every email nobody could place became `internal`. There is exactly one
+  // residual class and it is `other`; `internal` is whose work the email is.
+  it('makes other the residual class, not internal', async () => {
     const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
 
-    expect(es).toContain('Es la clase por defecto');
+    expect(es).toContain('Si ninguna encaja → `other`');
+    expect(es).toContain('No es la clase por defecto');
+    expect(es).not.toContain('Es la clase por defecto cuando');
     // the competing shortcut that sent every external request to `support`
     expect(es).not.toContain('si el remitente es externo y espera una acción');
   });
@@ -261,7 +285,9 @@ describe('tenant context', () => {
   it('keeps both languages on the same rule', async () => {
     const en = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' }, 'en');
 
-    expect(en).toContain('It is the default class');
+    expect(en).toContain('If none of them fits -> `other`');
+    expect(en).toContain('It is not the default class');
+    expect(en).not.toContain('It is the default class when');
     expect(en).toContain('What it does: (not available)');
   });
 });

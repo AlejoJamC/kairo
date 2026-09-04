@@ -60,8 +60,23 @@ export function computeToneInflation(rows: AnalysisRow[]): ToneInflationResult {
  * Difficulty breakdown: ticket_type F1 sliced by annotator-assigned difficulty.
  * The easy→hard gap quantifies the cost of classification ambiguity.
  */
+/**
+ * How hard the annotators found the email to label. A judgement they make and
+ * agree on, not something derived from anything else.
+ *
+ *   easy       it was straightforward to classify
+ *   ambiguous  they are not fully in agreement, or there is doubt
+ *   hard       indisputably difficult to label -- passive-aggressive wording,
+ *              a request whose real subject is in an attachment, a thread whose
+ *              owner cannot be told from the text
+ *
+ * Ordered least to most difficult, and the single definition of the set: it is
+ * both the breakdown's buckets and what the ground truth is validated against.
+ */
+export const DIFFICULTY_LEVELS = ['easy', 'ambiguous', 'hard'] as const;
+
 export function computeDifficultyBreakdown(rows: AnalysisRow[]): DifficultyBreakdown {
-  const levels = ['easy', 'ambiguous', 'hard'] as const;
+  const levels = DIFFICULTY_LEVELS;
   const result = {} as DifficultyBreakdown;
 
   for (const level of levels) {

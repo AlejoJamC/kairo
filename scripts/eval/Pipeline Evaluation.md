@@ -30,7 +30,7 @@ scripts/eval/data/
 │       └── 001.eml … 050.eml  ← correos fuente crudos
 └── output/                    ← los scripts la crean solos
     └── <provider>-<modelo>/   ← una carpeta POR CORRIDA, ej. ollama-granite4.1-3b
-        ├── pipeline_output_50.csv   (incluye columnas provider + model)
+        ├── pipeline_output.csv   (incluye columnas provider + model)
         ├── eval_report.md / eval_report.json
         └── *.log
 ```
@@ -68,11 +68,13 @@ bun run eval:pipeline
 **Output esperado:**
 
 ```
-scripts/eval/data/output/pipeline_output_50.csv
+scripts/eval/data/output/pipeline_output.csv
 scripts/eval/data/output/pipeline_eval_run.log
 ```
 
-**Por qué secuencial y no paralelo:** Para que los tiers del pipeline (0, 1, 2, 3) se ejecuten limpiamente y el campo `processing_tier` en el output sea confiable. En paralelo los tiers se mezclan.
+**Qué NO es este script:** no ejecuta el pipeline de tiers. Llama `classifyEmailWithMeta()` directamente — sin Inngest, sin Gmail, sin pre-filtro (Tier 0) y sin persistencia. Lo que mide es el clasificador, no la orquestación que lo rodea.
+
+**Por qué secuencial y no paralelo:** para que `processing_time_ms` sea la latencia limpia de una llamada individual. Es la cifra que gobierna Tier 1, donde el primer ticket aparece cuando responde la primera de las llamadas que se disparan en paralelo. Correr el eval en paralelo contaminaría esa medición sin representar mejor a ningún tier.
 
 **Por qué** `temperature: 0`: Sin esto, correr el mismo email dos veces puede dar resultados diferentes. El benchmark es inútil si no es reproducible.
 
@@ -82,7 +84,7 @@ scripts/eval/data/output/pipeline_eval_run.log
 
 **Script:** `bun run eval:metrics`
 **Issue:** [KAI-97](https://linear.app/agent-kairo/issue/KAI-97/evaluation-framework-precision-recall-and-confidence-calibration-over)
-**Qué hace:** Toma `ground_truth_50.csv` y `pipeline_output_50.csv`, los cruza por `email_id`, y calcula F1, precisión, recall, calibración de confianza, y análisis de fallos en español.
+**Qué hace:** Toma `ground_truth_50.csv` y `pipeline_output.csv`, los cruza por `email_id`, y calcula F1, precisión, recall, calibración de confianza, y análisis de fallos en español.
 
 ```bash
 # Desde la raíz del monorepo
@@ -133,7 +135,7 @@ El `eval_report.json` también es el input que [KEL-2](https://linear.app/agent-
 KAI-102 ya produjo ground_truth_50.csv ✅
          ↓
 bun run eval:pipeline   (KAI-106)
-         ↓  pipeline_output_50.csv
+         ↓  pipeline_output.csv
 bun run eval:metrics    (KAI-97)
          ↓  eval_report.md → GO / NO-GO
 KAI-93 se cierra

@@ -8,7 +8,7 @@ import { computeFieldMetrics, computeBaseline } from "./metrics";
 // for any model. These tests freeze that behaviour.
 // ---------------------------------------------------------------------------
 
-describe("computeFieldMetrics — off-rubric classes", () => {
+describe("computeFieldMetrics — classes the ground truth never uses", () => {
   it("averages over ground-truth classes only", () => {
     // 2 real classes, model emits a third the truth never contains
     const truths = ["support", "support", "support", "internal"];
@@ -18,7 +18,7 @@ describe("computeFieldMetrics — off-rubric classes", () => {
 
     // support: tp 2, fp 0, fn 1 → p 1.00, r 0.67, f1 0.80
     // internal: perfect → f1 1.00
-    // prospect: support 0 → excluded from the macro
+    // prospect: support 0 → its own F1 is left out of the macro
     expect(m.macro_f1).toBeCloseTo((0.8 + 1) / 2, 5);
   });
 
@@ -32,17 +32,17 @@ describe("computeFieldMetrics — off-rubric classes", () => {
     expect(computeFieldMetrics(truths, oneStray).macro_f1).toBeGreaterThan(2 / 3);
   });
 
-  it("reports off-rubric output instead of discarding it", () => {
+  it("reports output on absent classes instead of discarding it", () => {
     const truths = ["support", "support", "internal"];
     const predictions = ["prospect", "spam", "internal"];
 
     const m = computeFieldMetrics(truths, predictions);
 
-    expect(m.off_rubric_labels).toEqual(["prospect", "spam"]);
-    expect(m.off_rubric_predictions).toBe(2);
+    expect(m.off_ground_truth_labels).toEqual(["prospect", "spam"]);
+    expect(m.off_ground_truth_predictions).toBe(2);
   });
 
-  it("keeps off-rubric classes visible in per_label", () => {
+  it("keeps absent classes visible in per_label", () => {
     const m = computeFieldMetrics(["a", "a"], ["a", "z"]);
 
     expect(Object.keys(m.per_label).sort()).toEqual(["a", "z"]);
@@ -50,11 +50,11 @@ describe("computeFieldMetrics — off-rubric classes", () => {
     expect(m.per_label["z"]!.f1).toBe(0);
   });
 
-  it("reports nothing off-rubric when every prediction is in the rubric", () => {
+  it("reports nothing when every prediction lands on a ground-truth class", () => {
     const m = computeFieldMetrics(["a", "b"], ["a", "a"]);
 
-    expect(m.off_rubric_labels).toEqual([]);
-    expect(m.off_rubric_predictions).toBe(0);
+    expect(m.off_ground_truth_labels).toEqual([]);
+    expect(m.off_ground_truth_predictions).toBe(0);
   });
 
   it("returns zeros for an empty input", () => {
@@ -62,8 +62,83 @@ describe("computeFieldMetrics — off-rubric classes", () => {
 
     expect(m.macro_f1).toBe(0);
     expect(m.per_label).toEqual({});
-    expect(m.off_rubric_labels).toEqual([]);
-    expect(m.off_rubric_predictions).toBe(0);
+    expect(m.off_ground_truth_labels).toEqual([]);
+    expect(m.off_ground_truth_predictions).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Two separate failures, deliberately not merged into one number.
+//
+//   off_ground_truth — a class the rubric allows that this corpus never uses.
+//                      A gap in the corpus, not a defect in the model.
+//   off_contract     — a value the prompt never offered. A real model defect.
+//
+// Before they were split, a legal `billing` prediction and a garbage `"alta"`
+// prediction were reported as the same thing, under a name that blamed the
+// model for both.
+// ---------------------------------------------------------------------------
+
+describe("computeFieldMetrics — contract violations", () => {
+  const CONTRACT = ["support", "internal", "prospect", "spam", "other"] as const;
+
+  it("does not flag a legal class the corpus simply never uses", () => {
+    const m = computeFieldMetrics(
+      ["support", "support", "internal"],
+      ["support", "prospect", "internal"],
+      CONTRACT,
+    );
+
+    // `prospect` is in the contract but not in the truths: corpus gap, not defect
+    expect(m.off_ground_truth_labels).toEqual(["prospect"]);
+    expect(m.off_ground_truth_predictions).toBe(1);
+    expect(m.off_contract_labels).toEqual([]);
+    expect(m.off_contract_predictions).toBe(0);
+  });
+
+  it("flags a value the contract does not contain", () => {
+    const m = computeFieldMetrics(
+      ["support", "support"],
+      ["support", "soporte"],
+      CONTRACT,
+    );
+
+    expect(m.off_contract_labels).toEqual(["soporte"]);
+    expect(m.off_contract_predictions).toBe(1);
+    // It is also absent from the ground truth, so both counters see it
+    expect(m.off_ground_truth_predictions).toBe(1);
+  });
+
+  it("stays empty when no contract is supplied", () => {
+    const m = computeFieldMetrics(["support"], ["soporte"]);
+
+    expect(m.off_contract_labels).toEqual([]);
+    expect(m.off_contract_predictions).toBe(0);
+  });
+
+  it("does not count a blank prediction as a contract violation", () => {
+    const m = computeFieldMetrics(["support", "support"], ["support", ""], CONTRACT);
+
+    expect(m.off_contract_predictions).toBe(0);
+  });
+
+  it("counts every prediction on the offending label, not just the label", () => {
+    const m = computeFieldMetrics(
+      ["support", "support", "support"],
+      ["soporte", "soporte", "support"],
+      CONTRACT,
+    );
+
+    expect(m.off_contract_labels).toEqual(["soporte"]);
+    expect(m.off_contract_predictions).toBe(2);
+  });
+
+  it("leaves the macro F1 untouched — this is a report, not a penalty", () => {
+    const truths = ["support", "support", "internal"];
+    const predictions = ["support", "prospect", "internal"];
+
+    expect(computeFieldMetrics(truths, predictions, CONTRACT).macro_f1)
+      .toBe(computeFieldMetrics(truths, predictions).macro_f1);
   });
 });
 

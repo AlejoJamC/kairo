@@ -22,7 +22,11 @@
     "clean": "turbo run clean",
     "eval:pipeline": "bun scripts/eval/run_pipeline_eval.ts",
     "eval:metrics": "bun scripts/eval/compute_metrics.ts",
-    "eval:ablation": "bun scripts/eval/compare_ablation.ts"
+    "eval:ablation": "bun scripts/eval/compare_ablation.ts",
+    "eval:matrix": "bun scripts/eval/run_matrix_eval.ts"
   },
-  "workspaces": ["apps/*", "packages/*"]
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
 }

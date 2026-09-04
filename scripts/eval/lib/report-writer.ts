@@ -1,4 +1,6 @@
 import type { FieldMetrics, BaselineMetrics } from './metrics';
+import type { FieldAgreement } from './agreement';
+import { readKappa } from './agreement';
 import type { CalibrationBand } from './calibration';
 import type { ToneInflationResult, DifficultyBreakdown, DifficultyEntry } from './spanish-analysis';
 
@@ -35,7 +37,12 @@ export interface EvalReport {
     total_emails: number;
     emails_evaluated: number;
     emails_skipped_due_to_error: number;
-    inter_annotator_agreement?: number;
+    /**
+     * Agreement between the two annotators, per field. Not one number: on this
+     * corpus the fields range from almost perfect to no better than chance, and
+     * a single average would hide exactly the ones whose F1 cannot be trusted.
+     */
+    annotator_agreement?: Record<string, FieldAgreement>;
   };
   field_metrics: {
     ticket_type: FieldMetrics;
@@ -133,8 +140,30 @@ export function buildMarkdown(report: EvalReport): string {
     `Dataset: ${meta.total_emails} emails — ${meta.emails_evaluated} evaluated, ` +
     `${meta.emails_skipped_due_to_error} skipped (errors)`,
   );
-  if (meta.inter_annotator_agreement !== undefined) {
-    lines.push(`Inter-annotator agreement: ${pct(meta.inter_annotator_agreement)}`);
+  lines.push('');
+
+  if (meta.annotator_agreement) {
+    lines.push('## Annotator Agreement');
+    lines.push('');
+    lines.push(mdTable(
+      ['Field', 'Agreement', 'By chance', 'Kappa', 'Reading', 'n'],
+      Object.entries(meta.annotator_agreement).map(([field, a]) => [
+        field,
+        pct(a.observed),
+        pct(a.expected),
+        f2(a.kappa),
+        readKappa(a.kappa),
+        String(a.n),
+      ]),
+    ));
+    lines.push('');
+    lines.push(
+      'Every F1 below is distance to one of these labels. Where the two ' +
+      'annotators do not reproduce a field, there is no stable target to score ' +
+      'against and its F1 measures closeness to a coin flip. Read `Kappa`, not ' +
+      '`Agreement`: a two-class field with a skewed split hands out ~50% for ' +
+      'free, so the raw percentage is not comparable between fields.',
+    );
   }
   lines.push('');
 
@@ -173,11 +202,11 @@ export function buildMarkdown(report: EvalReport): string {
       f2(m.macro_f1 - base.macro_f1),
       f2(m.macro_precision),
       f2(m.macro_recall),
-      String(m.off_rubric_predictions),
+      String(m.off_ground_truth_predictions),
     ];
   });
   lines.push(mdTable(
-    ['Field', 'Macro F1', 'Baseline', 'vs Baseline', 'Macro Precision', 'Macro Recall', 'Off-rubric'],
+    ['Field', 'Macro F1', 'Baseline', 'vs Baseline', 'Macro Precision', 'Macro Recall', 'Off-GT'],
     fieldRows,
   ));
   lines.push('');
@@ -186,6 +215,39 @@ export function buildMarkdown(report: EvalReport): string {
     "ground truth's most frequent class. A negative `vs Baseline` means the run " +
     'carries no information about the email it read.',
   );
+  lines.push('');
+  lines.push(
+    '**Off-GT** counts predictions on a class the ground truth never uses. It is ' +
+    'not a model defect — the class can be perfectly legal under the rubric and ' +
+    'simply absent from this corpus. Those predictions get no F1 of their own, ' +
+    'but they still count as false negatives against the true class. A high ' +
+    'number here is a statement about the corpus, not about the model.',
+  );
+  lines.push('');
+
+  // Off-contract is the real defect: a value the prompt never offered. It is
+  // usually zero, and saying so out loud is the point — it is what proves the
+  // schema-constrained decoding held for the whole run.
+  const offContract = (Object.entries(fm) as [string, FieldMetrics][])
+    .filter(([, m]) => m.off_contract_predictions > 0);
+  if (offContract.length === 0) {
+    lines.push(
+      '**Off-contract: none.** Every prediction in this run is a value the ' +
+      'classification enums allow.',
+    );
+  } else {
+    lines.push(
+      '**Off-contract** — predictions outside the enum the model was given. ' +
+      'Unlike Off-GT, this *is* a model defect:',
+    );
+    lines.push('');
+    for (const [field, m] of offContract) {
+      lines.push(
+        `- \`${field}\`: ${m.off_contract_predictions} prediction(s) on ` +
+        `${m.off_contract_labels.map((l) => `\`${l}\``).join(', ')}`,
+      );
+    }
+  }
   lines.push('');
 
   // Per-label tables

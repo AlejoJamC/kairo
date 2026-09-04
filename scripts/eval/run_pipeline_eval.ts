@@ -7,7 +7,8 @@ import { classifyEmailWithMeta, stripQuotedThread } from '../../packages/intelli
 import { supportsTemperature } from '../../packages/intelligence/src/providers/anthropic/completion';
 import { parseEml } from './lib/parse-eml';
 import { writeCsv } from './lib/write-csv';
-import { resolveRunLabel, STAGE_BODY_RULES } from './lib/run-label';
+import { resolveRunLabel, STAGE_BODY_RULES, LOCAL_OLLAMA } from './lib/run-label';
+import { PIPELINE_OUTPUT } from './lib/run-files';
 import { getPromptVersion, DEFAULT_LANG } from '../../packages/intelligence/src/classification/prompt';
 
 // Resolve paths relative to this file's directory
@@ -18,7 +19,7 @@ const INPUT_DIR = join(SCRIPT_DIR, 'data/input/eml');
 // providers/models never overwrite each other
 const RUN = resolveRunLabel();
 const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', RUN.slug);
-const OUTPUT_CSV = join(OUTPUT_DIR, 'pipeline_output_50.csv');
+const OUTPUT_CSV = join(OUTPUT_DIR, PIPELINE_OUTPUT);
 const LOG_FILE = join(OUTPUT_DIR, 'pipeline_eval_run.log');
 
 const TEMPERATURE = 0;
@@ -62,6 +63,13 @@ interface OutputRow {
   prompt_lang: string;
   /** Which production path this row reproduces: onboarding or backfill. */
   pipeline_stage: string;
+  /** Where inference ran. A latency figure means nothing without it. */
+  endpoint: string;
+  /**
+   * Generation throughput reported by the provider. Wall-clock latency cannot
+   * separate a slow model from a busy endpoint; this can.
+   */
+  tokens_per_second: number | string;
   predicted_ticket_type: string;
   predicted_priority: string;
   predicted_category: string;
@@ -82,6 +90,8 @@ const CSV_COLUMNS: (keyof OutputRow)[] = [
   'prompt_version',
   'prompt_lang',
   'pipeline_stage',
+  'endpoint',
+  'tokens_per_second',
   'predicted_ticket_type',
   'predicted_priority',
   'predicted_category',
@@ -93,6 +103,39 @@ const CSV_COLUMNS: (keyof OutputRow)[] = [
   'raw_reasoning',
   'error',
 ];
+
+/**
+ * A second run against the same inference endpoint does not fail — it shares
+ * it. Both runs then measure an endpoint serving two clients, and their
+ * latency roughly doubles while the model is unchanged, which silently turns
+ * every timing in the output into a figure about the machine rather than the
+ * model. Ollama reports what it is currently serving, so the condition is
+ * detectable before a run starts rather than after the numbers are published.
+ *
+ * This warns and continues: sharing an endpoint is legitimate when only
+ * quality is being measured. It must not be silent.
+ */
+async function warnIfEndpointBusy(): Promise<string | null> {
+  if (RUN.provider !== 'ollama') return null;
+  try {
+    const res = await fetch(`${RUN.endpoint}/api/ps`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return null;
+    const { models } = (await res.json()) as { models?: { name?: string }[] };
+    const loaded = (models ?? []).map((m) => m.name).filter(Boolean);
+    if (loaded.length === 0) return null;
+    return (
+      `${RUN.endpoint} is already serving ${loaded.join(', ')}. ` +
+      'If another eval is running against it, both runs share the endpoint and ' +
+      'their latency measures contention, not model speed. Quality metrics stay valid.'
+    );
+  } catch {
+    // The endpoint may not expose /api/ps, or may be remote and slow to
+    // answer. Not being able to check is not a reason to block a run.
+    return null;
+  }
+}
 
 function pad(n: number, width: number): string {
   return String(n).padStart(width, '0');
@@ -142,6 +185,9 @@ async function main(): Promise<void> {
   console.log(`Context: ${contextLabel}`);
   console.log(`Dataset: ${INPUT_DIR} (${total} files)`);
   console.log(`Temperature: ${temperatureLabel}`);
+  console.log(`Endpoint: ${RUN.endpoint}${RUN.endpoint === LOCAL_OLLAMA ? ' (local default)' : ''}`);
+  const busyWarning = await warnIfEndpointBusy();
+  if (busyWarning) console.warn(`\n⚠  ${busyWarning}\n`);
   console.log('─'.repeat(44));
 
   const rows: OutputRow[] = [];
@@ -153,6 +199,8 @@ async function main(): Promise<void> {
     `Context: ${contextLabel}`,
     `Dataset: ${INPUT_DIR} (${total} files)`,
     `Temperature: ${temperatureLabel}`,
+    `Endpoint: ${RUN.endpoint}`,
+    ...(busyWarning ? [`WARNING: ${busyWarning}`] : []),
     '',
   ];
 
@@ -216,6 +264,8 @@ async function main(): Promise<void> {
         prompt_version: RUN.promptVersion,
         prompt_lang: PROMPT_LANG,
         pipeline_stage: RUN.stage,
+        endpoint: RUN.endpoint,
+        tokens_per_second: meta.tokensPerSecond === null ? '' : Math.round(meta.tokensPerSecond * 10) / 10,
         predicted_ticket_type: result.type,
         predicted_priority: result.priority,
         predicted_category: result.category,
@@ -242,6 +292,8 @@ async function main(): Promise<void> {
         prompt_version: RUN.promptVersion,
         prompt_lang: PROMPT_LANG,
         pipeline_stage: RUN.stage,
+        endpoint: RUN.endpoint,
+        tokens_per_second: '',
         predicted_ticket_type: '',
         predicted_priority: '',
         predicted_category: '',

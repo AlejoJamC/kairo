@@ -1,4 +1,6 @@
 import { classifyEmailWithMeta, detectEscalationTriggers } from "@kairo/intelligence";
+import { buildClassifierBody } from "../../lib/classifier-input.js";
+import { tier1ProposalStatus } from "./tier1-proposal-status.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { getFlag } from "@kairo/feature-flags";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -55,24 +57,6 @@ interface GmailMessage {
     parts?: GmailMessagePart[];
   };
 }
-
-// Tier 1 is the onboarding fast-path only — FAST_PATH_SCAN_SIZE (default 30)
-// messages, once per account, fired from the connect-Gmail wizard. Nothing
-// else triggers pipeline/tier1.triggered, so this is a low-volume, one-time
-// cost per signup, and getting the very first ticket right matters more here
-// than trimming it.
-//
-// This is a safety valve against a pathological input, not a trim of normal
-// correspondence (KAI-181): extractBody() only walks text/plain and
-// text/html MIME parts, so an email's attachments never reach this string
-// regardless of the raw .eml size on disk — measured on the KAI-93 corpus,
-// an 8.8MB email (mostly embedded images) extracted to 12,090 characters of
-// text. The largest real body across that corpus was 18,380 characters. This
-// cap sits just above that (real content never gets cut) and exists only to
-// stop something like a pasted log file or a MIME-parsing bug from reaching
-// the model — every local model handles 20k+ token prompts without
-// truncating, so this is not a context-window limit either.
-const CLASSIFIER_BODY_MAX_CHARS = 20_000;
 
 // ---------------------------------------------------------------------------
 // Gmail helpers
@@ -322,7 +306,7 @@ export const tier1FastPath = inngest.createFunction(
         const messageId = message.id;
         // Prefer the decoded plain-text body for classifier input; fall back to
         // snippet when the email only carried HTML or no decodable text part.
-        const classifierBody = (body_plain || snippet).slice(0, CLASSIFIER_BODY_MAX_CHARS);
+        const classifierBody = buildClassifierBody("onboarding", body_plain, snippet);
 
         pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
 
@@ -357,7 +341,11 @@ export const tier1FastPath = inngest.createFunction(
               DEFAULT_WEIGHTS
             );
 
-            // Stage classification as an auto-approved proposal before persisting the ticket
+            // Nothing is delayed by the split below: the ticket further down is
+            // written with its classification either way, as it already is when
+            // this insert fails outright. What changes is that a `pending` label
+            // stops claiming a review that did not happen, and POST
+            // /v1/tickets/:id/classify-approve has something to act on.
             const { data: proposal, error: proposalErr } = await supabase
               .from("ticket_proposals")
               .insert({
@@ -372,7 +360,7 @@ export const tier1FastPath = inngest.createFunction(
                 confidence_score: classification.confidence,
                 model_version: resolveModelVersion(),
                 raw_llm_output: classification as Record<string, unknown>,
-                status: "auto_approved",
+                status: tier1ProposalStatus(classification.type),
               })
               .select("id")
               .single();

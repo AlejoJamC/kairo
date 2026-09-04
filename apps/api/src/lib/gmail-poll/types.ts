@@ -8,6 +8,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ClassificationResult } from "@kairo/intelligence";
+import type { ClassifierContext, ClassifierStage } from "../classifier-input.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type DbClient = SupabaseClient<any>;
@@ -76,7 +77,10 @@ export class GmailHistoryExpiredError extends Error {
 export interface GmailPollDeps {
   db: DbClient;
   getFreshGmailToken: (accountId: string) => Promise<string>;
-  getGmailEmailByAccount: (accountId: string) => Promise<string>;
+  resolveClassifierContext: (
+    stage: ClassifierStage,
+    accountId: string
+  ) => Promise<ClassifierContext>;
   getProfile: (token: string) => Promise<GmailProfile>;
   historyList: (
     token: string,
@@ -96,6 +100,8 @@ export interface GmailPollDeps {
     subject: string;
     body: string;
     from: string;
+    tenantMailbox?: string;
+    businessContext?: string;
   }) => Promise<ClassificationResult>;
   upsertConversationByThread: (
     client: DbClient,

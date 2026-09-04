@@ -1,9 +1,10 @@
-import { classifyEmailWithMeta, stripQuotedThread } from "@kairo/intelligence";
+import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
-import { getFreshGmailToken, getGmailEmailByAccount } from "../../lib/gmail-token.js";
+import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
@@ -178,11 +179,6 @@ function headerValue(headers: GmailHeader[], name: string): string {
   );
 }
 
-// Cap body sent to the classifier as a safety net — only fires when
-// stripQuotedThread (KAI-181) leaves something abnormally long, since new
-// text on this corpus has a measured p90 of ~1,900 characters.
-const CLASSIFIER_BODY_MAX_CHARS = 2000;
-
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Gmail returns part data base64url-encoded; Buffer's "base64" decoder
 // accepts URL-safe variants on both Node and Bun.
@@ -283,9 +279,11 @@ export const incrementalSync = inngest.createFunction(
     // Step 3: Classify new emails
     // -----------------------------------------------------------------------
     await step.run("classify-new-emails", async () => {
-      const [gmailAccessToken, userEmail, channelRow] = await Promise.all([
+      // The tenant fields are per-account, so they are resolved once for the
+      // whole sync rather than once per email (KAI-93).
+      const [gmailAccessToken, classifierContext, channelRow] = await Promise.all([
         getFreshGmailToken(accountId),
-        getGmailEmailByAccount(accountId),
+        resolveClassifierContext("backfill", accountId),
         supabase
           .from("channel_integrations")
           .select("id")
@@ -296,6 +294,7 @@ export const incrementalSync = inngest.createFunction(
       ]);
 
       const channelIntegrationId: string | null = channelRow.data?.id ?? null;
+      const { tenantMailbox: userEmail, businessContext } = classifierContext;
 
       // Collect existing gmail_message_ids for this user to skip duplicates
       const incomingIds = headers.map((m) => m.id);
@@ -369,13 +368,16 @@ export const incrementalSync = inngest.createFunction(
         // the DB even before KAI-181 — out of scope here; only what reaches
         // the classifier changes.
         const { body_plain } = extractBody(message.payload);
-        const classifierBody = stripQuotedThread(body_plain || snippet)
-          .slice(0, CLASSIFIER_BODY_MAX_CHARS);
+        const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
 
         const threadId = message.threadId;
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
+        const promise = classifyEmailWithMeta({
+          subject, body: classifierBody, from,
+          tenantMailbox: userEmail,
+          ...(businessContext ? { businessContext } : {}),
+        })
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",
