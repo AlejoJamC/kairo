@@ -14,12 +14,13 @@
  *
  * Not idempotent — re-running creates a duplicate dashboard.
  *
- * Known gap: couldn't get a per-metric filter (error-rate-style tile) to
- * persist through either `select[].where` or `select[].aggCondition` — both
- * are silently dropped by this HyperDX version. Left out rather than
- * shipping a tile that looks configured but isn't. Revisit once the v2 tile
- * filter field is confirmed (undocumented — needs a source read or a newer
- * HyperDX version).
+ * Per-metric filters go directly on the `select[]` item as `where` +
+ * `whereLanguage` (e.g. `{ where: "StatusCode:Error", whereLanguage: "lucene" }`)
+ * — verified against a live instance. `aggCondition` and a top-level
+ * `config.where` both looked plausible from the field names elsewhere in the
+ * schema but are silently accepted and dropped (no validation error, no
+ * effect) — an earlier version of this script used those and shipped a tile
+ * that looked configured but wasn't.
  */
 
 if (!process.env.HYPERDX_API_URL || !process.env.HYPERDX_PERSONAL_API_KEY) {
@@ -75,8 +76,7 @@ async function main() {
         h: 4,
         config: {
           sourceId: tracesSource.id,
-          select: [{ aggFn: 'count', aggCondition: '', valueExpression: '' }],
-          where: '',
+          select: [{ aggFn: 'count', valueExpression: '' }],
           displayType: 'line',
           granularity: 'auto',
         },
@@ -90,8 +90,23 @@ async function main() {
         h: 4,
         config: {
           sourceId: tracesSource.id,
-          select: [{ aggFn: 'quantile', level: 0.95, aggCondition: '', valueExpression: 'Duration' }],
-          where: '',
+          select: [{ aggFn: 'quantile', level: 0.95, valueExpression: 'Duration' }],
+          displayType: 'line',
+          granularity: 'auto',
+        },
+      },
+      {
+        id: 'error-count',
+        name: 'Error count (StatusCode: Error)',
+        x: 0,
+        y: 4,
+        w: 6,
+        h: 4,
+        config: {
+          sourceId: tracesSource.id,
+          select: [
+            { aggFn: 'count', valueExpression: '', where: 'StatusCode:Error', whereLanguage: 'lucene' },
+          ],
           displayType: 'line',
           granularity: 'auto',
         },

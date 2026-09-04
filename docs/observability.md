@@ -107,25 +107,27 @@ Runs both:
   compose file — that one only authenticates telemetry ingestion. Get the
   Personal API access key from Team Settings → API & Agents, after the manual
   HyperDX signup (step 4 above — HyperDX has no headless-init env vars).
-  Creates "Kairo — App Observability": request count + p95 duration.
+  Creates "Kairo — App Observability": request count + p95 duration + error
+  count (`StatusCode:Error`, Lucene). Per-metric filters go directly on the
+  `select[]` item as `where` + `whereLanguage` — an `aggCondition` field and a
+  top-level `config.where` both looked plausible from the schema but are
+  silently accepted and dropped, no validation error. Confirmed against a
+  live instance, not guessed.
 
 Neither script is idempotent — re-running creates duplicates. Meant to run
 once against a fresh instance.
 
-**Known gap**: an error-rate tile (filtering HyperDX traces by `StatusCode`)
-isn't in the HyperDX dashboard — neither `select[].where` nor
-`select[].aggCondition` persisted through the v2 API in testing (silently
-dropped, no validation error). The v2 tile-filter field is undocumented;
-revisit once confirmed. Alerts (both products can alert on dashboard tiles)
-are also not provisioned yet — they need a notification channel (Slack/email)
-configured first, which local dev doesn't have.
+**Remaining gap**: alerts (both products can alert on dashboard tiles) aren't
+provisioned yet — they need a notification channel (Slack/email) configured
+first, which local dev doesn't have.
 
 ## `packages/observability`
 
-One shared package, two runtime-specific entry points — not a single universal
-SDK (impossible: OpenTelemetry itself splits Node vs browser SDKs), and not one
-package per runtime either (that would scatter the same config surface across
-the repo). A single package, split by subpath export:
+One shared package, three runtime-specific entry points — not a single
+universal SDK (impossible: OpenTelemetry itself splits Node vs browser vs
+React Native SDKs), and not one package per runtime either (that would
+scatter the same config surface across the repo). A single package, split by
+subpath export:
 
 - `@kairo/observability/node` — `initNodeTelemetry()`, a thin wrapper around
   `NodeSDK` + `LangfuseSpanProcessor` + `OTLPTraceExporter`. Used by `apps/api`'s
@@ -136,6 +138,11 @@ the repo). A single package, split by subpath export:
   transpiling to ES2015, which conflicts with this monorepo's ES2022 target) —
   spans are correct per-fetch-call; deeply nested async parent/child linking
   across awaits isn't guaranteed. Revisit if that becomes a real need.
+- `@kairo/observability/mobile` — `initMobileTelemetry()`, a bare
+  `BasicTracerProvider` + `OTLPTraceExporter`, no auto-instrumentation (Hermes
+  doesn't support the DOM/Node APIs the other two entry points patch). Used
+  by `apps/mobile`'s `app/_layout.tsx`. Manual spans only — see "What's
+  instrumented today" below.
 
 `landing` and `kelan` (both Next.js) needed the same server-side pattern
 (`@vercel/otel`), so that's now `apps/{landing,kelan}/instrumentation.ts` —
