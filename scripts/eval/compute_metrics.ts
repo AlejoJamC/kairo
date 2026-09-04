@@ -11,7 +11,7 @@ import { resolveRunLabel } from './lib/run-label';
 // The eval validates against the same enums the pipeline emits — one source
 import {
   TICKET_TYPE, PRIORITY, CATEGORY, TONE, URGENCY,
-} from '@kairo/intelligence';
+} from '../../packages/intelligence/src/index';
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 

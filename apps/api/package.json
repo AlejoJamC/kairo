@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hono/otel": "^1.1.2",
+    "@langfuse/tracing": "^5.11.0",
     "@kairo/env": "workspace:*",
     "@kairo/feature-flags": "workspace:*",
     "@kairo/identity": "workspace:*",

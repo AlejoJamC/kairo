@@ -209,7 +209,7 @@ async function ingestMessages(
 
       const conversation_id = resolvedConversationId;
 
-      const classification = await deps.classifyEmail({ subject, body: snippet, from });
+      const classification = await deps.classifyEmail({ subject, body: snippet, from }, { context: { accountId } });
       const classifiedAt = new Date().toISOString();
 
       const result = await deps.findOrCreateTicketForThread(deps.db, {

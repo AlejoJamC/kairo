@@ -92,11 +92,14 @@ export interface GmailPollDeps {
     mimeType?: string;
     userEmail: string;
   }) => { status: "skip" | "relevant"; skip_reason?: string };
-  classifyEmail: (message: {
-    subject: string;
-    body: string;
-    from: string;
-  }) => Promise<ClassificationResult>;
+  classifyEmail: (
+    message: {
+      subject: string;
+      body: string;
+      from: string;
+    },
+    options?: { context?: { accountId?: string } },
+  ) => Promise<ClassificationResult>;
   upsertConversationByThread: (
     client: DbClient,
     args: {

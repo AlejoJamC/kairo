@@ -375,7 +375,7 @@ export const incrementalSync = inngest.createFunction(
         const threadId = message.threadId;
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
+        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } })
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",
@@ -597,6 +597,7 @@ export const incrementalSync = inngest.createFunction(
               maybeGenerateTicketEmbedding({
                 supabase,
                 ticketId,
+                accountId,
                 subject,
                 bodyPreview: snippet,
               }).catch((err: unknown) => {

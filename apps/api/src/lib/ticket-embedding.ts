@@ -15,9 +15,10 @@ import { generateEmbedding } from "@kairo/intelligence";
 export interface MaybeGenerateTicketEmbeddingArgs {
   supabase: SupabaseClient;
   ticketId: string;
+  accountId?: string; // KAI-189: tags the Langfuse generation for per-tenant cost/perf breakdown
   subject: string;
   bodyPreview: string; // first ~200 chars of body OR Gmail snippet
-  embedFn?: (text: string) => Promise<number[]>; // override for tests
+  embedFn?: (text: string, context?: { ticketId?: string; accountId?: string }) => Promise<number[]>; // override for tests
 }
 
 export type TicketEmbeddingOutcome =
@@ -53,7 +54,7 @@ export async function maybeGenerateTicketEmbedding(
   const embed = args.embedFn ?? generateEmbedding;
   let vector: number[];
   try {
-    vector = await embed(text);
+    vector = await embed(text, { ticketId: args.ticketId, accountId: args.accountId });
   } catch (err) {
     console.error(
       `[ticket-embedding] generateEmbedding failed for ticket ${args.ticketId}:`,

@@ -20,6 +20,7 @@
         "@kairo/intelligence": "workspace:*",
         "@kairo/observability": "workspace:*",
         "@kairo/types": "workspace:*",
+        "@langfuse/tracing": "^5.11.0",
         "@supabase/supabase-js": "^2.105.3",
         "@t3-oss/env-core": "^0.13.11",
         "hono": "^4.12.18",

@@ -116,6 +116,7 @@ kbArticles.post("/", async (c) => {
   maybeGenerateKbEmbedding({
     supabase,
     articleId: data.id,
+    accountId: ctx.accountId,
     title: parsed.data.title,
     content: parsed.data.content,
   }).catch((err: unknown) => {
@@ -172,6 +173,7 @@ kbArticles.put("/:id", async (c) => {
     maybeGenerateKbEmbedding({
       supabase,
       articleId: data.id,
+      accountId: ctx.accountId,
       title: data.title,
       content: data.content,
     }).catch((err: unknown) => {

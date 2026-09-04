@@ -1,4 +1,4 @@
-export { classifyEmail, classifyEmailWithMeta, type ClassifyOptions } from './classify';
+export { classifyEmail, classifyEmailWithMeta, type ClassifyOptions, type LangfuseContext } from './classify';
 export {
   ClassificationSchema,
   TICKET_TYPE,

@@ -313,7 +313,7 @@ async function classifyWindow(
       .slice(0, CLASSIFIER_BODY_MAX_CHARS);
 
     const llmStart = Date.now();
-    const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
+    const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } })
       .then(async ({ result: classification, meta, prompt, promptVersion }) => {
         logLlmCall({
           feature: "email_classification",

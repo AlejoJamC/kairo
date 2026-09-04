@@ -18,6 +18,7 @@ export type {
   ClassificationResult,
   EmailMessage,
   ClassifyOptions,
+  LangfuseContext,
   PromptLang,
   TicketType,
   Priority,

@@ -327,7 +327,7 @@ export const tier1FastPath = inngest.createFunction(
         pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
+        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } })
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",
@@ -644,6 +644,7 @@ export const tier1FastPath = inngest.createFunction(
               maybeGenerateTicketEmbedding({
                 supabase,
                 ticketId: ticket.id,
+                accountId,
                 subject,
                 bodyPreview: body_plain || snippet,
               }).catch((err: unknown) => {
