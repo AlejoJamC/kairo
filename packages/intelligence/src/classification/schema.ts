@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TICKET_TYPES, TICKET_PRIORITIES, TICKET_CATEGORIES, TICKET_TONES } from '@kairo/types';
+import { TICKET_TYPES, TICKET_PRIORITIES, TICKET_CATEGORIES, TICKET_TONES, TICKET_URGENCIES } from '@kairo/types';
 
 /**
  * Canonical, language-neutral classification contract.
@@ -10,18 +10,16 @@ import { TICKET_TYPES, TICKET_PRIORITIES, TICKET_CATEGORIES, TICKET_TONES } from
  * into human-readable labels; downstream code (scoring, analytics, pipelines)
  * treats them as opaque.
  *
- * type/priority/category/tone are the same vocabulary the DB and every other
- * package restrict themselves to — imported from @kairo/types rather than
- * declared here, so this package can't drift from them. urgency is an
- * intermediate LLM signal that never crosses a package boundary or gets
- * persisted, so it stays local.
+ * type/priority/category/tone/urgency are the same vocabulary @kairo/types
+ * defines as the single source of truth — imported rather than declared
+ * here, so this package can't drift from it.
  */
 
 export const TICKET_TYPE = TICKET_TYPES;
 export const PRIORITY    = TICKET_PRIORITIES;
 export const CATEGORY    = TICKET_CATEGORIES;
 export const TONE        = TICKET_TONES;
-export const URGENCY     = ['high', 'medium', 'low'] as const;
+export const URGENCY     = TICKET_URGENCIES;
 
 export type TicketType = (typeof TICKET_TYPE)[number];
 export type Priority   = (typeof PRIORITY)[number];
