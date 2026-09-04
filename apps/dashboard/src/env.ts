@@ -20,6 +20,11 @@ const testFallbackEnv = {
     import.meta.env.VITE_OTEL_SERVICE_NAME ??
     process.env.VITE_OTEL_SERVICE_NAME ??
     "kairo-dashboard",
+  // KAI-189: ClickStack's Ingestion API key. Without it every OTLP export
+  // 401s (silently — the SDK swallows exporter errors by default).
+  VITE_HYPERDX_INGESTION_API_KEY:
+    import.meta.env.VITE_HYPERDX_INGESTION_API_KEY ??
+    process.env.VITE_HYPERDX_INGESTION_API_KEY,
 };
 
 export const env = createEnv({
@@ -30,6 +35,7 @@ export const env = createEnv({
     VITE_LANDING_URL: z.string().default(""),
     VITE_OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
     VITE_OTEL_SERVICE_NAME: z.string().min(1).default("kairo-dashboard"),
+    VITE_HYPERDX_INGESTION_API_KEY: z.string().min(1).optional(),
   },
   runtimeEnv: {
     ...testFallbackEnv,

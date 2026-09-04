@@ -9,6 +9,9 @@ import { initMobileTelemetry } from "@kairo/observability/mobile";
 initMobileTelemetry({
   serviceName: "kairo-mobile",
   otlpEndpoint: process.env.EXPO_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT,
+  // ClickStack's Ingestion API key. Without it every OTLP export 401s
+  // (silently — the SDK swallows exporter errors by default).
+  ingestionApiKey: process.env.EXPO_PUBLIC_HYPERDX_INGESTION_API_KEY,
 });
 
 export default function RootLayout() {

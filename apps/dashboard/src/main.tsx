@@ -13,6 +13,7 @@ import App from './App.tsx'
 initWebTelemetry({
   serviceName: env.VITE_OTEL_SERVICE_NAME,
   otlpEndpoint: env.VITE_OTEL_EXPORTER_OTLP_ENDPOINT,
+  ingestionApiKey: env.VITE_HYPERDX_INGESTION_API_KEY,
 })
 
 createRoot(document.getElementById('root')!).render(

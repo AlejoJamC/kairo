@@ -32,6 +32,12 @@ import { BasicTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trac
 export interface MobileTelemetryConfig {
   serviceName: string;
   otlpEndpoint?: string | undefined;
+  /**
+   * ClickStack's Ingestion API key (Team Settings -> API & Agents), sent as a
+   * raw `authorization` header — no `Bearer ` prefix (confirmed against a
+   * live instance). Without it every export 401s silently.
+   */
+  ingestionApiKey?: string | undefined;
 }
 
 /** No-op tracer (via the OTel API's default) if `otlpEndpoint` is unset. */
@@ -40,7 +46,12 @@ export function initMobileTelemetry(config: MobileTelemetryConfig): Tracer {
     const provider = new BasicTracerProvider({
       resource: resourceFromAttributes({ 'service.name': config.serviceName }),
       spanProcessors: [
-        new BatchSpanProcessor(new OTLPTraceExporter({ url: `${config.otlpEndpoint}/v1/traces` })),
+        new BatchSpanProcessor(
+          new OTLPTraceExporter({
+            url: `${config.otlpEndpoint}/v1/traces`,
+            headers: config.ingestionApiKey ? { authorization: config.ingestionApiKey } : undefined,
+          }),
+        ),
       ],
     });
     trace.setGlobalTracerProvider(provider);
