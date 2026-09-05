@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { httpInstrumentationMiddleware } from "@hono/otel";
 import { serve } from "inngest/hono";
 import { env } from "./env.js";
 import { inngest } from "./lib/inngest.js";
@@ -32,6 +33,13 @@ import { members } from "./routes/v1/members.js";
 import { notes } from "./routes/v1/notes.js";
 
 const app = new Hono({ strict: false });
+
+// KAI-126/KAI-189 — @opentelemetry/auto-instrumentations-node (in
+// @kairo/observability/node's NodeSDK) patches Node's http/undici modules,
+// which Bun's native server and fetch never go through — it silently
+// creates zero spans for this app. @hono/otel instruments at the Hono
+// middleware level instead, which works regardless of runtime.
+app.use("*", httpInstrumentationMiddleware({ serviceName: "kairo-api" }));
 
 const v1 = new Hono({ strict: false });
 v1.route("/", health);

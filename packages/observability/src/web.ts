@@ -20,6 +20,15 @@ import { otlpTracesUrl } from './shared';
 export interface WebTelemetryConfig {
   serviceName: string;
   otlpEndpoint?: string | undefined;
+  /**
+   * ClickStack's Ingestion API key (Team Settings -> API & Agents), sent as a
+   * raw `authorization` header — no `Bearer ` prefix (confirmed against a
+   * live instance; the collector rejects both an unauthenticated request and
+   * one with a `Bearer ` prefix). Without it every export 401s silently (the
+   * OTel SDK swallows exporter errors unless OTEL_LOG_LEVEL=debug is set) —
+   * dashboards look "just no traffic yet" instead of "broken".
+   */
+  ingestionApiKey?: string | undefined;
 }
 
 /** No-op if `otlpEndpoint` is unset. */
@@ -31,7 +40,12 @@ export function initWebTelemetry(config: WebTelemetryConfig): void {
   const provider = new WebTracerProvider({
     resource: resourceFromAttributes({ 'service.name': config.serviceName }),
     spanProcessors: [
-      new BatchSpanProcessor(new OTLPTraceExporter({ url: otlpTracesUrl(config.otlpEndpoint) })),
+      new BatchSpanProcessor(
+        new OTLPTraceExporter({
+          url: otlpTracesUrl(config.otlpEndpoint),
+          headers: config.ingestionApiKey ? { authorization: config.ingestionApiKey } : undefined,
+        }),
+      ),
     ],
   });
 

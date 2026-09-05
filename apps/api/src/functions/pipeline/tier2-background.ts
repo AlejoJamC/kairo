@@ -13,6 +13,9 @@ import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 import { emitTicketClassification } from "../../lib/ticket-events.js";
+import { createSemaphore } from "../../lib/semaphore.js";
+import { withRetry } from "../../lib/retry.js";
+import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 
 // KAI-191: tier2 writes priority/category onto every ticket it creates, but
 // used to leave no trace of that AI decision — the human correction path did,
@@ -304,6 +307,10 @@ export const tier2Background = inngest.createFunction(
       const channelIntegrationId: string | null = channelRow?.id ?? null;
 
       const classificationPromises: Promise<void>[] = [];
+      // Throttle only the LLM call itself, not the ticket-creation work
+      // after it — see tier1-fast-path.ts for the full rationale.
+      const llmSemaphore = createSemaphore(env.FAST_PATH_LLM_CONCURRENCY);
+      const circuitBreaker = createCircuitBreaker(env.FAST_PATH_CIRCUIT_BREAKER_THRESHOLD);
 
       for (const message of unprocessed) {
         const headers = message.payload?.headers ?? [];
@@ -349,6 +356,29 @@ export const tier2Background = inngest.createFunction(
           continue;
         }
 
+        if (circuitBreaker.isOpen()) {
+          if (channelIntegrationId) {
+            await supabase.from("messages").upsert(
+              {
+                account_id:             accountId,
+                channel_integration_id: channelIntegrationId,
+                external_id: message.id,
+                direction: "inbound",
+                received_at: receivedAt,
+                sender_external_id: from,
+                snippet: message.snippet ?? null,
+                body_plain: null,
+                body_html: null,
+                classification_status: "skipped",
+                skip_reason: "circuit_breaker_open",
+                processing_tier: 2,
+              },
+              { onConflict: "channel_integration_id,external_id" }
+            );
+          }
+          continue;
+        }
+
         // Relevant — capture loop-local values for the closure
         const messageId = message.id;
         const threadId = message.threadId;
@@ -358,8 +388,11 @@ export const tier2Background = inngest.createFunction(
           .slice(0, CLASSIFIER_BODY_MAX_CHARS);
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
+        const promise = withRetry(llmSemaphore, () =>
+          classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } }),
+        )
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+            circuitBreaker.recordSuccess();
             logLlmCall({
               feature: "email_classification",
               model: meta.model,
@@ -600,6 +633,7 @@ export const tier2Background = inngest.createFunction(
             }
           })
           .catch(async (err: unknown) => {
+            circuitBreaker.recordFailure();
             const detail = err instanceof Error ? err.message : String(err);
             console.error(
               `[tier2] Classification failed for ${messageId}: ${detail}`

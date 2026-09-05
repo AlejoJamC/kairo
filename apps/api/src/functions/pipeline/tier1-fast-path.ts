@@ -19,6 +19,9 @@ import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 import { extractKairoToken, findTicketByKairoToken } from "../../lib/ticket-traceability.js";
+import { createSemaphore } from "../../lib/semaphore.js";
+import { withRetry } from "../../lib/retry.js";
+import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -214,6 +217,26 @@ export const tier1FastPath = inngest.createFunction(
         );
       }
 
+      // Tier 1 is the onboarding fast-path — it must run at most ONCE per
+      // account, ever. The intended gate lives in apps/landing's auth
+      // callback (only dispatch for a brand-new account), but that is a
+      // caller-side check outside this function's control. This is the
+      // structural backstop: `messages` is the first table Tier 1 ever
+      // writes to for an account, so any pre-existing row there proves
+      // onboarding already ran — abort before touching Gmail/the LLM at all.
+      const { data: anyExistingMessage } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("account_id", accountId)
+        .limit(1)
+        .maybeSingle();
+      if (anyExistingMessage) {
+        throw new NonRetriableError(
+          `tier1-fast-path: account ${accountId} was already onboarded — refusing to re-run. ` +
+          "This event should never have been dispatched for an existing account; check /auth/callback's dispatch gate."
+        );
+      }
+
       const token = await getFreshGmailToken(accountId);
       const [profile, msgs] = await Promise.all([
         fetchGmailProfile(token),
@@ -252,6 +275,10 @@ export const tier1FastPath = inngest.createFunction(
 
       const classificationPromises: Promise<void>[] = [];
       let relevantDispatched = 0;
+      // Throttle only the LLM call itself, not the ticket-creation work
+      // after it — the slot frees the instant classification resolves.
+      const llmSemaphore = createSemaphore(env.FAST_PATH_LLM_CONCURRENCY);
+      const circuitBreaker = createCircuitBreaker(env.FAST_PATH_CIRCUIT_BREAKER_THRESHOLD);
 
       for (const message of messages) {
         const headers = message.payload?.headers ?? [];
@@ -312,6 +339,31 @@ export const tier1FastPath = inngest.createFunction(
           continue;
         }
 
+        if (circuitBreaker.isOpen()) {
+          pipelineLog("tier1:circuit-breaker", `open — skipping id=${message.id} without attempting classification`);
+          if (channelIntegrationId) {
+            await supabase.from("messages").upsert(
+              {
+                account_id:             accountId,
+                channel_integration_id: channelIntegrationId,
+                external_id: message.id,
+                direction: "inbound",
+                received_at: receivedAt,
+                sender_external_id: from,
+                snippet: snippet || null,
+                body_plain: body_plain || null,
+                body_html: body_html || null,
+                message_id_header: messageIdHeader,
+                classification_status: "skipped",
+                skip_reason: "circuit_breaker_open",
+                processing_tier: 1,
+              },
+              { onConflict: "channel_integration_id,external_id" }
+            );
+          }
+          continue;
+        }
+
         // Relevant — capture loop-local values for the closure, then dispatch
         relevantDispatched++;
 
@@ -327,8 +379,11 @@ export const tier1FastPath = inngest.createFunction(
         pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
 
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail })
+        const promise = withRetry(llmSemaphore, () =>
+          classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } }),
+        )
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+            circuitBreaker.recordSuccess();
             logLlmCall({
               feature: "email_classification",
               model: meta.model,
@@ -644,6 +699,7 @@ export const tier1FastPath = inngest.createFunction(
               maybeGenerateTicketEmbedding({
                 supabase,
                 ticketId: ticket.id,
+                accountId,
                 subject,
                 bodyPreview: body_plain || snippet,
               }).catch((err: unknown) => {
@@ -652,6 +708,7 @@ export const tier1FastPath = inngest.createFunction(
             }
           })
           .catch(async (err: unknown) => {
+            circuitBreaker.recordFailure();
             const detail = err instanceof Error ? err.message : String(err);
             console.error(`[tier1] Classification failed for ${messageId}: ${detail}`);
 

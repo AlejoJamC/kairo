@@ -8,7 +8,9 @@
     "clean": "rm -rf .expo"
   },
   "dependencies": {
+    "@kairo/observability": "workspace:*",
     "@kairo/ui": "workspace:*",
+    "@opentelemetry/api": "^1.9.1",
     "@tamagui/babel-plugin": "^1.144.3",
     "@tamagui/core": "^1.144.3",
     "babel-preset-expo": "~55.0.21",

@@ -223,7 +223,11 @@ export async function GET(request: Request) {
 
   // ── Save Gmail OAuth tokens (oauth_credentials + support_channels) ──────
   // resolvedAccountId is guaranteed at this point for all scenarios.
-  // provider_token is only present when the user re-consented to Gmail scopes.
+  // provider_token is present on every login (/bff/auth/google's
+  // `prompt: "consent"` forces Google to re-issue it every time, not just on
+  // first connect — the old comment here assumed otherwise). Credentials/
+  // channels are intentionally kept fresh on every login; only the pipeline
+  // dispatch below is gated to first-connect only.
   // gmail_accounts dropped in ADR-022 Phase 5; oauth_credentials is now canonical.
   if (session.provider_token && user.email) {
     // ── Persist OAuth credentials — pipeline MUST NOT dispatch if this fails ─
@@ -316,15 +320,20 @@ export async function GET(request: Request) {
     }
 
     // ── KAI-202: all preconditions verified — safe to dispatch pipeline ────
-    try {
-      await dispatchOnboardingClassification({
-        userId:           user.id,
-        accountId:        resolvedAccountId,
-        gmailAccessToken: session.provider_token,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[KAI-202] dispatch wrapper threw: ${msg}`);
+    // Tier 1 onboarding classification must fire at most once per account,
+    // ever — `existingMembership` (Scenario 1) means this account was
+    // already onboarded, so a repeat login must never re-dispatch it.
+    if (!existingMembership) {
+      try {
+        await dispatchOnboardingClassification({
+          userId:           user.id,
+          accountId:        resolvedAccountId,
+          gmailAccessToken: session.provider_token,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[KAI-202] dispatch wrapper threw: ${msg}`);
+      }
     }
   }
 

@@ -97,11 +97,14 @@ export const batchClassify = inngest.createFunction(
         // Classify
         const llmStart = Date.now();
         try {
-          const { result: classification, meta, prompt, promptVersion } = await classifyEmailWithMeta({
-            subject: ticket.subject,
-            body: ticket.body_plain ?? "",
-            from: ticket.from_email,
-          });
+          const { result: classification, meta, prompt, promptVersion } = await classifyEmailWithMeta(
+            {
+              subject: ticket.subject,
+              body: ticket.body_plain ?? "",
+              from: ticket.from_email,
+            },
+            { context: { ticketId: ticket.id, accountId: accountId ?? undefined } },
+          );
 
           logLlmCall({
             feature: "email_classification",

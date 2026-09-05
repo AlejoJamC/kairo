@@ -6,6 +6,18 @@
       "runtimeExecutable": "bunx",
       "runtimeArgs": ["turbo", "run", "dev", "--filter=@kairo/dashboard"],
       "port": 5173
+    },
+    {
+      "name": "landing",
+      "runtimeExecutable": "bunx",
+      "runtimeArgs": ["turbo", "run", "dev", "--filter=@kairo/landing"],
+      "port": 3000
+    },
+    {
+      "name": "all",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
     }
   ]
 }

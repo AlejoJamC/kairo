@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { startObservation, propagateAttributes } from "@langfuse/tracing";
 import { classifyEmailWithMeta, generateEmbedding, extractPromptVersion } from "@kairo/intelligence";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { supabase } from "../../lib/supabase.js";
@@ -367,11 +368,14 @@ tickets.post("/:id/classify", async (c) => {
   let classification;
   const llmStart = Date.now();
   try {
-    const { result, meta, prompt, promptVersion } = await classifyEmailWithMeta({
-      subject: ticket.subject,
-      body: ticket.body_plain ?? "",
-      from: ticket.from_email,
-    });
+    const { result, meta, prompt, promptVersion } = await classifyEmailWithMeta(
+      {
+        subject: ticket.subject,
+        body: ticket.body_plain ?? "",
+        from: ticket.from_email,
+      },
+      { context: { ticketId: id, accountId: ctx.accountId } },
+    );
     classification = result;
 
     logLlmCall({
@@ -596,11 +600,14 @@ tickets.post("/classify-batch", async (c) => {
     // Classify
     const llmStart = Date.now();
     try {
-      const { result: classification, meta, prompt, promptVersion } = await classifyEmailWithMeta({
-        subject: ticket.subject,
-        body: ticket.body_plain ?? "",
-        from: ticket.from_email,
-      });
+      const { result: classification, meta, prompt, promptVersion } = await classifyEmailWithMeta(
+        {
+          subject: ticket.subject,
+          body: ticket.body_plain ?? "",
+          from: ticket.from_email,
+        },
+        { context: { ticketId: ticket.id, accountId } },
+      );
 
       logLlmCall({
         feature: "email_classification",
@@ -1890,6 +1897,20 @@ tickets.post("/:id/suggest-reply", async (c) => {
   const llmStart = Date.now();
   let meta: Awaited<ReturnType<typeof provider.completeWithMeta>> | null = null;
 
+  // KAI-189: this call bypasses packages/intelligence's classify.ts wrapper
+  // (it's the raw provider, not classifyEmailWithMeta), so it previously had
+  // zero Langfuse coverage — only the parallel llm_calls Postgres log below.
+  // Grouped into the ticket's Langfuse trace, same as classification/embedding.
+  const generation = await propagateAttributes(
+    { sessionId: id, metadata: { accountId: ctx.accountId } },
+    async () =>
+      startObservation(
+        "suggest-reply",
+        { model: provider.model, input: prompt, metadata: { promptVersion, ticketId: id, accountId: ctx.accountId } },
+        { asType: "generation" },
+      ),
+  );
+
   try {
     meta = await provider.completeWithMeta(prompt, { maxTokens: 1500, temperature: 0.4 });
     const jsonMatch = meta.rawText.match(/\{[\s\S]*\}/);
@@ -1898,7 +1919,18 @@ tickets.post("/:id/suggest-reply", async (c) => {
     const parsed = SuggestReplyResponseSchema.parse(JSON.parse(jsonMatch[0]));
     suggestion = parsed.suggestion;
     confidence = parsed.confidence;
+
+    const usageDetails: Record<string, number> = {};
+    if (meta.usage.promptTokens != null) usageDetails.input = meta.usage.promptTokens;
+    if (meta.usage.completionTokens != null) usageDetails.output = meta.usage.completionTokens;
+    generation.update({
+      output: meta.rawText,
+      ...(Object.keys(usageDetails).length > 0 ? { usageDetails } : {}),
+    });
+    generation.end();
   } catch (err) {
+    generation.update({ level: "ERROR", statusMessage: err instanceof Error ? err.message : String(err) });
+    generation.end();
     const detail = err instanceof Error ? err.message : String(err);
     logLlmCall({
       feature: "reply_suggestion",
@@ -2495,7 +2527,7 @@ tickets.get("/:id/knowledge-context", async (c) => {
 
   let queryVector: number[];
   try {
-    queryVector = await generateEmbedding(queryText);
+    queryVector = await generateEmbedding(queryText, { ticketId: id, accountId });
   } catch (err) {
     console.error(`[knowledge-context] generateEmbedding failed for ticket ${id}:`, err);
     // Embedding service unavailable — fall back to published list
