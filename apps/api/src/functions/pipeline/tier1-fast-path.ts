@@ -21,6 +21,7 @@ import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transition
 import { extractKairoToken, findTicketByKairoToken } from "../../lib/ticket-traceability.js";
 import { createSemaphore } from "../../lib/semaphore.js";
 import { withRetry } from "../../lib/retry.js";
+import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -277,6 +278,7 @@ export const tier1FastPath = inngest.createFunction(
       // Throttle only the LLM call itself, not the ticket-creation work
       // after it — the slot frees the instant classification resolves.
       const llmSemaphore = createSemaphore(env.FAST_PATH_LLM_CONCURRENCY);
+      const circuitBreaker = createCircuitBreaker(env.FAST_PATH_CIRCUIT_BREAKER_THRESHOLD);
 
       for (const message of messages) {
         const headers = message.payload?.headers ?? [];
@@ -337,6 +339,31 @@ export const tier1FastPath = inngest.createFunction(
           continue;
         }
 
+        if (circuitBreaker.isOpen()) {
+          pipelineLog("tier1:circuit-breaker", `open — skipping id=${message.id} without attempting classification`);
+          if (channelIntegrationId) {
+            await supabase.from("messages").upsert(
+              {
+                account_id:             accountId,
+                channel_integration_id: channelIntegrationId,
+                external_id: message.id,
+                direction: "inbound",
+                received_at: receivedAt,
+                sender_external_id: from,
+                snippet: snippet || null,
+                body_plain: body_plain || null,
+                body_html: body_html || null,
+                message_id_header: messageIdHeader,
+                classification_status: "skipped",
+                skip_reason: "circuit_breaker_open",
+                processing_tier: 1,
+              },
+              { onConflict: "channel_integration_id,external_id" }
+            );
+          }
+          continue;
+        }
+
         // Relevant — capture loop-local values for the closure, then dispatch
         relevantDispatched++;
 
@@ -356,6 +383,7 @@ export const tier1FastPath = inngest.createFunction(
           classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } }),
         )
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+            circuitBreaker.recordSuccess();
             logLlmCall({
               feature: "email_classification",
               model: meta.model,
@@ -680,6 +708,7 @@ export const tier1FastPath = inngest.createFunction(
             }
           })
           .catch(async (err: unknown) => {
+            circuitBreaker.recordFailure();
             const detail = err instanceof Error ? err.message : String(err);
             console.error(`[tier1] Classification failed for ${messageId}: ${detail}`);
 

@@ -33,6 +33,13 @@ export const env = createEnv({
         // deliberately conservative for local dev; raise it per-environment once
         // measured (see docs/observability.md-style benchmarking, not guessed).
         FAST_PATH_LLM_CONCURRENCY: z.coerce.number().int().positive().default(2),
+        // Consecutive classification failures (after each message's own
+        // withRetry already exhausted its attempts) within a single tier1/
+        // tier2/tier3 run before the circuit breaker opens and the rest of
+        // the run stops attempting new classifications — the backend is down
+        // or saturated, and burning through the remaining batch against it
+        // wastes time, concurrency slots, and (on a paid provider) money.
+        FAST_PATH_CIRCUIT_BREAKER_THRESHOLD: z.coerce.number().int().positive().default(3),
         BACKGROUND_CONCURRENCY: z.coerce.number().int().positive().default(3),
         TIER_2_WINDOW_DAYS: z.coerce.number().int().positive().default(15),
         MAX_EMAIL_AGE_DAYS: z.coerce.number().int().positive().default(90),
