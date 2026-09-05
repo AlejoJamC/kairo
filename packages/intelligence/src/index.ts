@@ -29,6 +29,7 @@ export type {
 
 export { generateEmbedding, generateEmbeddings } from './embeddings';
 
+export { ProviderError } from './providers/base';
 export type {
   CompletionProvider,
   EmbeddingProvider,

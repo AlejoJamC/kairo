@@ -1,5 +1,22 @@
 import { z } from 'zod';
-import { fetchOrThrow, type CompletionProvider, type CompletionOptions, type CompletionMeta } from '../base';
+import { fetchOrThrow, ProviderError, type CompletionProvider, type CompletionOptions, type CompletionMeta } from '../base';
+
+// 429 (rate limited) and 5xx/529 (overloaded) are transient — Anthropic's own
+// docs describe both as conditions that clear on their own. 4xx otherwise
+// (bad request, auth) will fail identically every time.
+function classifyAnthropicError(response: Response): boolean {
+  return response.status === 429 || response.status >= 500;
+}
+
+// Anthropic sends `retry-after` (seconds) on 429s — prefer it over our own
+// backoff schedule when present, since it reflects the actual token-bucket
+// refill time.
+function retryAfterMs(response: Response): number | undefined {
+  const header = response.headers.get('retry-after');
+  if (!header) return undefined;
+  const seconds = Number(header);
+  return Number.isFinite(seconds) ? seconds * 1000 : undefined;
+}
 
 interface AnthropicContentBlock {
   type: string;
@@ -55,10 +72,13 @@ function extractText(data: AnthropicMessage, model: string): string {
 
   if (text === '') {
     const types = (data.content ?? []).map((b) => b.type).join(', ') || 'none';
-    throw new Error(
+    // A sampling fluke (thinking ate the whole budget), not a permanent
+    // condition — retriable.
+    throw new ProviderError(
       `Anthropic response carried no text block (model ${model}, ` +
         `blocks: ${types}, stop_reason: ${data.stop_reason ?? 'unknown'}). ` +
         'If the model was still reasoning, it ran out of max_tokens before answering.',
+      true,
     );
   }
   return text;
@@ -97,7 +117,11 @@ export class AnthropicCompletionProvider implements CompletionProvider {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Anthropic API error: ${response.statusText} - ${error}`);
+      throw new ProviderError(
+        `Anthropic API error: ${response.statusText} - ${error}`,
+        classifyAnthropicError(response),
+        retryAfterMs(response),
+      );
     }
 
     const data = await response.json() as AnthropicMessage;
@@ -147,7 +171,11 @@ export class AnthropicCompletionProvider implements CompletionProvider {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Anthropic API error: ${response.statusText} - ${error}`);
+      throw new ProviderError(
+        `Anthropic API error: ${response.statusText} - ${error}`,
+        classifyAnthropicError(response),
+        retryAfterMs(response),
+      );
     }
 
     const data = await response.json() as AnthropicMessage;
@@ -157,9 +185,11 @@ export class AnthropicCompletionProvider implements CompletionProvider {
 
     if (!call || call.input === undefined) {
       const types = (data.content ?? []).map((b) => b.type).join(', ') || 'none';
-      throw new Error(
+      // A sampling fluke, not a permanent condition — retriable.
+      throw new ProviderError(
         `Anthropic returned no ${CLASSIFY_TOOL} call despite tool_choice forcing it ` +
           `(model ${this.model}, blocks: ${types}, stop_reason: ${data.stop_reason ?? 'unknown'}).`,
+        true,
       );
     }
 

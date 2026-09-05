@@ -20,6 +20,7 @@ import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 import { extractKairoToken, findTicketByKairoToken } from "../../lib/ticket-traceability.js";
 import { createSemaphore } from "../../lib/semaphore.js";
+import { withRetry } from "../../lib/retry.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -351,14 +352,9 @@ export const tier1FastPath = inngest.createFunction(
         pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
 
         const llmStart = Date.now();
-        const promise = (async () => {
-          const release = await llmSemaphore.acquire();
-          try {
-            return await classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } });
-          } finally {
-            release();
-          }
-        })()
+        const promise = withRetry(llmSemaphore, () =>
+          classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } }),
+        )
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",
