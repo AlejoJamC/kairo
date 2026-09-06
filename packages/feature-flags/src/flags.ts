@@ -32,6 +32,14 @@
 //   operational_sla_escalation_check_interval_minutes — KAI-168: how often (in minutes)
 //                                  the operational-SLA escalation cron scans open tickets
 //                                  for priority-based escalation thresholds. Default: 5.
+//   classification_retry_sweep_cron_interval_minutes — how often (in minutes) the
+//                                  classification-retry-sweep cron re-attempts messages
+//                                  stuck at classification_status: 'failed' (a transient
+//                                  LLM/provider failure, not a permanent one). Default: 30 —
+//                                  deliberately spaced out: each message already went
+//                                  through withRetry's own 4 attempts with backoff before
+//                                  landing here, so this cron's own interval is the next
+//                                  layer of backoff, not a tight retry loop.
 // =============================================================================
 
 // ─── Static dashboard flags (build-time, no env override) ────────────────────
@@ -83,6 +91,7 @@ export function getFlag(name: RuntimeFlagName): boolean {
 const NUMERIC_FLAG_DEFAULTS = {
   gmail_poll_cron_interval_minutes: 5,
   operational_sla_escalation_check_interval_minutes: 5,
+  classification_retry_sweep_cron_interval_minutes: 30,
 } as const;
 
 type NumericFlagName = keyof typeof NUMERIC_FLAG_DEFAULTS;

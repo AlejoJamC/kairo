@@ -82,19 +82,26 @@ classificationProgress.get(
     if (msgErr) return c.json({ error: msgErr.message }, 500);
 
     const msgs = msgRows ?? [];
-    let pending = 0, classified = 0, failed = 0;
+    let pending = 0, classified = 0, failed = 0, failedPermanent = 0;
     for (const m of msgs) {
       if (m.classification_status === "pending") pending++;
       else if (m.classification_status === "classified") classified++;
       else if (m.classification_status === "failed") failed++;
+      else if (m.classification_status === "failed_permanent") failedPermanent++;
     }
+
+    // 'failed' is non-terminal (Plan E's classification-retry-sweep will
+    // retry it) — only 'failed_permanent' means the pipeline has given up.
+    // Both count toward this wizard-facing heuristic, which only cares
+    // whether the batch got stuck, not whether a retry might still recover it.
+    const notClassified = failed + failedPermanent;
 
     let status: "idle" | "in_progress" | "complete" | "failed";
     if (msgs.length === 0) {
       status = "idle";
     } else if (pending > 0) {
       status = "in_progress";
-    } else if (failed > 0 && classified === 0 && failed > msgs.length * 0.5) {
+    } else if (notClassified > 0 && classified === 0 && notClassified > msgs.length * 0.5) {
       status = "failed";
     } else {
       status = "complete";
@@ -108,6 +115,11 @@ classificationProgress.get(
       categories,
       window: { since, until },
       last_classified_at,
+      // Retriable failures (classification-retry-sweep will pick these up)
+      // vs. permanent ones (exhausted retries or a non-retriable error —
+      // needs a human to look, see docs/observability.md).
+      failed,
+      failed_permanent: failedPermanent,
       // True once enough emails have been classified to enable the wizard Continue button.
       threshold_reached: tickets_count >= env.FAST_PATH_CONTINUE_THRESHOLD,
     });

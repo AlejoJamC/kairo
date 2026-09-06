@@ -14,6 +14,7 @@ import { outboundMessageSend } from "./functions/outbound-send/send.js";
 import { gmailPoll } from "./functions/inbound/gmail-poll.js";
 import { gmailPollCron } from "./functions/inbound/gmail-poll-cron.js";
 import { operationalSlaEscalationCron } from "./functions/operational-sla/escalation-check-cron.js";
+import { classificationRetrySweep } from "./functions/pipeline/classification-retry-sweep.js";
 import { health } from "./routes/v1/health.js";
 import { tickets } from "./routes/v1/tickets.js";
 import { ticketGroups } from "./routes/v1/ticket-groups.js";
@@ -66,7 +67,7 @@ app.use(
   "/api/inngest",
   serve({
     client: inngest,
-    functions: [tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill, outboundMessageSend, gmailPoll, gmailPollCron, operationalSlaEscalationCron],
+    functions: [tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill, outboundMessageSend, gmailPoll, gmailPollCron, operationalSlaEscalationCron, classificationRetrySweep],
   })
 );
 

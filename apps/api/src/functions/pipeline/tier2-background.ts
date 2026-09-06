@@ -16,6 +16,7 @@ import { emitTicketClassification } from "../../lib/ticket-events.js";
 import { createSemaphore } from "../../lib/semaphore.js";
 import { withRetry } from "../../lib/retry.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
+import { recordClassificationFailure } from "../../lib/classification-outcome.js";
 
 // KAI-191: tier2 writes priority/category onto every ticket it creates, but
 // used to leave no trace of that AI decision — the human correction path did,
@@ -651,18 +652,24 @@ export const tier2Background = inngest.createFunction(
             });
 
             if (channelIntegrationId) {
-              await supabase.from("messages").upsert(
-                {
-                  account_id:             accountId,
-                  channel_integration_id: channelIntegrationId,
-                  external_id: messageId,
-                  direction: "inbound",
-                  received_at: receivedAt,
-                  classification_status: "failed",
-                  processing_tier: 2,
-                },
-                { onConflict: "channel_integration_id,external_id" }
-              );
+              await recordClassificationFailure({
+                supabase,
+                accountId,
+                channelIntegrationId,
+                externalId: messageId,
+                threadExternalId: threadId,
+                receivedAt,
+                senderExternalId: from,
+                senderDisplayName: null,
+                subject,
+                snippet,
+                bodyPlain: body_plain || null,
+                bodyHtml: body_html || null,
+                messageIdHeader: null,
+                processingTier: 2,
+                err,
+                maxAttempts: env.CLASSIFICATION_MAX_ATTEMPTS,
+              });
             }
           });
 

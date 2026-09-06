@@ -40,6 +40,16 @@ export const env = createEnv({
         // or saturated, and burning through the remaining batch against it
         // wastes time, concurrency slots, and (on a paid provider) money.
         FAST_PATH_CIRCUIT_BREAKER_THRESHOLD: z.coerce.number().int().positive().default(3),
+        // Total classification attempts a message can accumulate across ALL
+        // 5 call sites (tier1/tier2/tier3/incremental-sync/gmail-poll) plus
+        // the classification-retry-sweep cron combined, before it's marked
+        // classification_status: 'failed_permanent' and given up on. Not the
+        // same as withRetry's own internal 4 attempts
+        // (apps/api/src/lib/retry.ts's CLASSIFICATION_RETRY_POLICY) — this
+        // counts separate pipeline dispatches over time (minutes/hours
+        // apart), that one counts sub-second retries within a single
+        // dispatch.
+        CLASSIFICATION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
         BACKGROUND_CONCURRENCY: z.coerce.number().int().positive().default(3),
         TIER_2_WINDOW_DAYS: z.coerce.number().int().positive().default(15),
         MAX_EMAIL_AGE_DAYS: z.coerce.number().int().positive().default(90),

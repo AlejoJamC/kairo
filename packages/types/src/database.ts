@@ -913,6 +913,7 @@ export type Database = {
           body_html: string | null
           body_plain: string | null
           channel_integration_id: string
+          classification_attempt_count: number
           classification_status: string | null
           classified_at: string | null
           conversation_id: string | null
@@ -921,6 +922,7 @@ export type Database = {
           direction: string
           external_id: string | null
           id: string
+          last_classification_attempt_at: string | null
           message_id_header: string | null
           processing_batch: string | null
           processing_tier: number | null
@@ -932,6 +934,7 @@ export type Database = {
           sender_external_id: string | null
           skip_reason: string | null
           snippet: string | null
+          subject: string | null
           thread_external_id: string | null
         }
         Insert: {
@@ -939,6 +942,7 @@ export type Database = {
           body_html?: string | null
           body_plain?: string | null
           channel_integration_id: string
+          classification_attempt_count?: number
           classification_status?: string | null
           classified_at?: string | null
           conversation_id?: string | null
@@ -947,6 +951,7 @@ export type Database = {
           direction: string
           external_id?: string | null
           id?: string
+          last_classification_attempt_at?: string | null
           message_id_header?: string | null
           processing_batch?: string | null
           processing_tier?: number | null
@@ -958,6 +963,7 @@ export type Database = {
           sender_external_id?: string | null
           skip_reason?: string | null
           snippet?: string | null
+          subject?: string | null
           thread_external_id?: string | null
         }
         Update: {
@@ -965,6 +971,7 @@ export type Database = {
           body_html?: string | null
           body_plain?: string | null
           channel_integration_id?: string
+          classification_attempt_count?: number
           classification_status?: string | null
           classified_at?: string | null
           conversation_id?: string | null
@@ -973,6 +980,7 @@ export type Database = {
           direction?: string
           external_id?: string | null
           id?: string
+          last_classification_attempt_at?: string | null
           message_id_header?: string | null
           processing_batch?: string | null
           processing_tier?: number | null
@@ -984,6 +992,7 @@ export type Database = {
           sender_external_id?: string | null
           skip_reason?: string | null
           snippet?: string | null
+          subject?: string | null
           thread_external_id?: string | null
         }
         Relationships: [

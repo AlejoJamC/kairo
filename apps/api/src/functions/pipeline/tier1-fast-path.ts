@@ -22,6 +22,7 @@ import { extractKairoToken, findTicketByKairoToken } from "../../lib/ticket-trac
 import { createSemaphore } from "../../lib/semaphore.js";
 import { withRetry } from "../../lib/retry.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
+import { recordClassificationFailure } from "../../lib/classification-outcome.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
@@ -724,18 +725,24 @@ export const tier1FastPath = inngest.createFunction(
             });
 
             if (channelIntegrationId) {
-              await supabase.from("messages").upsert(
-                {
-                  account_id:             accountId,
-                  channel_integration_id: channelIntegrationId,
-                  external_id: messageId,
-                  direction: "inbound",
-                  received_at: receivedAt,
-                  classification_status: "failed",
-                  processing_tier: 1,
-                },
-                { onConflict: "channel_integration_id,external_id" }
-              );
+              await recordClassificationFailure({
+                supabase,
+                accountId,
+                channelIntegrationId,
+                externalId: messageId,
+                threadExternalId: message.threadId,
+                receivedAt,
+                senderExternalId: from,
+                senderDisplayName: from_name,
+                subject,
+                snippet,
+                bodyPlain: body_plain || null,
+                bodyHtml: body_html || null,
+                messageIdHeader,
+                processingTier: 1,
+                err,
+                maxAttempts: env.CLASSIFICATION_MAX_ATTEMPTS,
+              });
             }
           });
 

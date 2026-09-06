@@ -16,6 +16,8 @@ import {
   type GmailPollDeps,
   type PollAccountResult,
 } from "./types.js";
+import { recordClassificationFailure } from "../classification-outcome.js";
+import { env } from "../../env.js";
 
 function headerValue(headers: { name: string; value: string }[], name: string): string {
   return (
@@ -269,10 +271,24 @@ async function ingestMessages(
         `[gmail-poll] ingestion failed for message ${messageId}:`,
         err instanceof Error ? err.message : String(err)
       );
-      await deps.db
-        .from("messages")
-        .update({ classification_status: "failed" })
-        .eq("id", insertedMsg.id);
+      await recordClassificationFailure({
+        supabase: deps.db,
+        accountId,
+        channelIntegrationId,
+        externalId: messageId,
+        threadExternalId: threadId,
+        receivedAt,
+        senderExternalId: from,
+        senderDisplayName: null,
+        subject,
+        snippet,
+        bodyPlain: null,
+        bodyHtml: null,
+        messageIdHeader,
+        processingTier: 0,
+        err,
+        maxAttempts: env.CLASSIFICATION_MAX_ATTEMPTS,
+      });
     }
   }
 

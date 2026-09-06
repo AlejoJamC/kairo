@@ -14,6 +14,7 @@ import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 import { emitTicketClassification } from "../../lib/ticket-events.js";
+import { recordClassificationFailure } from "../../lib/classification-outcome.js";
 
 // KAI-191: incremental-sync writes priority/category onto every ticket it
 // creates, but used to leave no trace of that AI decision — the human
@@ -626,11 +627,24 @@ export const incrementalSync = inngest.createFunction(
             });
 
             if (channelIntegrationId) {
-              await supabase
-                .from("messages")
-                .update({ classification_status: "failed" })
-                .eq("external_id", messageId)
-                .eq("channel_integration_id", channelIntegrationId);
+              await recordClassificationFailure({
+                supabase,
+                accountId,
+                channelIntegrationId,
+                externalId: messageId,
+                threadExternalId: threadId,
+                receivedAt,
+                senderExternalId: from,
+                senderDisplayName: null,
+                subject,
+                snippet,
+                bodyPlain: body_plain || null,
+                bodyHtml: null,
+                messageIdHeader,
+                processingTier: 0,
+                err,
+                maxAttempts: env.CLASSIFICATION_MAX_ATTEMPTS,
+              });
             }
           });
 
