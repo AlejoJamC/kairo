@@ -1406,7 +1406,10 @@ CREATE TABLE IF NOT EXISTS "public"."messages" (
     "send_error" "jsonb",
     "send_attempts" integer DEFAULT 0 NOT NULL,
     "message_id_header" "text",
-    CONSTRAINT "messages_classification_status_check" CHECK ((("classification_status" IS NULL) OR ("classification_status" = ANY (ARRAY['pending'::"text", 'classified'::"text", 'skipped'::"text", 'failed'::"text"])))),
+    "subject" "text",
+    "classification_attempt_count" integer DEFAULT 0 NOT NULL,
+    "last_classification_attempt_at" timestamp with time zone,
+    CONSTRAINT "messages_classification_status_check" CHECK ((("classification_status" IS NULL) OR ("classification_status" = ANY (ARRAY['pending'::"text", 'classified'::"text", 'skipped'::"text", 'failed'::"text", 'failed_permanent'::"text"])))),
     CONSTRAINT "messages_delivery_status_check" CHECK ((("delivery_status" IS NULL) OR ("delivery_status" = ANY (ARRAY['queued'::"text", 'sending'::"text", 'sent'::"text", 'failed'::"text"]))))
 );
 

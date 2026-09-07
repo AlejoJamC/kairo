@@ -18,6 +18,7 @@ export type {
   ClassificationResult,
   EmailMessage,
   ClassifyOptions,
+  LangfuseContext,
   PromptLang,
   TicketType,
   Priority,
@@ -28,6 +29,7 @@ export type {
 
 export { generateEmbedding, generateEmbeddings } from './embeddings';
 
+export { ProviderError } from './providers/base';
 export type {
   CompletionProvider,
   EmbeddingProvider,

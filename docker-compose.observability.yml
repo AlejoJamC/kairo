@@ -101,6 +101,17 @@ services:
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:?set LANGFUSE_NEXTAUTH_SECRET in .env.local, see docs/observability.md} # CHANGEME
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://localhost:9090
       LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://langfuse-minio:9000
+      # Headless init (KAI-189) — auto-provisions org/project/user/API-key pair
+      # on first boot, so local dev/scripts never need the manual UI signup.
+      LANGFUSE_INIT_ORG_ID: kairo
+      LANGFUSE_INIT_ORG_NAME: Kairo
+      LANGFUSE_INIT_PROJECT_ID: kairo-local
+      LANGFUSE_INIT_PROJECT_NAME: Kairo (local)
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:?set LANGFUSE_INIT_PROJECT_PUBLIC_KEY in .env.local, see docs/observability.md}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:?set LANGFUSE_INIT_PROJECT_SECRET_KEY in .env.local, see docs/observability.md}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-local@kairo.dev}
+      LANGFUSE_INIT_USER_NAME: Kairo Local
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-changeme-local-only}
 
   langfuse-minio:
     image: cgr.dev/chainguard/minio
@@ -170,10 +181,19 @@ services:
         condition: service_healthy
     environment:
       CLICKHOUSE_ENDPOINT: "tcp://clickhouse:${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}@clickhouse:9000?dial_timeout=10s"
+      # The schema-seed step (separate from ingestion) authenticates as this
+      # user/password pair rather than parsing CLICKHOUSE_ENDPOINT's DSN.
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
       HYPERDX_OTEL_EXPORTER_CLICKHOUSE_DATABASE: default
       HYPERDX_LOG_LEVEL: info
       OPAMP_SERVER_URL: http://clickstack-app:4320
-      HYPERDX_OTEL_EXPORTER_CREATE_LEGACY_SCHEMA: "true"
+      # KAI-189: must stay false — DEFAULT_SOURCES below (copied verbatim
+      # from ClickStack's own compose) references `TimestampTime`, a column
+      # that only exists in the non-legacy schema. Legacy schema only has
+      # `Timestamp`, and the UI errors with "Unknown expression or function
+      # identifier TimestampTime" on every log/session query if this is true.
+      HYPERDX_OTEL_EXPORTER_CREATE_LEGACY_SCHEMA: "false"
     ports:
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP
@@ -198,13 +218,17 @@ services:
       MONGO_URI: mongodb://clickstack-mongo:27017/hyperdx
       SERVER_URL: http://127.0.0.1:8000
       OPAMP_PORT: "4320"
+      # KAI-189: fixed key so provisioning scripts don't depend on a manually
+      # created Personal API Key. See scripts/observability/ for whether this
+      # works as the dashboards/alerts API Bearer token too.
+      HYPERDX_API_KEY: ${HYPERDX_API_KEY:?set HYPERDX_API_KEY in .env.local, see docs/observability.md}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack-otel-collector:4318
       OTEL_SERVICE_NAME: hdx-oss-app
       USAGE_STATS_ENABLED: "false"
       DEFAULT_CONNECTIONS: >-
         [{"name":"Local ClickHouse","host":"http://clickhouse:8123","username":"clickhouse","password":"${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}"}]
       DEFAULT_SOURCES: >-
-        [{"from":{"databaseName":"default","tableName":"otel_logs"},"kind":"log","timestampValueExpression":"TimestampTime","name":"Logs","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","connection":"Local ClickHouse","traceSourceId":"Traces","sessionSourceId":"Sessions","metricSourceId":"Metrics"},{"from":{"databaseName":"default","tableName":"otel_traces"},"kind":"trace","timestampValueExpression":"Timestamp","name":"Traces","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"SpanName","serviceNameExpression":"ServiceName","eventAttributesExpression":"SpanAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName","traceIdExpression":"TraceId","spanIdExpression":"SpanId","durationExpression":"Duration","durationPrecision":9,"parentSpanIdExpression":"ParentSpanId","spanNameExpression":"SpanName","spanKindExpression":"SpanKind","statusCodeExpression":"StatusCode","statusMessageExpression":"StatusMessage","connection":"Local ClickHouse","logSourceId":"Logs","sessionSourceId":"Sessions","metricSourceId":"Metrics"},{"from":{"databaseName":"default","tableName":""},"kind":"metric","timestampValueExpression":"TimeUnix","name":"Metrics","resourceAttributesExpression":"ResourceAttributes","metricTables":{"gauge":"otel_metrics_gauge","histogram":"otel_metrics_histogram","sum":"otel_metrics_sum"},"connection":"Local ClickHouse","logSourceId":"Logs","traceSourceId":"Traces","sessionSourceId":"Sessions"},{"from":{"databaseName":"default","tableName":"hyperdx_sessions"},"kind":"session","timestampValueExpression":"TimestampTime","name":"Sessions","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","connection":"Local ClickHouse","logSourceId":"Logs","traceSourceId":"Traces","metricSourceId":"Metrics"}]
+        [{"from":{"databaseName":"default","tableName":"otel_logs"},"kind":"log","timestampValueExpression":"Timestamp","name":"Logs","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","connection":"Local ClickHouse","traceSourceId":"Traces","sessionSourceId":"Sessions","metricSourceId":"Metrics"},{"from":{"databaseName":"default","tableName":"otel_traces"},"kind":"trace","timestampValueExpression":"Timestamp","name":"Traces","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"SpanName","serviceNameExpression":"ServiceName","eventAttributesExpression":"SpanAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName","traceIdExpression":"TraceId","spanIdExpression":"SpanId","durationExpression":"Duration","durationPrecision":9,"parentSpanIdExpression":"ParentSpanId","spanNameExpression":"SpanName","spanKindExpression":"SpanKind","statusCodeExpression":"StatusCode","statusMessageExpression":"StatusMessage","connection":"Local ClickHouse","logSourceId":"Logs","sessionSourceId":"Sessions","metricSourceId":"Metrics"},{"from":{"databaseName":"default","tableName":""},"kind":"metric","timestampValueExpression":"TimeUnix","name":"Metrics","resourceAttributesExpression":"ResourceAttributes","metricTables":{"gauge":"otel_metrics_gauge","histogram":"otel_metrics_histogram","sum":"otel_metrics_sum"},"connection":"Local ClickHouse","logSourceId":"Logs","traceSourceId":"Traces","sessionSourceId":"Sessions"},{"from":{"databaseName":"default","tableName":"hyperdx_sessions"},"kind":"session","timestampValueExpression":"Timestamp","name":"Sessions","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","connection":"Local ClickHouse","logSourceId":"Logs","traceSourceId":"Traces","metricSourceId":"Metrics"}]
 
   clickstack-mongo:
     image: docker.io/mongo:5.0.32-focal

@@ -8,10 +8,11 @@ import type { AnalysisRow } from './lib/spanish-analysis';
 import { writeReports } from './lib/report-writer';
 import type { EvalReport, PerEmailDiff, FieldDiff } from './lib/report-writer';
 import { resolveRunLabel } from './lib/run-label';
+import { DIFFICULTY_LEVELS } from './lib/difficulty';
 // The eval validates against the same enums the pipeline emits — one source
 import {
   TICKET_TYPE, PRIORITY, CATEGORY, TONE, URGENCY,
-} from '@kairo/intelligence';
+} from '../../packages/intelligence/src/index';
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
@@ -124,15 +125,13 @@ const CANONICAL_GT_HEADERS = [
   'email_id', 'ticket_type', 'priority', 'category', 'tone', 'urgency', 'difficulty',
 ];
 
-const DIFFICULTY_ORDER = ['easy', 'ambiguous', 'hard'];
-
 const CANONICAL_VALUES: Record<string, readonly string[]> = {
   ticket_type: TICKET_TYPE,
   priority: PRIORITY,
   category: CATEGORY,
   tone: TONE,
   urgency: URGENCY,
-  difficulty: DIFFICULTY_ORDER,
+  difficulty: DIFFICULTY_LEVELS,
 };
 
 // "field: value" → occurrences, reported after adaptation so nothing outside
@@ -158,8 +157,8 @@ export function canonicalEmailId(raw: string): string {
 function deriveDifficulty(alexandra: string, alejandro: string): string {
   const a = gtValue('difficulty', alexandra);
   const b = gtValue('difficulty', alejandro);
-  const rankA = DIFFICULTY_ORDER.indexOf(a);
-  const rankB = DIFFICULTY_ORDER.indexOf(b);
+  const rankA = DIFFICULTY_LEVELS.indexOf(a as (typeof DIFFICULTY_LEVELS)[number]);
+  const rankB = DIFFICULTY_LEVELS.indexOf(b as (typeof DIFFICULTY_LEVELS)[number]);
   if (rankA === -1 && rankB === -1) return '';
   return rankB > rankA ? b : a;
 }

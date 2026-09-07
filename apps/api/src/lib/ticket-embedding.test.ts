@@ -75,7 +75,7 @@ describe("maybeGenerateTicketEmbedding", () => {
       embedFn,
     });
     expect(result).toEqual({ status: "ok" });
-    expect(embedFn).toHaveBeenCalledWith("Hi\n\nBody");
+    expect(embedFn).toHaveBeenCalledWith("Hi\n\nBody", { ticketId: "tk-1", accountId: undefined });
     expect(updates).toHaveLength(1);
     expect(updates[0].filterId).toBe("tk-1");
     expect(Array.isArray(updates[0].payload.embedding)).toBe(true);

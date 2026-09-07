@@ -17,9 +17,10 @@ export function buildKbEmbeddingText(title: string, content: string): string | n
 export interface MaybeGenerateKbEmbeddingArgs {
   supabase: SupabaseClient;
   articleId: string;
+  accountId?: string; // KAI-189: tags the Langfuse generation for per-tenant cost/perf breakdown
   title: string;
   content: string;
-  embedFn?: (text: string) => Promise<number[]>;
+  embedFn?: (text: string, context?: { accountId?: string }) => Promise<number[]>;
 }
 
 export type KbEmbeddingOutcome =
@@ -36,7 +37,7 @@ export async function maybeGenerateKbEmbedding(
   const embed = args.embedFn ?? generateEmbedding;
   let vector: number[];
   try {
-    vector = await embed(text);
+    vector = await embed(text, { accountId: args.accountId });
   } catch (err) {
     console.error(
       `[kb-embedding] generateEmbedding failed for article ${args.articleId}:`,

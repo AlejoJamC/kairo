@@ -46,7 +46,7 @@ describe("maybeGenerateKbEmbedding", () => {
       embedFn,
     });
     expect(r).toEqual({ status: "ok" });
-    expect(embedFn).toHaveBeenCalledWith("T\n\nC");
+    expect(embedFn).toHaveBeenCalledWith("T\n\nC", { accountId: undefined });
     const payload = updates[0].payload as Record<string, unknown>;
     expect((payload.embedding as number[]).length).toBe(512);
     expect(typeof payload.updated_at).toBe("string");

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { fetchOrThrow, type CompletionProvider, type CompletionOptions, type CompletionMeta } from '../base';
+import { fetchOrThrow, ProviderError, type CompletionProvider, type CompletionOptions, type CompletionMeta } from '../base';
 
 interface OllamaGenerateResponse {
   response: string;
@@ -59,7 +59,10 @@ export class OllamaCompletionProvider implements CompletionProvider {
     }, 'Ollama');
 
     if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.statusText}`);
+      // 5xx (overloaded, crashed mid-request) and 503 (queue full, see
+      // OLLAMA_MAX_QUEUE) are transient. 4xx (unknown model, malformed
+      // request) will fail identically every time — retrying is pointless.
+      throw new ProviderError(`Ollama API error: ${response.statusText}`, response.status >= 500);
     }
 
     const data = await response.json() as OllamaGenerateResponse;
@@ -97,9 +100,12 @@ export class OllamaCompletionProvider implements CompletionProvider {
     try {
       parsed = JSON.parse(meta.text);
     } catch {
-      throw new Error(
+      // A sampling fluke, not a permanent condition — retriable (a second
+      // attempt at the same schema-constrained request can simply succeed).
+      throw new ProviderError(
         `Ollama returned output that is not valid JSON despite a schema-constrained ` +
           `request (model ${meta.model}): ${meta.text.slice(0, 200)}`,
+        true,
       );
     }
 

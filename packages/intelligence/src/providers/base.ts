@@ -1,5 +1,30 @@
 import type { z } from 'zod';
 
+/**
+ * Thrown by CompletionProvider/EmbeddingProvider implementations instead of a
+ * plain Error, so callers can decide whether retrying is ever going to help.
+ *
+ * `retriable: false` covers anything retrying can't fix: a malformed request
+ * (4xx), an auth failure, a response that fails schema validation — these
+ * indicate a bug on our side or a permanent rejection, and retrying just
+ * delays finding that out. `retriable: true` covers transient conditions:
+ * network failures/timeouts, 5xx, rate limiting (429) — and may carry
+ * `retryAfterMs` when the provider tells us exactly how long to wait
+ * (Anthropic's `retry-after` header), which callers should prefer over their
+ * own backoff schedule.
+ */
+export class ProviderError extends Error {
+  readonly retriable: boolean;
+  readonly retryAfterMs?: number;
+
+  constructor(message: string, retriable: boolean, retryAfterMs?: number, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'ProviderError';
+    this.retriable = retriable;
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
 export interface CompletionProvider {
   complete(prompt: string, options?: CompletionOptions): Promise<string>;
   completeJSON<T>(prompt: string, schema: z.ZodSchema<T>, options?: CompletionOptions): Promise<T>;
@@ -51,6 +76,8 @@ export async function fetchOrThrow(url: string, init: RequestInit, label: string
   } catch (err: unknown) {
     const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined;
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`${label} request failed: ${cause ?? message}`, { cause: err });
+    // Network failures (connection refused, DNS, timeout) are always
+    // transient — retriable regardless of provider.
+    throw new ProviderError(`${label} request failed: ${cause ?? message}`, true, undefined, { cause: err });
   }
 }

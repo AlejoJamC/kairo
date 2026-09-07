@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { InstrumentationClient } from "./_instrumentation-client";
 import { LanguageProvider } from "@/lib/i18n";
 
 export const metadata: Metadata = {
@@ -16,6 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="flex flex-col min-h-screen antialiased">
+        <InstrumentationClient />
         <LanguageProvider>{children}</LanguageProvider>
       </body>
     </html>

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "typeRoots": ["../../packages/intelligence/node_modules/@types"],
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts"]
+}

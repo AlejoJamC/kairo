@@ -13,7 +13,10 @@
   "dependencies": {
     "@kairo/env": "workspace:*",
     "@kairo/feature-flags": "workspace:*",
+    "@kairo/observability": "workspace:*",
+    "@opentelemetry/api": "^1.9.1",
     "@t3-oss/env-nextjs": "^0.13.11",
+    "@vercel/otel": "^2.1.3",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/supabase-js": "^2.105.3",
     "@tailwindcss/postcss": "^4.2.4",

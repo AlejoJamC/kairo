@@ -1,4 +1,5 @@
 import { computeFieldMetrics, computeBaseline } from './metrics';
+import { DIFFICULTY_LEVELS, type DifficultyLevel } from './difficulty';
 
 export interface ToneInflationResult {
   aggressive_or_frustrated_emails: number;
@@ -13,11 +14,9 @@ export interface DifficultyEntry {
   ticket_type_baseline_f1: number;
 }
 
-export interface DifficultyBreakdown {
-  easy: DifficultyEntry;
-  ambiguous: DifficultyEntry;
-  hard: DifficultyEntry;
-}
+// Record over DifficultyLevel rather than hand-listing easy/ambiguous/hard
+// again — can't drift from DIFFICULTY_LEVELS by construction.
+export type DifficultyBreakdown = Record<DifficultyLevel, DifficultyEntry>;
 
 export interface AnalysisRow {
   gtTone: string;
@@ -61,10 +60,9 @@ export function computeToneInflation(rows: AnalysisRow[]): ToneInflationResult {
  * The easy→hard gap quantifies the cost of classification ambiguity.
  */
 export function computeDifficultyBreakdown(rows: AnalysisRow[]): DifficultyBreakdown {
-  const levels = ['easy', 'ambiguous', 'hard'] as const;
   const result = {} as DifficultyBreakdown;
 
-  for (const level of levels) {
+  for (const level of DIFFICULTY_LEVELS) {
     const subset = rows.filter((r) => r.gtDifficulty === level);
     const truths = subset.map((r) => r.gtTicketType);
     const preds = subset.map((r) => r.predictedTicketType);

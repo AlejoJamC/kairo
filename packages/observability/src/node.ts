@@ -21,6 +21,17 @@ import { otlpTracesUrl } from './shared';
 export interface NodeTelemetryConfig {
   serviceName: string;
   otlpEndpoint?: string | undefined;
+  /**
+   * ClickStack's Ingestion API key (Team Settings -> API & Agents), sent as a
+   * raw `authorization` header — no `Bearer ` prefix (confirmed against a
+   * live instance). Without it every export 401s silently (the OTel SDK
+   * swallows exporter errors unless OTEL_LOG_LEVEL=debug is set) — dashboards
+   * look "just no traffic yet" instead of "broken". If omitted, falls back to
+   * the standard OTEL_EXPORTER_OTLP_HEADERS env var (read automatically by
+   * the exporter) — set one or the other, not required to pass explicitly
+   * here in a Node process.
+   */
+  ingestionApiKey?: string | undefined;
   langfusePublicKey?: string | undefined;
   langfuseSecretKey?: string | undefined;
 }
@@ -31,7 +42,12 @@ export function initNodeTelemetry(config: NodeTelemetryConfig): NodeSDK | null {
 
   if (config.otlpEndpoint) {
     spanProcessors.push(
-      new BatchSpanProcessor(new OTLPTraceExporter({ url: otlpTracesUrl(config.otlpEndpoint) })),
+      new BatchSpanProcessor(
+        new OTLPTraceExporter({
+          url: otlpTracesUrl(config.otlpEndpoint),
+          headers: config.ingestionApiKey ? { authorization: config.ingestionApiKey } : undefined,
+        }),
+      ),
     );
   }
 
