@@ -223,11 +223,14 @@ export async function GET(request: Request) {
 
   // ── Save Gmail OAuth tokens (oauth_credentials + support_channels) ──────
   // resolvedAccountId is guaranteed at this point for all scenarios.
-  // provider_token is present on every login (/bff/auth/google's
-  // `prompt: "consent"` forces Google to re-issue it every time, not just on
-  // first connect — the old comment here assumed otherwise). Credentials/
-  // channels are intentionally kept fresh on every login; only the pipeline
-  // dispatch below is gated to first-connect only.
+  // provider_token is only present when Google actually issued one — first
+  // connect, a newly-granted scope, or a re-consent after revocation.
+  // /bff/auth/google no longer forces `prompt: "consent"` on every login
+  // (that was the root cause of Tier 1 re-firing on every login — fixed at
+  // the source now, not just via !existingMembership below), so a routine
+  // returning-user login typically has no provider_token at all and this
+  // whole block is skipped — nothing needs refreshing when Google didn't
+  // reissue anything.
   // gmail_accounts dropped in ADR-022 Phase 5; oauth_credentials is now canonical.
   if (session.provider_token && user.email) {
     // ── Persist OAuth credentials — pipeline MUST NOT dispatch if this fails ─
