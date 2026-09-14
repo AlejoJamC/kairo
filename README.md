@@ -1,6 +1,6 @@
 # Kairo
 
-AI-powered support cockpit for support teams — classifies emails, routes tickets, and learns per-client behavior.
+Kairo is a bet that support triage is a trust problem, not a tooling problem. Support teams today choose between two bad defaults: a person reads every ticket, or a bot answers all of them. Kairo takes the position a good lead would take with a promising new hire: it decides what it can, delegates what it shouldn't, and gets better at telling the two apart. Every incoming message is read and classified on arrival — what it's about, how urgent it is, who should own it. When Kairo has a track record of being right on that kind of ticket, it acts without waiting: routes it, sets the priority, moves it along. When it doesn't, it puts the decision in front of a person and learns from what they do. Nobody configures that threshold; it comes from the system's own history with each client, expanding where corrections stop and contracting where they resume. What a support team gets is not a smarter queue to manage but a queue that already knows its own order: whoever opens it sees at a glance what to take first, what can wait, and what Kairo has already handled. It's built for companies that want AI to carry real responsibility in support without handing it the keys on day one — trust that is earned per client, per ticket, and revoked just as easily.
 
 🇨🇴 [Versión en español](docs/README.es.md)
 
