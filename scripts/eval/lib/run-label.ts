@@ -39,7 +39,17 @@ export interface RunLabel {
   stage: PipelineStage;
   /** Rubric version this run is executing. Filled by the runner at start. */
   promptVersion: string;
+  /**
+   * Where inference actually happened. Open-weight models are not a local-only
+   * category: the same model served from a laptop and from a remote GPU is the
+   * same model on very different hardware, and only the endpoint says which
+   * one produced a latency figure. Recorded on every row for that reason.
+   */
+  endpoint: string;
 }
+
+/** Ollama's default when OLLAMA_BASE_URL is unset. */
+export const LOCAL_OLLAMA = 'http://localhost:11434';
 
 export type PipelineStage = 'onboarding' | 'backfill';
 
@@ -62,11 +72,21 @@ export function resolveRunLabel(env: NodeJS.ProcessEnv = process.env): RunLabel 
   const stage: PipelineStage =
     env['EVAL_STAGE'] === 'onboarding' ? 'onboarding' : 'backfill';
 
-  // Both switches are part of the run's identity, so no run can ever
-  // overwrite the run it is meant to be compared against
+  const endpoint =
+    provider === 'anthropic'
+      ? 'https://api.anthropic.com'
+      : (env['OLLAMA_BASE_URL'] ?? LOCAL_OLLAMA);
+
+  // Every switch that changes what was measured joins the run's identity, so
+  // no run can overwrite the one it is meant to be compared against. A remote
+  // endpoint gets its own directory: same model, different hardware, and the
+  // latency of one says nothing about the other. The default endpoint adds no
+  // suffix, so existing run directories keep their names.
+  const remote = provider === 'ollama' && endpoint !== LOCAL_OLLAMA;
   const suffix =
     (stage === 'onboarding' ? '-onboarding' : '') +
-    (withoutContext ? '-nocontext' : '');
+    (withoutContext ? '-nocontext' : '') +
+    (remote ? `-at-${slugify(endpoint.replace(/^https?:\/\//, ''))}` : '');
 
   return {
     provider,
@@ -75,6 +95,7 @@ export function resolveRunLabel(env: NodeJS.ProcessEnv = process.env): RunLabel 
     withoutContext,
     stage,
     promptVersion: 'unknown',
+    endpoint,
   };
 }
 

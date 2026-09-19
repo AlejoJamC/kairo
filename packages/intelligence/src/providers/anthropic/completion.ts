@@ -134,6 +134,9 @@ export class AnthropicCompletionProvider implements CompletionProvider {
         promptTokens: data.usage?.input_tokens ?? null,
         completionTokens: data.usage?.output_tokens ?? null,
       },
+      // The Messages API reports no generation timer, so throughput cannot be
+      // derived the way it can for Ollama.
+      tokensPerSecond: null,
     };
   }
 
@@ -203,6 +206,9 @@ export class AnthropicCompletionProvider implements CompletionProvider {
         promptTokens: data.usage?.input_tokens ?? null,
         completionTokens: data.usage?.output_tokens ?? null,
       },
+      // The Messages API reports no generation timer, so throughput cannot be
+      // derived the way it can for Ollama.
+      tokensPerSecond: null,
     };
   }
 }

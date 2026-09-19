@@ -1,8 +1,11 @@
-import { classifyEmailWithMeta, stripQuotedThread } from "@kairo/intelligence";
+import { classifyEmailWithMeta } from "@kairo/intelligence";
+import type { TicketType } from "@kairo/intelligence";
+import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
+import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
-import { getFreshGmailToken, getGmailEmailByAccount } from "../../lib/gmail-token.js";
+import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
@@ -16,6 +19,7 @@ import { createSemaphore } from "../../lib/semaphore.js";
 import { withRetry } from "../../lib/retry.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
+import { backfillProposalStatus, autoApprovedTypes } from "./backfill-proposal-status.js";
 
 // KAI-191: tier3 writes priority/category onto every ticket it creates, but
 // used to leave no trace of that AI decision — the human correction path did,
@@ -194,9 +198,6 @@ function headersToRecord(headers: GmailHeader[]): Record<string, string> {
   return out;
 }
 
-// Cap body sent to the classifier — matches Tier 1's CLASSIFIER_BODY_MAX_CHARS.
-const CLASSIFIER_BODY_MAX_CHARS = 2000;
-
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Same decoder as Tier 1 (KAI-93): Gmail returns part data base64url-encoded,
 // and Buffer's "base64" decoder accepts URL-safe variants on both Node and Bun.
@@ -238,7 +239,12 @@ async function classifyWindow(
   userId: string,
   accountId: string,
   accessToken: string,
-  userEmail: string,
+  // The tenant fields the rubric needs, resolved once per run (KAI-93). Carries
+  // the business context on this stage; `tenantMailbox` is also what the
+  // pre-filter uses to tell the tenant's own address from a correspondent's.
+  classifierContext: ClassifierContext,
+  /** Classes this account may auto-approve. Resolved once per run, like the context. */
+  autoApproved: TicketType[],
   channelIntegrationId: string | null,
   daysFrom: number,
   daysTo: number
@@ -287,7 +293,7 @@ async function classifyWindow(
       headers: headersToRecord(headers),
       gmailCategories,
       mimeType: message.payload?.mimeType,
-      userEmail,
+      userEmail: classifierContext.tenantMailbox,
     });
 
     if (filterResult.status === "skip") {
@@ -340,12 +346,20 @@ async function classifyWindow(
     const threadId = message.threadId;
     const snippet = message.snippet ?? "";
     const { body_plain, body_html } = extractBody(message.payload);
-    const classifierBody = stripQuotedThread(body_plain || snippet)
-      .slice(0, CLASSIFIER_BODY_MAX_CHARS);
+    const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
 
     const llmStart = Date.now();
     const promise = withRetry(llmSemaphore, () =>
-      classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } }),
+      classifyEmailWithMeta(
+        {
+          subject,
+          body: classifierBody,
+          from,
+          tenantMailbox: classifierContext.tenantMailbox,
+          ...(classifierContext.businessContext ? { businessContext: classifierContext.businessContext } : {}),
+        },
+        { context: { accountId } },
+      ),
     )
       .then(async ({ result: classification, meta, prompt, promptVersion }) => {
         circuitBreaker.recordSuccess();
@@ -389,7 +403,13 @@ async function classifyWindow(
             confidence_score: classification.confidence,
             model_version: resolveModelVersion(),
             raw_llm_output: classification as Record<string, unknown>,
-            status: "auto_approved",
+            // Same rule as Tier 2 — see backfill-proposal-status.ts. Nobody is
+            // watching here either.
+            status: backfillProposalStatus({
+              type: classification.type,
+              businessContext: classifierContext.businessContext,
+              autoApprovalEnabled: autoApproved.includes(classification.type),
+            }),
           })
           .select("id")
           .single();
@@ -650,7 +670,7 @@ export const tier3Deferred = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Fetch Gmail credentials + channel integration id once
     // -----------------------------------------------------------------------
-    const { accessToken, userEmail, accountId, channelIntegrationId } = (await step.run(
+    const { accessToken, tenantMailbox, businessContext, autoApproved, accountId, channelIntegrationId } = (await step.run(
       "fetch-credentials",
       async () => {
         // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
@@ -665,30 +685,41 @@ export const tier3Deferred = inngest.createFunction(
         const accountId = memberRow?.account_id;
         if (!accountId) {
           console.warn(`[tier3] account_id missing for user ${userId} — aborting`);
-          return { accessToken: null, userEmail: "", accountId: "", channelIntegrationId: null };
+          return { accessToken: null, tenantMailbox: "", businessContext: "", autoApproved: [] as string[], accountId: "", channelIntegrationId: null };
         }
 
-        const [freshToken, email, channelRow] = await Promise.all([
+        const [freshToken, ctx, autoApproved, channelRow] = await Promise.all([
           getFreshGmailToken(accountId).catch(() => null),
-          getGmailEmailByAccount(accountId),
+          resolveClassifierContext("backfill", accountId),
+          autoApprovedTypes(accountId),
           supabase.from("channel_integrations").select("id").eq("account_id", accountId).eq("provider", "gmail").limit(1).single(),
         ]);
 
         if (!freshToken) {
           console.warn(`[tier3] No Gmail credentials found for account ${accountId}`);
-          return { accessToken: null, userEmail: "", accountId, channelIntegrationId: null };
+          return { accessToken: null, tenantMailbox: "", businessContext: "", autoApproved: [] as string[], accountId, channelIntegrationId: null };
         }
 
         return {
           accessToken: freshToken,
-          userEmail: email,
+          tenantMailbox: ctx.tenantMailbox,
+          businessContext: ctx.businessContext ?? "",
+          autoApproved: autoApproved as string[],
           accountId,
           channelIntegrationId: channelRow.data?.id ?? null,
         };
       }
-    )) as { accessToken: string | null; userEmail: string; accountId: string; channelIntegrationId: string | null };
+    )) as { accessToken: string | null; tenantMailbox: string; businessContext: string; autoApproved: string[]; accountId: string; channelIntegrationId: string | null };
 
     if (!accessToken || !accountId) return;
+
+    // Rebuilt on this side of the step boundary: Inngest serializes step output
+    // to JSON, so an absent optional field has to travel as "" and come back as
+    // absent, or every window would send an empty business_context block.
+    const classifierContext: ClassifierContext = {
+      tenantMailbox,
+      ...(businessContext ? { businessContext } : {}),
+    };
 
     // -----------------------------------------------------------------------
     // Batch A: 16–30 days
@@ -698,7 +729,8 @@ export const tier3Deferred = inngest.createFunction(
         userId,
         accountId,
         accessToken,
-        userEmail,
+        classifierContext,
+        autoApproved as TicketType[],
         channelIntegrationId,
         16,
         30
@@ -713,7 +745,8 @@ export const tier3Deferred = inngest.createFunction(
         userId,
         accountId,
         accessToken,
-        userEmail,
+        classifierContext,
+        autoApproved as TicketType[],
         channelIntegrationId,
         31,
         60
@@ -728,7 +761,8 @@ export const tier3Deferred = inngest.createFunction(
         userId,
         accountId,
         accessToken,
-        userEmail,
+        classifierContext,
+        autoApproved as TicketType[],
         channelIntegrationId,
         61,
         env.MAX_EMAIL_AGE_DAYS

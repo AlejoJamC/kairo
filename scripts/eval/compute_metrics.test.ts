@@ -14,8 +14,7 @@ import {
 const HEADERS = [
   "email_id",
   "tipo_ticket_final", "prioridad_final", "categoria_final",
-  "tono_final", "urgencia_final",
-  "alexandra_dificultad", "alejandro_dificultad",
+  "tono_final_v130", "urgencia_final", "difficulty_final",
 ].join(",");
 
 function sheet(...rows: string[]): string {
@@ -51,7 +50,7 @@ describe("parseCsv", () => {
 describe("adaptGroundTruth", () => {
   it("renames the Spanish consensus columns to canonical field names", () => {
     const out = adaptGroundTruth(parseCsv(
-      sheet("1,support,P1,technical,frustrated,high,easy,easy"),
+      sheet("1,support,P1,technical,frustrated,high,easy"),
     ));
 
     expect(out.headers).toEqual([
@@ -70,7 +69,7 @@ describe("adaptGroundTruth", () => {
 
   it("passes values through verbatim — no lowercasing", () => {
     const out = adaptGroundTruth(parseCsv(
-      sheet("1,support,P1,technical,neutral,low,easy,easy"),
+      sheet("1,support,P1,technical,neutral,low,easy"),
     ));
 
     // Lowercasing here would turn P1 into p1 and break the join with predictions
@@ -79,27 +78,31 @@ describe("adaptGroundTruth", () => {
 
   it("drops Excel-export ghost rows with an empty email_id", () => {
     const out = adaptGroundTruth(parseCsv(sheet(
-      "1,support,P1,technical,neutral,low,easy,easy",
-      ",,,,,,,",
-      "2,internal,P3,general,neutral,low,easy,easy",
+      "1,support,P1,technical,neutral,low,easy",
+      ",,,,,,",
+      "2,internal,P3,general,neutral,low,easy",
     )));
 
     expect(out.rows.map((r) => r["email_id"])).toEqual(["1", "2"]);
   });
 
-  it("derives difficulty from the harsher of the two annotators", () => {
+  // `difficulty` used to have no consensus column: the adapter took the harsher
+  // of the two annotators and called that the answer. That is a judgement, and
+  // judgements on this sheet belong to the people making them -- every other
+  // field is resolved by them, and this one was resolved by an `indexOf`.
+  it("reads difficulty from its consensus column like every other field", () => {
     const out = adaptGroundTruth(parseCsv(sheet(
-      "1,support,P1,technical,neutral,low,easy,hard",
-      "2,support,P1,technical,neutral,low,ambiguous,easy",
-      "3,support,P1,technical,neutral,low,easy,easy",
+      "1,support,P1,technical,neutral,low,easy",
+      "2,support,P1,technical,neutral,low,ambiguous",
+      "3,support,P1,technical,neutral,low,hard",
     )));
 
-    expect(out.rows.map((r) => r["difficulty"])).toEqual(["hard", "ambiguous", "easy"]);
+    expect(out.rows.map((r) => r["difficulty"])).toEqual(["easy", "ambiguous", "hard"]);
   });
 
-  it("leaves difficulty empty when neither annotator rated it", () => {
+  it("leaves difficulty empty when the sheet did not resolve it", () => {
     const out = adaptGroundTruth(parseCsv(
-      sheet("1,support,P1,technical,neutral,low,,"),
+      sheet("1,support,P1,technical,neutral,low,"),
     ));
 
     expect(out.rows[0]!["difficulty"]).toBe("");
