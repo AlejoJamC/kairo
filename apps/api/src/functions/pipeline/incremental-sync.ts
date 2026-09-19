@@ -1,5 +1,5 @@
 import { classifyEmailWithMeta } from "@kairo/intelligence";
-import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
+import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -364,6 +364,7 @@ export const incrementalSync = inngest.createFunction(
             from,
             tenantMailbox: userEmail,
             ...(businessContext ? { businessContext } : {}),
+            ...classifierEnvelope(filterResult.facts),
           },
           { context: { accountId } },
         )

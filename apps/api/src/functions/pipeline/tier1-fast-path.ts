@@ -1,5 +1,5 @@
 import { classifyEmailWithMeta, detectEscalationTriggers } from "@kairo/intelligence";
-import { buildClassifierBody } from "../../lib/classifier-input.js";
+import { buildClassifierBody, classifierEnvelope } from "../../lib/classifier-input.js";
 import { tier1ProposalStatus } from "./tier1-proposal-status.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { getFlag } from "@kairo/feature-flags";
@@ -349,7 +349,18 @@ export const tier1FastPath = inngest.createFunction(
 
         const llmStart = Date.now();
         const promise = withRetry(llmSemaphore, () =>
-          classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } }),
+          classifyEmailWithMeta(
+            {
+              subject,
+              body: classifierBody,
+              from,
+              tenantMailbox: userEmail,
+              // KAI-45 — recipients and thread position, read once by the
+              // pre-filter and previously discarded.
+              ...classifierEnvelope(filterResult.facts),
+            },
+            { context: { accountId } },
+          ),
         )
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             circuitBreaker.recordSuccess();

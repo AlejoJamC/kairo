@@ -13,8 +13,9 @@
 // path can be named the same thing.
 // ---------------------------------------------------------------------------
 
-import { stripQuotedThread } from "@kairo/intelligence";
+import { stripQuotedThread, type EmailMessage } from "@kairo/intelligence";
 
+import { type MailFacts } from "./email/mail-facts.js";
 import { getGmailEmailByAccount } from "./gmail-token.js";
 import { supabase } from "./supabase.js";
 
@@ -81,6 +82,43 @@ export function buildClassifierBody(
 // argument the caller gets to pass. That is the whole point of routing this
 // through here.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// The envelope fields, from the facts the pre-filter already read.
+//
+// `EmailMessage` has carried `to`, `cc` and `threadDepth` since the rubric
+// started saying `internal` is not decidable without them — and not one of the
+// seven call sites ever populated a single one. Every production classification
+// so far has rendered `Para: (no disponible)`, `Copia: (no disponible)`,
+// `Mensajes previos en el hilo: (no disponible)`, while the headers that answer
+// all three sat in the same function that decided whether to classify at all.
+//
+// Lives here rather than at each call site for the reason in this module's
+// header: five paths that each assemble classifier input by hand is how the
+// four regimes this file exists to collapse came about in the first place.
+// ---------------------------------------------------------------------------
+
+/**
+ * The recipient and thread fields to hand the classifier, from a
+ * {@link MailFacts} produced by `preFilterEmail`.
+ *
+ * A header that did not arrive is omitted rather than sent as an empty string:
+ * the prompt renders an omitted field as `(no disponible)` and tells the model
+ * not to invent it, which is true, whereas an empty `Para:` reads as a message
+ * with no recipients.
+ */
+export function classifierEnvelope(
+  facts: MailFacts
+): Pick<EmailMessage, "to" | "cc" | "threadDepth"> {
+  return {
+    ...(facts.toHeader ? { to: facts.toHeader } : {}),
+    ...(facts.ccHeader ? { cc: facts.ccHeader } : {}),
+    // `References` lists every ancestor, so its length is how many messages
+    // precede this one. Absent header means this message opens the thread —
+    // which is a known 0, not an unknown, so it is always sent.
+    threadDepth: facts.referencesCount,
+  };
+}
 
 export interface ClassifierContext {
   /** The mailbox Kairo is reading. Sent by every stage. */

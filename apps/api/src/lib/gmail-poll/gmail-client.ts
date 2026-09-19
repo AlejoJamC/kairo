@@ -16,6 +16,13 @@ import {
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1";
 
+// The headers `format=metadata` returns. Unlisted headers are simply absent
+// from the response, so this list is the hard limit on what extractMailFacts
+// can know about a polled message — the four pipeline tiers use `format=full`
+// and receive everything regardless.
+//
+// Widening it is free: Gmail charges 5 quota units per messages.get whatever
+// the format, and only the payload size changes.
 const METADATA_HEADERS = [
   "From",
   "Subject",
@@ -27,6 +34,32 @@ const METADATA_HEADERS = [
   // KAI-248 Grupo 1: RFC 2822 Message-ID — persisted to messages.message_id_header
   // so outbound replies can set In-Reply-To / References (mirrors tier1-fast-path).
   "Message-ID",
+
+  // KAI-45 — the envelope facts the classifier is told instead of asked to
+  // infer. Every one of these was previously unavailable to this path, so the
+  // corresponding fact came back null no matter what the message carried.
+  //
+  // To / Cc      recipient count, and whether the tenant is among them. The
+  //              EmailMessage type has carried `to` and `cc` since the rubric
+  //              started claiming `internal` is undecidable without them, and
+  //              no ingestion path has ever populated either.
+  // References   thread depth as the headers report it.
+  // X-Spam-Status
+  //              the receiving server's own verdict. On the KAI-93 coverage
+  //              corpus it separates all ten spam emails from the other thirty
+  //              with no error either way.
+  // Auto-Submitted
+  //              RFC 3834 machine-generated mail that sets no Precedence.
+  // Authentication-Results
+  //              SPF/DKIM/DMARC — a sender claiming the tenant's own domain and
+  //              failing DMARC is the forgery case the same-domain rule used to
+  //              hide (see routing-policy.ts 2.0.0).
+  "To",
+  "Cc",
+  "References",
+  "X-Spam-Status",
+  "Auto-Submitted",
+  "Authentication-Results",
 ];
 
 async function gmailGet<T>(

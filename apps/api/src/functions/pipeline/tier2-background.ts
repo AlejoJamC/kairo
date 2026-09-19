@@ -1,5 +1,5 @@
 import { classifyEmailWithMeta } from "@kairo/intelligence";
-import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
+import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
@@ -387,6 +387,7 @@ export const tier2Background = inngest.createFunction(
               from,
               tenantMailbox: userEmail,
               ...(businessContext ? { businessContext } : {}),
+              ...classifierEnvelope(filterResult.facts),
             },
             { context: { accountId } },
           ),

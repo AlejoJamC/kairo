@@ -32,6 +32,156 @@ const UNAVAILABLE: Record<PromptLang, string> = {
   pt: '(indisponível)',
 };
 
+// ---------------------------------------------------------------------------
+// KAI-45 — the envelope, stated rather than inferred.
+//
+// The rubric used to spend paragraphs asking the model to work out from prose
+// whether `De` and `Para` were the same mailbox (es.md:44), whether a message
+// came from the house or from outside, whether it looked automated. Every one
+// of those was a string comparison apps/api had already done and thrown away.
+//
+// Stating them costs ~60 tokens and removes ~25 lines of rules. Two properties
+// matter and are load-bearing:
+//
+//   - A fact that is not known is OMITTED, never rendered as a negative. "the
+//     provider did not scan this" and "the provider says it is clean" are
+//     different, and a rubric that conflates them teaches the model to trust a
+//     header nobody fetched.
+//   - The block says nothing about what the facts IMPLY. Provenance does not
+//     decide `internal`: on the KAI-93 coverage corpus the eleven messages sent
+//     between the company's own mailboxes carry three different labels. The
+//     envelope is evidence, and the rubric still does the deciding.
+// ---------------------------------------------------------------------------
+
+type FactLabels = {
+  heading: string;
+  sender: string;
+  senderIsTenant: string;
+  senderIsSameCompany: string;
+  senderIsExternal: string;
+  recipients: string;
+  tenantAmongRecipients: string;
+  spam: string;
+  spamPositive: (score: number | null) => string;
+  spamNegative: string;
+  bulk: string;
+  automated: string;
+  auth: string;
+  authPass: string;
+  authFail: string;
+  yes: string;
+  no: string;
+};
+
+const FACT_LABELS: Record<PromptLang, FactLabels> = {
+  es: {
+    heading:
+      'Hechos del sobre, verificados por el sistema. No los deduzcas ni los contradigas; ' +
+      'lo que no aparece aquí es que no se sabe, no que sea falso:',
+    sender: 'Remitente',
+    senderIsTenant: 'la misma casilla que Kairo lee',
+    senderIsSameCompany: 'otra casilla de la misma empresa',
+    senderIsExternal: 'ajeno a la empresa',
+    recipients: 'Destinatarios',
+    tenantAmongRecipients: 'La casilla que Kairo lee está entre los destinatarios',
+    spam: 'Filtro de spam del proveedor',
+    spamPositive: (score) => (score === null ? 'positivo' : `positivo (puntaje ${score})`),
+    spamNegative: 'negativo',
+    bulk: 'Envío masivo',
+    automated: 'Remitente automático',
+    auth: 'Autenticación del remitente',
+    authPass: 'correcta',
+    authFail: 'fallida',
+    yes: 'sí',
+    no: 'no',
+  },
+  en: {
+    heading:
+      'Envelope facts, verified by the system. Do not infer or contradict them; ' +
+      'anything missing here is unknown, not false:',
+    sender: 'Sender',
+    senderIsTenant: 'the same mailbox Kairo reads',
+    senderIsSameCompany: 'another mailbox of the same company',
+    senderIsExternal: 'outside the company',
+    recipients: 'Recipients',
+    tenantAmongRecipients: 'The mailbox Kairo reads is among the recipients',
+    spam: "Provider's spam filter",
+    spamPositive: (score) => (score === null ? 'positive' : `positive (score ${score})`),
+    spamNegative: 'negative',
+    bulk: 'Bulk mailing',
+    automated: 'Automated sender',
+    auth: 'Sender authentication',
+    authPass: 'pass',
+    authFail: 'fail',
+    yes: 'yes',
+    no: 'no',
+  },
+  pt: {
+    heading:
+      'Fatos do envelope, verificados pelo sistema. Não os deduza nem os contradiga; ' +
+      'o que não aparece aqui é desconhecido, não falso:',
+    sender: 'Remetente',
+    senderIsTenant: 'a mesma caixa que o Kairo lê',
+    senderIsSameCompany: 'outra caixa da mesma empresa',
+    senderIsExternal: 'externo à empresa',
+    recipients: 'Destinatários',
+    tenantAmongRecipients: 'A caixa que o Kairo lê está entre os destinatários',
+    spam: 'Filtro de spam do provedor',
+    spamPositive: (score) => (score === null ? 'positivo' : `positivo (pontuação ${score})`),
+    spamNegative: 'negativo',
+    bulk: 'Envio em massa',
+    automated: 'Remetente automático',
+    auth: 'Autenticação do remetente',
+    authPass: 'correta',
+    authFail: 'falhou',
+    yes: 'sim',
+    no: 'não',
+  },
+};
+
+/**
+ * The envelope block, or an empty string when the caller had no facts to give —
+ * the three call sites that reclassify a stored ticket have no headers to read,
+ * and an empty block is more honest than a block full of unknowns.
+ */
+function renderFacts(facts: EmailMessage['facts'], lang: PromptLang): string {
+  if (!facts) return '';
+  const l = FACT_LABELS[lang];
+  const bool = (v: boolean) => (v ? l.yes : l.no);
+  const lines: string[] = [];
+
+  lines.push(
+    `- ${l.sender}: ${
+      facts.senderIsTenantAddress
+        ? l.senderIsTenant
+        : facts.senderIsTenantDomain
+          ? l.senderIsSameCompany
+          : l.senderIsExternal
+    }`,
+  );
+
+  // 0 means neither To nor Cc arrived, which is unknown rather than "nobody".
+  if (facts.recipientCount > 0) {
+    lines.push(`- ${l.recipients}: ${facts.recipientCount}`);
+    lines.push(`- ${l.tenantAmongRecipients}: ${bool(facts.tenantInRecipients)}`);
+  }
+
+  if (facts.spamFiltered !== null) {
+    lines.push(
+      `- ${l.spam}: ${facts.spamFiltered ? l.spamPositive(facts.spamScore) : l.spamNegative}`,
+    );
+  }
+
+  lines.push(`- ${l.bulk}: ${bool(facts.isBulk)}`);
+  lines.push(`- ${l.automated}: ${bool(facts.isAutomatedSender)}`);
+
+  if (facts.authResult !== null && facts.authResult !== 'none') {
+    lines.push(`- ${l.auth}: ${facts.authResult === 'pass' ? l.authPass : l.authFail}`);
+  }
+
+  return `${l.heading}\n${lines.join('\n')}`;
+}
+
 function renderAttachments(
   attachments: EmailMessage['attachments'],
   unavailable: string,
@@ -62,6 +212,16 @@ export async function buildPrompt(
       message.threadDepth === undefined ? na : String(message.threadDepth),
     )
     .replaceAll('{{attachments}}', renderAttachments(message.attachments, na))
+    // The block is optional, so it takes its own surrounding blank lines with
+    // it when there is nothing to say — a caller with no headers should get the
+    // prompt as it read before KAI-45, not one with a hole in it.
+    .replace(
+      /\n*\{\{envelope_facts\}\}\n*/,
+      () => {
+        const block = renderFacts(message.facts, lang);
+        return block ? `\n\n${block}\n\n` : '\n';
+      },
+    )
     .replaceAll('{{body}}', message.body);
 }
 

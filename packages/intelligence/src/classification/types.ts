@@ -30,6 +30,17 @@ export interface EmailMessage {
   tenantMailbox?: string;
 
   /**
+   * What the envelope states outright, read by apps/api before the message got
+   * here (lib/email/mail-facts.ts).
+   *
+   * Optional because three call sites classify a stored ticket rather than a
+   * Gmail message and have no headers to read. The prompt renders whatever is
+   * present and says nothing about the rest — the absence of a fact is never
+   * presented to the model as a negative one.
+   */
+  facts?: MailFacts;
+
+  /**
    * What the tenant does for its customers, in one or two sentences. This is
    * what separates `support` from `internal`: an email is support when it can
    * be tied to the service the company provides, and internal when it is the

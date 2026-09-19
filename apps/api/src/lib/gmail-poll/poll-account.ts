@@ -19,7 +19,7 @@ import {
 import { recordClassificationFailure } from "../classification-outcome.js";
 import { env } from "../../env.js";
 // Pure function, no I/O — safe to import directly rather than inject.
-import { buildClassifierBody } from "../classifier-input.js";
+import { buildClassifierBody, classifierEnvelope } from "../classifier-input.js";
 import type { ClassifierContext } from "../classifier-input.js";
 import { headerValue, headersToRecord } from "../email/headers.js";
 
@@ -212,6 +212,7 @@ async function ingestMessages(
         body: buildClassifierBody("backfill", null, snippet),
         from,
         ...classifierContext,
+        ...classifierEnvelope(filterResult.facts),
       }, { context: { accountId } });
       const classifiedAt = new Date().toISOString();
 

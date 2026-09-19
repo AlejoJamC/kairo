@@ -1,6 +1,6 @@
 import { classifyEmailWithMeta } from "@kairo/intelligence";
 import type { TicketType } from "@kairo/intelligence";
-import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
+import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -340,6 +340,7 @@ async function classifyWindow(
           from,
           tenantMailbox: classifierContext.tenantMailbox,
           ...(classifierContext.businessContext ? { businessContext: classifierContext.businessContext } : {}),
+          ...classifierEnvelope(filterResult.facts),
         },
         { context: { accountId } },
       ),
