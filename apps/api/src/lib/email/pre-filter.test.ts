@@ -71,20 +71,30 @@ describe("Rule: mailing_list", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Rule 3: outbound
+// Rule 3: same-domain mail — REMOVED in KAI-45 F0b (routing policy 1.1.0)
+//
+// This block used to assert that mail from the tenant's own domain was skipped
+// with skip_reason "outbound". The rule never detected outbound: this pipeline
+// only reads an inbox, and real outbound is messages.direction='outbound'
+// written by the reply flow. What it dropped was the company's own
+// correspondence that arrived — and with it 5 of the 10 emails the KAI-93
+// coverage corpus labels `internal`.
+//
+// The cases are kept, inverted, so the removal stays pinned: a future change
+// that reintroduces the rule fails here rather than quietly re-emptying the
+// class.
 // ---------------------------------------------------------------------------
-describe("Rule: outbound", () => {
-  it("skips email where sender domain matches user domain", () => {
+describe("Rule: same-domain mail is classified, not skipped", () => {
+  it("classifies mail from a sibling mailbox of the tenant's company", () => {
     const result = preFilterEmail({
       ...BASE,
       from: "colleague@mycompany.com",
       userEmail: "support@mycompany.com",
     });
-    expect(result.status).toBe("skip");
-    expect(result.skip_reason).toBe("outbound");
+    expect(result.status).toBe("relevant");
   });
 
-  it("does not skip email from a different domain", () => {
+  it("classifies mail from a different domain, as before", () => {
     const result = preFilterEmail({
       ...BASE,
       from: "alice@otherdomain.com",
@@ -93,14 +103,25 @@ describe("Rule: outbound", () => {
     expect(result.status).toBe("relevant");
   });
 
-  it("handles display-name format in From header", () => {
+  it("classifies a copy of the tenant's own message", () => {
     const result = preFilterEmail({
       ...BASE,
-      from: "Colleague Name <col@mycompany.com>",
-      userEmail: "me@mycompany.com",
+      from: "Support <support@mycompany.com>",
+      userEmail: "support@mycompany.com",
+    });
+    expect(result.status).toBe("relevant");
+  });
+
+  // The rule ran ahead of everything, so a same-domain no-reply@ was reported
+  // as "outbound". Now it reaches rule 4 and is named for what it is.
+  it("reports the real reason when a same-domain sender is also automated", () => {
+    const result = preFilterEmail({
+      ...BASE,
+      from: "noreply@mycompany.com",
+      userEmail: "support@mycompany.com",
     });
     expect(result.status).toBe("skip");
-    expect(result.skip_reason).toBe("outbound");
+    expect(result.skip_reason).toBe("automated_sender");
   });
 });
 
@@ -233,15 +254,17 @@ describe("Edge cases", () => {
     expect(result.relevance_signals).toContain("in_reply_to");
   });
 
-  it("outbound sender domain + urgency keyword → outbound wins (skip)", () => {
+  // Used to assert the opposite: the same-domain rule outranked every override,
+  // so an urgent subject from a colleague was still dropped. Removed in F0b.
+  it("same-domain sender + urgency keyword → classified", () => {
     const result = preFilterEmail({
       ...BASE,
       from: "colleague@mycompany.com",
       subject: "urgent: need help with production",
       userEmail: "support@mycompany.com",
     });
-    expect(result.status).toBe("skip");
-    expect(result.skip_reason).toBe("outbound");
+    expect(result.status).toBe("relevant");
+    expect(result.relevance_signals).toContain("urgency_keyword");
   });
 });
 

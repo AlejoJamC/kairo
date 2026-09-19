@@ -27,7 +27,6 @@ import type { MailFacts } from "./mail-facts.js";
  * new reason belongs here rather than inline at a call site.
  */
 export const SKIP_REASONS = [
-  "outbound",
   "automated_sender",
   "mailing_list",
   "system_notification",
@@ -48,7 +47,12 @@ export type Route =
  * production row that disagree are indistinguishable from a model that changed
  * its mind.
  */
-export const ROUTING_POLICY_VERSION = "1.0.0";
+export const ROUTING_POLICY_VERSION = "1.1.0";
+
+// 1.1.0 (KAI-45 F0b) — the `outbound` rule is gone. See rule 1 below for what
+//   it actually did and why it was removed. Historical `messages.skip_reason`
+//   rows still carry the string; nothing emits it any more.
+// 1.0.0 — the eight rules as they were inside preFilterEmail since KAI-206.
 
 /**
  * Signals describing a message that is being classified.
@@ -75,17 +79,26 @@ function relevanceSignals(facts: MailFacts, overrides: string[]): string[] {
  * so `facts.isBulk`, which unions all three, would silently widen rule 6.
  */
 export function resolveRoute(facts: MailFacts): Route {
-  // 1. The tenant's own domain. Highest priority, not overridable by any
-  //    pass-through signal.
+  // 1. REMOVED in 2.0.0 — the rule that dropped mail from the tenant's own
+  //    domain, unconditionally and ahead of every override.
   //
-  //    Named `outbound`, but it does not detect outbound: real outbound is
-  //    `messages.direction = 'outbound'` written by the reply flow (ADR-023),
-  //    which never reaches this function. What this catches is the company's
-  //    own mail that ARRIVED in the monitored inbox — one corporate mailbox
-  //    writing to another, or a copy of the house's own thread.
-  if (facts.senderIsTenantDomain || facts.senderIsTenantAddress) {
-    return { kind: "skip", reason: "outbound", signals: [] };
-  }
+  //    It was named `outbound` and it did not detect outbound. Real outbound is
+  //    `messages.direction = 'outbound'`, written by the reply flow (ADR-023)
+  //    and by the manual ticket module; neither reaches this function, and this
+  //    pipeline only ever reads an inbox. What the rule actually caught was the
+  //    company's own mail that ARRIVED — one corporate mailbox writing to
+  //    another (125: customer service writing to the dispatcher), or a copy of the
+  //    house's own thread pulled in by the POP fetch.
+  //
+  //    Measured on the KAI-93 coverage corpus before removing it: of the ten
+  //    emails labelled `internal`, the rule dropped five and `automated_sender`
+  //    dropped three, so two reached the classifier. `internal` is the class
+  //    that report shows the models recognising ~90% of the time, and it barely
+  //    existed in production.
+  //
+  //    `senderIsTenantDomain` and `senderIsTenantAddress` survive as facts: they
+  //    are what tells `internal` from `support`, and F1 hands them to the model
+  //    instead of asking it to infer them from prose (es.md:44).
 
   // 2. Pass-through overrides. An urgent subject or a reply in an existing
   //    thread beats every remaining skip rule.

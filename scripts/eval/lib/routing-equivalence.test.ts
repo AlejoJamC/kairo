@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// KAI-45 F0 — the routing decision, pinned against real mail.
+// KAI-45 F0/F0b — the routing decision, pinned against real mail.
 //
 // `preFilterEmail` ran in all five ingestion paths and had exactly one test
 // file: 43 cases built from inline object literals. Not one of them was a real
@@ -8,17 +8,19 @@
 // carries — forwarded through a POP fetch, quoted-printable, Bcc-only, the
 // tenant's address appearing twice in `To`.
 //
-// This holds the extracted layer (mail-facts.ts + routing-policy.ts) against
-// all 90 .eml in both corpora. It was written by running the pre-KAI-45
-// `preFilterEmail` over the same 90 files and recording its verdict: the table
-// below IS the old behaviour, so a green run is the equivalence proof for the
-// refactor.
+// This file holds two tables over all 90 .eml in both corpora:
 //
-// Once F0 is in, its job changes: it becomes the regression suite for the
-// routing policy. A rule that is added, removed or reordered must show up here
-// as an enumerated diff, one email at a time, and `ROUTING_POLICY_VERSION`
-// moves with it. That is the whole point of taking the rules out of eight
-// early returns — a policy change stops being invisible.
+//   POLICY_1_0  what the pre-KAI-45 pre-filter answered, recorded by running it
+//   EXPECTED    what the extracted layer answers now
+//
+// F0 was a pure refactor and the two were identical, which is what proved the
+// extraction. F0b then removed one rule, and the diff between the tables is the
+// entire behavioural change — enumerated, not summarised.
+//
+// From here the file is the regression suite for the policy. A rule added,
+// removed or reordered must show up as a named diff and move
+// `ROUTING_POLICY_VERSION` with it. That is the point of taking the rules out
+// of eight early returns: a policy change stops being invisible.
 // ---------------------------------------------------------------------------
 
 import { describe, it, expect } from 'bun:test';
@@ -86,9 +88,13 @@ function emlFiles(corpusEmlDir: string): string[] {
     .sort();
 }
 
-// The verdict the pre-KAI-45 pre-filter gave each message. Written by running
-// it; not by predicting it.
-const EXPECTED: Record<string, Record<string, string>> = {
+/**
+ * The verdict the pre-KAI-45 pre-filter gave each message. Written by running
+ * it against these files, not by predicting it.
+ *
+ * Kept after F0b so the rule removal has something to be a diff against.
+ */
+const POLICY_1_0: Record<string, Record<string, string>> = {
   main: {
     '001': 'outbound',  '002': 'classify', '003': 'classify', '004': 'outbound', '005': 'outbound',
     '006': 'classify',  '007': 'classify', '008': 'classify', '009': 'classify', '010': 'outbound',
@@ -113,7 +119,21 @@ const EXPECTED: Record<string, Record<string, string>> = {
   },
 };
 
-describe('routing policy — equivalence with the pre-KAI-45 pre-filter', () => {
+/**
+ * What the policy answers today. F0b (routing policy 1.1.0) removed the rule
+ * that dropped mail from the tenant's own domain, so every `outbound` verdict
+ * became `classify` and nothing else moved.
+ */
+const EXPECTED: Record<string, Record<string, string>> = Object.fromEntries(
+  Object.entries(POLICY_1_0).map(([corpus, rows]) => [
+    corpus,
+    Object.fromEntries(
+      Object.entries(rows).map(([id, v]) => [id, v === 'outbound' ? 'classify' : v]),
+    ),
+  ]),
+);
+
+describe('routing policy — verdict per message', () => {
   for (const corpus of [CORPORA.main, CORPORA.coverage]) {
     const expected = EXPECTED[corpus.id]!;
 
@@ -132,30 +152,48 @@ describe('routing policy — equivalence with the pre-KAI-45 pre-filter', () => 
   }
 });
 
-describe('routing policy — what the gate does to the corpus', () => {
-  // Stated as counts so a rule change shows its blast radius in one number
-  // before anyone reads 90 individual cases.
-  function tally(corpusId: 'main' | 'coverage'): Record<string, number> {
-    const out: Record<string, number> = {};
-    for (const want of Object.values(EXPECTED[corpusId]!)) out[want] = (out[want] ?? 0) + 1;
-    return out;
-  }
+describe('routing policy — the F0b diff, enumerated', () => {
+  const changed = Object.entries(POLICY_1_0).flatMap(([corpus, rows]) =>
+    Object.keys(rows)
+      .filter((id) => rows[id] !== EXPECTED[corpus]![id])
+      .map((id) => `${corpus}/${id}: ${rows[id]} → ${EXPECTED[corpus]![id]}`),
+  );
 
-  it('drops 21 of the 90 as same-domain mail the tenant received', () => {
-    expect(tally('main')['outbound']).toBe(7);
-    expect(tally('coverage')['outbound']).toBe(14);
+  it('changes exactly the 21 messages the removed rule was dropping', () => {
+    expect(changed).toHaveLength(21);
+    expect(changed.every((c) => c.includes('outbound → classify'))).toBe(true);
   });
 
-  it('reaches the model on 63 of the 90 — 21 same-domain, 3 lists and 3 automated are gated', () => {
-    expect(tally('main')['classify']! + tally('coverage')['classify']!).toBe(63);
+  it('moves no message between two skip reasons', () => {
+    for (const [corpus, rows] of Object.entries(POLICY_1_0)) {
+      for (const [id, before] of Object.entries(rows)) {
+        const after = EXPECTED[corpus]![id];
+        if (before !== after) expect([before, after]).toEqual(['outbound', 'classify']);
+      }
+    }
   });
 
-  // The measurement that motivates F0b: `internal` is the class the KAI-93
-  // report shows the models recognising ~90% of the time, and the gate removes
-  // most of it before any model is asked.
-  it('removes 8 of the 10 ground-truth `internal` emails before the classifier', () => {
+  it('reaches the model on 84 of the 90, up from 63', () => {
+    const count = (table: typeof EXPECTED) =>
+      Object.values(table).reduce(
+        (n, rows) => n + Object.values(rows).filter((v) => v === 'classify').length,
+        0,
+      );
+    expect(count(POLICY_1_0)).toBe(63);
+    expect(count(EXPECTED)).toBe(84);
+  });
+
+  // The measurement that motivated F0b. `internal` is the class the KAI-93
+  // report shows the models recognising ~90% of the time, and the old policy
+  // removed most of it before any model was asked.
+  it('takes `internal` from 2 of 10 reaching the classifier to 7 of 10', () => {
     const internalIds = ['131', '132', '133', '134', '135', '136', '137', '138', '139', '140'];
-    const reaching = internalIds.filter((id) => EXPECTED['coverage']![id] === 'classify');
-    expect(reaching).toEqual(['131', '136']);
+    const reaching = (table: typeof EXPECTED) =>
+      internalIds.filter((id) => table['coverage']![id] === 'classify');
+
+    expect(reaching(POLICY_1_0)).toEqual(['131', '136']);
+    // 132, 133 and 140 come from the app's own notifier — still gated, as automated
+    // senders rather than as same-domain mail.
+    expect(reaching(EXPECTED)).toEqual(['131', '134', '135', '136', '137', '138', '139']);
   });
 });
