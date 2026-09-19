@@ -19,6 +19,7 @@ import { withRetry } from "../../lib/retry.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
 import { backfillProposalStatus, autoApprovedTypes } from "./backfill-proposal-status.js";
+import { headerValue, headersToRecord, type GmailHeader } from "../../lib/email/headers.js";
 
 // KAI-191: tier2 writes priority/category onto every ticket it creates, but
 // used to leave no trace of that AI decision — the human correction path did,
@@ -66,11 +67,6 @@ async function recordAiClassification(
 // ---------------------------------------------------------------------------
 // Gmail API types (shared shape with Tier 1)
 // ---------------------------------------------------------------------------
-
-interface GmailHeader {
-  name: string;
-  value: string;
-}
 
 interface GmailListResponse {
   messages?: { id: string; threadId: string }[];
@@ -176,19 +172,6 @@ async function fetchGmailWindow(
   } while (pageToken);
 
   return allMessages;
-}
-
-function headerValue(headers: GmailHeader[], name: string): string {
-  return (
-    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
-    ""
-  );
-}
-
-function headersToRecord(headers: GmailHeader[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const { name, value } of headers) out[name] = value;
-  return out;
 }
 
 // Walks the MIME tree extracting decoded text/plain and text/html parts.

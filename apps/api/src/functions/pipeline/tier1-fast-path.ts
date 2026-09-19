@@ -25,15 +25,11 @@ import { createSemaphore } from "../../lib/semaphore.js";
 import { withRetry } from "../../lib/retry.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
+import { headerValue, headersToRecord, type GmailHeader } from "../../lib/email/headers.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
 // ---------------------------------------------------------------------------
-
-interface GmailHeader {
-  name: string;
-  value: string;
-}
 
 interface GmailProfile {
   emailAddress: string;
@@ -109,18 +105,6 @@ async function fetchGmailMessages(token: string, maxResults: number): Promise<Gm
   return settled
     .map((r) => (r.status === "fulfilled" ? r.value : null))
     .filter((m): m is GmailMessage => m !== null);
-}
-
-function headerValue(headers: GmailHeader[], name: string): string {
-  return (
-    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? ""
-  );
-}
-
-function headersToRecord(headers: GmailHeader[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const { name, value } of headers) out[name] = value;
-  return out;
 }
 
 // Parses `From` header into display name + email address.

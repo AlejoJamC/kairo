@@ -9,14 +9,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ClassificationResult } from "@kairo/intelligence";
 import type { ClassifierContext, ClassifierStage } from "../classifier-input.js";
+import type { GmailHeader } from "../email/headers.js";
+import type { EmailMetadata, PreFilterResult } from "../email/pre-filter.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type DbClient = SupabaseClient<any>;
 
-export interface GmailHeader {
-  name: string;
-  value: string;
-}
+// One definition of a header pair, shared with the four pipeline tiers.
+// Re-exported so this module stays the single import site for poll-worker types.
+export type { GmailHeader };
 
 export interface GmailMessagePayload {
   headers?: GmailHeader[];
@@ -88,14 +89,12 @@ export interface GmailPollDeps {
   ) => Promise<GmailHistoryListResponse>;
   messagesList: (token: string) => Promise<GmailMessageListResponse>;
   getMessage: (token: string, messageId: string) => Promise<GmailMessage>;
-  preFilterEmail: (metadata: {
-    from: string;
-    subject: string;
-    headers: Record<string, string>;
-    gmailCategories?: string[];
-    mimeType?: string;
-    userEmail: string;
-  }) => { status: "skip" | "relevant"; skip_reason?: string };
+  // KAI-45 — the real types rather than a structural copy. The copy was written
+  // when the result was a two-value enum and cost nothing to restate; it now
+  // carries a sixteen-field MailFacts, and a hand-maintained duplicate of that
+  // is a drift waiting to happen. The seam is still a seam: a test injects any
+  // function of this shape, it just no longer gets to disagree about the shape.
+  preFilterEmail: (metadata: EmailMetadata) => PreFilterResult;
   classifyEmail: (
     message: {
       subject: string;

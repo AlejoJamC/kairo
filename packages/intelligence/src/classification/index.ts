@@ -14,5 +14,6 @@ export {
   type Urgency,
 } from './schema';
 export { buildPrompt, getPromptVersion, extractPromptVersion, SUPPORTED_LANGS, DEFAULT_LANG, type PromptLang } from './prompt';
-export type { EmailMessage } from './types';
+export { GMAIL_CATEGORIES } from './types';
+export type { EmailMessage, MailFacts, GmailCategory, AuthResult } from './types';
 export { stripQuotedThread } from './strip-quotes';

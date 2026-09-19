@@ -21,18 +21,7 @@ import { env } from "../../env.js";
 // Pure function, no I/O — safe to import directly rather than inject.
 import { buildClassifierBody } from "../classifier-input.js";
 import type { ClassifierContext } from "../classifier-input.js";
-
-function headerValue(headers: { name: string; value: string }[], name: string): string {
-  return (
-    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? ""
-  );
-}
-
-function headersToRecord(headers: { name: string; value: string }[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const { name, value } of headers) out[name] = value;
-  return out;
-}
+import { headerValue, headersToRecord } from "../email/headers.js";
 
 /**
  * Extract the bare email address from a raw `From:` header value

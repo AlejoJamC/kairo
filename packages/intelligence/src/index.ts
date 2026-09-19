@@ -13,10 +13,14 @@ export {
   SUPPORTED_LANGS,
   DEFAULT_LANG,
   stripQuotedThread,
+  GMAIL_CATEGORIES,
 } from './classification';
 export type {
   ClassificationResult,
   EmailMessage,
+  MailFacts,
+  GmailCategory,
+  AuthResult,
   ClassifyOptions,
   LangfuseContext,
   PromptLang,

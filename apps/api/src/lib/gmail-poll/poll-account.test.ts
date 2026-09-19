@@ -1,6 +1,20 @@
 import { describe, it, expect, mock } from "bun:test";
 import { pollGmailAccount } from "./poll-account.js";
 import { GmailHistoryExpiredError, type DbClient, type GmailPollDeps } from "./types.js";
+import { extractMailFacts } from "../email/mail-facts.js";
+import type { EmailMetadata, PreFilterResult } from "../email/pre-filter.js";
+
+// KAI-45 — a pre-filter stub still has to report what the envelope said, so
+// the facts come from the real reader over the metadata the stub was handed
+// rather than from a hand-written literal that could disagree with it.
+function stubFilter(
+  outcome: Omit<PreFilterResult, "facts">,
+): (metadata: EmailMetadata) => PreFilterResult {
+  return (metadata) => ({
+    ...outcome,
+    facts: extractMailFacts({ ...metadata, tenantMailbox: metadata.userEmail }),
+  });
+}
 
 // ---------------------------------------------------------------------------
 // KAI-248 — pollGmailAccount unit tests
@@ -119,7 +133,7 @@ function baseDeps(overrides: Partial<GmailPollDeps>): GmailPollDeps {
         ],
       },
     }),
-    preFilterEmail: () => ({ status: "relevant" }),
+    preFilterEmail: stubFilter({ status: "relevant" }),
     classifyEmail: async () => ({
       type: "support",
       priority: "P2",
@@ -597,7 +611,7 @@ describe("pollGmailAccount — pre-filter gate", () => {
         history: [{ id: "h1", messagesAdded: [{ message: { id: "msg-newsletter", threadId: "thread-x" } }] }],
         historyId: "1020",
       }),
-      preFilterEmail: () => ({ status: "skip", skip_reason: "automated_sender" }),
+      preFilterEmail: stubFilter({ status: "skip", skip_reason: "automated_sender" }),
       findOrCreateTicketForThread: findOrCreateSpy,
     });
 

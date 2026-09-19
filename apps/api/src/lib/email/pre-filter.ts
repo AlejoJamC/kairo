@@ -1,60 +1,21 @@
-// Regex covering all "no reply" local-part variants:
-//   noreply@, no-reply@, no.reply@, no_reply@
-//   -noreply@, .noreply@, +noreply@, -no-reply@, etc.
-//   donotreply@, do-not-reply@, do_not_reply@
-// Applied to the extracted email address (not the display name).
-const NO_REPLY_REGEX = /(^|[-._+])(no[._-]?reply|donotreply|do[-_.]not[-_.]reply)@/i;
+// ---------------------------------------------------------------------------
+// KAI-45 — adapter kept for the five ingestion paths that still call it.
+//
+// The parsing moved to mail-facts.ts and the rules to routing-policy.ts. This
+// file is now the seam between them and the old two-value contract, so the
+// refactor lands without touching tier1/tier2/tier3/incremental-sync/gmail-poll
+// and without editing a single one of the 43 cases in pre-filter.test.ts —
+// which is what makes those tests an equivalence proof rather than a rewrite.
+//
+// Call sites migrate to `extractMailFacts` + `resolveRoute` one at a time in
+// F1, and this adapter goes away when the last one has.
+// ---------------------------------------------------------------------------
 
-export const BLOCKED_SENDER_PATTERNS: string[] = [
-  "marketing@",
-  "newsletter@",
-  "mailer-daemon@",
-  "postmaster@",
-  "bounce@",
-  "bounces@",
-  "@mailchimp.com",
-  "@sendgrid.net",
-  "@constantcontact.com",
-];
+import { extractMailFacts, type MailFacts } from "./mail-facts.js";
+import { resolveRoute } from "./routing-policy.js";
 
-const URGENCY_KEYWORDS = [
-  "urgent",
-  "error",
-  "down",
-  "broken",
-  "help",
-  "asap",
-  "production",
-  "critical",
-];
-
-const SYSTEM_SUBJECT_PREFIXES = [
-  "Accepted:",
-  "Declined:",
-  "Delivery Status",
-  "Read Receipt",
-];
-
-// Public email providers — anyone can register an address here, so the
-// "same domain = outbound" heuristic does NOT apply. Used by the outbound
-// rule below to fall back to a full-address comparison.
-// Keep this list short and conservative; corporate domains should NOT be here.
-const PUBLIC_EMAIL_DOMAINS = new Set<string>([
-  "gmail.com",
-  "googlemail.com",
-  "hotmail.com",
-  "outlook.com",
-  "live.com",
-  "msn.com",
-  "yahoo.com",
-  "yahoo.es",
-  "yahoo.co.uk",
-  "icloud.com",
-  "me.com",
-  "aol.com",
-  "proton.me",
-  "protonmail.com",
-]);
+// Re-exported because pre-filter.test.ts asserts against the list by name.
+export { BLOCKED_SENDER_PATTERNS } from "./mail-facts.js";
 
 export interface EmailMetadata {
   from: string;
@@ -62,6 +23,15 @@ export interface EmailMetadata {
   headers: Record<string, string>;
   gmailCategories?: string[];
   mimeType?: string;
+  /**
+   * The address this account's inbox is read as.
+   *
+   * Still named `userEmail` for the callers that have not migrated. It is the
+   * connected mailbox, not a member's address — `extractMailFacts` takes it as
+   * `tenantMailbox`, and F1 moves the callers onto
+   * `support_channels.email_address`, closing the multi-tenant TODO this file
+   * carried since KAI-206.
+   */
   userEmail: string;
 }
 
@@ -69,136 +39,29 @@ export interface PreFilterResult {
   status: "skip" | "relevant";
   skip_reason?: string;
   relevance_signals?: string[];
-}
-
-function extractDomain(email: string): string {
-  const match = email.match(/@([^>\s]+)/);
-  return match ? match[1].toLowerCase() : "";
-}
-
-function extractEmailAddress(from: string): string {
-  // Try angle-bracket format first: "Display Name <user@example.com>"
-  const angleMatch = from.match(/<([^>]+)>/);
-  if (angleMatch) return angleMatch[1].toLowerCase();
-  // Bare address
-  const bareMatch = from.match(/\S+@\S+/);
-  return bareMatch ? bareMatch[0].toLowerCase() : from.toLowerCase();
-}
-
-function normalizeHeaders(
-  headers: Record<string, string>
-): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const [key, value] of Object.entries(headers)) {
-    result[key.toLowerCase()] = value;
-  }
-  return result;
+  /**
+   * What the envelope said, so the caller does not have to read it again.
+   *
+   * The whole point of KAI-45: this function already computed the sender's
+   * domain, the recipient list, the provider's spam verdict and the thread
+   * position, and every one of them used to die here. Callers hand it to
+   * `classifierEnvelope()` on their way to the model.
+   */
+  facts: MailFacts;
 }
 
 export function preFilterEmail(metadata: EmailMetadata): PreFilterResult {
-  const { from, subject, headers, gmailCategories = [], mimeType, userEmail } =
-    metadata;
+  const facts = extractMailFacts({
+    from: metadata.from,
+    subject: metadata.subject,
+    headers: metadata.headers,
+    ...(metadata.gmailCategories ? { gmailCategories: metadata.gmailCategories } : {}),
+    ...(metadata.mimeType !== undefined ? { mimeType: metadata.mimeType } : {}),
+    tenantMailbox: metadata.userEmail,
+  });
+  const route = resolveRoute(facts);
 
-  const fromLower = from.toLowerCase();
-  const subjectLower = subject.toLowerCase();
-  const h = normalizeHeaders(headers);
-
-  // Rule: Outbound — highest priority skip, not overridable by any pass-through signal.
-  //
-  // Two modes:
-  //  1. Public-domain inbox (gmail.com / hotmail.com / outlook.com / etc.):
-  //     compare the FULL email address, because millions of unrelated people
-  //     share these domains. The original domain-only check produced massive
-  //     false positives during onboarding (every gmail.com → gmail.com email
-  //     was being skipped).
-  //  2. Corporate inbox (custom domain): keep the domain-level check — if
-  //     another @company.com address writes to support@company.com, it's most
-  //     likely an internal/outbound thread.
-  //
-  // TODO/tech-debt — this whole rule is wrong under multi-tenant + multi-user:
-  //  - KAI-172 introduced account_members; the connected inbox (support_channels)
-  //    is the real "outbound" reference, NOT a single userEmail.
-  //  - KAI-206 expanded the pre-filter (no-reply regex, body extraction) but
-  //    deliberately did not touch this rule to keep scope narrow.
-  //  - Real fix: compare against the connected channel address (support_channels
-  //    .email_address) and/or check whether userEmail appears in To/Cc. Track
-  //    under the multi-tenant cleanup work after KAI-207 (@supabase/ssr).
-  const senderEmail = extractEmailAddress(fromLower);
-  const senderDomain = extractDomain(fromLower);
-  const userDomain = extractDomain(userEmail.toLowerCase());
-  if (senderDomain && userDomain && senderDomain === userDomain) {
-    const isPublicDomain = PUBLIC_EMAIL_DOMAINS.has(senderDomain);
-    const isSameAddress = senderEmail === userEmail.toLowerCase();
-    if (!isPublicDomain || isSameAddress) {
-      return { status: "skip", skip_reason: "outbound" };
-    }
-  }
-
-  // Pass-through override signals — urgency keyword and In-Reply-To beat all
-  // remaining skip rules (automated_sender, mailing_list, etc.)
-  const overrideSignals: string[] = [];
-
-  if (URGENCY_KEYWORDS.some((kw) => subjectLower.includes(kw))) {
-    overrideSignals.push("urgency_keyword");
-  }
-  if ("in-reply-to" in h) {
-    overrideSignals.push("in_reply_to");
-  }
-
-  if (overrideSignals.length > 0) {
-    const signals = [...overrideSignals];
-    if (gmailCategories.includes("CATEGORY_PRIMARY")) signals.push("gmail_primary");
-    if (gmailCategories.includes("CATEGORY_UPDATES")) signals.push("gmail_updates");
-    signals.push("external_sender");
-    return { status: "relevant", relevance_signals: signals };
-  }
-
-  // Rule: no-reply and equivalent automated sender variants (regex-based)
-  const emailAddr = extractEmailAddress(from);
-  if (NO_REPLY_REGEX.test(emailAddr)) {
-    return { status: "skip", skip_reason: "automated_sender" };
-  }
-
-  // Rule: Known newsletter / automated sender (substring patterns)
-  if (BLOCKED_SENDER_PATTERNS.some((p) => fromLower.includes(p))) {
-    return { status: "skip", skip_reason: "automated_sender" };
-  }
-
-  // Rule: Mailing list header
-  if ("list-unsubscribe" in h) {
-    return { status: "skip", skip_reason: "mailing_list" };
-  }
-
-  // Rule: Calendar invite or system receipt
-  if (
-    mimeType === "text/calendar" ||
-    SYSTEM_SUBJECT_PREFIXES.some((prefix) => subject.startsWith(prefix))
-  ) {
-    return { status: "skip", skip_reason: "system_notification" };
-  }
-
-  // Rule: Gmail Promotions or Social category
-  if (
-    gmailCategories.includes("CATEGORY_PROMOTIONS") ||
-    gmailCategories.includes("CATEGORY_SOCIAL")
-  ) {
-    return { status: "skip", skip_reason: "gmail_category_filter" };
-  }
-
-  // Rule: Auto-generated headers
-  const precedence = h["precedence"] ?? "";
-  if (
-    "x-auto-response-suppress" in h ||
-    precedence === "bulk" ||
-    precedence === "list"
-  ) {
-    return { status: "skip", skip_reason: "auto_generated" };
-  }
-
-  // Relevant — collect all applicable signals
-  const signals: string[] = ["external_sender"];
-  if (gmailCategories.includes("CATEGORY_PRIMARY")) signals.push("gmail_primary");
-  if (gmailCategories.includes("CATEGORY_UPDATES")) signals.push("gmail_updates");
-
-  return { status: "relevant", relevance_signals: signals };
+  return route.kind === "skip"
+    ? { status: "skip", skip_reason: route.reason, facts }
+    : { status: "relevant", relevance_signals: route.signals, facts };
 }

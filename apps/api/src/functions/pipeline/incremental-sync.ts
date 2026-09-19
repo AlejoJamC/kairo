@@ -16,6 +16,7 @@ import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 import { emitTicketClassification } from "../../lib/ticket-events.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
+import { headerValue, headersToRecord, type GmailHeader } from "../../lib/email/headers.js";
 
 // KAI-191: incremental-sync writes priority/category onto every ticket it
 // creates, but used to leave no trace of that AI decision — the human
@@ -64,11 +65,6 @@ async function recordAiClassification(
 // ---------------------------------------------------------------------------
 // Gmail API types
 // ---------------------------------------------------------------------------
-
-interface GmailHeader {
-  name: string;
-  value: string;
-}
 
 interface GmailListResponse {
   messages?: { id: string; threadId: string }[];
@@ -173,13 +169,6 @@ async function fetchGmailSince(
   return allMessages;
 }
 
-function headerValue(headers: GmailHeader[], name: string): string {
-  return (
-    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
-    ""
-  );
-}
-
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Gmail returns part data base64url-encoded; Buffer's "base64" decoder
 // accepts URL-safe variants on both Node and Bun.
@@ -211,12 +200,6 @@ function extractBody(payload: GmailMessage["payload"]): {
   }
 
   return { body_plain, body_html };
-}
-
-function headersToRecord(headers: GmailHeader[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const { name, value } of headers) out[name] = value;
-  return out;
 }
 
 // ---------------------------------------------------------------------------
