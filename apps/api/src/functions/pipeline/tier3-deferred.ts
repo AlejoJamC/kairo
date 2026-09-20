@@ -276,7 +276,7 @@ async function classifyWindow(
       headers: headersToRecord(headers),
       gmailCategories,
       mimeType: message.payload?.mimeType,
-      userEmail: classifierContext.tenantMailbox,
+      userEmail: classifierContext.tenantMailboxes,
     });
 
     if (filterResult.status === "skip") {
@@ -654,7 +654,7 @@ export const tier3Deferred = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Fetch Gmail credentials + channel integration id once
     // -----------------------------------------------------------------------
-    const { accessToken, tenantMailbox, businessContext, autoApproved, accountId, channelIntegrationId } = (await step.run(
+    const { accessToken, tenantMailbox, tenantMailboxes, businessContext, autoApproved, accountId, channelIntegrationId } = (await step.run(
       "fetch-credentials",
       async () => {
         // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
@@ -681,19 +681,20 @@ export const tier3Deferred = inngest.createFunction(
 
         if (!freshToken) {
           console.warn(`[tier3] No Gmail credentials found for account ${accountId}`);
-          return { accessToken: null, tenantMailbox: "", businessContext: "", autoApproved: [] as string[], accountId, channelIntegrationId: null };
+          return { accessToken: null, tenantMailbox: "", tenantMailboxes: [] as string[], businessContext: "", autoApproved: [] as string[], accountId, channelIntegrationId: null };
         }
 
         return {
           accessToken: freshToken,
           tenantMailbox: ctx.tenantMailbox,
+          tenantMailboxes: ctx.tenantMailboxes,
           businessContext: ctx.businessContext ?? "",
           autoApproved: autoApproved as string[],
           accountId,
           channelIntegrationId: channelRow.data?.id ?? null,
         };
       }
-    )) as { accessToken: string | null; tenantMailbox: string; businessContext: string; autoApproved: string[]; accountId: string; channelIntegrationId: string | null };
+    )) as { accessToken: string | null; tenantMailbox: string; tenantMailboxes: string[]; businessContext: string; autoApproved: string[]; accountId: string; channelIntegrationId: string | null };
 
     if (!accessToken || !accountId) return;
 
@@ -702,6 +703,7 @@ export const tier3Deferred = inngest.createFunction(
     // absent, or every window would send an empty business_context block.
     const classifierContext: ClassifierContext = {
       tenantMailbox,
+      tenantMailboxes,
       ...(businessContext ? { businessContext } : {}),
     };
 

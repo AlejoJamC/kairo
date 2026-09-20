@@ -112,13 +112,19 @@ export interface MailFactsInput {
   gmailCategories?: string[];
   mimeType?: string;
   /**
-   * The mailbox Kairo reads for this account: `support_channels.email_address`.
+   * Every mailbox this account reads — `support_channels.email_address`, one
+   * row per connected inbox.
    *
-   * Not "the user's email". A tenant is an account with one connected inbox and
-   * many members, and comparing against a member's address is what
-   * pre-filter.ts:118-125 already flagged as wrong under multi-tenant.
+   * A list, not a string. An account is not one inbox: a tenant can connect
+   * several, on more than one domain, and the app's own notifier is another.
+   * Comparing against a single address called six of the ninety corpus messages
+   * `external` when they came from the company's own mailboxes, and provenance
+   * is a coordinate of the derivation key — a wrong one puts the message in the
+   * wrong row of the table.
+   *
+   * A bare string is still accepted for the call sites that genuinely have one.
    */
-  tenantMailbox: string;
+  tenantMailbox: string | readonly string[];
 }
 
 /** The bare address out of a `From`-style header value. */
@@ -139,6 +145,12 @@ export function extractDomain(raw: string): string {
 function parseAddressList(raw: string): string[] {
   const found = raw.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[A-Za-z0-9]/g) ?? [];
   return [...new Set(found.map((a) => a.toLowerCase()))];
+}
+
+/** The account's mailboxes as a lowercased set, from one address or many. */
+function normaliseMailboxes(raw: string | readonly string[]): Set<string> {
+  const list = typeof raw === "string" ? [raw] : raw;
+  return new Set(list.map((m) => m.trim().toLowerCase()).filter((m) => m !== ""));
 }
 
 function lowercaseKeys(headers: Record<string, string>): Record<string, string> {
@@ -204,9 +216,16 @@ export function extractMailFacts(input: MailFactsInput): MailFacts {
 
   const senderAddress = extractEmailAddress(input.from);
   const senderDomain = extractDomain(senderAddress);
-  const tenantAddress = input.tenantMailbox.trim().toLowerCase();
-  const tenantDomain = extractDomain(tenantAddress);
-  const tenantDomainIsPublic = tenantDomain !== "" && PUBLIC_EMAIL_DOMAINS.has(tenantDomain);
+  const tenantAddresses = normaliseMailboxes(input.tenantMailbox);
+  // Only corporate domains identify a company. A tenant whose inbox is on a
+  // public provider shares that domain with millions of strangers, so its
+  // domain contributes nothing and only the full address can match.
+  const tenantDomains = new Set(
+    [...tenantAddresses].map(extractDomain).filter((d) => d !== "" && !PUBLIC_EMAIL_DOMAINS.has(d)),
+  );
+  const tenantDomainIsPublic = [...tenantAddresses].some((a) =>
+    PUBLIC_EMAIL_DOMAINS.has(extractDomain(a)),
+  );
 
   const recipients = [
     ...parseAddressList(h["to"] ?? ""),
@@ -227,11 +246,11 @@ export function extractMailFacts(input: MailFactsInput): MailFacts {
   return {
     senderAddress,
     senderDomain,
-    senderIsTenantAddress: senderAddress !== "" && senderAddress === tenantAddress,
+    senderIsTenantAddress: senderAddress !== "" && tenantAddresses.has(senderAddress),
     senderIsTenantDomain:
-      !tenantDomainIsPublic && senderDomain !== "" && senderDomain === tenantDomain,
+      !tenantAddresses.has(senderAddress) && senderDomain !== "" && tenantDomains.has(senderDomain),
     tenantDomainIsPublic,
-    tenantInRecipients: tenantAddress !== "" && uniqueRecipients.includes(tenantAddress),
+    tenantInRecipients: uniqueRecipients.some((r) => tenantAddresses.has(r)),
     recipientCount: uniqueRecipients.length,
     toHeader: h["to"] ?? "",
     ccHeader: h["cc"] ?? "",

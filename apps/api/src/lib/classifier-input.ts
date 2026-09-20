@@ -120,15 +120,63 @@ export function classifierEnvelope(
   };
 }
 
+/** The connected mailboxes plus the resolved one, deduplicated and non-empty. */
+function unionMailboxes(primary: string, channels: string[]): string[] {
+  return [...new Set([primary, ...channels].map((m) => m.trim().toLowerCase()).filter(Boolean))];
+}
+
 export interface ClassifierContext {
-  /** The mailbox Kairo is reading. Sent by every stage. */
+  /** The mailbox Kairo is reading. Sent by every stage, rendered in the prompt. */
   tenantMailbox: string;
+  /**
+   * Every mailbox this account has connected, for `extractMailFacts`.
+   *
+   * An account is not one inbox. A tenant can have several connected addresses
+   * across more than one domain, and provenance compared against a single one
+   * read six of the ninety corpus messages as external when they came from the
+   * company itself.
+   * Provenance is a coordinate of the derivation key, so a wrong one puts the
+   * message in the wrong row of the table.
+   *
+   * Always contains {@link tenantMailbox}; falls back to just that one when the
+   * channels table cannot be read.
+   */
+  tenantMailboxes: string[];
   /**
    * What the tenant's company does. Absent on `onboarding`, and absent on
    * `backfill` until the account has one — the rubric then renders
    * `(no disponible)` and classifies without it.
    */
   businessContext?: string;
+}
+
+/**
+ * Every active mailbox the account has connected.
+ *
+ * `support_channels` holds one row per connected inbox, unique per account.
+ * Never throws: a classification with one mailbox is worth more than none, and
+ * the caller always unions in the address it already resolved.
+ */
+async function readTenantMailboxes(accountId: string): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from("support_channels")
+      .select("email_address")
+      .eq("account_id", accountId)
+      .eq("is_active", true);
+
+    if (error) {
+      console.warn(`[classifier-input] support_channels unreadable for account ${accountId}: ${error.message}`);
+      return [];
+    }
+    return (data ?? [])
+      .map((r) => (r.email_address as string | null | undefined)?.trim() ?? "")
+      .filter((a) => a !== "");
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[classifier-input] support_channels unreadable for account ${accountId}: ${message}`);
+    return [];
+  }
 }
 
 /**
@@ -180,13 +228,22 @@ export async function resolveClassifierContext(
   accountId: string
 ): Promise<ClassifierContext> {
   if (stage === "onboarding") {
-    return { tenantMailbox: await getGmailEmailByAccount(accountId) };
+    const [tenantMailbox, channels] = await Promise.all([
+      getGmailEmailByAccount(accountId),
+      readTenantMailboxes(accountId),
+    ]);
+    return { tenantMailbox, tenantMailboxes: unionMailboxes(tenantMailbox, channels) };
   }
 
-  const [tenantMailbox, businessContext] = await Promise.all([
+  const [tenantMailbox, channels, businessContext] = await Promise.all([
     getGmailEmailByAccount(accountId),
+    readTenantMailboxes(accountId),
     readBusinessContext(accountId),
   ]);
 
-  return { tenantMailbox, ...(businessContext ? { businessContext } : {}) };
+  return {
+    tenantMailbox,
+    tenantMailboxes: unionMailboxes(tenantMailbox, channels),
+    ...(businessContext ? { businessContext } : {}),
+  };
 }

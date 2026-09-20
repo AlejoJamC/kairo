@@ -24,15 +24,15 @@ export interface EmailMetadata {
   gmailCategories?: string[];
   mimeType?: string;
   /**
-   * The address this account's inbox is read as.
+   * Every mailbox this account reads, or the one it has.
    *
-   * Still named `userEmail` for the callers that have not migrated. It is the
-   * connected mailbox, not a member's address — `extractMailFacts` takes it as
-   * `tenantMailbox`, and F1 moves the callers onto
-   * `support_channels.email_address`, closing the multi-tenant TODO this file
-   * carried since KAI-206.
+   * Still named `userEmail` for the callers that have not migrated, but it is
+   * the connected inbox and not a member's address — which is the multi-tenant
+   * TODO this file carried since KAI-206. A list because an account is not one
+   * inbox: comparing against a single address read six of the ninety corpus
+   * messages as external when they came from the company's own mailboxes.
    */
-  userEmail: string;
+  userEmail: string | readonly string[];
 }
 
 export interface PreFilterResult {

@@ -26,8 +26,12 @@ const maybeSingleMock = mock(() => {
     error: storedError,
   });
 });
+// KAI-45 — support_channels holds one row per connected mailbox.
+let storedChannels: { email_address: string }[] = [];
+const channelsResult = () => Promise.resolve({ data: storedChannels, error: null });
 const selectMock = mock((_columns: string) => ({
-  eq: () => ({ maybeSingle: maybeSingleMock }),
+  // accounts: .eq(...).maybeSingle()   support_channels: .eq(...).eq(...) awaited
+  eq: () => ({ maybeSingle: maybeSingleMock, eq: channelsResult }),
 }));
 const fromMock = mock((_table: string) => ({ select: selectMock }));
 mock.module("./supabase.js", () => ({ supabase: { from: fromMock } }));
@@ -38,6 +42,7 @@ const { buildClassifierBody, resolveClassifierContext, CLASSIFIER_BODY_RULES } =
 beforeEach(() => {
   mailbox = "support@acme.com";
   storedContext = null;
+  storedChannels = [];
   storedError = null;
   throwOnRead = false;
   getGmailEmailByAccountMock.mockClear();
@@ -52,7 +57,10 @@ describe("resolveClassifierContext — onboarding", () => {
 
     const ctx = await resolveClassifierContext("onboarding", "acc-1");
 
-    expect(ctx).toEqual({ tenantMailbox: "support@acme.com" });
+    expect(ctx).toEqual({
+      tenantMailbox: "support@acme.com",
+      tenantMailboxes: ["support@acme.com"],
+    });
     expect("businessContext" in ctx).toBe(false);
   });
 
@@ -63,8 +71,36 @@ describe("resolveClassifierContext — onboarding", () => {
 
     // Tier 1 runs before any value could exist, and the bench measured the
     // field as harmful in that column. Not sending it is the rule; not paying
-    // for the read is the consequence.
-    expect(fromMock).not.toHaveBeenCalled();
+    // for the read is the consequence. It does read support_channels, which is
+    // a different question: which mailboxes are the account's own.
+    expect(fromMock.mock.calls.map((c) => c[0])).toEqual(["support_channels"]);
+  });
+
+  // An account is not one inbox, and provenance compared against a single
+  // address reads the company's own mail as external.
+  it("unions every connected mailbox with the resolved one, lowercased and deduped", async () => {
+    storedChannels = [
+      { email_address: "Support@Acme.com" },
+      { email_address: "ops@acme.com" },
+      { email_address: "acme.support@gmail.com" },
+    ];
+
+    const ctx = await resolveClassifierContext("onboarding", "acc-1");
+
+    expect(ctx.tenantMailboxes).toEqual([
+      "support@acme.com",
+      "ops@acme.com",
+      "acme.support@gmail.com",
+    ]);
+  });
+
+  // A classification with one mailbox is worth more than none.
+  it("falls back to the resolved mailbox when the channels table is unreadable", async () => {
+    storedChannels = [];
+
+    const ctx = await resolveClassifierContext("onboarding", "acc-1");
+
+    expect(ctx.tenantMailboxes).toEqual(["support@acme.com"]);
   });
 });
 
@@ -76,6 +112,7 @@ describe("resolveClassifierContext — backfill", () => {
 
     expect(ctx).toEqual({
       tenantMailbox: "support@acme.com",
+      tenantMailboxes: ["support@acme.com"],
       businessContext: "Encarga SAS moves freight for pharmacies.",
     });
     expect(fromMock).toHaveBeenCalledWith("accounts");
@@ -88,7 +125,10 @@ describe("resolveClassifierContext — backfill", () => {
 
     // Absent, not empty: the prompt renders `(no disponible)` for an absent
     // field, and an empty string would claim the company does nothing.
-    expect(ctx).toEqual({ tenantMailbox: "support@acme.com" });
+    expect(ctx).toEqual({
+      tenantMailbox: "support@acme.com",
+      tenantMailboxes: ["support@acme.com"],
+    });
   });
 
   it("treats a whitespace-only value as no value", async () => {
@@ -96,7 +136,10 @@ describe("resolveClassifierContext — backfill", () => {
 
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
-    expect(ctx).toEqual({ tenantMailbox: "support@acme.com" });
+    expect(ctx).toEqual({
+      tenantMailbox: "support@acme.com",
+      tenantMailboxes: ["support@acme.com"],
+    });
   });
 
   it("trims the stored value", async () => {
@@ -114,7 +157,10 @@ describe("resolveClassifierContext — backfill", () => {
 
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
-    expect(ctx).toEqual({ tenantMailbox: "support@acme.com" });
+    expect(ctx).toEqual({
+      tenantMailbox: "support@acme.com",
+      tenantMailboxes: ["support@acme.com"],
+    });
   });
 
   it("still classifies when the read throws", async () => {
@@ -122,7 +168,10 @@ describe("resolveClassifierContext — backfill", () => {
 
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
-    expect(ctx).toEqual({ tenantMailbox: "support@acme.com" });
+    expect(ctx).toEqual({
+      tenantMailbox: "support@acme.com",
+      tenantMailboxes: ["support@acme.com"],
+    });
   });
 });
 

@@ -45,14 +45,41 @@ describe("address parsing", () => {
 });
 
 describe("tenant identity", () => {
+  // The two booleans are mutually exclusive, so the pair encodes exactly the
+  // three provenance states the derivation key uses: the account's own mailbox,
+  // a sibling mailbox of the same company, and outside.
   it("separates the tenant's own mailbox from a sibling mailbox of the same company", () => {
     const sibling = facts({ from: "operaciones@mycompany.com" });
-    expect(sibling.senderIsTenantAddress).toBe(false);
-    expect(sibling.senderIsTenantDomain).toBe(true);
+    expect([sibling.senderIsTenantAddress, sibling.senderIsTenantDomain]).toEqual([false, true]);
 
     const self = facts({ from: "Support <support@mycompany.com>" });
-    expect(self.senderIsTenantAddress).toBe(true);
-    expect(self.senderIsTenantDomain).toBe(true);
+    expect([self.senderIsTenantAddress, self.senderIsTenantDomain]).toEqual([true, false]);
+
+    const outside = facts({ from: "alice@partner.com" });
+    expect([outside.senderIsTenantAddress, outside.senderIsTenantDomain]).toEqual([false, false]);
+  });
+
+  // The account is not one inbox. A tenant can connect several across more than
+  // one domain — a corporate pair, a public-provider account that aggregates
+  // them, and the app's own notifier — and comparing against a single address
+  // read six of the ninety corpus messages as external when they came from the
+  // company itself.
+  it("recognises every mailbox the account has connected, across domains", () => {
+    const boxes = [
+      "support@acme.com",
+      "support2@acme.com",
+      "acme.support@gmail.com",
+      "noreply@acme.app",
+    ];
+    for (const from of boxes) {
+      expect(facts({ from, tenantMailbox: boxes }).senderIsTenantAddress).toBe(true);
+    }
+    const sibling = facts({ from: "management@acme.com", tenantMailbox: boxes });
+    expect([sibling.senderIsTenantAddress, sibling.senderIsTenantDomain]).toEqual([false, true]);
+    // The second corporate domain identifies the company just as well.
+    expect(facts({ from: "alerts@acme.app", tenantMailbox: boxes }).senderIsTenantDomain).toBe(true);
+    // gmail.com is public: it must never make a stranger look like the company.
+    expect(facts({ from: "stranger@gmail.com", tenantMailbox: boxes }).senderIsTenantDomain).toBe(false);
   });
 
   // A public provider hands the same domain to millions of unrelated people, so

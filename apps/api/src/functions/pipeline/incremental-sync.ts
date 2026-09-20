@@ -328,7 +328,7 @@ export const incrementalSync = inngest.createFunction(
           headers: headersToRecord(msgHeaders),
           gmailCategories,
           mimeType: message.payload?.mimeType,
-          userEmail,
+          userEmail: classifierContext.tenantMailboxes,
         });
 
         if (filterResult.status === "skip") {

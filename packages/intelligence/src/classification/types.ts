@@ -89,11 +89,15 @@ export interface MailFacts {
   senderAddress: string;
   /** Domain of {@link senderAddress}, lowercased, `""` when unparseable. */
   senderDomain: string;
-  /** Sender is exactly the connected mailbox — a copy of the house's own message. */
+  /** Sender is one of the account's own mailboxes — a copy of the house's own message. */
   senderIsTenantAddress: boolean;
   /**
-   * Sender shares the tenant's domain: another mailbox of the same company.
-   * Always false for a public-provider inbox, where the domain says nothing.
+   * Sender shares a corporate domain with the account but is **not** one of its
+   * mailboxes: another mailbox of the same company.
+   *
+   * Mutually exclusive with {@link MailFacts.senderIsTenantAddress}, so the pair
+   * encodes exactly the three provenance states the derivation key uses. Always
+   * false for a public-provider inbox, where the domain identifies nobody.
    */
   senderIsTenantDomain: boolean;
   /** The tenant's inbox is on a public provider, so domain matching is meaningless. */

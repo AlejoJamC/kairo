@@ -95,13 +95,11 @@ export const TYPE_DERIVATION: Record<DerivationKey, TicketType> = {
   'external|fyi|commercial': 'other',
   'external|fyi|admin': 'internal',
 
-  // ── Another mailbox of the same company ───────────────────────────────────
-  // Arrived in the inbox, was not sent from it. Until routing policy 1.1.0 this
-  // whole group was dropped as "outbound" and never reached a classifier.
+  // ── A corporate address that is not one of the connected inboxes ──────────
+  // gerencia@, operacioneslog@ and the like — four of the ninety. Until routing
+  // policy 2.0.0 this whole group was dropped as "outbound".
   'same_company|needs_action|service': 'support',
-  // A bid invitation forwarded to the commercial area (101, 106).
   'same_company|needs_action|commercial': 'prospect',
-  // Coordination between areas (125: customer service to the dispatcher).
   'same_company|needs_action|admin': 'internal',
   // The one cell where provenance changes the answer. An outsider stating
   // something about the service is the queue's business; the house stating
@@ -110,8 +108,11 @@ export const TYPE_DERIVATION: Record<DerivationKey, TicketType> = {
   'same_company|fyi|commercial': 'other',
   'same_company|fyi|admin': 'internal',
 
-  // ── The monitored mailbox itself ──────────────────────────────────────────
-  // A copy of the house's own message, pulled into the inbox by the POP fetch.
+  // ── One of the account's own mailboxes ────────────────────────────────────
+  // The largest provenance group after `external`: 23 of the ninety, because
+  // the Gmail account aggregates two corporate inboxes by POP and the copies
+  // land back in it. A bid invitation forwarded to the commercial area (101,
+  // 106) and the quote the house sent a client (102) are both here.
   'tenant_mailbox|needs_action|service': 'support',
   'tenant_mailbox|needs_action|commercial': 'prospect',
   'tenant_mailbox|needs_action|admin': 'internal',

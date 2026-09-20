@@ -1,5 +1,9 @@
 import { classifyEmailWithMeta, detectEscalationTriggers } from "@kairo/intelligence";
-import { buildClassifierBody, classifierEnvelope } from "../../lib/classifier-input.js";
+import {
+  buildClassifierBody,
+  classifierEnvelope,
+  resolveClassifierContext,
+} from "../../lib/classifier-input.js";
 import { tier1ProposalStatus } from "./tier1-proposal-status.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { getFlag } from "@kairo/feature-flags";
@@ -167,7 +171,7 @@ export const tier1FastPath = inngest.createFunction(
     // Step 1: Resolve account, fetch Gmail profile + most recent message headers
     // ADR-022: getFreshGmailToken now takes accountId (Level 4 oauth_credentials).
     // -----------------------------------------------------------------------
-    const { messages, userEmail, gmailAccessToken, accountId: resolvedAccountId } = await step.run("fetch-headers", async () => {
+    const { messages, userEmail, tenantMailboxes, gmailAccessToken, accountId: resolvedAccountId } = await step.run("fetch-headers", async () => {
       // Resolve accountId before token fetch (required by ADR-022 Phase 2).
       const { data: memberRow } = await supabase
         .from("account_members")
@@ -207,13 +211,22 @@ export const tier1FastPath = inngest.createFunction(
       }
 
       const token = await getFreshGmailToken(accountId);
-      const [profile, msgs] = await Promise.all([
+      const [profile, msgs, ctx] = await Promise.all([
         fetchGmailProfile(token),
         fetchGmailMessages(token, env.FAST_PATH_SCAN_SIZE),
+        // KAI-45 — every mailbox the account has connected, for provenance.
+        // Tier 1 still does not read `business_context` (the bench measured it
+        // as harmful here); `onboarding` is exactly the stage that skips it.
+        resolveClassifierContext("onboarding", accountId),
       ]);
       pipelineLog("tier1:fetch", `fetched ${msgs.length} messages for ${profile.emailAddress} (scan_size=${env.FAST_PATH_SCAN_SIZE})`);
-      return { messages: msgs, userEmail: profile.emailAddress, gmailAccessToken: token, accountId };
-    }) as { messages: GmailMessage[]; userEmail: string; gmailAccessToken: string; accountId: string };
+      // The Gmail profile is the account this token belongs to; the channels
+      // table holds the corporate inboxes it aggregates. Provenance needs both.
+      const tenantMailboxes = [
+        ...new Set([profile.emailAddress, ...ctx.tenantMailboxes].map((m) => m.trim().toLowerCase()).filter(Boolean)),
+      ];
+      return { messages: msgs, userEmail: profile.emailAddress, tenantMailboxes, gmailAccessToken: token, accountId };
+    }) as { messages: GmailMessage[]; userEmail: string; tenantMailboxes: string[]; gmailAccessToken: string; accountId: string };
 
     // -----------------------------------------------------------------------
     // Step 2: Pre-filter, classify in parallel, persist each result
@@ -267,7 +280,7 @@ export const tier1FastPath = inngest.createFunction(
           headers: headersToRecord(headers),
           gmailCategories,
           mimeType: message.payload?.mimeType,
-          userEmail,
+          userEmail: tenantMailboxes,
         });
 
         // Extract full email body from MIME tree and parse address headers

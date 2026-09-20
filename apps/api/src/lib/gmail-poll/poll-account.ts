@@ -64,7 +64,6 @@ async function ingestMessages(
   }
 ): Promise<{ ticketsCreated: number; ticketsReopened: number; skipped: number; processed: number }> {
   const { accountId, channelIntegrationId, token, messageIds, classifierContext } = args;
-  const userEmail = classifierContext.tenantMailbox;
 
   let ticketsCreated = 0;
   let ticketsReopened = 0;
@@ -113,7 +112,7 @@ async function ingestMessages(
       headers: headersToRecord(msgHeaders),
       gmailCategories,
       mimeType: message.payload?.mimeType,
-      userEmail,
+      userEmail: classifierContext.tenantMailboxes,
     });
 
     // Insert the message row regardless of outcome — preserves a record of
