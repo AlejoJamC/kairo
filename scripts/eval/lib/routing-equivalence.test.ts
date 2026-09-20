@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// KAI-45 F0/F0b — the routing decision, pinned against real mail.
+// KAI-45 F0/F0b/F2 — the routing decision, pinned against real mail.
 //
 // `preFilterEmail` ran in all five ingestion paths and had exactly one test
 // file: 43 cases built from inline object literals. Not one of them was a real
@@ -14,8 +14,11 @@
 //   EXPECTED    what the extracted layer answers now
 //
 // F0 was a pure refactor and the two were identical, which is what proved the
-// extraction. F0b then removed one rule, and the diff between the tables is the
-// entire behavioural change — enumerated, not summarised.
+// extraction. Every later policy version is a diff against that table,
+// enumerated one message at a time rather than summarised:
+//
+//   2.0.0 (F0b)  the same-domain rule removed — 21 messages, all to `classify`
+//   3.0.0 (F2)   the provider's spam verdict decides first — 10 messages
 //
 // From here the file is the regression suite for the policy. A rule added,
 // removed or reordered must show up as a named diff and move
@@ -120,15 +123,34 @@ const POLICY_1_0: Record<string, Record<string, string>> = {
 };
 
 /**
- * What the policy answers today. F0b (routing policy 1.1.0) removed the rule
- * that dropped mail from the tenant's own domain, so every `outbound` verdict
- * became `classify` and nothing else moved.
+ * The ten messages the receiving server itself flagged. `X-Spam-Status: Yes`
+ * fires on exactly these and on nothing else across all 90 files, which is what
+ * lets routing policy 1.1.1 answer `spam` without spending a token.
+ */
+const SPAM_FILTERED = ['111', '112', '113', '114', '115', '116', '117', '118', '119', '120'];
+
+/**
+ * What the policy answers today, derived from POLICY_1_0 by the two rule
+ * changes rather than retyped — so a table that drifts from the rules it claims
+ * to describe cannot go unnoticed.
+ *
+ *   2.0.0 — the same-domain rule is gone: every `outbound` becomes `classify`.
+ *   3.0.0 — the provider's spam verdict runs first: the ten flagged messages
+ *           become `spam_filtered` whatever they answered before (115 was
+ *           `mailing_list`, the rest `classify`).
  */
 const EXPECTED: Record<string, Record<string, string>> = Object.fromEntries(
   Object.entries(POLICY_1_0).map(([corpus, rows]) => [
     corpus,
     Object.fromEntries(
-      Object.entries(rows).map(([id, v]) => [id, v === 'outbound' ? 'classify' : v]),
+      Object.entries(rows).map(([id, v]) => [
+        id,
+        corpus === 'coverage' && SPAM_FILTERED.includes(id)
+          ? 'spam_filtered'
+          : v === 'outbound'
+            ? 'classify'
+            : v,
+      ]),
     ),
   ]),
 );
@@ -152,35 +174,49 @@ describe('routing policy — verdict per message', () => {
   }
 });
 
-describe('routing policy — the F0b diff, enumerated', () => {
-  const changed = Object.entries(POLICY_1_0).flatMap(([corpus, rows]) =>
+describe('routing policy — every change since 1.0.0, enumerated', () => {
+  const changes = Object.entries(POLICY_1_0).flatMap(([corpus, rows]) =>
     Object.keys(rows)
       .filter((id) => rows[id] !== EXPECTED[corpus]![id])
-      .map((id) => `${corpus}/${id}: ${rows[id]} → ${EXPECTED[corpus]![id]}`),
+      .map((id) => ({ corpus, id, from: rows[id]!, to: EXPECTED[corpus]![id]! })),
   );
 
-  it('changes exactly the 21 messages the removed rule was dropping', () => {
-    expect(changed).toHaveLength(21);
-    expect(changed.every((c) => c.includes('outbound → classify'))).toBe(true);
+  it('moves 31 of the 90 messages, and only in the two ways the rules describe', () => {
+    expect(changes).toHaveLength(31);
+    const transitions = [...new Set(changes.map((c) => `${c.from} → ${c.to}`))].sort();
+    expect(transitions).toEqual([
+      'classify → spam_filtered',
+      'mailing_list → spam_filtered',
+      'outbound → classify',
+    ]);
   });
 
-  it('moves no message between two skip reasons', () => {
-    for (const [corpus, rows] of Object.entries(POLICY_1_0)) {
-      for (const [id, before] of Object.entries(rows)) {
-        const after = EXPECTED[corpus]![id];
-        if (before !== after) expect([before, after]).toEqual(['outbound', 'classify']);
-      }
-    }
+  // 2.0.0 — the same-domain rule. Named `outbound`, it never detected outbound:
+  // this pipeline only reads an inbox. What it dropped was the company's own
+  // mail that arrived.
+  it('2.0.0 stops dropping 21 same-domain messages', () => {
+    const undropped = changes.filter((c) => c.from === 'outbound');
+    expect(undropped).toHaveLength(21);
+    expect(undropped.every((c) => c.to === 'classify')).toBe(true);
   });
 
-  it('reaches the model on 84 of the 90, up from 63', () => {
+  // 3.0.0 — the provider's own verdict, ahead of everything. It also reclaims
+  // 115, which used to be reported as a mailing list because List-Unsubscribe
+  // was checked before anyone asked whether the server had already decided.
+  it('3.0.0 answers the ten flagged messages from the envelope', () => {
+    const flagged = changes.filter((c) => c.to === 'spam_filtered').map((c) => c.id);
+    expect(flagged.sort()).toEqual([...SPAM_FILTERED].sort());
+    expect(changes.find((c) => c.id === '115')!.from).toBe('mailing_list');
+  });
+
+  it('reaches the model on 75 of the 90 — 63 before, +21 same-domain, −9 spam', () => {
     const count = (table: typeof EXPECTED) =>
       Object.values(table).reduce(
         (n, rows) => n + Object.values(rows).filter((v) => v === 'classify').length,
         0,
       );
     expect(count(POLICY_1_0)).toBe(63);
-    expect(count(EXPECTED)).toBe(84);
+    expect(count(EXPECTED)).toBe(75);
   });
 
   // The measurement that motivated F0b. `internal` is the class the KAI-93
@@ -195,5 +231,16 @@ describe('routing policy — the F0b diff, enumerated', () => {
     // 132, 133 and 140 come from the app's own notifier — still gated, as automated
     // senders rather than as same-domain mail.
     expect(reaching(EXPECTED)).toEqual(['131', '134', '135', '136', '137', '138', '139']);
+  });
+
+  // What the spam rule buys the derivation table downstream: `spam` and an
+  // unsolicited vendor offer are both "commercial, no action needed", so no
+  // combination of the two model axes could separate them. Answering spam from
+  // the envelope is what makes the table fittable.
+  it('leaves the classifier four types to tell apart on external mail, not five', () => {
+    const external = Object.entries(EXPECTED['coverage']!)
+      .filter(([, v]) => v === 'classify')
+      .map(([id]) => id);
+    expect(external.some((id) => SPAM_FILTERED.includes(id))).toBe(false);
   });
 });

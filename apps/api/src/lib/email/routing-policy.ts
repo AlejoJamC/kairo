@@ -27,6 +27,7 @@ import type { MailFacts } from "./mail-facts.js";
  * new reason belongs here rather than inline at a call site.
  */
 export const SKIP_REASONS = [
+  "spam_filtered",
   "automated_sender",
   "mailing_list",
   "system_notification",
@@ -47,8 +48,10 @@ export type Route =
  * production row that disagree are indistinguishable from a model that changed
  * its mind.
  */
-export const ROUTING_POLICY_VERSION = "1.1.0";
+export const ROUTING_POLICY_VERSION = "1.1.1";
 
+// 1.1.1 (KAI-45 F2) — the provider's own spam verdict decides, ahead of
+//   everything. See rule 0.
 // 1.1.0 (KAI-45 F0b) — the `outbound` rule is gone. See rule 1 below for what
 //   it actually did and why it was removed. Historical `messages.skip_reason`
 //   rows still carry the string; nothing emits it any more.
@@ -79,6 +82,24 @@ function relevanceSignals(facts: MailFacts, overrides: string[]): string[] {
  * so `facts.isBulk`, which unions all three, would silently widen rule 6.
  */
 export function resolveRoute(facts: MailFacts): Route {
+  // 0. The receiving server already ran a spam filter. Believe it.
+  //
+  //    On the 90 real .eml in scripts/eval/data, `X-Spam-Status: Yes` fires on
+  //    exactly the ten messages the sheet labels `spam` and on nothing else —
+  //    precision and recall 1.0, zero tokens, zero milliseconds. The models
+  //    asked the same question score 78–98% and took up to 145 s on email 116,
+  //    which carries `X-Spam-Status: Yes, score=11.8` in its own headers.
+  //
+  //    This is also what makes the derivation table in @kairo/intelligence
+  //    fittable: `spam` and an unsolicited vendor offer are both "commercial,
+  //    no action needed", so no combination of the two model axes can separate
+  //    them. The envelope can, so the envelope does.
+  //
+  //    `null` means the provider did not scan, which is not a clean bill.
+  if (facts.spamFiltered === true) {
+    return { kind: "skip", reason: "spam_filtered", signals: [] };
+  }
+
   // 1. REMOVED in 2.0.0 — the rule that dropped mail from the tenant's own
   //    domain, unconditionally and ahead of every override.
   //

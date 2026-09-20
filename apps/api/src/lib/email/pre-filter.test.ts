@@ -10,6 +10,49 @@ const BASE: Parameters<typeof preFilterEmail>[0] = {
 };
 
 // ---------------------------------------------------------------------------
+// Rule 0: spam_filtered — KAI-45 F2, routing policy 1.1.1
+//
+// Runs ahead of everything, including the urgency / In-Reply-To overrides. On
+// the 90 real .eml in scripts/eval/data the header fires on exactly the ten
+// messages the sheet labels `spam` and on nothing else.
+// ---------------------------------------------------------------------------
+describe("Rule: spam_filtered", () => {
+  it("believes the receiving server's verdict", () => {
+    const result = preFilterEmail({
+      ...BASE,
+      headers: { "X-Spam-Status": "Yes, score=11.8 required=5.0" },
+    });
+    expect(result.status).toBe("skip");
+    expect(result.skip_reason).toBe("spam_filtered");
+  });
+
+  // Email 116 of the coverage corpus: a forged purchase order that three of the
+  // seven KAI-93 cells read as `support`, carrying its own verdict in a header
+  // nobody was reading.
+  it("outranks an urgent subject and an existing thread", () => {
+    const result = preFilterEmail({
+      ...BASE,
+      subject: "URGENT: production order 15458",
+      headers: { "X-Spam-Status": "Yes, score=11.8", "In-Reply-To": "<a@b>" },
+    });
+    expect(result.status).toBe("skip");
+    expect(result.skip_reason).toBe("spam_filtered");
+  });
+
+  // A negative verdict and a missing header are different states, and neither
+  // is a reason to drop the message.
+  it("does not skip when the provider scanned and cleared it", () => {
+    expect(
+      preFilterEmail({ ...BASE, headers: { "X-Spam-Status": "No, score=-2.6" } }).status,
+    ).toBe("relevant");
+  });
+
+  it("does not skip when the provider never scanned", () => {
+    expect(preFilterEmail({ ...BASE, headers: {} }).status).toBe("relevant");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Rule 1: automated_sender
 // ---------------------------------------------------------------------------
 describe("Rule: automated_sender", () => {
