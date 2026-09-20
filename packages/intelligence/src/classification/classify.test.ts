@@ -272,22 +272,49 @@ describe('tenant context', () => {
   // it was unreachable by construction — 0 of 100 annotations used it while
   // every email nobody could place became `internal`. There is exactly one
   // residual class and it is `other`; `internal` is whose work the email is.
-  it('makes other the residual class, not internal', async () => {
+  // KAI-45 F2 — the five-way `type` question is gone. It was the product of
+  // two independent axes crossed with the envelope, and asking for it in one
+  // shot is what made `other` and `internal` argue for five rubric versions.
+  it('asks for the two axes and no longer for a ticket type', async () => {
     const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
 
-    expect(es).toContain('Si ninguna encaja → `other`');
-    expect(es).toContain('No es la clase por defecto');
-    expect(es).not.toContain('Es la clase por defecto cuando');
-    // the competing shortcut that sent every external request to `support`
-    expect(es).not.toContain('si el remitente es externo y espera una acción');
+    expect(es).toContain('## 1. actionability');
+    expect(es).toContain('## 2. subject_matter');
+    expect(es).not.toContain('## 1. type');
+    for (const residual of ['`support`, `prospect`, `spam`, `internal`, `other`', 'Si ninguna encaja']) {
+      expect(es).not.toContain(residual);
+    }
+  });
+
+  // Provenance is computed from the envelope and combined with the answer by
+  // the derivation table. A rubric that also asks the model to weigh it counts
+  // it twice — and on this corpus the messages between the company's own
+  // mailboxes carry three different types, so it settles nothing on its own.
+  it('tells the model to leave provenance out of the subject-matter call', async () => {
+    const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
+
+    expect(es).toContain('La procedencia no entra en esta decisión');
+    expect(es).toContain('la estás contando dos veces');
+  });
+
+  // Both directions of a commercial exchange are `commercial`; what separates
+  // the vendor from the buyer is `actionability`. Getting this wrong is the
+  // error three of the seven KAI-93 cells made on all four supplier offers.
+  it('puts both sides of a commercial exchange on the same axis value', async () => {
+    const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
+
+    expect(es).toContain('en cualquiera de las dos direcciones');
+    expect(es).toContain('Quien ofrece y quien pide caen los dos aquí');
   });
 
   it('keeps both languages on the same rule', async () => {
     const en = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' }, 'en');
 
-    expect(en).toContain('If none of them fits -> `other`');
-    expect(en).toContain('It is not the default class');
-    expect(en).not.toContain('It is the default class when');
+    expect(en).toContain('## 1. actionability');
+    expect(en).toContain('## 2. subject_matter');
+    expect(en).not.toContain('## 1. type');
+    expect(en).toContain('Provenance is not part of this decision');
+    expect(en).toContain('in either direction');
     expect(en).toContain('What it does: (not available)');
   });
 });
