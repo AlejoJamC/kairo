@@ -17,6 +17,8 @@ import { readdir, readFile } from 'fs/promises';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { classifyEmailWithMeta, stripQuotedThread } from '../../packages/intelligence/src/index';
 import { parseEml } from './lib/parse-eml';
+import { readEmlHeaders, tenantMailboxes } from './lib/eml-headers';
+import { extractMailFacts } from '../../apps/api/src/lib/email/mail-facts';
 import { getPromptVersion, DEFAULT_LANG } from '../../packages/intelligence/src/classification/prompt';
 import { BENCH, ONBOARDING_BENCH, VARIANTS, cellSlug, bodyRule, cellKey, totalCells, variantsFor } from './lib/matrix';
 import { Ledger } from './lib/ledger';
@@ -40,7 +42,12 @@ const RUN_LOG = join(OUTPUT_ROOT, '.matrix-state', 'matrix_run.log');
 const BC_FILE = join(SCRIPT_DIR, 'data/input/business_context.txt');
 
 const TEMPERATURE = 0;
-const TENANT_MAILBOX = process.env['EVAL_TENANT_MAILBOX'] ?? 'servicioalcliente2@encargasas.com';
+// Read from data/input/tenant_mailboxes.txt, which is gitignored along with the
+// rest of the corpus. Provenance is a coordinate of the derivation key and an
+// account reads more than one inbox, so the facts get the whole list; the prompt
+// renders a single address and gets the first.
+const TENANT_MAILBOXES_FOR_FACTS = tenantMailboxes();
+const TENANT_MAILBOX = TENANT_MAILBOXES_FOR_FACTS[0]!;
 const MAX_MINUTES = Number(process.env['EVAL_MAX_MINUTES'] ?? '0');
 const MAX_CALLS = Number(process.env['EVAL_MAX_CALLS'] ?? '0');
 const DRY = process.env['EVAL_MATRIX_DRY'] === '1';
@@ -193,7 +200,20 @@ async function main(): Promise<void> {
     for (const filename of emails) {
       if (stopping) break;
       const emailId = filename.replace(/\.eml$/, '');
-      const parsed = parseEml(await readFile(join(INPUT_DIR, filename), 'utf-8'));
+      const raw = await readFile(join(INPUT_DIR, filename), 'utf-8');
+      const parsed = parseEml(raw);
+      // The envelope facts production computes before classifying. The runner
+      // does NOT apply the routing policy on purpose: this measures what the
+      // model does on every message, including the ones the static rules catch
+      // today — those rules fail (public-domain inbox, forged sender, a
+      // provider that sets no X-Spam-Status) and that is exactly where the
+      // model's answer has to be known.
+      const facts = extractMailFacts({
+        from: parsed.from,
+        subject: parsed.subject,
+        headers: readEmlHeaders(raw),
+        tenantMailbox: TENANT_MAILBOXES_FOR_FACTS,
+      });
 
       for (const v of variantsFor(m)) {
         if (stopping) break;
@@ -228,6 +248,7 @@ async function main(): Promise<void> {
               subject: parsed.subject, from: parsed.from, to: parsed.to, cc: parsed.cc,
               body, threadDepth: parsed.threadDepth, attachments: parsed.attachments,
               tenantMailbox: TENANT_MAILBOX,
+              facts,
               ...(v.businessContext ? { businessContext } : {}),
             }, { temperature: TEMPERATURE });
             const ms = Math.round(performance.now() - t0);

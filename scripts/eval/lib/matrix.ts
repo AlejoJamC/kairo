@@ -24,7 +24,36 @@ export interface BenchModel {
   stages: PipelineStage[];
 }
 
-export const BENCH: BenchModel[] = [
+/**
+ * Narrow the bench to specific models, for a cheap targeted run.
+ *
+ * `EVAL_MODELS=muse-glimmer` runs one cell instead of 280 — which is the
+ * difference between measuring one change for free on a laptop and spending an
+ * afternoon and an API budget re-confirming six cells nobody asked about. Match
+ * is a case-insensitive substring against the label or the model id, so
+ * `EVAL_MODELS=qwen,granite` works too.
+ *
+ * Unset runs everything, so every command that worked before still means the
+ * same thing. A name matching nothing is fatal rather than an empty run: a
+ * bench of zero models that reports success is how an afternoon disappears.
+ */
+function selectedModels(all: BenchModel[]): BenchModel[] {
+  const raw = (process.env['EVAL_MODELS'] ?? '').trim();
+  if (!raw) return all;
+
+  const wanted = raw.split(',').map((w) => w.trim().toLowerCase()).filter(Boolean);
+  const picked = all.filter((m) =>
+    wanted.some((w) => m.label.toLowerCase().includes(w) || m.model.toLowerCase().includes(w)),
+  );
+  if (picked.length === 0) {
+    throw new Error(
+      `EVAL_MODELS="${raw}" matched no model. Known: ${all.map((m) => m.label).join(', ')}.`,
+    );
+  }
+  return picked;
+}
+
+const ALL_MODELS: BenchModel[] = [
   // Onboarding only. Tier 1 is one scan per signup; backfill is the whole
   // history and then every message that arrives, forever.
   { provider: 'anthropic', model: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', stages: ['onboarding'] },
@@ -37,6 +66,8 @@ export const BENCH: BenchModel[] = [
   // Backfill only, same reason as muse-glimmer.
   { provider: 'ollama', model: 'gemma4:31b', label: 'gemma4 31b', stages: ['backfill'] },
 ];
+
+export const BENCH: BenchModel[] = selectedModels(ALL_MODELS);
 
 /**
  * One cell of the matrix: a way of feeding the classifier that some part of

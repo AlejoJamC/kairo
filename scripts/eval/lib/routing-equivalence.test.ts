@@ -33,42 +33,16 @@ import { join } from 'path';
 import { extractMailFacts } from '../../../apps/api/src/lib/email/mail-facts';
 import { resolveRoute } from '../../../apps/api/src/lib/email/routing-policy';
 import { CORPORA } from './corpus';
+import { readEmlHeaders, tenantMailboxes } from './eml-headers';
 import { parseEml } from './parse-eml';
+
+// Read from scripts/eval/data/input/, which is gitignored: the corpus is a
+// real company's inbox and the addresses that identify it stay with it.
+const TENANT_MAILBOXES = tenantMailboxes();
 
 const SCRIPT_DIR = join(new URL('.', import.meta.url).pathname, '..');
 
-// Read from scripts/eval/data/input/tenant_mailboxes.txt, which is gitignored
-// along with the corpus: the mailbox that identifies the tenant lives with the
-// data, never in tracked source. First line is the monitored inbox.
-const TENANT_MAILBOX = readFileSync(join(SCRIPT_DIR, 'data/input/tenant_mailboxes.txt'), 'utf-8')
-  .split('\n')
-  .map((l) => l.trim().toLowerCase())
-  .filter((l) => l !== '' && !l.startsWith('#'))[0]!;
 
-/**
- * The raw header block as a record, mirroring `headersToRecord` in
- * apps/api/src/lib/email/headers.ts: original case preserved, last occurrence
- * of a repeated header wins. Folded continuation lines are rejoined first.
- *
- * Production gets this record from Gmail's API rather than from a file, so what
- * is reproduced here is the shape, not the transport.
- */
-function readHeaders(raw: string): Record<string, string> {
-  const head = raw.split(/\r?\n\r?\n/)[0] ?? '';
-  const out: Record<string, string> = {};
-  let key = '';
-  for (const line of head.split(/\r?\n/)) {
-    if (/^[ \t]/.test(line) && key) {
-      out[key] += ' ' + line.trim();
-      continue;
-    }
-    const match = line.match(/^([A-Za-z0-9-]+):[ \t]*(.*)$/);
-    if (!match) continue;
-    key = match[1]!;
-    out[key] = match[2]!;
-  }
-  return out;
-}
 
 /** `skip_reason`, or `classify` when the message reaches the model. */
 function verdict(corpusEmlDir: string, filename: string): string {
@@ -78,8 +52,8 @@ function verdict(corpusEmlDir: string, filename: string): string {
     extractMailFacts({
       from: parsed.from,
       subject: parsed.subject,
-      headers: readHeaders(raw),
-      tenantMailbox: TENANT_MAILBOX,
+      headers: readEmlHeaders(raw),
+      tenantMailbox: TENANT_MAILBOXES,
     }),
   );
   return route.kind === 'skip' ? route.reason : 'classify';

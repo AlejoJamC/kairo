@@ -41,34 +41,14 @@ import {
 import { extractMailFacts } from '../../../apps/api/src/lib/email/mail-facts';
 import { parseCsv, adaptGroundTruth, canonicalEmailId } from '../compute_metrics';
 import { CORPORA, type Corpus } from './corpus';
+import { readEmlHeaders, tenantMailboxes } from './eml-headers';
 import { parseEml } from './parse-eml';
 
 const EVAL_DIR = join(new URL('.', import.meta.url).pathname, '..');
-// Read from scripts/eval/data/input/tenant_mailboxes.txt, which is gitignored
-// along with the corpus: the mailbox that identifies the tenant lives with the
-// data, never in tracked source. First line is the monitored inbox.
-const TENANT_MAILBOX = readFileSync(join(EVAL_DIR, 'data/input/tenant_mailboxes.txt'), 'utf-8')
-  .split('\n')
-  .map((l) => l.trim().toLowerCase())
-  .filter((l) => l !== '' && !l.startsWith('#'))[0]!;
 
-/** Mirrors `headersToRecord`: original case kept, last occurrence wins. */
-function readHeaders(raw: string): Record<string, string> {
-  const head = raw.split(/\r?\n\r?\n/)[0] ?? '';
-  const out: Record<string, string> = {};
-  let key = '';
-  for (const line of head.split(/\r?\n/)) {
-    if (/^[ \t]/.test(line) && key) {
-      out[key] += ' ' + line.trim();
-      continue;
-    }
-    const match = line.match(/^([A-Za-z0-9-]+):[ \t]*(.*)$/);
-    if (!match) continue;
-    key = match[1]!;
-    out[key] = match[2]!;
-  }
-  return out;
-}
+// Read from scripts/eval/data/input/, which is gitignored: the corpus is a
+// real company's inbox and the addresses that identify it stay with it.
+const TENANT_MAILBOXES = tenantMailboxes();
 
 interface Labelled {
   corpus: string;
@@ -101,8 +81,8 @@ function labelled(corpus: Corpus): Labelled[] {
     const facts = extractMailFacts({
       from: parsed.from,
       subject: parsed.subject,
-      headers: readHeaders(raw),
-      tenantMailbox: TENANT_MAILBOX,
+      headers: readEmlHeaders(raw),
+      tenantMailbox: TENANT_MAILBOXES,
     });
     out.push({
       corpus: corpus.id,
@@ -186,9 +166,23 @@ describe('derivation table — fit against the 90 human labels', () => {
   // not have to rerun the analysis to know why the table looks the way it does.
   it('the corpus splits across provenance the way the table assumes', () => {
     const count = (p: Provenance) => CORPUS_EMAILS.filter((e) => e.provenance === p).length;
-    expect(count('external')).toBe(69);
-    expect(count('same_company')).toBe(13);
-    expect(count('tenant_mailbox')).toBe(8);
+    expect(count('external')).toBe(63);
+    expect(count('tenant_mailbox')).toBe(23);
+    // Corporate addresses that are not themselves connected inboxes:
+    // gerencia@, operacioneslog@ and the like.
+    expect(count('same_company')).toBe(4);
+  });
+
+  // Reading one mailbox instead of four moved 26 of the 90 into the wrong row.
+  // Provenance is a coordinate of the derivation key, so that is 26 messages
+  // looked up in the wrong place before anyone even asks the model.
+  it('every type each row must reach is reachable, row by row', () => {
+    const needed = (p: Provenance) =>
+      [...new Set(CORPUS_EMAILS.filter((e) => e.provenance === p && e.label !== 'spam').map((e) => e.label))].sort();
+
+    expect(needed('external')).toEqual(['internal', 'other', 'prospect', 'support']);
+    expect(needed('tenant_mailbox')).toEqual(['internal', 'other', 'prospect', 'support']);
+    expect(needed('same_company')).toEqual(['internal', 'support']);
   });
 
   // The ten flagged messages are the reason `spam` is excluded above: all of
