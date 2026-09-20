@@ -14,6 +14,13 @@ export {
   DEFAULT_LANG,
   stripQuotedThread,
   GMAIL_CATEGORIES,
+  TYPE_DERIVATION,
+  DERIVATION_VERSION,
+  provenanceOf,
+  derivationKey,
+  deriveTicketType,
+  deriveClassification,
+  reachableTypes,
 } from './classification';
 export type {
   ClassificationResult,
@@ -21,6 +28,8 @@ export type {
   MailFacts,
   GmailCategory,
   AuthResult,
+  DerivationKey,
+  ModelVerdict,
   ClassifyOptions,
   LangfuseContext,
   PromptLang,
