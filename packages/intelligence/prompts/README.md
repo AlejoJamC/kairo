@@ -8,30 +8,35 @@ Prompts are business logic. They are versioned in git and reviewed via PR.
 
 ### Version Format
 
-**The major is frozen at 1 until this ships to production. There is no 2.x.**
-It was bumped to 2.0.0 and then 3.0.0 during development and reset to 1.2.0 in
-`1c0a2e8`; that reset is the correct state, not a mistake to undo. A prompt
-edit never touches the first number.
+`X.Y.Z`, and **it is not semver.** Read the rule below, not your instincts.
 
-The remaining two are decided by **what moves for the consumer**, not by how
-much of the file changed. Every edit reads as a "refined instruction", so a
-rule written that way spends the minor on everything and the number climbs
-forever while saying nothing.
+**X is frozen at 1.** It was bumped to 2.0.0 and then 3.0.0 during development
+and reset to 1.2.0 in `1c0a2e8`; that reset is the correct state, not a mistake
+to undo. A prompt edit never touches the first number.
 
-- **Minor** (1.3.0 → 1.4.0): the same email now gets a different value in some
-  field. A new rule, a changed threshold, a class redefined.
-- **Patch** (1.3.0 → 1.3.1): wording, ordering, examples, an instruction made
-  conditional or clearer — the label a given email receives does not change.
+Freezing X removes a position, so the other two shift up in meaning. There are
+three kinds of change and only two positions left, so the bottom two merge:
 
-The test is mechanical: if you cannot name an email whose returned JSON changes,
-it is a patch.
+| Position | Role | When |
+|---|---|---|
+| **X** — `1`.y.z | frozen | never |
+| **Y** — 1.`Y`.z | **the major** | A block rewritten end to end. A field the model stops answering. A class that stops existing. Something radical, with unequivocal evidence that it is radical. |
+| **Z** — 1.y.`Z` | **medium and minor, merged** | Everything else. A new rule, a changed threshold, a redefined class, reworded prose, reordered sections — all of it. |
+
+**The common error is spending Y on an edit that changes some email's answer.**
+That is not the test. A rule that moves labels is still a rule, and rules live
+in Z. The question for Y is only: *did a block disappear, or get replaced
+whole?* If not, it is a Z.
 
 Worked examples from this file's history:
 
 | Change | Version | Why |
 |---|---|---|
-| `frustrated` gains the thread-position rule | 1.2.0 → **1.3.0** | Emails that were `neutral` come back `frustrated` |
-| The confidence penalty for a missing field becomes conditional | 1.3.0 → **1.3.1** | Same labels; only the wording of when to lower a number |
+| The envelope-facts block is added and one bullet is reworded — 3 changed lines | 1.4.1 → **1.4.2** | Labels moved, but nothing was replaced. A rule edit is a Z, however much it moves |
+| The `type` section is deleted and replaced by two sections, one per orthogonal axis; the model stops emitting `type` at all | 1.4.2 → **1.5.0** | A block gone and a field removed from the model's answer. This is what Y is for |
+
+Versions before 1.4.1 were numbered by reading Y and Z as semver's minor and
+patch. That reading was wrong and is not a precedent.
 
 ### Making Changes
 
