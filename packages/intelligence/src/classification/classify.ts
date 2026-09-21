@@ -1,6 +1,6 @@
 import { startObservation, propagateAttributes } from '@langfuse/tracing';
 import { createCompletionProvider } from '../config/providers';
-import { ModelVerdictSchema, type ClassificationResult } from './schema';
+import { ModelVerdictSchema, type ClassificationResult, type ModelVerdictResult } from './schema';
 import { deriveClassification, provenanceOf } from './derive';
 import { buildPrompt, getPromptVersion, type PromptLang, DEFAULT_LANG } from './prompt';
 import type { EmailMessage } from './types';
@@ -45,7 +45,23 @@ export async function classifyEmail(
 export async function classifyEmailWithMeta(
   message: EmailMessage,
   options?: ClassifyOptions,
-): Promise<{ result: ClassificationResult; meta: CompletionMeta; prompt: string; promptVersion: string | null }> {
+): Promise<{
+  result: ClassificationResult;
+  /**
+   * What the model actually answered, before the table turned it into a type.
+   *
+   * Returned rather than kept inside because `result.type` is the product of
+   * three coordinates and a wrong one is unattributable without them: an eval
+   * that sees only the type cannot tell a model that picked the wrong axis from
+   * a table cell that cannot reach the label at all. Those are different
+   * defects with different fixes, and scripts/eval/run_layered_eval.ts
+   * separates them from this field.
+   */
+  verdict: ModelVerdictResult;
+  meta: CompletionMeta;
+  prompt: string;
+  promptVersion: string | null;
+}> {
   const provider = createCompletionProvider();
   const lang = options?.lang ?? DEFAULT_LANG;
 
@@ -104,7 +120,7 @@ export async function classifyEmailWithMeta(
         ...(Object.keys(usageDetails).length > 0 ? { usageDetails } : {}),
       });
 
-      return { result: data, meta, prompt, promptVersion };
+      return { result: data, verdict, meta, prompt, promptVersion };
     } catch (err) {
       generation.update({ level: 'ERROR', statusMessage: err instanceof Error ? err.message : String(err) });
       throw err;

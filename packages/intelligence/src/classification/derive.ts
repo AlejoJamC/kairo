@@ -40,7 +40,7 @@ import type { MailFacts } from './types';
  * it, a row from last week and a corpus run from today disagreeing is
  * indistinguishable from a model that changed its mind.
  */
-export const DERIVATION_VERSION = '1.0.0';
+export const DERIVATION_VERSION = '1.1.0';
 
 /**
  * Where the message came from, from the envelope. Three reachable states.
@@ -66,23 +66,42 @@ export function derivationKey(
 }
 
 /**
- * The 18 cells. Every combination has an entry — a missing one would surface as
+ * The 24 cells. Every combination has an entry — a missing one would surface as
  * `undefined` reaching the database, and the completeness test exists to stop
  * that before it ships.
  *
  * Note `spam` appears nowhere. It is answered before this runs, by
  * `X-Spam-Status` in the routing policy: an unsolicited vendor offer and a
- * phishing attempt are both "commercial, no action needed", so no pair of axes
- * can separate them. The envelope can, so the envelope does — which is also
- * what leaves this table four types to produce instead of five.
+ * phishing attempt are both commercial mail nobody asked for, so no pair of
+ * axes can separate them. The envelope can, so the envelope does — which is
+ * also what leaves this table four types to produce instead of five.
+ *
+ * **1.1.0 — the commercial rows no longer read `actionability`.** They used to:
+ * `needs_action|commercial` was `prospect` and `fyi|commercial` was `other`,
+ * which made the difference between a buyer and a seller a question of
+ * intensity. It is not. A vendor offering its services asks for a meeting, so
+ * the model answered `needs_action` and was correct by the rubric, and the
+ * table turned a correct answer into `prospect`. On the coverage corpus every
+ * one of the 10 model errors was commercial mail and `other` scored 2/10.
+ *
+ * Direction now comes from `subject_matter` itself, where the text can answer
+ * it. The consequence is deliberate and visible here: the four commercial cells
+ * of each provenance row collapse to two values, and `actionability` decides
+ * nothing for them. It still decides `service` mail, which is what it was for.
  */
 export const TYPE_DERIVATION: Record<DerivationKey, TicketType> = {
   // ── Mail from outside the company ─────────────────────────────────────────
   // The common case: 40 of the 90 corpus emails are an external sender asking
   // for something about the service.
   'external|needs_action|service': 'support',
-  // Someone who is not a customer yet and wants to be.
-  'external|needs_action|commercial': 'prospect',
+  // Someone who is not a customer yet and wants to be. Whether they are asking
+  // for a quote today or merely announcing a tender does not change who is
+  // buying, so both actionabilities land here.
+  'external|needs_action|commercial_demand': 'prospect',
+  // Vendor offers, ad pitches, event invitations. The single largest `other`
+  // group in the corpus (121, 124, 126, 128, 129, 130) — and the one the old
+  // table lost, because these do ask for a reply.
+  'external|needs_action|commercial_offer': 'other',
   // An outsider asking the house to do its own paperwork — a CV, a summons, a
   // compliance form. The rubric has said this since es.md:44: a message can
   // arrive from outside and still be the company's own housekeeping.
@@ -90,22 +109,23 @@ export const TYPE_DERIVATION: Record<DerivationKey, TicketType> = {
   // A customer telling us something about their service without asking: still
   // the queue's business.
   'external|fyi|service': 'support',
-  // Vendor offers, ad pitches, event invitations. The single largest `other`
-  // group in the corpus (121, 124, 126, 128, 129, 130).
-  'external|fyi|commercial': 'other',
+  'external|fyi|commercial_demand': 'prospect',
+  'external|fyi|commercial_offer': 'other',
   'external|fyi|admin': 'internal',
 
   // ── A corporate address that is not one of the connected inboxes ──────────
   // gerencia@, operacioneslog@ and the like — four of the ninety. Until routing
   // policy 2.0.0 this whole group was dropped as "outbound".
   'same_company|needs_action|service': 'support',
-  'same_company|needs_action|commercial': 'prospect',
+  'same_company|needs_action|commercial_demand': 'prospect',
+  'same_company|needs_action|commercial_offer': 'other',
   'same_company|needs_action|admin': 'internal',
   // The one cell where provenance changes the answer. An outsider stating
   // something about the service is the queue's business; the house stating
   // something about its own operation to its own people is housekeeping.
   'same_company|fyi|service': 'internal',
-  'same_company|fyi|commercial': 'other',
+  'same_company|fyi|commercial_demand': 'prospect',
+  'same_company|fyi|commercial_offer': 'other',
   'same_company|fyi|admin': 'internal',
 
   // ── One of the account's own mailboxes ────────────────────────────────────
@@ -114,13 +134,15 @@ export const TYPE_DERIVATION: Record<DerivationKey, TicketType> = {
   // land back in it. A bid invitation forwarded to the commercial area (101,
   // 106) and the quote the house sent a client (102) are both here.
   'tenant_mailbox|needs_action|service': 'support',
-  'tenant_mailbox|needs_action|commercial': 'prospect',
+  'tenant_mailbox|needs_action|commercial_demand': 'prospect',
+  'tenant_mailbox|needs_action|commercial_offer': 'other',
   'tenant_mailbox|needs_action|admin': 'internal',
   // 137: the holiday-schedule announcement to 16 clients. About the service,
   // asking nothing, sent by the house — `internal` in the sheet, and the reason
   // this cell cannot simply mirror the external row.
   'tenant_mailbox|fyi|service': 'internal',
-  'tenant_mailbox|fyi|commercial': 'other',
+  'tenant_mailbox|fyi|commercial_demand': 'prospect',
+  'tenant_mailbox|fyi|commercial_offer': 'other',
   'tenant_mailbox|fyi|admin': 'internal',
 };
 

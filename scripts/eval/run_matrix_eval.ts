@@ -81,6 +81,39 @@ function appendRow(dir: string, row: Row): void {
   appendFileSync(file, CSV_COLUMNS.map((c) => csvCell(row[c])).join(',') + '\n', 'utf-8');
 }
 
+/**
+ * Refuse to append a run to a CSV that already holds a different rubric.
+ *
+ * Rows are appended, and a cell directory is one measurement. A second run with
+ * a new prompt version lands in the same file, `eval:metrics` reads all of it as
+ * one population, and the report is nonsense — silently, because both halves are
+ * well-formed. That is exactly what happened on 20 Sep: 40 rows of one rubric and
+ * 40 of the next in a single file, separable only by hand afterwards.
+ *
+ * Archive the old cell, or point EVAL_OUTPUT_ROOT somewhere else.
+ */
+function assertSameRubric(dir: string, promptVersion: string): void {
+  const file = join(dir, PIPELINE_OUTPUT);
+  if (!existsSync(file)) return;
+
+  const lines = readFileSync(file, 'utf-8').split('\n').filter((l) => l.trim() !== '');
+  if (lines.length < 2) return;
+
+  const column = lines[0]!.split(',').indexOf('prompt_version');
+  if (column === -1) return;
+
+  const found = new Set(lines.slice(1).map((l) => l.split(',')[column]).filter(Boolean));
+  found.delete(promptVersion);
+  if (found.size === 0) return;
+
+  console.error(`\n✗ ${file}`);
+  console.error(`  already holds rows from rubric ${[...found].join(', ')}, and this run is ${promptVersion}.`);
+  console.error('  Appending would mix two measurements into one file, and eval:metrics');
+  console.error('  would read them as one population without noticing.');
+  console.error('\n  Archive that cell, or set EVAL_OUTPUT_ROOT to a fresh directory.\n');
+  process.exit(1);
+}
+
 function log(line: string): void {
   mkdirSync(join(OUTPUT_ROOT, '.matrix-state'), { recursive: true });
   appendFileSync(RUN_LOG, `[${new Date().toISOString()}] ${line}\n`, 'utf-8');
@@ -140,6 +173,14 @@ async function main(): Promise<void> {
     if (stale.length > 0) {
       console.warn(`⚠  ${stale.length} run director(ies) still hold a CSV from that run ` +
         `(${stale[0]}${stale.length > 1 ? ', …' : ''}). Archive or delete them, or their rows will be duplicated.`);
+    }
+  }
+
+  // Before anything runs: a cell that already measured another rubric is not a
+  // cell this run may append to.
+  for (const m of BENCH) {
+    for (const v of variantsFor(m)) {
+      assertSameRubric(join(OUTPUT_ROOT, cellSlug(m, v)), promptVersion);
     }
   }
 

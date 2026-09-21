@@ -65,16 +65,29 @@ export type Actionability = (typeof ACTIONABILITY)[number];
 /**
  * What the message is about, in terms of the company's own activity.
  *
- * - `service`    — the service the company sells to its customers
- * - `commercial` — buying or selling between companies, in either direction
- * - `admin`      — the company's own housekeeping: personnel, compliance,
- *                  paperwork, notifications from its own systems
+ * - `service`           — the service the company sells to its customers
+ * - `commercial_demand` — the sender wants to buy from us
+ * - `commercial_offer`  — the sender wants to sell to us
+ * - `admin`             — the company's own housekeeping: personnel,
+ *                         compliance, paperwork, notifications from its own
+ *                         systems
+ *
+ * The commercial value carries **direction**, and that is the whole reason it
+ * is split. `prospect` and `other` differ by who is selling to whom, and until
+ * now the table encoded that difference as `needs_action` vs `fyi` — which
+ * cannot work, because an unsolicited vendor offer does ask for action. The
+ * model answered `needs_action` and was right by the rubric; the rubric was
+ * wrong. Measured on the coverage corpus: all 10 model errors were commercial
+ * mail, and `other` scored 2/10.
+ *
+ * Direction is a fact stated in the message. Intensity is a judgement the two
+ * cases share. Asking for the one the text answers is the point.
  *
  * Deliberately not `internal` vs `external`: that is provenance, it is readable
  * off the envelope, and asking the model for it is asking it to redo a string
  * comparison the deterministic layer already did.
  */
-export const SUBJECT_MATTER = ['service', 'commercial', 'admin'] as const;
+export const SUBJECT_MATTER = ['service', 'commercial_demand', 'commercial_offer', 'admin'] as const;
 export type SubjectMatter = (typeof SUBJECT_MATTER)[number];
 
 /**

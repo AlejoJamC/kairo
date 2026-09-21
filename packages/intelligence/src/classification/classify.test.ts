@@ -297,14 +297,37 @@ describe('tenant context', () => {
     expect(es).toContain('la estás contando dos veces');
   });
 
-  // Both directions of a commercial exchange are `commercial`; what separates
-  // the vendor from the buyer is `actionability`. Getting this wrong is the
-  // error three of the seven KAI-93 cells made on all four supplier offers.
-  it('puts both sides of a commercial exchange on the same axis value', async () => {
+  // The two sides of a commercial exchange are separate values, and the thing
+  // that separates them is direction — never `actionability`. The previous
+  // rubric said the opposite, and it cost every `other` in the corpus: a vendor
+  // offer asks for a meeting, so the model answered `needs_action`, which was
+  // correct by that rubric and derived `prospect`. All 10 model errors measured
+  // on 21 Sep were commercial mail, `other` scored 2/10, and this is the test
+  // that fails if the rule drifts back.
+  it('separates the two sides of a commercial exchange by direction, not by actionability', async () => {
     const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
 
-    expect(es).toContain('en cualquiera de las dos direcciones');
-    expect(es).toContain('Quien ofrece y quien pide caen los dos aquí');
+    expect(es).toContain('`commercial_demand`');
+    expect(es).toContain('`commercial_offer`');
+    expect(es).toContain('la dirección de la venta, y solo eso');
+    expect(es).toContain('¿quién le va a facturar a quién?');
+    // The axis that must NOT be used to tell them apart says so itself.
+    expect(es).toContain('Esa diferencia la lleva `subject_matter`');
+  });
+
+  // Measured on 21 Sep with rubric 1.5.1: the model inverted the direction on
+  // every tender invitation in the corpus, reasoning that an "invitación a
+  // ofertar" was a third party offering. It is the opposite — whoever invites
+  // you to quote is the one buying — and the word "oferta" appearing in the
+  // text is what misleads. Naming the idiom is the fix; this pins it.
+  it('warns that an invitation to quote comes from the buyer, not the seller', async () => {
+    const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
+    const en = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' }, 'en');
+
+    expect(es).toContain('quien escribe quiere comprar');
+    expect(es).toContain('No te guíes por las palabras del correo');
+    expect(en).toContain('the writer wants to buy');
+    expect(en).toContain("Do not follow the email's vocabulary");
   });
 
   it('keeps both languages on the same rule', async () => {
@@ -314,7 +337,8 @@ describe('tenant context', () => {
     expect(en).toContain('## 2. subject_matter');
     expect(en).not.toContain('## 1. type');
     expect(en).toContain('Provenance is not part of this decision');
-    expect(en).toContain('in either direction');
+    expect(en).toContain('the direction of the sale, and nothing else');
+    expect(en).toContain('who ends up invoicing whom?');
     expect(en).toContain('What it does: (not available)');
   });
 });
