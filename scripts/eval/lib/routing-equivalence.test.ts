@@ -112,7 +112,19 @@ const SPAM_FILTERED = ['111', '112', '113', '114', '115', '116', '117', '118', '
  *   3.0.0 — the provider's spam verdict runs first: the ten flagged messages
  *           become `spam_filtered` whatever they answered before (115 was
  *           `mailing_list`, the rest `classify`).
+ *   4.0.0 — `mailing_list` is gone, so what it held becomes `classify`; and
+ *           `automated_sender` stops firing on the account's own mailboxes,
+ *           which is what 132, 133 and 140 are.
  */
+
+/**
+ * The account's own notifier writing into the account's own inbox.
+ *
+ * Listed rather than derived because it is a property of these three messages,
+ * not of the table: `isAutomatedSender` is true for all of them and so is
+ * `senderIsTenantAddress`, and the second is what rule 3 now reads.
+ */
+const TENANT_OWN_ROBOT = ['132', '133', '140'];
 const EXPECTED: Record<string, Record<string, string>> = Object.fromEntries(
   Object.entries(POLICY_1_0).map(([corpus, rows]) => [
     corpus,
@@ -121,9 +133,11 @@ const EXPECTED: Record<string, Record<string, string>> = Object.fromEntries(
         id,
         corpus === 'coverage' && SPAM_FILTERED.includes(id)
           ? 'spam_filtered'
-          : v === 'outbound'
+          : v === 'outbound' || v === 'mailing_list'
             ? 'classify'
-            : v,
+            : v === 'automated_sender' && corpus === 'coverage' && TENANT_OWN_ROBOT.includes(id)
+              ? 'classify'
+              : v,
       ]),
     ),
   ]),
@@ -155,11 +169,13 @@ describe('routing policy — every change since 1.0.0, enumerated', () => {
       .map((id) => ({ corpus, id, from: rows[id]!, to: EXPECTED[corpus]![id]! })),
   );
 
-  it('moves 31 of the 90 messages, and only in the two ways the rules describe', () => {
-    expect(changes).toHaveLength(31);
+  it('moves 36 of the 90 messages, and only in the ways the rules describe', () => {
+    expect(changes).toHaveLength(36);
     const transitions = [...new Set(changes.map((c) => `${c.from} → ${c.to}`))].sort();
     expect(transitions).toEqual([
+      'automated_sender → classify',
       'classify → spam_filtered',
+      'mailing_list → classify',
       'mailing_list → spam_filtered',
       'outbound → classify',
     ]);
@@ -183,28 +199,39 @@ describe('routing policy — every change since 1.0.0, enumerated', () => {
     expect(changes.find((c) => c.id === '115')!.from).toBe('mailing_list');
   });
 
-  it('reaches the model on 75 of the 90 — 63 before, +21 same-domain, −9 spam', () => {
+  // 4.0.0 — the two rules that were dropping mail the ground truth gives a type
+  // to. `mailing_list` is gone entirely, and `automated_sender` stopped firing
+  // on the account's own mailboxes.
+  it('4.0.0 stops dropping the five messages the sheet labels', () => {
+    const undropped = changes.filter((c) => c.to === 'classify' && c.from !== 'outbound');
+    expect(undropped.map((c) => c.id).sort()).toEqual(['107', '128', '132', '133', '140']);
+    expect(undropped.filter((c) => c.from === 'mailing_list').map((c) => c.id)).toEqual(['107', '128']);
+    expect(undropped.filter((c) => c.from === 'automated_sender').map((c) => c.id)).toEqual(['132', '133', '140']);
+  });
+
+  it('reaches the model on 80 of the 90 — 63 before, +21 same-domain, −9 spam, +5 undropped', () => {
     const count = (table: typeof EXPECTED) =>
       Object.values(table).reduce(
         (n, rows) => n + Object.values(rows).filter((v) => v === 'classify').length,
         0,
       );
     expect(count(POLICY_1_0)).toBe(63);
-    expect(count(EXPECTED)).toBe(75);
+    expect(count(EXPECTED)).toBe(80);
   });
 
   // The measurement that motivated F0b. `internal` is the class the KAI-93
   // report shows the models recognising ~90% of the time, and the old policy
   // removed most of it before any model was asked.
-  it('takes `internal` from 2 of 10 reaching the classifier to 7 of 10', () => {
+  it('takes `internal` from 2 of 10 reaching the classifier to 10 of 10', () => {
     const internalIds = ['131', '132', '133', '134', '135', '136', '137', '138', '139', '140'];
     const reaching = (table: typeof EXPECTED) =>
       internalIds.filter((id) => table['coverage']![id] === 'classify');
 
     expect(reaching(POLICY_1_0)).toEqual(['131', '136']);
-    // 132, 133 and 140 come from the app's own notifier — still gated, as automated
-    // senders rather than as same-domain mail.
-    expect(reaching(EXPECTED)).toEqual(['131', '134', '135', '136', '137', '138', '139']);
+    // 132, 133 and 140 are the app's own notifier. Policy 2.0.0 left them gated
+    // as automated senders; 4.0.0 stopped treating the house's own robot as a
+    // stranger's bulk mail, so the whole class now reaches the classifier.
+    expect(reaching(EXPECTED)).toEqual(internalIds);
   });
 
   // What the spam rule buys the derivation table downstream: `spam` and an

@@ -88,28 +88,34 @@ describe("Rule: automated_sender", () => {
 // ---------------------------------------------------------------------------
 // Rule 2: mailing_list
 // ---------------------------------------------------------------------------
-describe("Rule: mailing_list", () => {
-  it("skips email with List-Unsubscribe header", () => {
-    const result = preFilterEmail({
-      ...BASE,
-      headers: { "List-Unsubscribe": "<https://example.com/unsub>" },
-    });
-    expect(result.status).toBe("skip");
-    expect(result.skip_reason).toBe("mailing_list");
+// REMOVED in KAI-45 (routing policy 1.2.0). This block used to assert that any
+// message carrying List-Unsubscribe was skipped. The header is not a marker of
+// junk — RFC 8058 asks every sender of recurring mail to set it, and on the
+// coverage corpus it fired on exactly two messages, a tender invitation and a
+// supplier notice, both of which the ground truth gives a real type. Both were
+// dropped before the classifier saw them.
+//
+// What the rule aimed at is still caught: marketing@ and newsletter@ senders by
+// automated_sender, promotional bulk by the Gmail category rule, and
+// `Precedence: bulk` by auto_generated.
+describe("Rule: mailing_list — removed", () => {
+  it("classifies a message carrying List-Unsubscribe instead of dropping it", () => {
+    for (const key of ["List-Unsubscribe", "list-unsubscribe"]) {
+      const result = preFilterEmail({
+        ...BASE,
+        headers: { [key]: "<https://example.com/unsub>" },
+      });
+      expect(result.status).toBe("relevant");
+      // Kept as a fact, which is what it always should have been: the model can
+      // weigh "this is recurring mail" without the pipeline deciding for it.
+      expect(result.facts.hasListUnsubscribe).toBe(true);
+    }
   });
 
-  it("does not skip email without List-Unsubscribe header", () => {
+  it("still reports the fact as absent when the header did not arrive", () => {
     const result = preFilterEmail({ ...BASE, headers: {} });
     expect(result.status).toBe("relevant");
-  });
-
-  it("treats List-Unsubscribe header key as case-insensitive", () => {
-    const result = preFilterEmail({
-      ...BASE,
-      headers: { "list-unsubscribe": "<https://example.com/unsub>" },
-    });
-    expect(result.status).toBe("skip");
-    expect(result.skip_reason).toBe("mailing_list");
+    expect(result.facts.hasListUnsubscribe).toBe(false);
   });
 });
 
@@ -155,16 +161,27 @@ describe("Rule: same-domain mail is classified, not skipped", () => {
     expect(result.status).toBe("relevant");
   });
 
-  // The rule ran ahead of everything, so a same-domain no-reply@ was reported
-  // as "outbound". Now it reaches rule 4 and is named for what it is.
-  it("reports the real reason when a same-domain sender is also automated", () => {
-    const result = preFilterEmail({
+  // The house's own robot is the house's correspondence. Three of the ten
+  // `internal` emails in the coverage corpus are exactly this — the tenant's
+  // notifier writing into the tenant's own inbox — and the ground truth gives
+  // all three a type, so dropping them made them unreproducible. Narrowed in
+  // routing policy 1.2.0; a no-reply@ from outside is still dropped.
+  it("classifies an automated sender on the account's own domain", () => {
+    const own = preFilterEmail({
       ...BASE,
       from: "noreply@mycompany.com",
       userEmail: "support@mycompany.com",
     });
-    expect(result.status).toBe("skip");
-    expect(result.skip_reason).toBe("automated_sender");
+    expect(own.status).toBe("relevant");
+    expect(own.facts.isAutomatedSender).toBe(true);
+
+    const stranger = preFilterEmail({
+      ...BASE,
+      from: "noreply@somewhere-else.com",
+      userEmail: "support@mycompany.com",
+    });
+    expect(stranger.status).toBe("skip");
+    expect(stranger.skip_reason).toBe("automated_sender");
   });
 });
 

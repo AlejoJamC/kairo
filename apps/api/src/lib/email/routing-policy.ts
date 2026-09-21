@@ -41,20 +41,27 @@ export type Route =
   | { kind: "classify"; signals: string[] };
 
 /**
- * Bumped whenever a rule is added, removed or reordered.
+ * Persisted alongside the decision so a classification can be read back against
+ * the policy that produced it.
  *
- * Persisted alongside the decision so a classification can be read back
- * against the policy that produced it. Without it, a corpus run and a
- * production row that disagree are indistinguishable from a model that changed
- * its mind.
+ * Scheme in docs/versioning.md. The first number does not move while this is
+ * unmerged, and afterwards it is for a different mechanism, not a better one —
+ * the ordinary evolution of a rule never earns it. The second moves when a rule
+ * disappears and a `skip_reason` it emitted can never be written again; the
+ * third for everything else, however much traffic it moves.
  */
-export const ROUTING_POLICY_VERSION = "1.1.1";
+export const ROUTING_POLICY_VERSION = "1.2.0";
 
+// 1.2.0 (KAI-45 F2) — `mailing_list` is gone, so that reason can never be
+//   written again; and `automated_sender` stopped firing on the account's own
+//   mailboxes, which on its own would only have moved the third number. See
+//   rules 3 and 4.
 // 1.1.1 (KAI-45 F2) — the provider's own spam verdict decides, ahead of
-//   everything. See rule 0.
-// 1.1.0 (KAI-45 F0b) — the `outbound` rule is gone. See rule 1 below for what
-//   it actually did and why it was removed. Historical `messages.skip_reason`
-//   rows still carry the string; nothing emits it any more.
+//   everything. A rule added: ten messages change route, and `spam_filtered`
+//   already existed and still means the same thing. See rule 0.
+// 1.1.0 (KAI-45 F0b) — the `outbound` rule is gone, and it was the only emitter
+//   of that reason, so the string survives in old rows and can never be written
+//   again. See rule 1 below for what it actually did.
 // 1.0.0 — the eight rules as they were inside preFilterEmail since KAI-206.
 
 /**
@@ -134,15 +141,36 @@ export function resolveRoute(facts: MailFacts): Route {
     return { kind: "classify", signals: relevanceSignals(facts, overrides) };
   }
 
-  // 3. no-reply@ senders and known bulk-sender patterns.
-  if (facts.isAutomatedSender) {
+  // 3. no-reply@ senders and known bulk-sender patterns — from outside.
+  //
+  //    Narrowed in 4.0.0. The rule was written for strangers' robots and it
+  //    also caught the account's own: three of the ten `internal` emails in the
+  //    coverage corpus are the tenant's own notifier writing to the tenant's
+  //    own inbox from a no-reply address, and the sheet gives all three a type.
+  //    A message from the house's own system is the house's correspondence, not
+  //    a stranger's bulk mail, and dropping it is how `internal` stayed
+  //    invisible in production.
+  //
+  //    Provenance is the discriminator and it is already computed, so this
+  //    costs nothing. A no-reply from outside is still dropped.
+  if (facts.isAutomatedSender && !facts.senderIsTenantAddress && !facts.senderIsTenantDomain) {
     return { kind: "skip", reason: "automated_sender", signals: [] };
   }
 
-  // 4. Mailing list.
-  if (facts.hasListUnsubscribe) {
-    return { kind: "skip", reason: "mailing_list", signals: [] };
-  }
+  // 4. REMOVED in 4.0.0 — the rule that dropped anything carrying
+  //    `List-Unsubscribe`.
+  //
+  //    The header is not a marker of junk. RFC 8058 asks any sender of
+  //    recurring mail to set it, and legitimate commercial correspondence does:
+  //    on the coverage corpus it fires on exactly two messages, a tender
+  //    invitation the sheet labels `prospect` and a supplier notice it labels
+  //    `other`. Both were dropped before the model saw them, and neither could
+  //    ever be reproduced.
+  //
+  //    What the rule was aimed at is still caught: marketing@ and newsletter@
+  //    senders by rule 3, promotional bulk by Gmail's own category in rule 6,
+  //    and `Precedence: bulk` by rule 7. `hasListUnsubscribe` survives as a
+  //    fact for the model to weigh, which is what it always should have been.
 
   // 5. Calendar invite or system receipt.
   if (facts.isCalendarInvite || facts.hasSystemSubjectPrefix) {

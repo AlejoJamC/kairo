@@ -35,10 +35,16 @@ import type { ClassificationResult } from './schema';
 import type { MailFacts } from './types';
 
 /**
- * Bumped whenever a cell changes. Persisted with the classification so a stored
- * `ticket_type` can be read back against the table that produced it — without
- * it, a row from last week and a corpus run from today disagreeing is
- * indistinguishable from a model that changed its mind.
+ * Persisted with the classification so a stored `ticket_type` can be read back
+ * against the table that produced it — without it, a row from last week and a
+ * corpus run from today disagreeing is indistinguishable from a model that
+ * changed its mind.
+ *
+ * Scheme in docs/versioning.md. The first number does not move for the ordinary
+ * evolution of the table, however much of it is rewritten — 1.1.0 replaced every
+ * commercial cell and split an axis value, and moved the second number only,
+ * because `commercial` stopped being a formable key while all five `TicketType`
+ * values stayed reachable and every stored row kept its meaning.
  */
 export const DERIVATION_VERSION = '1.1.0';
 
