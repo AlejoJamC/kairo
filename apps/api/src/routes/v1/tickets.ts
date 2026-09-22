@@ -377,7 +377,7 @@ tickets.post("/:id/classify", async (c) => {
         from: ticket.from_email,
         ...classifierContext,
       },
-      { context: { ticketId: id, accountId: ctx.accountId } },
+      { lang: classifierContext.language, context: { ticketId: id, accountId: ctx.accountId } },
     );
     classification = result;
 
@@ -615,7 +615,7 @@ tickets.post("/classify-batch", async (c) => {
           from: ticket.from_email,
           ...classifierContext,
         },
-        { context: { ticketId: ticket.id, accountId } },
+        { lang: classifierContext.language, context: { ticketId: ticket.id, accountId } },
       );
 
       logLlmCall({

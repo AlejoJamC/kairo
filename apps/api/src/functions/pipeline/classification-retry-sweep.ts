@@ -134,7 +134,7 @@ export const classificationRetrySweep = inngest.createFunction(
             const { result: classification, meta, prompt, promptVersion } = await withRetry(llmSemaphore, () =>
               classifyEmailWithMeta(
                 { subject, body: classifierBody, from, ...classifierContext },
-                { context: { accountId: message.account_id } }
+                { lang: classifierContext.language, context: { accountId: message.account_id } }
               )
             );
             circuitBreaker.recordSuccess();

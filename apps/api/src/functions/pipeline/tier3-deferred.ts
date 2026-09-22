@@ -1,4 +1,4 @@
-import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { classifyEmailWithMeta, DEFAULT_LANG, type PromptLang } from "@kairo/intelligence";
 import type { TicketType } from "@kairo/intelligence";
 import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import type { ClassifierContext } from "../../lib/classifier-input.js";
@@ -342,7 +342,7 @@ async function classifyWindow(
           ...(classifierContext.businessContext ? { businessContext: classifierContext.businessContext } : {}),
           ...classifierEnvelope(filterResult.facts),
         },
-        { context: { accountId } },
+        { lang: classifierContext.language, context: { accountId } },
       ),
     )
       .then(async ({ result: classification, meta, prompt, promptVersion }) => {
@@ -654,7 +654,7 @@ export const tier3Deferred = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Fetch Gmail credentials + channel integration id once
     // -----------------------------------------------------------------------
-    const { accessToken, tenantMailbox, tenantMailboxes, businessContext, autoApproved, accountId, channelIntegrationId } = (await step.run(
+    const { accessToken, tenantMailbox, tenantMailboxes, businessContext, language, autoApproved, accountId, channelIntegrationId } = (await step.run(
       "fetch-credentials",
       async () => {
         // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
@@ -681,7 +681,7 @@ export const tier3Deferred = inngest.createFunction(
 
         if (!freshToken) {
           console.warn(`[tier3] No Gmail credentials found for account ${accountId}`);
-          return { accessToken: null, tenantMailbox: "", tenantMailboxes: [] as string[], businessContext: "", autoApproved: [] as string[], accountId, channelIntegrationId: null };
+          return { accessToken: null, tenantMailbox: "", tenantMailboxes: [] as string[], businessContext: "", language: DEFAULT_LANG, autoApproved: [] as string[], accountId, channelIntegrationId: null };
         }
 
         return {
@@ -689,12 +689,13 @@ export const tier3Deferred = inngest.createFunction(
           tenantMailbox: ctx.tenantMailbox,
           tenantMailboxes: ctx.tenantMailboxes,
           businessContext: ctx.businessContext ?? "",
+          language: ctx.language,
           autoApproved: autoApproved as string[],
           accountId,
           channelIntegrationId: channelRow.data?.id ?? null,
         };
       }
-    )) as { accessToken: string | null; tenantMailbox: string; tenantMailboxes: string[]; businessContext: string; autoApproved: string[]; accountId: string; channelIntegrationId: string | null };
+    )) as { accessToken: string | null; tenantMailbox: string; tenantMailboxes: string[]; businessContext: string; language: PromptLang; autoApproved: string[]; accountId: string; channelIntegrationId: string | null };
 
     if (!accessToken || !accountId) return;
 
@@ -704,6 +705,7 @@ export const tier3Deferred = inngest.createFunction(
     const classifierContext: ClassifierContext = {
       tenantMailbox,
       tenantMailboxes,
+      language,
       ...(businessContext ? { businessContext } : {}),
     };
 

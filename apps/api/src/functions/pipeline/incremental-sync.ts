@@ -366,7 +366,7 @@ export const incrementalSync = inngest.createFunction(
             ...(businessContext ? { businessContext } : {}),
             ...classifierEnvelope(filterResult.facts),
           },
-          { context: { accountId } },
+          { lang: classifierContext.language, context: { accountId } },
         )
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {
             logLlmCall({

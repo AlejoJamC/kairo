@@ -212,7 +212,7 @@ async function ingestMessages(
         from,
         ...classifierContext,
         ...classifierEnvelope(filterResult.facts),
-      }, { context: { accountId } });
+      }, { lang: classifierContext.language, context: { accountId } });
       const classifiedAt = new Date().toISOString();
 
       const result = await deps.findOrCreateTicketForThread(deps.db, {

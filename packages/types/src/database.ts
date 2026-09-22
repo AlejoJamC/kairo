@@ -102,6 +102,7 @@ export type Database = {
           created_at: string
           help_center_url: string | null
           id: string
+          language: string
           name: string
           plan_id: string
           privacy_url: string | null
@@ -120,6 +121,7 @@ export type Database = {
           created_at?: string
           help_center_url?: string | null
           id?: string
+          language?: string
           name: string
           plan_id: string
           privacy_url?: string | null
@@ -138,6 +140,7 @@ export type Database = {
           created_at?: string
           help_center_url?: string | null
           id?: string
+          language?: string
           name?: string
           plan_id?: string
           privacy_url?: string | null

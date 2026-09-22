@@ -7,7 +7,7 @@
 // ---------------------------------------------------------------------------
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ClassificationResult } from "@kairo/intelligence";
+import type { ClassificationResult, PromptLang } from "@kairo/intelligence";
 import type { ClassifierContext, ClassifierStage } from "../classifier-input.js";
 import type { GmailHeader } from "../email/headers.js";
 import type { EmailMetadata, PreFilterResult } from "../email/pre-filter.js";
@@ -103,7 +103,9 @@ export interface GmailPollDeps {
       tenantMailbox?: string;
       businessContext?: string;
     },
-    options?: { context?: { accountId?: string } },
+    // KAI-45 F4 — the tenant's rubric language. The poll resolves it with the
+    // rest of the classifier context and passes it like every other path.
+    options?: { lang?: PromptLang; context?: { accountId?: string } },
   ) => Promise<ClassificationResult>;
   upsertConversationByThread: (
     client: DbClient,

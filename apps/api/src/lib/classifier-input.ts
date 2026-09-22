@@ -13,7 +13,13 @@
 // path can be named the same thing.
 // ---------------------------------------------------------------------------
 
-import { stripQuotedThread, type EmailMessage } from "@kairo/intelligence";
+import {
+  stripQuotedThread,
+  DEFAULT_LANG,
+  SUPPORTED_LANGS,
+  type EmailMessage,
+  type PromptLang,
+} from "@kairo/intelligence";
 
 import { type MailFacts } from "./email/mail-facts.js";
 import { getGmailEmailByAccount } from "./gmail-token.js";
@@ -129,6 +135,16 @@ export interface ClassifierContext {
   /** The mailbox Kairo is reading. Sent by every stage, rendered in the prompt. */
   tenantMailbox: string;
   /**
+   * Which rubric this tenant is classified against.
+   *
+   * `DEFAULT_LANG` was a module constant and no call site ever passed `lang`,
+   * so every tenant got the Spanish rubric whatever language their mail is in.
+   * Resolved here rather than at the call sites for the same reason the body
+   * rule is: seven paths each deciding for themselves is how four regimes came
+   * about in the first place.
+   */
+  language: PromptLang;
+  /**
    * Every mailbox this account has connected, for `extractMailFacts`.
    *
    * An account is not one inbox. A tenant can have several connected addresses
@@ -179,33 +195,54 @@ async function readTenantMailboxes(accountId: string): Promise<string[]> {
   }
 }
 
+/** What the `accounts` row contributes to a classification. */
+interface AccountSettings {
+  language: PromptLang;
+  businessContext: string | undefined;
+}
+
 /**
- * Reads `accounts.business_context`.
+ * Reads `accounts.language` and `accounts.business_context` in one query.
  *
- * Never throws: a classification is worth more without the context than not at
- * all, and this column is read on every backfill call. The most likely failure
- * is also the most benign one — an environment where the migration adding the
- * column has not been applied yet.
+ * Never throws, and falls back to {@link DEFAULT_LANG} with no context: a
+ * classification is worth more than none, and the most likely failure is the
+ * most benign one — an environment where the migration adding a column has not
+ * been applied yet. A tenant reverting to the default rubric is the same
+ * behaviour every tenant had before this column existed.
+ *
+ * One query for both because both are per-account settings read at the same
+ * moment; splitting them would double a round trip to say the same thing twice.
  */
-async function readBusinessContext(accountId: string): Promise<string | undefined> {
+async function readAccountSettings(accountId: string): Promise<AccountSettings> {
+  const fallback: AccountSettings = { language: DEFAULT_LANG, businessContext: undefined };
   try {
     const { data, error } = await supabase
       .from("accounts")
-      .select("business_context")
+      .select("language, business_context")
       .eq("id", accountId)
       .maybeSingle();
 
     if (error) {
-      console.warn(`[classifier-input] business_context unreadable for account ${accountId}: ${error.message}`);
-      return undefined;
+      console.warn(`[classifier-input] accounts row unreadable for account ${accountId}: ${error.message}`);
+      return fallback;
+    }
+
+    const raw = (data?.language as string | null | undefined)?.trim().toLowerCase();
+    // A value outside SUPPORTED_LANGS has no rubric file, and honouring it
+    // would fail at template load, far from the write that caused it. The CHECK
+    // constraint makes this unreachable through the API; this covers the row
+    // written before the constraint, or by hand.
+    const language = SUPPORTED_LANGS.includes(raw as PromptLang) ? (raw as PromptLang) : DEFAULT_LANG;
+    if (raw && language !== raw) {
+      console.warn(`[classifier-input] account ${accountId} has unsupported language "${raw}"; using ${DEFAULT_LANG}`);
     }
 
     const text = (data?.business_context as string | null | undefined)?.trim();
-    return text ? text : undefined;
+    return { language, businessContext: text ? text : undefined };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[classifier-input] business_context unreadable for account ${accountId}: ${message}`);
-    return undefined;
+    console.warn(`[classifier-input] accounts row unreadable for account ${accountId}: ${message}`);
+    return fallback;
   }
 }
 
@@ -227,23 +264,26 @@ export async function resolveClassifierContext(
   stage: ClassifierStage,
   accountId: string
 ): Promise<ClassifierContext> {
-  if (stage === "onboarding") {
-    const [tenantMailbox, channels] = await Promise.all([
-      getGmailEmailByAccount(accountId),
-      readTenantMailboxes(accountId),
-    ]);
-    return { tenantMailbox, tenantMailboxes: unionMailboxes(tenantMailbox, channels) };
-  }
-
-  const [tenantMailbox, channels, businessContext] = await Promise.all([
+  const [tenantMailbox, channels, settings] = await Promise.all([
     getGmailEmailByAccount(accountId),
     readTenantMailboxes(accountId),
-    readBusinessContext(accountId),
+    readAccountSettings(accountId),
   ]);
 
-  return {
+  const base = {
     tenantMailbox,
     tenantMailboxes: unionMailboxes(tenantMailbox, channels),
-    ...(businessContext ? { businessContext } : {}),
+    language: settings.language,
+  };
+
+  // Tier 1 reads the language but never the business context — see this
+  // function's contract above for why that field is stage-dependent and this
+  // one is not: the rubric's language is not an experiment, it is who the
+  // tenant is.
+  if (stage === "onboarding") return base;
+
+  return {
+    ...base,
+    ...(settings.businessContext ? { businessContext: settings.businessContext } : {}),
   };
 }

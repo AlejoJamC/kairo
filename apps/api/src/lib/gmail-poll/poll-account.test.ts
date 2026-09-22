@@ -119,6 +119,7 @@ function baseDeps(overrides: Partial<GmailPollDeps>): GmailPollDeps {
     resolveClassifierContext: async () => ({
       tenantMailbox: "support@mycompany.com",
       tenantMailboxes: ["support@mycompany.com"],
+      language: "es" as const,
     }),
     getProfile: async () => ({ emailAddress: "support@mycompany.com", historyId: "1000" }),
     historyList: async () => ({ history: [], historyId: "1001" }),

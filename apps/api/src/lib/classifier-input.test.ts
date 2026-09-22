@@ -5,9 +5,13 @@ import { describe, it, expect, beforeEach, mock } from "bun:test";
 //
 // The rule these tests exist to pin is the one that is easy to break by
 // accident and expensive to notice: the onboarding stage must not carry the
-// business context, and must not even go looking for it. Everything else in
-// this file is about a missing value degrading quietly instead of failing a
-// classification.
+// business context. Everything else in this file is about a missing value
+// degrading quietly instead of failing a classification.
+//
+// KAI-45 F4 — `language` is the opposite kind of field and both stages read it.
+// The business context is an experiment the bench settled per stage; the
+// rubric's language is who the tenant is, and tier 1 classifies with a rubric
+// like everything else.
 // ---------------------------------------------------------------------------
 
 let mailbox = "support@acme.com";
@@ -17,12 +21,13 @@ mock.module("./gmail-token.js", () => ({
 }));
 
 let storedContext: string | null = null;
+let storedLanguage: string | null = null;
 let storedError: { message: string } | null = null;
 let throwOnRead = false;
 const maybeSingleMock = mock(() => {
   if (throwOnRead) throw new Error("connection reset");
   return Promise.resolve({
-    data: storedError ? null : { business_context: storedContext },
+    data: storedError ? null : { business_context: storedContext, language: storedLanguage },
     error: storedError,
   });
 });
@@ -42,6 +47,7 @@ const { buildClassifierBody, resolveClassifierContext, CLASSIFIER_BODY_RULES } =
 beforeEach(() => {
   mailbox = "support@acme.com";
   storedContext = null;
+  storedLanguage = "es";
   storedChannels = [];
   storedError = null;
   throwOnRead = false;
@@ -53,27 +59,36 @@ beforeEach(() => {
 
 describe("resolveClassifierContext — onboarding", () => {
   it("sends the tenant mailbox and nothing else", async () => {
-    storedContext = "Encarga SAS moves freight for pharmacies.";
+    storedContext = "Acme Logistics moves freight for pharmacies.";
 
     const ctx = await resolveClassifierContext("onboarding", "acc-1");
 
     expect(ctx).toEqual({
       tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
+      language: "es",
     });
     expect("businessContext" in ctx).toBe(false);
   });
 
-  it("does not read the column at all", async () => {
-    storedContext = "Encarga SAS moves freight for pharmacies.";
+  // It reads the row — it needs the language from it — and still must not
+  // carry the context out. Reading and sending are different decisions, and
+  // only the second one was ever settled against tier 1.
+  it("reads the accounts row for the language but never carries the context", async () => {
+    storedContext = "Acme Logistics moves freight for pharmacies.";
 
-    await resolveClassifierContext("onboarding", "acc-1");
+    const ctx = await resolveClassifierContext("onboarding", "acc-1");
 
-    // Tier 1 runs before any value could exist, and the bench measured the
-    // field as harmful in that column. Not sending it is the rule; not paying
-    // for the read is the consequence. It does read support_channels, which is
-    // a different question: which mailboxes are the account's own.
-    expect(fromMock.mock.calls.map((c) => c[0])).toEqual(["support_channels"]);
+    expect(fromMock.mock.calls.map((c) => c[0]).sort()).toEqual(["accounts", "support_channels"]);
+    expect("businessContext" in ctx).toBe(false);
+  });
+
+  it("classifies a tenant against its own rubric", async () => {
+    storedLanguage = "en";
+
+    const ctx = await resolveClassifierContext("onboarding", "acc-1");
+
+    expect(ctx.language).toBe("en");
   });
 
   // An account is not one inbox, and provenance compared against a single
@@ -106,14 +121,15 @@ describe("resolveClassifierContext — onboarding", () => {
 
 describe("resolveClassifierContext — backfill", () => {
   it("carries the business context once the account has one", async () => {
-    storedContext = "Encarga SAS moves freight for pharmacies.";
+    storedContext = "Acme Logistics moves freight for pharmacies.";
 
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
     expect(ctx).toEqual({
       tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
-      businessContext: "Encarga SAS moves freight for pharmacies.",
+      language: "es",
+      businessContext: "Acme Logistics moves freight for pharmacies.",
     });
     expect(fromMock).toHaveBeenCalledWith("accounts");
   });
@@ -128,6 +144,7 @@ describe("resolveClassifierContext — backfill", () => {
     expect(ctx).toEqual({
       tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
+      language: "es",
     });
   });
 
@@ -139,6 +156,7 @@ describe("resolveClassifierContext — backfill", () => {
     expect(ctx).toEqual({
       tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
+      language: "es",
     });
   });
 
@@ -160,7 +178,28 @@ describe("resolveClassifierContext — backfill", () => {
     expect(ctx).toEqual({
       tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
+      language: "es",
     });
+  });
+
+  // The CHECK constraint makes this unreachable through the API, so it can only
+  // arrive by hand or from a row written before the constraint existed.
+  // Honouring it would fail at template load — there is no pt.md — far from the
+  // write that caused it, so it is caught here instead.
+  it("falls back to the default rubric when the stored language has no template", async () => {
+    storedLanguage = "pt";
+
+    const ctx = await resolveClassifierContext("backfill", "acc-1");
+
+    expect(ctx.language).toBe("es");
+  });
+
+  it("reads the language case-insensitively and trimmed", async () => {
+    storedLanguage = "  EN ";
+
+    const ctx = await resolveClassifierContext("backfill", "acc-1");
+
+    expect(ctx.language).toBe("en");
   });
 
   it("still classifies when the read throws", async () => {
@@ -171,6 +210,7 @@ describe("resolveClassifierContext — backfill", () => {
     expect(ctx).toEqual({
       tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
+      language: "es",
     });
   });
 });

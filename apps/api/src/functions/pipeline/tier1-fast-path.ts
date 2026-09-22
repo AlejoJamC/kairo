@@ -1,4 +1,4 @@
-import { classifyEmailWithMeta, detectEscalationTriggers } from "@kairo/intelligence";
+import { classifyEmailWithMeta, detectEscalationTriggers, type PromptLang } from "@kairo/intelligence";
 import {
   buildClassifierBody,
   classifierEnvelope,
@@ -171,7 +171,7 @@ export const tier1FastPath = inngest.createFunction(
     // Step 1: Resolve account, fetch Gmail profile + most recent message headers
     // ADR-022: getFreshGmailToken now takes accountId (Level 4 oauth_credentials).
     // -----------------------------------------------------------------------
-    const { messages, userEmail, tenantMailboxes, gmailAccessToken, accountId: resolvedAccountId } = await step.run("fetch-headers", async () => {
+    const { messages, userEmail, tenantMailboxes, language, gmailAccessToken, accountId: resolvedAccountId } = await step.run("fetch-headers", async () => {
       // Resolve accountId before token fetch (required by ADR-022 Phase 2).
       const { data: memberRow } = await supabase
         .from("account_members")
@@ -225,8 +225,8 @@ export const tier1FastPath = inngest.createFunction(
       const tenantMailboxes = [
         ...new Set([profile.emailAddress, ...ctx.tenantMailboxes].map((m) => m.trim().toLowerCase()).filter(Boolean)),
       ];
-      return { messages: msgs, userEmail: profile.emailAddress, tenantMailboxes, gmailAccessToken: token, accountId };
-    }) as { messages: GmailMessage[]; userEmail: string; tenantMailboxes: string[]; gmailAccessToken: string; accountId: string };
+      return { messages: msgs, userEmail: profile.emailAddress, tenantMailboxes, language: ctx.language, gmailAccessToken: token, accountId };
+    }) as { messages: GmailMessage[]; userEmail: string; tenantMailboxes: string[]; language: PromptLang; gmailAccessToken: string; accountId: string };
 
     // -----------------------------------------------------------------------
     // Step 2: Pre-filter, classify in parallel, persist each result
@@ -372,7 +372,7 @@ export const tier1FastPath = inngest.createFunction(
               // pre-filter and previously discarded.
               ...classifierEnvelope(filterResult.facts),
             },
-            { context: { accountId } },
+            { lang: language, context: { accountId } },
           ),
         )
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {

@@ -1,4 +1,4 @@
-import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { classifyEmailWithMeta, DEFAULT_LANG, type PromptLang } from "@kairo/intelligence";
 import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -223,7 +223,7 @@ export const tier2Background = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Step 1: Fetch Gmail credentials + full 0–N day window
     // -----------------------------------------------------------------------
-    const { messages, userEmail, tenantMailboxes, businessContext, autoApproved, accountId: resolvedAccountId } = await step.run(
+    const { messages, userEmail, tenantMailboxes, businessContext, language, autoApproved, accountId: resolvedAccountId } = await step.run(
       "fetch-0-15d-headers",
       async () => {
         // ADR-022 Phase 2: resolve accountId, then read tokens from oauth_credentials.
@@ -238,7 +238,7 @@ export const tier2Background = inngest.createFunction(
         const accountId = memberRow?.account_id;
         if (!accountId) {
           console.warn(`[tier2] account_id missing for user ${userId} — aborting`);
-          return { messages: [] as GmailMessage[], userEmail: "", tenantMailboxes: [] as string[], businessContext: "", autoApproved: [] as string[], accountId: "" };
+          return { messages: [] as GmailMessage[], userEmail: "", tenantMailboxes: [] as string[], businessContext: "", language: DEFAULT_LANG, autoApproved: [] as string[], accountId: "" };
         }
 
         // Resolved once for the whole window, not once per email: the mailbox
@@ -255,12 +255,13 @@ export const tier2Background = inngest.createFunction(
           userEmail: ctx.tenantMailbox,
           tenantMailboxes: ctx.tenantMailboxes,
           businessContext: ctx.businessContext ?? "",
+          language: ctx.language,
           autoApproved: autoApproved as string[],
           accountId,
         };
       }
     // Inngest's JsonifyObject loses interface field types across step boundaries; cast back
-    ) as { messages: GmailMessage[]; userEmail: string; tenantMailboxes: string[]; businessContext: string; autoApproved: string[]; accountId: string };
+    ) as { messages: GmailMessage[]; userEmail: string; tenantMailboxes: string[]; businessContext: string; language: PromptLang; autoApproved: string[]; accountId: string };
 
     if (messages.length === 0) {
       console.warn(`[tier2] No messages in window for user ${userId}`);
@@ -390,7 +391,7 @@ export const tier2Background = inngest.createFunction(
               ...(businessContext ? { businessContext } : {}),
               ...classifierEnvelope(filterResult.facts),
             },
-            { context: { accountId } },
+            { lang: language, context: { accountId } },
           ),
         )
           .then(async ({ result: classification, meta, prompt, promptVersion }) => {

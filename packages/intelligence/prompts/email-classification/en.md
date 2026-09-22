@@ -12,7 +12,7 @@ Analyze the following email and classify it according to the instructions.
 Mailbox Kairo is reading: {{tenant_mailbox}}
 What it does: {{business_context}}
 
-That block is what separates `support` from `internal`. If `What it does` says `(not available)`, do not invent it: classify with what you have. **The field being absent does not, on its own, lower your confidence.** Lower it only if deciding *this* email required you to assume what the company does — that is, if the sender and the request were not enough to tell what the company does for its customers from its own housekeeping. On many emails they are enough, and there your confidence is unchanged.
+That block is what separates `service` from `admin` on axis 2. If `What it does` says `(not available)`, do not invent it: classify with what you have. **The field being absent does not, on its own, lower your confidence.** Lower it only if deciding *this* email required you to assume what the company does — that is, if the sender and the request were not enough to tell what the company does for its customers from its own housekeeping. On many emails they are enough, and there your confidence is unchanged.
 
 **Email:**
 From: {{from}}
@@ -83,7 +83,7 @@ Valid values: `technical`, `billing`, `account`, `general`, `not_applicable`
 - **billing**: The matter is money — invoicing, payments, charges, refunds, credit notes.
 - **account**: The matter is access or identity — users, permissions, credentials, profile data.
 - **general**: Informs or coordinates without an incident to resolve.
-- **not_applicable**: Only when the type makes the category meaningless, as in `spam`.
+- **not_applicable**: Only when the subject makes the category meaningless. It rarely applies: unsolicited bulk mail is dropped by the provider's filter before it reaches you, so do not expect it.
 
 ## 5. tone
 

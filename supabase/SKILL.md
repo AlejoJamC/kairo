@@ -57,43 +57,58 @@ Write the SQL into that file. The SQL must be:
 - Non-destructive unless explicitly requested (never DROP without confirmation)
 - Consistent with existing naming conventions in `supabase/migrations/`
 
-### Step 3 — Diff before pushing
-
-Always run a diff to confirm exactly what the migration will change:
+### Step 3 — Diff, then stop
 
 ```bash
-supabase db diff --schema public
+supabase db diff --linked --schema public 2>/dev/null
 ```
 
-Show the output to the user and wait for confirmation before pushing.
+Read-only. It confirms the only pending difference is the migration just
+written — anything else is pre-existing drift and has to be resolved before
+going further.
+
+**This is where a migration task ends.** Wire the code, write the tests,
+typecheck, and report. Nothing below this line runs yet.
+
+---
+
+## ⛔ The remote gate
+
+Steps 4 to 6 touch the linked project. **They do not run while the migration is
+uncommitted and under review.** An unreviewed migration applied to the remote is
+a change nobody approved, on the only copy of the data, and undoing it needs a
+second migration.
+
+**Approval is the commit instruction.** When the user says "commit" for a
+migration, that is the moment these steps are allowed, as part of processing
+that commit. Not when the code looks finished, not when the tests pass, not
+because this file lists them.
+
+`--linked` on every command: without it they target the local stack on 54322.
+`2>/dev/null` on every redirect: with a bare `>` the CLI's logs land inside the
+file and `gen types` truncates it to 0 bytes.
 
 ### Step 4 — Push to remote
 
 ```bash
-supabase db push
+supabase db push --linked
 ```
 
 If this fails, do not attempt to apply the SQL manually. Report the error.
 
 ### Step 5 — Update the canonical schema dump
 
-After every successful push, update the source of truth:
-
 ```bash
-supabase db dump --schema public > supabase/schema.sql
+supabase db dump --linked --schema public > supabase/schema.sql 2>/dev/null
 ```
-
-Commit this file alongside the migration.
 
 ### Step 6 — Regenerate TypeScript types
 
-After every schema change, regenerate types so `packages/types` stays in sync:
-
 ```bash
-supabase gen types typescript --schema public > packages/types/src/database.ts
+supabase gen types typescript --linked --schema public > packages/types/src/database.ts 2>/dev/null
 ```
 
-Commit this file alongside the migration and schema dump.
+Then commit the migration, `schema.sql` and `database.ts` together.
 
 ---
 
@@ -149,8 +164,8 @@ supabase login                          # authenticate
 supabase link --project-ref <ref>       # link to remote project
 supabase db diff --schema public        # diff local vs remote
 supabase migration new <name>           # create versioned migration file
-supabase db push                        # apply pending migrations to remote
-supabase db dump --schema public        # dump full schema
-supabase gen types typescript           # generate TypeScript types from schema
+supabase db push --linked               # apply pending migrations to remote (only after approval)
+supabase db dump --linked --schema public  # dump full schema (only after approval)
+supabase gen types typescript --linked  # generate types from schema (only after approval)
 supabase migration list                 # list applied migrations
 ```

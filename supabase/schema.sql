@@ -1101,6 +1101,8 @@ CREATE TABLE IF NOT EXISTS "public"."accounts" (
     "business_context" "text",
     "business_context_updated_at" timestamp with time zone,
     "business_context_source" "text",
+    "language" "text" DEFAULT 'es'::"text" NOT NULL,
+    CONSTRAINT "chk_accounts_language" CHECK (("language" = ANY (ARRAY['es'::"text", 'en'::"text"]))),
     CONSTRAINT "chk_business_context_source" CHECK ((("business_context_source" IS NULL) OR ("business_context_source" = ANY (ARRAY['derived'::"text", 'manual'::"text"]))))
 );
 
@@ -1129,6 +1131,10 @@ COMMENT ON COLUMN "public"."accounts"."business_context_updated_at" IS 'When bus
 
 
 COMMENT ON COLUMN "public"."accounts"."business_context_source" IS 'derived = inferred by Kairo from the account''s own mail; manual = written by a person. Only "derived" corresponds to what the KAI-93 bench measured.';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."language" IS 'Rubric language for this tenant. Must match a file in packages/intelligence/prompts/email-classification/ and a member of SUPPORTED_LANGS.';
 
 
 
