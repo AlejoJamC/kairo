@@ -1,4 +1,9 @@
 import type { TicketType } from "@kairo/intelligence";
+import {
+  proposalStatusAttributes,
+  recordDecision,
+  type ProposalStatusReason,
+} from "../../lib/decision-telemetry.js";
 
 /** `ticket_proposals.status` for a freshly classified email. */
 export type ProposalStatus = "auto_approved" | "pending";
@@ -16,10 +21,17 @@ export type ProposalStatus = "auto_approved" | "pending";
  * something they measure, not something they inherit from here.
  */
 export function tier1ProposalStatus(type: TicketType, abstain = false): ProposalStatus {
+  const [status, reason] = tier1ProposalDecision(type, abstain);
+  recordDecision("ticket.proposal_status", proposalStatusAttributes({ stage: "onboarding", type, status, reason }));
+  return status;
+}
+
+/** The status and the rule that decided it, first match wins. */
+export function tier1ProposalDecision(type: TicketType, abstain: boolean): [ProposalStatus, ProposalStatusReason] {
   // KAI-45 F3 — two models that disagree on the type have told us the label is
   // not settled, whatever it is. A disputed `support` is exactly the one that
   // must not auto-approve: that is the class whose auto-approval this function
   // exists to grant.
-  if (abstain) return "pending";
-  return type === "support" ? "auto_approved" : "pending";
+  if (abstain) return ["pending", "abstain"];
+  return type === "support" ? ["auto_approved", "support"] : ["pending", "not_support"];
 }

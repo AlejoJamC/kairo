@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { TICKET_TYPE } from "@kairo/intelligence";
-import { tier1ProposalStatus } from "./tier1-proposal-status";
+import { tier1ProposalDecision, tier1ProposalStatus } from "./tier1-proposal-status";
 
 describe("tier1ProposalStatus", () => {
   it("lets a `support` classification stand on its own", () => {
@@ -34,5 +34,15 @@ describe("tier1ProposalStatus", () => {
   it("defaults a class it has never seen to pending", () => {
     expect(tier1ProposalStatus("prospect")).toBe("pending");
     expect(tier1ProposalStatus("other")).toBe("pending");
+  });
+});
+
+// KAI-45 F6 — the rule that decided, as it reaches ClickStack on the
+// `ticket.proposal_status` span.
+describe("tier1ProposalDecision", () => {
+  it("names the rule that decided", () => {
+    expect(tier1ProposalDecision("support", false)).toEqual(["auto_approved", "support"]);
+    expect(tier1ProposalDecision("internal", false)).toEqual(["pending", "not_support"]);
+    expect(tier1ProposalDecision("support", true)).toEqual(["pending", "abstain"]);
   });
 });

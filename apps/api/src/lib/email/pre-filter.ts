@@ -11,6 +11,7 @@
 // F1, and this adapter goes away when the last one has.
 // ---------------------------------------------------------------------------
 
+import { recordDecision, routeAttributes } from "../decision-telemetry.js";
 import { extractMailFacts, type MailFacts } from "./mail-facts.js";
 import { resolveRoute } from "./routing-policy.js";
 
@@ -60,6 +61,10 @@ export function preFilterEmail(metadata: EmailMetadata): PreFilterResult {
     tenantMailbox: metadata.userEmail,
   });
   const route = resolveRoute(facts);
+  // Every ingestion path passes through here, so this is the one place the
+  // routing decision reaches ClickStack — including for the mail that never
+  // becomes a ticket, which is the population nothing else can see.
+  recordDecision("email.route", routeAttributes(facts, route));
 
   return route.kind === "skip"
     ? { status: "skip", skip_reason: route.reason, facts }

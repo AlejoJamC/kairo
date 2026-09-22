@@ -4,6 +4,7 @@ import { resolveEnsembleTarget } from '../config/ensemble';
 import { ModelVerdictSchema, type ClassificationResult, type ModelVerdictResult } from './schema';
 import { deriveClassification, provenanceOf } from './derive';
 import { buildPrompt, getPromptVersion, type PromptLang, DEFAULT_LANG } from './prompt';
+import { generationResultMetadata, generationStartMetadata } from './telemetry';
 import type { EmailMessage } from './types';
 import type { TicketType } from '@kairo/types';
 import type { CompletionMeta, CompletionOptions } from '../providers/base';
@@ -78,6 +79,7 @@ export async function classifyEmailWithMeta(
 }> {
   const provider = createCompletionProvider();
   const ensembleTarget = resolveEnsembleTarget();
+  const ensembleMisconfigured = Boolean(process.env['INTELLIGENCE_ENSEMBLE']?.trim()) && ensembleTarget === null;
   const lang = options?.lang ?? DEFAULT_LANG;
 
   const prompt = await buildPrompt(message, lang);
@@ -93,7 +95,14 @@ export async function classifyEmailWithMeta(
       {
         model: provider.model,
         input: prompt,
-        metadata: { promptVersion, ...(ticketId ? { ticketId } : {}), ...(accountId ? { accountId } : {}) },
+        metadata: generationStartMetadata({
+          promptVersion,
+          lang,
+          ensembleModel: ensembleTarget ? `${ensembleTarget.provider}:${ensembleTarget.model}` : null,
+          ensembleMisconfigured,
+          ticketId,
+          accountId,
+        }),
       },
       { asType: 'generation' },
     );
@@ -101,6 +110,8 @@ export async function classifyEmailWithMeta(
     const completionOptions = {
       ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
     };
+
+    let ensembleFailed = false;
 
     try {
       // KAI-45 F3 — the second opinion runs alongside the first, not after it,
@@ -114,6 +125,7 @@ export async function classifyEmailWithMeta(
           ? createCompletionProvider(ensembleTarget)
               .completeJSONWithMeta(prompt, ModelVerdictSchema, completionOptions)
               .catch((err: unknown) => {
+                ensembleFailed = true;
                 console.warn(
                   `[intelligence] ensemble model ${ensembleTarget.provider}:${ensembleTarget.model} failed; ` +
                     `classifying without a second opinion: ${err instanceof Error ? err.message : String(err)}`,
@@ -176,7 +188,15 @@ export async function classifyEmailWithMeta(
       generation.update({
         output: meta.rawText,
         ...(Object.keys(usageDetails).length > 0 ? { usageDetails } : {}),
-        ...(ensemble ? { metadata: { ensembleModel: ensemble.model, ensembleType: ensemble.type, abstain } } : {}),
+        metadata: generationResultMetadata({
+          provenance: provenanceOf(message.facts ?? EXTERNAL_FALLBACK_FACTS),
+          factsPresent: message.facts !== undefined,
+          verdict,
+          type: data.type,
+          ensemble,
+          ensembleFailed,
+          abstain,
+        }),
       });
 
       return { result: data, verdict, abstain, ensemble, meta, prompt, promptVersion };

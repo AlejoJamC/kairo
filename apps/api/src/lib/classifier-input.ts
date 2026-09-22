@@ -21,6 +21,11 @@ import {
   type PromptLang,
 } from "@kairo/intelligence";
 
+import {
+  classifierContextAttributes,
+  recordDecision,
+  type ContextDegradation,
+} from "./decision-telemetry.js";
 import { type MailFacts } from "./email/mail-facts.js";
 import { getGmailEmailByAccount } from "./gmail-token.js";
 import { supabase } from "./supabase.js";
@@ -173,7 +178,10 @@ export interface ClassifierContext {
  * Never throws: a classification with one mailbox is worth more than none, and
  * the caller always unions in the address it already resolved.
  */
-async function readTenantMailboxes(accountId: string): Promise<string[]> {
+async function readTenantMailboxes(
+  accountId: string,
+  degradations: ContextDegradation[]
+): Promise<string[]> {
   try {
     const { data, error } = await supabase
       .from("support_channels")
@@ -183,6 +191,7 @@ async function readTenantMailboxes(accountId: string): Promise<string[]> {
 
     if (error) {
       console.warn(`[classifier-input] support_channels unreadable for account ${accountId}: ${error.message}`);
+      degradations.push("support_channels_unreadable");
       return [];
     }
     return (data ?? [])
@@ -191,6 +200,7 @@ async function readTenantMailboxes(accountId: string): Promise<string[]> {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[classifier-input] support_channels unreadable for account ${accountId}: ${message}`);
+    degradations.push("support_channels_unreadable");
     return [];
   }
 }
@@ -213,7 +223,10 @@ interface AccountSettings {
  * One query for both because both are per-account settings read at the same
  * moment; splitting them would double a round trip to say the same thing twice.
  */
-async function readAccountSettings(accountId: string): Promise<AccountSettings> {
+async function readAccountSettings(
+  accountId: string,
+  degradations: ContextDegradation[]
+): Promise<AccountSettings> {
   const fallback: AccountSettings = { language: DEFAULT_LANG, businessContext: undefined };
   try {
     const { data, error } = await supabase
@@ -224,6 +237,7 @@ async function readAccountSettings(accountId: string): Promise<AccountSettings> 
 
     if (error) {
       console.warn(`[classifier-input] accounts row unreadable for account ${accountId}: ${error.message}`);
+      degradations.push("accounts_unreadable");
       return fallback;
     }
 
@@ -235,6 +249,7 @@ async function readAccountSettings(accountId: string): Promise<AccountSettings> 
     const language = SUPPORTED_LANGS.includes(raw as PromptLang) ? (raw as PromptLang) : DEFAULT_LANG;
     if (raw && language !== raw) {
       console.warn(`[classifier-input] account ${accountId} has unsupported language "${raw}"; using ${DEFAULT_LANG}`);
+      degradations.push("unsupported_language");
     }
 
     const text = (data?.business_context as string | null | undefined)?.trim();
@@ -242,6 +257,7 @@ async function readAccountSettings(accountId: string): Promise<AccountSettings> 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[classifier-input] accounts row unreadable for account ${accountId}: ${message}`);
+    degradations.push("accounts_unreadable");
     return fallback;
   }
 }
@@ -264,10 +280,11 @@ export async function resolveClassifierContext(
   stage: ClassifierStage,
   accountId: string
 ): Promise<ClassifierContext> {
+  const degradations: ContextDegradation[] = [];
   const [tenantMailbox, channels, settings] = await Promise.all([
     getGmailEmailByAccount(accountId),
-    readTenantMailboxes(accountId),
-    readAccountSettings(accountId),
+    readTenantMailboxes(accountId, degradations),
+    readAccountSettings(accountId, degradations),
   ]);
 
   const base = {
@@ -280,10 +297,15 @@ export async function resolveClassifierContext(
   // function's contract above for why that field is stage-dependent and this
   // one is not: the rubric's language is not an experiment, it is who the
   // tenant is.
-  if (stage === "onboarding") return base;
+  const context: ClassifierContext =
+    stage === "onboarding"
+      ? base
+      : { ...base, ...(settings.businessContext ? { businessContext: settings.businessContext } : {}) };
 
-  return {
-    ...base,
-    ...(settings.businessContext ? { businessContext: settings.businessContext } : {}),
-  };
+  recordDecision(
+    "classifier.context",
+    classifierContextAttributes(stage, accountId, context),
+    degradations.map((name) => ({ name }))
+  );
+  return context;
 }

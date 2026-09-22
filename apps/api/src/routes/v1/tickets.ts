@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { classificationAudit, feedbackAudit } from "../../lib/classification-audit.js";
+import { correctionAttributes, recordDecision } from "../../lib/decision-telemetry.js";
+import { sendTypeCorrectionScore } from "../../lib/langfuse-scores.js";
 import { startObservation, propagateAttributes } from "@langfuse/tracing";
 import { classifyEmailWithMeta, generateEmbedding, extractPromptVersion } from "@kairo/intelligence";
 import { logLlmCall } from "../../lib/llm-logging.js";
@@ -2459,6 +2461,27 @@ tickets.post("/:id/correct-classification", async (c) => {
     .single();
 
   if (updateErr) return c.json({ error: "Correction saved but ticket update failed" }, 500);
+
+  // KAI-45 F6 — the type correction, in ClickStack and against the ticket's
+  // Langfuse session. Only a change of type: that is the value the pipeline's
+  // layers produce, and a correction to priority or tone says nothing about
+  // routing, the axes or the table.
+  const correctedType = parsed.data.correct_ticket_type;
+  if (correctedType && ticket.ticket_type && correctedType !== ticket.ticket_type) {
+    const correction = {
+      ticketId,
+      accountId: ctx.accountId,
+      from: ticket.ticket_type,
+      to: correctedType,
+      derivationVersion: ticket.derivation_version ?? null,
+      promptVersion: ticket.prompt_version ?? null,
+      routingPolicyVersion: originMessage?.routing_policy_version ?? null,
+    };
+    recordDecision("ticket.correction", correctionAttributes(correction));
+    // Not awaited: the correction is saved, and the response does not wait on
+    // telemetry. The send never rejects.
+    void sendTypeCorrectionScore(correction);
+  }
 
   // KAI-191: classification_corrected moved from the old events table to
   // ticket_classification_history — one row per dimension actually changed

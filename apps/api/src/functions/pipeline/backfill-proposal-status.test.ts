@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { TICKET_TYPE } from "@kairo/intelligence";
-import { backfillProposalStatus } from "./backfill-proposal-status";
+import { backfillProposalDecision, backfillProposalStatus } from "./backfill-proposal-status";
 
 const WITH_CONTEXT = "Acme Logistics moves medicine for pharmacy chains.";
 
@@ -53,5 +53,23 @@ describe("backfillProposalStatus", () => {
       expect(backfillProposalStatus({ type, businessContext: WITH_CONTEXT, autoApprovalEnabled: false }))
         .toBe("pending");
     }
+  });
+});
+
+// KAI-45 F6 — the rule that decided, as it reaches ClickStack on the
+// `ticket.proposal_status` span. First match wins, in the order checked.
+describe("backfillProposalDecision", () => {
+  it("names the rule that decided", () => {
+    expect(backfillProposalDecision({
+      type: "support", businessContext: WITH_CONTEXT, autoApprovalEnabled: true, abstain: true,
+    })).toEqual(["pending", "abstain"]);
+    expect(backfillProposalDecision({ type: "support", autoApprovalEnabled: true }))
+      .toEqual(["pending", "no_business_context"]);
+    expect(backfillProposalDecision({
+      type: "support", businessContext: WITH_CONTEXT, autoApprovalEnabled: true,
+    })).toEqual(["auto_approved", "auto_approval_earned"]);
+    expect(backfillProposalDecision({
+      type: "support", businessContext: WITH_CONTEXT, autoApprovalEnabled: false,
+    })).toEqual(["pending", "auto_approval_not_earned"]);
   });
 });
