@@ -345,7 +345,7 @@ async function classifyWindow(
         { lang: classifierContext.language, context: { accountId } },
       ),
     )
-      .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+      .then(async ({ result: classification, abstain, meta, prompt, promptVersion }) => {
         circuitBreaker.recordSuccess();
         logLlmCall({
           feature: "email_classification",
@@ -393,6 +393,7 @@ async function classifyWindow(
               type: classification.type,
               businessContext: classifierContext.businessContext,
               autoApprovalEnabled: autoApproved.includes(classification.type),
+              abstain,
             }),
           })
           .select("id")

@@ -12,6 +12,12 @@ export interface BackfillProposalInput {
    * sample; never set by hand.
    */
   autoApprovalEnabled: boolean;
+  /**
+   * The classification ensemble disagreed on the type (KAI-45 F3). Absent means
+   * no ensemble ran, which is the same as agreement: nothing contradicted the
+   * label.
+   */
+  abstain?: boolean;
 }
 
 /**
@@ -43,6 +49,10 @@ export interface BackfillProposalInput {
  * checked and nothing has vouched for.
  */
 export function backfillProposalStatus(input: BackfillProposalInput): ProposalStatus {
+  // Ahead of both gates. A permission earned from measured precision is a
+  // statement about the class on average; two models disagreeing is a
+  // statement about this email.
+  if (input.abstain) return "pending";
   if (!input.businessContext) return "pending";
   return input.autoApprovalEnabled ? "auto_approved" : "pending";
 }

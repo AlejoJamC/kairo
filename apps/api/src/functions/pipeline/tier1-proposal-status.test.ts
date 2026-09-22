@@ -16,6 +16,19 @@ describe("tier1ProposalStatus", () => {
     }
   });
 
+  // KAI-45 F3 — the ensemble disputing the label outranks the class. A disputed
+  // `support` is precisely the call this function would otherwise auto-approve.
+  it("holds a disputed classification, even `support`", () => {
+    for (const type of TICKET_TYPE) {
+      expect(tier1ProposalStatus(type, true)).toBe("pending");
+    }
+  });
+
+  it("treats an absent ensemble as agreement", () => {
+    expect(tier1ProposalStatus("support", false)).toBe("auto_approved");
+    expect(tier1ProposalStatus("support")).toBe("auto_approved");
+  });
+
   // A new class added to the contract must not be auto-approved by default:
   // nothing has measured it yet.
   it("defaults a class it has never seen to pending", () => {

@@ -15,6 +15,11 @@ export type ProposalStatus = "auto_approved" | "pending";
  * have not decided this yet; when they do, whether the rule is the same is
  * something they measure, not something they inherit from here.
  */
-export function tier1ProposalStatus(type: TicketType): ProposalStatus {
+export function tier1ProposalStatus(type: TicketType, abstain = false): ProposalStatus {
+  // KAI-45 F3 — two models that disagree on the type have told us the label is
+  // not settled, whatever it is. A disputed `support` is exactly the one that
+  // must not auto-approve: that is the class whose auto-approval this function
+  // exists to grant.
+  if (abstain) return "pending";
   return type === "support" ? "auto_approved" : "pending";
 }

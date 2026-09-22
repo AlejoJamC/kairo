@@ -5,6 +5,10 @@ import { OllamaEmbeddingProvider } from '../providers/ollama/embedding';
 import { AnthropicCompletionProvider } from '../providers/anthropic/completion';
 import { VoyageEmbeddingProvider } from '../providers/voyage/embedding';
 import { OLLAMA_DEFAULT_BASE_URL } from './constants';
+import type { CompletionTarget } from './ensemble';
+
+// Re-exported so callers keep one import site for provider configuration.
+export { resolveEnsembleTarget, type CompletionTarget } from './ensemble';
 
 const CompletionConfigSchema = z.object({
   completionMode: z.enum(['ollama', 'anthropic']).default('ollama'),
@@ -22,13 +26,21 @@ const EmbeddingConfigSchema = z.object({
   voyageApiKey: z.string().optional(),
 });
 
-export function createCompletionProvider(): CompletionProvider {
+/**
+ * The completion provider for a classification.
+ *
+ * With no argument, the one configured by `INTELLIGENCE_PROVIDER` and its model
+ * variable, as always. With a target, that provider and model instead — which
+ * is how the ensemble asks a second opinion while reusing the same base URL and
+ * API key from the environment.
+ */
+export function createCompletionProvider(target?: CompletionTarget): CompletionProvider {
   const config = CompletionConfigSchema.parse({
-    completionMode: process.env['INTELLIGENCE_PROVIDER'] ?? 'ollama',
+    completionMode: target?.provider ?? process.env['INTELLIGENCE_PROVIDER'] ?? 'ollama',
     ollamaBaseUrl: process.env['OLLAMA_BASE_URL'],
-    ollamaModel: process.env['OLLAMA_MODEL'],
+    ollamaModel: target?.provider === 'ollama' ? target.model : process.env['OLLAMA_MODEL'],
     anthropicApiKey: process.env['ANTHROPIC_API_KEY'],
-    anthropicModel: process.env['ANTHROPIC_MODEL'],
+    anthropicModel: target?.provider === 'anthropic' ? target.model : process.env['ANTHROPIC_MODEL'],
   });
 
   switch (config.completionMode) {

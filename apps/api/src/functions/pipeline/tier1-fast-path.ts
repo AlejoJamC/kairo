@@ -375,7 +375,7 @@ export const tier1FastPath = inngest.createFunction(
             { lang: language, context: { accountId } },
           ),
         )
-          .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+          .then(async ({ result: classification, abstain, meta, prompt, promptVersion }) => {
             circuitBreaker.recordSuccess();
             logLlmCall({
               feature: "email_classification",
@@ -424,7 +424,7 @@ export const tier1FastPath = inngest.createFunction(
                 confidence_score: classification.confidence,
                 model_version: resolveModelVersion(),
                 raw_llm_output: classification as Record<string, unknown>,
-                status: tier1ProposalStatus(classification.type),
+                status: tier1ProposalStatus(classification.type, abstain),
               })
               .select("id")
               .single();

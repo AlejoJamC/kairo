@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { TICKET_TYPE } from "@kairo/intelligence";
 import { backfillProposalStatus } from "./backfill-proposal-status";
 
-const WITH_CONTEXT = "Encarga SAS moves medicine for pharmacy chains.";
+const WITH_CONTEXT = "Acme Logistics moves medicine for pharmacy chains.";
 
 describe("backfillProposalStatus", () => {
   // The standing rule: a classification made without knowing what the company
@@ -25,6 +25,22 @@ describe("backfillProposalStatus", () => {
     expect(backfillProposalStatus({
       type: "support", businessContext: WITH_CONTEXT, autoApprovalEnabled: false,
     })).toBe("pending");
+  });
+
+  // KAI-45 F3 — ahead of both gates. An earned permission is a statement about
+  // a class on average; two models disagreeing is a statement about this email.
+  it("holds a disputed classification even where the class has earned it", () => {
+    for (const type of TICKET_TYPE) {
+      expect(backfillProposalStatus({
+        type, businessContext: WITH_CONTEXT, autoApprovalEnabled: true, abstain: true,
+      })).toBe("pending");
+    }
+  });
+
+  it("treats an absent ensemble as agreement", () => {
+    expect(backfillProposalStatus({
+      type: "support", businessContext: WITH_CONTEXT, autoApprovalEnabled: true, abstain: false,
+    })).toBe("auto_approved");
   });
 
   // Tier 1 names `support` because a human is watching it. These tiers run with

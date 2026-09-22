@@ -34,9 +34,10 @@ describe('getPromptVersion', () => {
   // 3.0.0 during development and reset to 1.2.0 in 1c0a2e8; that reset is the
   // intended state, not a regression to undo. A prompt edit never touches the
   // first number. The rule lives here and not only in prompts/README.md because
-  // a rule nobody runs is a rule that gets re-litigated. Minor vs patch is in
-  // that README: minor changes the value some email comes back with, patch
-  // does not.
+  // a rule nobody runs is a rule that gets re-litigated. The other two positions
+  // are in that README and they are not semver: the second is the major (a
+  // block replaced whole), the third carries everything else — including a
+  // rule that changes what some email comes back with.
   it('never moves the major off 1', async () => {
     for (const lang of ['es', 'en'] as const) {
       expect((await getPromptVersion(lang))!.split('.')[0]).toBe('1');

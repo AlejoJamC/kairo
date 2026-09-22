@@ -394,7 +394,7 @@ export const tier2Background = inngest.createFunction(
             { lang: language, context: { accountId } },
           ),
         )
-          .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+          .then(async ({ result: classification, abstain, meta, prompt, promptVersion }) => {
             circuitBreaker.recordSuccess();
             logLlmCall({
               feature: "email_classification",
@@ -444,6 +444,7 @@ export const tier2Background = inngest.createFunction(
                   type: classification.type,
                   businessContext,
                   autoApprovalEnabled: autoApproved.includes(classification.type),
+                  abstain,
                 }),
               })
               .select("id")
