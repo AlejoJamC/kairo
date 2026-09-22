@@ -1,5 +1,6 @@
 import { classifyEmailWithMeta } from "@kairo/intelligence";
-import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
+import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
+import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -16,6 +17,7 @@ import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 import { emitTicketClassification } from "../../lib/ticket-events.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
+import { headerValue, headersToRecord, type GmailHeader } from "../../lib/email/headers.js";
 
 // KAI-191: incremental-sync writes priority/category onto every ticket it
 // creates, but used to leave no trace of that AI decision — the human
@@ -64,11 +66,6 @@ async function recordAiClassification(
 // ---------------------------------------------------------------------------
 // Gmail API types
 // ---------------------------------------------------------------------------
-
-interface GmailHeader {
-  name: string;
-  value: string;
-}
 
 interface GmailListResponse {
   messages?: { id: string; threadId: string }[];
@@ -173,13 +170,6 @@ async function fetchGmailSince(
   return allMessages;
 }
 
-function headerValue(headers: GmailHeader[], name: string): string {
-  return (
-    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
-    ""
-  );
-}
-
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Gmail returns part data base64url-encoded; Buffer's "base64" decoder
 // accepts URL-safe variants on both Node and Bun.
@@ -211,12 +201,6 @@ function extractBody(payload: GmailMessage["payload"]): {
   }
 
   return { body_plain, body_html };
-}
-
-function headersToRecord(headers: GmailHeader[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const { name, value } of headers) out[name] = value;
-  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -345,7 +329,7 @@ export const incrementalSync = inngest.createFunction(
           headers: headersToRecord(msgHeaders),
           gmailCategories,
           mimeType: message.payload?.mimeType,
-          userEmail,
+          userEmail: classifierContext.tenantMailboxes,
         });
 
         if (filterResult.status === "skip") {
@@ -354,6 +338,7 @@ export const incrementalSync = inngest.createFunction(
               .from("messages")
               .update({
                 classification_status: "skipped",
+                ...routingAudit(filterResult.facts),
                 skip_reason: filterResult.skip_reason,
               })
               .eq("external_id", message.id)
@@ -381,10 +366,11 @@ export const incrementalSync = inngest.createFunction(
             from,
             tenantMailbox: userEmail,
             ...(businessContext ? { businessContext } : {}),
+            ...classifierEnvelope(filterResult.facts),
           },
-          { context: { accountId } },
+          { lang: classifierContext.language, context: { accountId } },
         )
-          .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+          .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",
               model: meta.model,
@@ -417,6 +403,7 @@ export const incrementalSync = inngest.createFunction(
                 });
 
                 const result = await findOrCreateTicketForThread(supabase, {
+                  audit: classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   accountId,
                   conversationId: conversation_id,
                   originatingUserId: userId,
@@ -456,6 +443,7 @@ export const incrementalSync = inngest.createFunction(
                   .update({
                     conversation_id,
                     classification_status: "classified",
+                    ...routingAudit(filterResult.facts),
                     processing_tier: 0,
                     classified_at,
                   })
@@ -502,6 +490,7 @@ export const incrementalSync = inngest.createFunction(
                     gmail_thread_id: threadId,
                     received_at: receivedAt,
                     ticket_type: classification.type,
+                    ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                     priority: classification.priority,
                     category: classification.category,
                     sentiment: classification.tone,
@@ -521,7 +510,12 @@ export const incrementalSync = inngest.createFunction(
 
                 await supabase
                   .from("messages")
-                  .update({ classification_status: "classified", processing_tier: 0, classified_at })
+                  .update({
+                    classification_status: "classified",
+                    processing_tier: 0,
+                    classified_at,
+                    ...routingAudit(filterResult.facts),
+                  })
                   .eq("external_id", messageId)
                   .eq("channel_integration_id", channelIntegrationId);
               }
@@ -538,6 +532,7 @@ export const incrementalSync = inngest.createFunction(
                   gmail_thread_id: threadId,
                   received_at: receivedAt,
                   ticket_type: classification.type,
+                  ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   priority: classification.priority,
                   category: classification.category,
                   sentiment: classification.tone,

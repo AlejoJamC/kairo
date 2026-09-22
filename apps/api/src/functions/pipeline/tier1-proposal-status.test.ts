@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { TICKET_TYPE } from "@kairo/intelligence";
-import { tier1ProposalStatus } from "./tier1-proposal-status";
+import { tier1ProposalDecision, tier1ProposalStatus } from "./tier1-proposal-status";
 
 describe("tier1ProposalStatus", () => {
   it("lets a `support` classification stand on its own", () => {
@@ -16,10 +16,33 @@ describe("tier1ProposalStatus", () => {
     }
   });
 
+  // KAI-45 F3 — the ensemble disputing the label outranks the class. A disputed
+  // `support` is precisely the call this function would otherwise auto-approve.
+  it("holds a disputed classification, even `support`", () => {
+    for (const type of TICKET_TYPE) {
+      expect(tier1ProposalStatus(type, true)).toBe("pending");
+    }
+  });
+
+  it("treats an absent ensemble as agreement", () => {
+    expect(tier1ProposalStatus("support", false)).toBe("auto_approved");
+    expect(tier1ProposalStatus("support")).toBe("auto_approved");
+  });
+
   // A new class added to the contract must not be auto-approved by default:
   // nothing has measured it yet.
   it("defaults a class it has never seen to pending", () => {
     expect(tier1ProposalStatus("prospect")).toBe("pending");
     expect(tier1ProposalStatus("other")).toBe("pending");
+  });
+});
+
+// KAI-45 F6 — the rule that decided, as it reaches ClickStack on the
+// `ticket.proposal_status` span.
+describe("tier1ProposalDecision", () => {
+  it("names the rule that decided", () => {
+    expect(tier1ProposalDecision("support", false)).toEqual(["auto_approved", "support"]);
+    expect(tier1ProposalDecision("internal", false)).toEqual(["pending", "not_support"]);
+    expect(tier1ProposalDecision("support", true)).toEqual(["pending", "abstain"]);
   });
 });

@@ -10,6 +10,49 @@ const BASE: Parameters<typeof preFilterEmail>[0] = {
 };
 
 // ---------------------------------------------------------------------------
+// Rule 0: spam_filtered — KAI-45 F2, routing policy 1.1.1
+//
+// Runs ahead of everything, including the urgency / In-Reply-To overrides. On
+// the 90 real .eml in scripts/eval/data the header fires on exactly the ten
+// messages the sheet labels `spam` and on nothing else.
+// ---------------------------------------------------------------------------
+describe("Rule: spam_filtered", () => {
+  it("believes the receiving server's verdict", () => {
+    const result = preFilterEmail({
+      ...BASE,
+      headers: { "X-Spam-Status": "Yes, score=11.8 required=5.0" },
+    });
+    expect(result.status).toBe("skip");
+    expect(result.skip_reason).toBe("spam_filtered");
+  });
+
+  // Email 116 of the coverage corpus: a forged purchase order that three of the
+  // seven KAI-93 cells read as `support`, carrying its own verdict in a header
+  // nobody was reading.
+  it("outranks an urgent subject and an existing thread", () => {
+    const result = preFilterEmail({
+      ...BASE,
+      subject: "URGENT: production order 15458",
+      headers: { "X-Spam-Status": "Yes, score=11.8", "In-Reply-To": "<a@b>" },
+    });
+    expect(result.status).toBe("skip");
+    expect(result.skip_reason).toBe("spam_filtered");
+  });
+
+  // A negative verdict and a missing header are different states, and neither
+  // is a reason to drop the message.
+  it("does not skip when the provider scanned and cleared it", () => {
+    expect(
+      preFilterEmail({ ...BASE, headers: { "X-Spam-Status": "No, score=-2.6" } }).status,
+    ).toBe("relevant");
+  });
+
+  it("does not skip when the provider never scanned", () => {
+    expect(preFilterEmail({ ...BASE, headers: {} }).status).toBe("relevant");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Rule 1: automated_sender
 // ---------------------------------------------------------------------------
 describe("Rule: automated_sender", () => {
@@ -45,46 +88,62 @@ describe("Rule: automated_sender", () => {
 // ---------------------------------------------------------------------------
 // Rule 2: mailing_list
 // ---------------------------------------------------------------------------
-describe("Rule: mailing_list", () => {
-  it("skips email with List-Unsubscribe header", () => {
-    const result = preFilterEmail({
-      ...BASE,
-      headers: { "List-Unsubscribe": "<https://example.com/unsub>" },
-    });
-    expect(result.status).toBe("skip");
-    expect(result.skip_reason).toBe("mailing_list");
+// REMOVED in KAI-45 (routing policy 1.2.0). This block used to assert that any
+// message carrying List-Unsubscribe was skipped. The header is not a marker of
+// junk — RFC 8058 asks every sender of recurring mail to set it, and on the
+// coverage corpus it fired on exactly two messages, a tender invitation and a
+// supplier notice, both of which the ground truth gives a real type. Both were
+// dropped before the classifier saw them.
+//
+// What the rule aimed at is still caught: marketing@ and newsletter@ senders by
+// automated_sender, promotional bulk by the Gmail category rule, and
+// `Precedence: bulk` by auto_generated.
+describe("Rule: mailing_list — removed", () => {
+  it("classifies a message carrying List-Unsubscribe instead of dropping it", () => {
+    for (const key of ["List-Unsubscribe", "list-unsubscribe"]) {
+      const result = preFilterEmail({
+        ...BASE,
+        headers: { [key]: "<https://example.com/unsub>" },
+      });
+      expect(result.status).toBe("relevant");
+      // Kept as a fact, which is what it always should have been: the model can
+      // weigh "this is recurring mail" without the pipeline deciding for it.
+      expect(result.facts.hasListUnsubscribe).toBe(true);
+    }
   });
 
-  it("does not skip email without List-Unsubscribe header", () => {
+  it("still reports the fact as absent when the header did not arrive", () => {
     const result = preFilterEmail({ ...BASE, headers: {} });
     expect(result.status).toBe("relevant");
-  });
-
-  it("treats List-Unsubscribe header key as case-insensitive", () => {
-    const result = preFilterEmail({
-      ...BASE,
-      headers: { "list-unsubscribe": "<https://example.com/unsub>" },
-    });
-    expect(result.status).toBe("skip");
-    expect(result.skip_reason).toBe("mailing_list");
+    expect(result.facts.hasListUnsubscribe).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Rule 3: outbound
+// Rule 3: same-domain mail — REMOVED in KAI-45 F0b (routing policy 1.1.0)
+//
+// This block used to assert that mail from the tenant's own domain was skipped
+// with skip_reason "outbound". The rule never detected outbound: this pipeline
+// only reads an inbox, and real outbound is messages.direction='outbound'
+// written by the reply flow. What it dropped was the company's own
+// correspondence that arrived — and with it 5 of the 10 emails the KAI-93
+// coverage corpus labels `internal`.
+//
+// The cases are kept, inverted, so the removal stays pinned: a future change
+// that reintroduces the rule fails here rather than quietly re-emptying the
+// class.
 // ---------------------------------------------------------------------------
-describe("Rule: outbound", () => {
-  it("skips email where sender domain matches user domain", () => {
+describe("Rule: same-domain mail is classified, not skipped", () => {
+  it("classifies mail from a sibling mailbox of the tenant's company", () => {
     const result = preFilterEmail({
       ...BASE,
       from: "colleague@mycompany.com",
       userEmail: "support@mycompany.com",
     });
-    expect(result.status).toBe("skip");
-    expect(result.skip_reason).toBe("outbound");
+    expect(result.status).toBe("relevant");
   });
 
-  it("does not skip email from a different domain", () => {
+  it("classifies mail from a different domain, as before", () => {
     const result = preFilterEmail({
       ...BASE,
       from: "alice@otherdomain.com",
@@ -93,14 +152,36 @@ describe("Rule: outbound", () => {
     expect(result.status).toBe("relevant");
   });
 
-  it("handles display-name format in From header", () => {
+  it("classifies a copy of the tenant's own message", () => {
     const result = preFilterEmail({
       ...BASE,
-      from: "Colleague Name <col@mycompany.com>",
-      userEmail: "me@mycompany.com",
+      from: "Support <support@mycompany.com>",
+      userEmail: "support@mycompany.com",
     });
-    expect(result.status).toBe("skip");
-    expect(result.skip_reason).toBe("outbound");
+    expect(result.status).toBe("relevant");
+  });
+
+  // The house's own robot is the house's correspondence. Three of the ten
+  // `internal` emails in the coverage corpus are exactly this — the tenant's
+  // notifier writing into the tenant's own inbox — and the ground truth gives
+  // all three a type, so dropping them made them unreproducible. Narrowed in
+  // routing policy 1.2.0; a no-reply@ from outside is still dropped.
+  it("classifies an automated sender on the account's own domain", () => {
+    const own = preFilterEmail({
+      ...BASE,
+      from: "noreply@mycompany.com",
+      userEmail: "support@mycompany.com",
+    });
+    expect(own.status).toBe("relevant");
+    expect(own.facts.isAutomatedSender).toBe(true);
+
+    const stranger = preFilterEmail({
+      ...BASE,
+      from: "noreply@somewhere-else.com",
+      userEmail: "support@mycompany.com",
+    });
+    expect(stranger.status).toBe("skip");
+    expect(stranger.skip_reason).toBe("automated_sender");
   });
 });
 
@@ -233,15 +314,17 @@ describe("Edge cases", () => {
     expect(result.relevance_signals).toContain("in_reply_to");
   });
 
-  it("outbound sender domain + urgency keyword → outbound wins (skip)", () => {
+  // Used to assert the opposite: the same-domain rule outranked every override,
+  // so an urgent subject from a colleague was still dropped. Removed in F0b.
+  it("same-domain sender + urgency keyword → classified", () => {
     const result = preFilterEmail({
       ...BASE,
       from: "colleague@mycompany.com",
       subject: "urgent: need help with production",
       userEmail: "support@mycompany.com",
     });
-    expect(result.status).toBe("skip");
-    expect(result.skip_reason).toBe("outbound");
+    expect(result.status).toBe("relevant");
+    expect(result.relevance_signals).toContain("urgency_keyword");
   });
 });
 

@@ -34,9 +34,10 @@ describe('getPromptVersion', () => {
   // 3.0.0 during development and reset to 1.2.0 in 1c0a2e8; that reset is the
   // intended state, not a regression to undo. A prompt edit never touches the
   // first number. The rule lives here and not only in prompts/README.md because
-  // a rule nobody runs is a rule that gets re-litigated. Minor vs patch is in
-  // that README: minor changes the value some email comes back with, patch
-  // does not.
+  // a rule nobody runs is a rule that gets re-litigated. The other two positions
+  // are in that README and they are not semver: the second is the major (a
+  // block replaced whole), the third carries everything else — including a
+  // rule that changes what some email comes back with.
   it('never moves the major off 1', async () => {
     for (const lang of ['es', 'en'] as const) {
       expect((await getPromptVersion(lang))!.split('.')[0]).toBe('1');
@@ -272,22 +273,173 @@ describe('tenant context', () => {
   // it was unreachable by construction — 0 of 100 annotations used it while
   // every email nobody could place became `internal`. There is exactly one
   // residual class and it is `other`; `internal` is whose work the email is.
-  it('makes other the residual class, not internal', async () => {
+  // KAI-45 F2 — the five-way `type` question is gone. It was the product of
+  // two independent axes crossed with the envelope, and asking for it in one
+  // shot is what made `other` and `internal` argue for five rubric versions.
+  it('asks for the two axes and no longer for a ticket type', async () => {
     const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
 
-    expect(es).toContain('Si ninguna encaja → `other`');
-    expect(es).toContain('No es la clase por defecto');
-    expect(es).not.toContain('Es la clase por defecto cuando');
-    // the competing shortcut that sent every external request to `support`
-    expect(es).not.toContain('si el remitente es externo y espera una acción');
+    expect(es).toContain('## 1. actionability');
+    expect(es).toContain('## 2. subject_matter');
+    expect(es).not.toContain('## 1. type');
+    for (const residual of ['`support`, `prospect`, `spam`, `internal`, `other`', 'Si ninguna encaja']) {
+      expect(es).not.toContain(residual);
+    }
+  });
+
+  // Provenance is computed from the envelope and combined with the answer by
+  // the derivation table. A rubric that also asks the model to weigh it counts
+  // it twice — and on this corpus the messages between the company's own
+  // mailboxes carry three different types, so it settles nothing on its own.
+  it('tells the model to leave provenance out of the subject-matter call', async () => {
+    const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
+
+    expect(es).toContain('La procedencia no entra en esta decisión');
+    expect(es).toContain('la estás contando dos veces');
+  });
+
+  // The two sides of a commercial exchange are separate values, and the thing
+  // that separates them is direction — never `actionability`. The previous
+  // rubric said the opposite, and it cost every `other` in the corpus: a vendor
+  // offer asks for a meeting, so the model answered `needs_action`, which was
+  // correct by that rubric and derived `prospect`. All 10 model errors measured
+  // on 21 Sep were commercial mail, `other` scored 2/10, and this is the test
+  // that fails if the rule drifts back.
+  it('separates the two sides of a commercial exchange by direction, not by actionability', async () => {
+    const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
+
+    expect(es).toContain('`commercial_demand`');
+    expect(es).toContain('`commercial_offer`');
+    expect(es).toContain('la dirección de la venta, y solo eso');
+    expect(es).toContain('¿quién le va a facturar a quién?');
+    // The axis that must NOT be used to tell them apart says so itself.
+    expect(es).toContain('Esa diferencia la lleva `subject_matter`');
+  });
+
+  // Measured on 21 Sep with rubric 1.5.1: the model inverted the direction on
+  // every tender invitation in the corpus, reasoning that an "invitación a
+  // ofertar" was a third party offering. It is the opposite — whoever invites
+  // you to quote is the one buying — and the word "oferta" appearing in the
+  // text is what misleads. Naming the idiom is the fix; this pins it.
+  it('warns that an invitation to quote comes from the buyer, not the seller', async () => {
+    const es = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
+    const en = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' }, 'en');
+
+    expect(es).toContain('quien escribe quiere comprar');
+    expect(es).toContain('No te guíes por las palabras del correo');
+    expect(en).toContain('the writer wants to buy');
+    expect(en).toContain("Do not follow the email's vocabulary");
   });
 
   it('keeps both languages on the same rule', async () => {
     const en = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' }, 'en');
 
-    expect(en).toContain('If none of them fits -> `other`');
-    expect(en).toContain('It is not the default class');
-    expect(en).not.toContain('It is the default class when');
+    expect(en).toContain('## 1. actionability');
+    expect(en).toContain('## 2. subject_matter');
+    expect(en).not.toContain('## 1. type');
+    expect(en).toContain('Provenance is not part of this decision');
+    expect(en).toContain('the direction of the sale, and nothing else');
+    expect(en).toContain('who ends up invoicing whom?');
     expect(en).toContain('What it does: (not available)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KAI-45 — the envelope block.
+//
+// Two properties are load-bearing and easy to break by accident: an unknown
+// fact must be omitted rather than stated as a negative, and the block must
+// report provenance without concluding anything from it. On the KAI-93 coverage
+// corpus the eleven messages sent between the company's own mailboxes carry
+// three different labels, so a block that said "same company → internal" would
+// be teaching the model something the data contradicts.
+// ---------------------------------------------------------------------------
+
+const FACTS: NonNullable<Parameters<typeof buildPrompt>[0]['facts']> = {
+  senderAddress: 'someone@external.com',
+  senderDomain: 'external.com',
+  senderIsTenantAddress: false,
+  senderIsTenantDomain: false,
+  tenantDomainIsPublic: false,
+  tenantInRecipients: true,
+  recipientCount: 3,
+  toHeader: 'support@acme.com, other@x.com',
+  ccHeader: 'third@y.com',
+  isAutomatedSender: false,
+  hasListUnsubscribe: false,
+  isAutoGenerated: false,
+  isAutoSubmitted: false,
+  isBulk: false,
+  isReply: false,
+  referencesCount: 0,
+  spamFiltered: null,
+  spamScore: null,
+  authResult: null,
+  gmailCategory: null,
+  isCalendarInvite: false,
+  hasSystemSubjectPrefix: false,
+  hasUrgencyKeyword: false,
+};
+
+const withFacts = (over: Partial<typeof FACTS> = {}) =>
+  buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com', facts: { ...FACTS, ...over } });
+
+describe('envelope facts block', () => {
+  it('names the three provenances without deciding the class from them', async () => {
+    expect(await withFacts({ senderIsTenantAddress: true, senderIsTenantDomain: true })).toContain(
+      'Remitente: la misma casilla que Kairo lee',
+    );
+    expect(await withFacts({ senderIsTenantDomain: true })).toContain(
+      'Remitente: otra casilla de la misma empresa',
+    );
+    expect(await withFacts()).toContain('Remitente: ajeno a la empresa');
+
+    // Evidence, not a verdict: the block must never name a ticket type.
+    const out = await withFacts({ senderIsTenantDomain: true });
+    const block = out.slice(out.indexOf('Hechos del sobre'), out.indexOf('Cuerpo:'));
+    for (const type of ['internal', 'support', 'prospect', 'spam', 'other']) {
+      expect(block).not.toContain(`\`${type}\``);
+    }
+  });
+
+  it('omits the spam verdict when the provider gave none, and states it when it did', async () => {
+    expect(await withFacts()).not.toContain('Filtro de spam del proveedor');
+    expect(await withFacts({ spamFiltered: true, spamScore: 11.8 })).toContain(
+      'Filtro de spam del proveedor: positivo (puntaje 11.8)',
+    );
+    expect(await withFacts({ spamFiltered: false, spamScore: -2.6 })).toContain(
+      'Filtro de spam del proveedor: negativo',
+    );
+  });
+
+  it('omits recipients when neither To nor Cc arrived', async () => {
+    const none = await withFacts({ recipientCount: 0, tenantInRecipients: false });
+    expect(none).not.toContain('Destinatarios:');
+    expect(await withFacts()).toContain('Destinatarios: 3');
+  });
+
+  it('omits authentication unless the server reached a verdict', async () => {
+    expect(await withFacts()).not.toContain('Autenticación del remitente');
+    expect(await withFacts({ authResult: 'none' })).not.toContain('Autenticación del remitente');
+    expect(await withFacts({ authResult: 'fail' })).toContain('Autenticación del remitente: fallida');
+  });
+
+  it('leaves the prompt as it was when the caller has no facts', async () => {
+    const bare = await buildPrompt({ subject: 'S', body: 'B', from: 'a@b.com' });
+    expect(bare).not.toContain('Hechos del sobre');
+    expect(bare).not.toMatch(/\{\{\w+\}\}/);
+    // No hole where the block would have gone.
+    expect(bare).not.toMatch(/\n\n\n/);
+  });
+
+  it('renders in English against the English rubric', async () => {
+    const out = await buildPrompt(
+      { subject: 'S', body: 'B', from: 'a@b.com', facts: { ...FACTS, spamFiltered: true, spamScore: 9 } },
+      'en',
+    );
+    expect(out).toContain('Envelope facts, verified by the system');
+    expect(out).toContain('Sender: outside the company');
+    expect(out).toContain("Provider's spam filter: positive (score 9)");
+    expect(out).not.toMatch(/\{\{\w+\}\}/);
   });
 });

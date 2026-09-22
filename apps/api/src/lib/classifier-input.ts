@@ -13,8 +13,20 @@
 // path can be named the same thing.
 // ---------------------------------------------------------------------------
 
-import { stripQuotedThread } from "@kairo/intelligence";
+import {
+  stripQuotedThread,
+  DEFAULT_LANG,
+  SUPPORTED_LANGS,
+  type EmailMessage,
+  type PromptLang,
+} from "@kairo/intelligence";
 
+import {
+  classifierContextAttributes,
+  recordDecision,
+  type ContextDegradation,
+} from "./decision-telemetry.js";
+import { type MailFacts } from "./email/mail-facts.js";
 import { getGmailEmailByAccount } from "./gmail-token.js";
 import { supabase } from "./supabase.js";
 
@@ -82,9 +94,75 @@ export function buildClassifierBody(
 // through here.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// The envelope fields, from the facts the pre-filter already read.
+//
+// `EmailMessage` has carried `to`, `cc` and `threadDepth` since the rubric
+// started saying `internal` is not decidable without them — and not one of the
+// seven call sites ever populated a single one. Every production classification
+// so far has rendered `Para: (no disponible)`, `Copia: (no disponible)`,
+// `Mensajes previos en el hilo: (no disponible)`, while the headers that answer
+// all three sat in the same function that decided whether to classify at all.
+//
+// Lives here rather than at each call site for the reason in this module's
+// header: five paths that each assemble classifier input by hand is how the
+// four regimes this file exists to collapse came about in the first place.
+// ---------------------------------------------------------------------------
+
+/**
+ * The recipient and thread fields to hand the classifier, from a
+ * {@link MailFacts} produced by `preFilterEmail`.
+ *
+ * A header that did not arrive is omitted rather than sent as an empty string:
+ * the prompt renders an omitted field as `(no disponible)` and tells the model
+ * not to invent it, which is true, whereas an empty `Para:` reads as a message
+ * with no recipients.
+ */
+export function classifierEnvelope(
+  facts: MailFacts
+): Pick<EmailMessage, "to" | "cc" | "threadDepth"> {
+  return {
+    ...(facts.toHeader ? { to: facts.toHeader } : {}),
+    ...(facts.ccHeader ? { cc: facts.ccHeader } : {}),
+    // `References` lists every ancestor, so its length is how many messages
+    // precede this one. Absent header means this message opens the thread —
+    // which is a known 0, not an unknown, so it is always sent.
+    threadDepth: facts.referencesCount,
+  };
+}
+
+/** The connected mailboxes plus the resolved one, deduplicated and non-empty. */
+function unionMailboxes(primary: string, channels: string[]): string[] {
+  return [...new Set([primary, ...channels].map((m) => m.trim().toLowerCase()).filter(Boolean))];
+}
+
 export interface ClassifierContext {
-  /** The mailbox Kairo is reading. Sent by every stage. */
+  /** The mailbox Kairo is reading. Sent by every stage, rendered in the prompt. */
   tenantMailbox: string;
+  /**
+   * Which rubric this tenant is classified against.
+   *
+   * `DEFAULT_LANG` was a module constant and no call site ever passed `lang`,
+   * so every tenant got the Spanish rubric whatever language their mail is in.
+   * Resolved here rather than at the call sites for the same reason the body
+   * rule is: seven paths each deciding for themselves is how four regimes came
+   * about in the first place.
+   */
+  language: PromptLang;
+  /**
+   * Every mailbox this account has connected, for `extractMailFacts`.
+   *
+   * An account is not one inbox. A tenant can have several connected addresses
+   * across more than one domain, and provenance compared against a single one
+   * read six of the ninety corpus messages as external when they came from the
+   * company itself.
+   * Provenance is a coordinate of the derivation key, so a wrong one puts the
+   * message in the wrong row of the table.
+   *
+   * Always contains {@link tenantMailbox}; falls back to just that one when the
+   * channels table cannot be read.
+   */
+  tenantMailboxes: string[];
   /**
    * What the tenant's company does. Absent on `onboarding`, and absent on
    * `backfill` until the account has one — the rubric then renders
@@ -94,32 +172,93 @@ export interface ClassifierContext {
 }
 
 /**
- * Reads `accounts.business_context`.
+ * Every active mailbox the account has connected.
  *
- * Never throws: a classification is worth more without the context than not at
- * all, and this column is read on every backfill call. The most likely failure
- * is also the most benign one — an environment where the migration adding the
- * column has not been applied yet.
+ * `support_channels` holds one row per connected inbox, unique per account.
+ * Never throws: a classification with one mailbox is worth more than none, and
+ * the caller always unions in the address it already resolved.
  */
-async function readBusinessContext(accountId: string): Promise<string | undefined> {
+async function readTenantMailboxes(
+  accountId: string,
+  degradations: ContextDegradation[]
+): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from("support_channels")
+      .select("email_address")
+      .eq("account_id", accountId)
+      .eq("is_active", true);
+
+    if (error) {
+      console.warn(`[classifier-input] support_channels unreadable for account ${accountId}: ${error.message}`);
+      degradations.push("support_channels_unreadable");
+      return [];
+    }
+    return (data ?? [])
+      .map((r) => (r.email_address as string | null | undefined)?.trim() ?? "")
+      .filter((a) => a !== "");
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[classifier-input] support_channels unreadable for account ${accountId}: ${message}`);
+    degradations.push("support_channels_unreadable");
+    return [];
+  }
+}
+
+/** What the `accounts` row contributes to a classification. */
+interface AccountSettings {
+  language: PromptLang;
+  businessContext: string | undefined;
+}
+
+/**
+ * Reads `accounts.language` and `accounts.business_context` in one query.
+ *
+ * Never throws, and falls back to {@link DEFAULT_LANG} with no context: a
+ * classification is worth more than none, and the most likely failure is the
+ * most benign one — an environment where the migration adding a column has not
+ * been applied yet. A tenant reverting to the default rubric is the same
+ * behaviour every tenant had before this column existed.
+ *
+ * One query for both because both are per-account settings read at the same
+ * moment; splitting them would double a round trip to say the same thing twice.
+ */
+async function readAccountSettings(
+  accountId: string,
+  degradations: ContextDegradation[]
+): Promise<AccountSettings> {
+  const fallback: AccountSettings = { language: DEFAULT_LANG, businessContext: undefined };
   try {
     const { data, error } = await supabase
       .from("accounts")
-      .select("business_context")
+      .select("language, business_context")
       .eq("id", accountId)
       .maybeSingle();
 
     if (error) {
-      console.warn(`[classifier-input] business_context unreadable for account ${accountId}: ${error.message}`);
-      return undefined;
+      console.warn(`[classifier-input] accounts row unreadable for account ${accountId}: ${error.message}`);
+      degradations.push("accounts_unreadable");
+      return fallback;
+    }
+
+    const raw = (data?.language as string | null | undefined)?.trim().toLowerCase();
+    // A value outside SUPPORTED_LANGS has no rubric file, and honouring it
+    // would fail at template load, far from the write that caused it. The CHECK
+    // constraint makes this unreachable through the API; this covers the row
+    // written before the constraint, or by hand.
+    const language = SUPPORTED_LANGS.includes(raw as PromptLang) ? (raw as PromptLang) : DEFAULT_LANG;
+    if (raw && language !== raw) {
+      console.warn(`[classifier-input] account ${accountId} has unsupported language "${raw}"; using ${DEFAULT_LANG}`);
+      degradations.push("unsupported_language");
     }
 
     const text = (data?.business_context as string | null | undefined)?.trim();
-    return text ? text : undefined;
+    return { language, businessContext: text ? text : undefined };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[classifier-input] business_context unreadable for account ${accountId}: ${message}`);
-    return undefined;
+    console.warn(`[classifier-input] accounts row unreadable for account ${accountId}: ${message}`);
+    degradations.push("accounts_unreadable");
+    return fallback;
   }
 }
 
@@ -141,14 +280,32 @@ export async function resolveClassifierContext(
   stage: ClassifierStage,
   accountId: string
 ): Promise<ClassifierContext> {
-  if (stage === "onboarding") {
-    return { tenantMailbox: await getGmailEmailByAccount(accountId) };
-  }
-
-  const [tenantMailbox, businessContext] = await Promise.all([
+  const degradations: ContextDegradation[] = [];
+  const [tenantMailbox, channels, settings] = await Promise.all([
     getGmailEmailByAccount(accountId),
-    readBusinessContext(accountId),
+    readTenantMailboxes(accountId, degradations),
+    readAccountSettings(accountId, degradations),
   ]);
 
-  return { tenantMailbox, ...(businessContext ? { businessContext } : {}) };
+  const base = {
+    tenantMailbox,
+    tenantMailboxes: unionMailboxes(tenantMailbox, channels),
+    language: settings.language,
+  };
+
+  // Tier 1 reads the language but never the business context — see this
+  // function's contract above for why that field is stage-dependent and this
+  // one is not: the rubric's language is not an experiment, it is who the
+  // tenant is.
+  const context: ClassifierContext =
+    stage === "onboarding"
+      ? base
+      : { ...base, ...(settings.businessContext ? { businessContext: settings.businessContext } : {}) };
+
+  recordDecision(
+    "classifier.context",
+    classifierContextAttributes(stage, accountId, context),
+    degradations.map((name) => ({ name }))
+  );
+  return context;
 }

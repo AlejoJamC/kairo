@@ -1,6 +1,7 @@
-import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { classifyEmailWithMeta, DEFAULT_LANG, type PromptLang } from "@kairo/intelligence";
+import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import type { TicketType } from "@kairo/intelligence";
-import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
+import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -20,6 +21,7 @@ import { withRetry } from "../../lib/retry.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
 import { backfillProposalStatus, autoApprovedTypes } from "./backfill-proposal-status.js";
+import { headerValue, headersToRecord, type GmailHeader } from "../../lib/email/headers.js";
 
 // KAI-191: tier3 writes priority/category onto every ticket it creates, but
 // used to leave no trace of that AI decision — the human correction path did,
@@ -67,11 +69,6 @@ async function recordAiClassification(
 // ---------------------------------------------------------------------------
 // Gmail API types (shared shape with Tier 1 & 2)
 // ---------------------------------------------------------------------------
-
-interface GmailHeader {
-  name: string;
-  value: string;
-}
 
 interface GmailListResponse {
   messages?: { id: string; threadId: string }[];
@@ -185,19 +182,6 @@ async function fetchGmailRange(
   return allMessages;
 }
 
-function headerValue(headers: GmailHeader[], name: string): string {
-  return (
-    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
-    ""
-  );
-}
-
-function headersToRecord(headers: GmailHeader[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const { name, value } of headers) out[name] = value;
-  return out;
-}
-
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Same decoder as Tier 1 (KAI-93): Gmail returns part data base64url-encoded,
 // and Buffer's "base64" decoder accepts URL-safe variants on both Node and Bun.
@@ -293,7 +277,7 @@ async function classifyWindow(
       headers: headersToRecord(headers),
       gmailCategories,
       mimeType: message.payload?.mimeType,
-      userEmail: classifierContext.tenantMailbox,
+      userEmail: classifierContext.tenantMailboxes,
     });
 
     if (filterResult.status === "skip") {
@@ -310,6 +294,7 @@ async function classifyWindow(
             body_plain: null,
             body_html: null,
             classification_status: "skipped",
+            ...routingAudit(filterResult.facts),
             skip_reason: filterResult.skip_reason,
             processing_tier: 3,
           },
@@ -333,6 +318,7 @@ async function classifyWindow(
             body_plain: null,
             body_html: null,
             classification_status: "skipped",
+            ...routingAudit(filterResult.facts),
             skip_reason: "circuit_breaker_open",
             processing_tier: 3,
           },
@@ -357,11 +343,12 @@ async function classifyWindow(
           from,
           tenantMailbox: classifierContext.tenantMailbox,
           ...(classifierContext.businessContext ? { businessContext: classifierContext.businessContext } : {}),
+          ...classifierEnvelope(filterResult.facts),
         },
-        { context: { accountId } },
+        { lang: classifierContext.language, context: { accountId } },
       ),
     )
-      .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+      .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
         circuitBreaker.recordSuccess();
         logLlmCall({
           feature: "email_classification",
@@ -409,6 +396,7 @@ async function classifyWindow(
               type: classification.type,
               businessContext: classifierContext.businessContext,
               autoApprovalEnabled: autoApproved.includes(classification.type),
+              abstain,
             }),
           })
           .select("id")
@@ -432,6 +420,7 @@ async function classifyWindow(
             });
 
             const result = await findOrCreateTicketForThread(supabase, {
+              audit: classificationAudit({ verdict, ensemble, abstain, promptVersion }),
               accountId,
               conversationId: conversation_id,
               originatingUserId: userId,
@@ -484,6 +473,7 @@ async function classifyWindow(
                 body_plain: body_plain || null,
                 body_html: body_html || null,
                 classification_status: "classified",
+                ...routingAudit(filterResult.facts),
                 processing_tier: 3,
                 classified_at,
               },
@@ -522,6 +512,7 @@ async function classifyWindow(
                 gmail_thread_id: threadId,
                 received_at: receivedAt,
                 ticket_type: classification.type,
+                ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                 priority: classification.priority,
                 category: classification.category,
                 sentiment: classification.tone,
@@ -561,6 +552,7 @@ async function classifyWindow(
                 body_plain: body_plain || null,
                 body_html: body_html || null,
                 classification_status: "classified",
+                ...routingAudit(filterResult.facts),
                 processing_tier: 3,
                 classified_at,
               },
@@ -580,6 +572,7 @@ async function classifyWindow(
               gmail_thread_id: threadId,
               received_at: receivedAt,
               ticket_type: classification.type,
+              ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
               priority: classification.priority,
               category: classification.category,
               sentiment: classification.tone,
@@ -670,7 +663,7 @@ export const tier3Deferred = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Fetch Gmail credentials + channel integration id once
     // -----------------------------------------------------------------------
-    const { accessToken, tenantMailbox, businessContext, autoApproved, accountId, channelIntegrationId } = (await step.run(
+    const { accessToken, tenantMailbox, tenantMailboxes, businessContext, language, autoApproved, accountId, channelIntegrationId } = (await step.run(
       "fetch-credentials",
       async () => {
         // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
@@ -697,19 +690,21 @@ export const tier3Deferred = inngest.createFunction(
 
         if (!freshToken) {
           console.warn(`[tier3] No Gmail credentials found for account ${accountId}`);
-          return { accessToken: null, tenantMailbox: "", businessContext: "", autoApproved: [] as string[], accountId, channelIntegrationId: null };
+          return { accessToken: null, tenantMailbox: "", tenantMailboxes: [] as string[], businessContext: "", language: DEFAULT_LANG, autoApproved: [] as string[], accountId, channelIntegrationId: null };
         }
 
         return {
           accessToken: freshToken,
           tenantMailbox: ctx.tenantMailbox,
+          tenantMailboxes: ctx.tenantMailboxes,
           businessContext: ctx.businessContext ?? "",
+          language: ctx.language,
           autoApproved: autoApproved as string[],
           accountId,
           channelIntegrationId: channelRow.data?.id ?? null,
         };
       }
-    )) as { accessToken: string | null; tenantMailbox: string; businessContext: string; autoApproved: string[]; accountId: string; channelIntegrationId: string | null };
+    )) as { accessToken: string | null; tenantMailbox: string; tenantMailboxes: string[]; businessContext: string; language: PromptLang; autoApproved: string[]; accountId: string; channelIntegrationId: string | null };
 
     if (!accessToken || !accountId) return;
 
@@ -718,6 +713,8 @@ export const tier3Deferred = inngest.createFunction(
     // absent, or every window would send an empty business_context block.
     const classifierContext: ClassifierContext = {
       tenantMailbox,
+      tenantMailboxes,
+      language,
       ...(businessContext ? { businessContext } : {}),
     };
 

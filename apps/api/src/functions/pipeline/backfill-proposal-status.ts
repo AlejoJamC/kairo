@@ -1,4 +1,9 @@
 import type { TicketType } from "@kairo/intelligence";
+import {
+  proposalStatusAttributes,
+  recordDecision,
+  type ProposalStatusReason,
+} from "../../lib/decision-telemetry.js";
 import { supabase } from "../../lib/supabase.js";
 import type { ProposalStatus } from "./tier1-proposal-status.js";
 
@@ -12,6 +17,12 @@ export interface BackfillProposalInput {
    * sample; never set by hand.
    */
   autoApprovalEnabled: boolean;
+  /**
+   * The classification ensemble disagreed on the type (KAI-45 F3). Absent means
+   * no ensemble ran, which is the same as agreement: nothing contradicted the
+   * label.
+   */
+  abstain?: boolean;
 }
 
 /**
@@ -43,8 +54,24 @@ export interface BackfillProposalInput {
  * checked and nothing has vouched for.
  */
 export function backfillProposalStatus(input: BackfillProposalInput): ProposalStatus {
-  if (!input.businessContext) return "pending";
-  return input.autoApprovalEnabled ? "auto_approved" : "pending";
+  const [status, reason] = backfillProposalDecision(input);
+  recordDecision(
+    "ticket.proposal_status",
+    proposalStatusAttributes({ stage: "backfill", type: input.type, status, reason })
+  );
+  return status;
+}
+
+/** The status and the rule that decided it, first match wins. */
+export function backfillProposalDecision(input: BackfillProposalInput): [ProposalStatus, ProposalStatusReason] {
+  // Ahead of both gates. A permission earned from measured precision is a
+  // statement about the class on average; two models disagreeing is a
+  // statement about this email.
+  if (input.abstain) return ["pending", "abstain"];
+  if (!input.businessContext) return ["pending", "no_business_context"];
+  return input.autoApprovalEnabled
+    ? ["auto_approved", "auto_approval_earned"]
+    : ["pending", "auto_approval_not_earned"];
 }
 
 /**

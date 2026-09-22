@@ -18,12 +18,17 @@
 // ---------------------------------------------------------------------------
 
 import { inngest } from "../../lib/inngest.js";
+import { classificationAudit } from "../../lib/classification-audit.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { getNumericFlag } from "@kairo/feature-flags";
 import { buildIntervalCronExpression } from "../../lib/cron-interval.js";
 import { classifyEmailWithMeta } from "@kairo/intelligence";
-import { getGmailEmailByAccount } from "../../lib/gmail-token.js";
+import {
+  buildClassifierBody,
+  resolveClassifierContext,
+  type ClassifierContext,
+} from "../../lib/classifier-input.js";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
@@ -91,7 +96,12 @@ export const classificationRetrySweep = inngest.createFunction(
     const result = await step.run("retry-classification", async () => {
       const llmSemaphore = createSemaphore(env.FAST_PATH_LLM_CONCURRENCY);
       const circuitBreaker = createCircuitBreaker(env.FAST_PATH_CIRCUIT_BREAKER_THRESHOLD);
-      const userEmailCache = new Map<string, string>();
+      // KAI-45 — one cache per sweep, keyed by account, holding the whole
+      // classifier context rather than just the mailbox. The sweep used to
+      // resolve the address by hand and send no business context at all,
+      // which made it the fifth input regime classifier-input.ts exists to
+      // prevent (see its module header).
+      const contextCache = new Map<string, ClassifierContext>();
 
       let recovered = 0;
       let stillFailed = 0;
@@ -104,21 +114,28 @@ export const classificationRetrySweep = inngest.createFunction(
           }
 
           const subject = message.subject ?? "";
-          const classifierBody = message.body_plain || message.snippet || "";
+          // Same rule as every other non-onboarding path: quoted thread
+          // stripped, then capped. Built by hand here until KAI-45, so a
+          // retried message was the only one classified on a raw, uncapped body.
+          const classifierBody = buildClassifierBody(
+            "backfill",
+            message.body_plain,
+            message.snippet,
+          );
           const from = message.sender_external_id ?? "";
           const llmStart = Date.now();
 
-          let userEmail = userEmailCache.get(message.account_id);
-          if (userEmail === undefined) {
-            userEmail = await getGmailEmailByAccount(message.account_id);
-            userEmailCache.set(message.account_id, userEmail);
+          let classifierContext = contextCache.get(message.account_id);
+          if (classifierContext === undefined) {
+            classifierContext = await resolveClassifierContext("backfill", message.account_id);
+            contextCache.set(message.account_id, classifierContext);
           }
 
           try {
-            const { result: classification, meta, prompt, promptVersion } = await withRetry(llmSemaphore, () =>
+            const { result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion } = await withRetry(llmSemaphore, () =>
               classifyEmailWithMeta(
-                { subject, body: classifierBody, from, tenantMailbox: userEmail },
-                { context: { accountId: message.account_id } }
+                { subject, body: classifierBody, from, ...classifierContext },
+                { lang: classifierContext.language, context: { accountId: message.account_id } }
               )
             );
             circuitBreaker.recordSuccess();
@@ -158,6 +175,7 @@ export const classificationRetrySweep = inngest.createFunction(
             });
 
             const ticketResult = await findOrCreateTicketForThread(supabase, {
+              audit: classificationAudit({ verdict, ensemble, abstain, promptVersion }),
               accountId: message.account_id,
               conversationId: conversation_id,
               originatingUserId: null,

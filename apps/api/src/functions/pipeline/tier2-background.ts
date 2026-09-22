@@ -1,5 +1,6 @@
-import { classifyEmailWithMeta } from "@kairo/intelligence";
-import { buildClassifierBody, resolveClassifierContext } from "../../lib/classifier-input.js";
+import { classifyEmailWithMeta, DEFAULT_LANG, type PromptLang } from "@kairo/intelligence";
+import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
+import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
@@ -19,6 +20,7 @@ import { withRetry } from "../../lib/retry.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
 import { backfillProposalStatus, autoApprovedTypes } from "./backfill-proposal-status.js";
+import { headerValue, headersToRecord, type GmailHeader } from "../../lib/email/headers.js";
 
 // KAI-191: tier2 writes priority/category onto every ticket it creates, but
 // used to leave no trace of that AI decision — the human correction path did,
@@ -66,11 +68,6 @@ async function recordAiClassification(
 // ---------------------------------------------------------------------------
 // Gmail API types (shared shape with Tier 1)
 // ---------------------------------------------------------------------------
-
-interface GmailHeader {
-  name: string;
-  value: string;
-}
 
 interface GmailListResponse {
   messages?: { id: string; threadId: string }[];
@@ -178,19 +175,6 @@ async function fetchGmailWindow(
   return allMessages;
 }
 
-function headerValue(headers: GmailHeader[], name: string): string {
-  return (
-    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
-    ""
-  );
-}
-
-function headersToRecord(headers: GmailHeader[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const { name, value } of headers) out[name] = value;
-  return out;
-}
-
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Same decoder as Tier 1 (KAI-93): Gmail returns part data base64url-encoded,
 // and Buffer's "base64" decoder accepts URL-safe variants on both Node and Bun.
@@ -240,7 +224,7 @@ export const tier2Background = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Step 1: Fetch Gmail credentials + full 0–N day window
     // -----------------------------------------------------------------------
-    const { messages, userEmail, businessContext, autoApproved, accountId: resolvedAccountId } = await step.run(
+    const { messages, userEmail, tenantMailboxes, businessContext, language, autoApproved, accountId: resolvedAccountId } = await step.run(
       "fetch-0-15d-headers",
       async () => {
         // ADR-022 Phase 2: resolve accountId, then read tokens from oauth_credentials.
@@ -255,7 +239,7 @@ export const tier2Background = inngest.createFunction(
         const accountId = memberRow?.account_id;
         if (!accountId) {
           console.warn(`[tier2] account_id missing for user ${userId} — aborting`);
-          return { messages: [] as GmailMessage[], userEmail: "", businessContext: "", autoApproved: [] as string[], accountId: "" };
+          return { messages: [] as GmailMessage[], userEmail: "", tenantMailboxes: [] as string[], businessContext: "", language: DEFAULT_LANG, autoApproved: [] as string[], accountId: "" };
         }
 
         // Resolved once for the whole window, not once per email: the mailbox
@@ -270,13 +254,15 @@ export const tier2Background = inngest.createFunction(
         return {
           messages: msgs,
           userEmail: ctx.tenantMailbox,
+          tenantMailboxes: ctx.tenantMailboxes,
           businessContext: ctx.businessContext ?? "",
+          language: ctx.language,
           autoApproved: autoApproved as string[],
           accountId,
         };
       }
     // Inngest's JsonifyObject loses interface field types across step boundaries; cast back
-    ) as { messages: GmailMessage[]; userEmail: string; businessContext: string; autoApproved: string[]; accountId: string };
+    ) as { messages: GmailMessage[]; userEmail: string; tenantMailboxes: string[]; businessContext: string; language: PromptLang; autoApproved: string[]; accountId: string };
 
     if (messages.length === 0) {
       console.warn(`[tier2] No messages in window for user ${userId}`);
@@ -339,7 +325,7 @@ export const tier2Background = inngest.createFunction(
           headers: headersToRecord(headers),
           gmailCategories,
           mimeType: message.payload?.mimeType,
-          userEmail,
+          userEmail: tenantMailboxes,
         });
 
         if (filterResult.status === "skip") {
@@ -356,6 +342,7 @@ export const tier2Background = inngest.createFunction(
                 body_plain: null,
                 body_html: null,
                 classification_status: "skipped",
+                ...routingAudit(filterResult.facts),
                 skip_reason: filterResult.skip_reason,
                 processing_tier: 2,
               },
@@ -379,6 +366,7 @@ export const tier2Background = inngest.createFunction(
                 body_plain: null,
                 body_html: null,
                 classification_status: "skipped",
+                ...routingAudit(filterResult.facts),
                 skip_reason: "circuit_breaker_open",
                 processing_tier: 2,
               },
@@ -404,11 +392,12 @@ export const tier2Background = inngest.createFunction(
               from,
               tenantMailbox: userEmail,
               ...(businessContext ? { businessContext } : {}),
+              ...classifierEnvelope(filterResult.facts),
             },
-            { context: { accountId } },
+            { lang: language, context: { accountId } },
           ),
         )
-          .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+          .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
             circuitBreaker.recordSuccess();
             logLlmCall({
               feature: "email_classification",
@@ -458,6 +447,7 @@ export const tier2Background = inngest.createFunction(
                   type: classification.type,
                   businessContext,
                   autoApprovalEnabled: autoApproved.includes(classification.type),
+                  abstain,
                 }),
               })
               .select("id")
@@ -481,6 +471,7 @@ export const tier2Background = inngest.createFunction(
                 });
 
                 const result = await findOrCreateTicketForThread(supabase, {
+                  audit: classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   accountId,
                   conversationId: conversation_id,
                   originatingUserId: userId,
@@ -533,6 +524,7 @@ export const tier2Background = inngest.createFunction(
                     body_plain: body_plain || null,
                     body_html: body_html || null,
                     classification_status: "classified",
+                    ...routingAudit(filterResult.facts),
                     processing_tier: 2,
                     classified_at,
                   },
@@ -571,6 +563,7 @@ export const tier2Background = inngest.createFunction(
                     gmail_thread_id: threadId,
                     received_at: receivedAt,
                     ticket_type: classification.type,
+                    ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                     priority: classification.priority,
                     category: classification.category,
                     sentiment: classification.tone,
@@ -610,6 +603,7 @@ export const tier2Background = inngest.createFunction(
                     body_plain: body_plain || null,
                     body_html: body_html || null,
                     classification_status: "classified",
+                    ...routingAudit(filterResult.facts),
                     processing_tier: 2,
                     classified_at,
                   },
@@ -629,6 +623,7 @@ export const tier2Background = inngest.createFunction(
                   gmail_thread_id: threadId,
                   received_at: receivedAt,
                   ticket_type: classification.type,
+                  ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   priority: classification.priority,
                   category: classification.category,
                   sentiment: classification.tone,

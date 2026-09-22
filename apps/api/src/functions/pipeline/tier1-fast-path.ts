@@ -1,5 +1,10 @@
-import { classifyEmailWithMeta, detectEscalationTriggers } from "@kairo/intelligence";
-import { buildClassifierBody } from "../../lib/classifier-input.js";
+import { classifyEmailWithMeta, detectEscalationTriggers, type PromptLang } from "@kairo/intelligence";
+import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
+import {
+  buildClassifierBody,
+  classifierEnvelope,
+  resolveClassifierContext,
+} from "../../lib/classifier-input.js";
 import { tier1ProposalStatus } from "./tier1-proposal-status.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { getFlag } from "@kairo/feature-flags";
@@ -25,15 +30,11 @@ import { createSemaphore } from "../../lib/semaphore.js";
 import { withRetry } from "../../lib/retry.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
+import { headerValue, headersToRecord, type GmailHeader } from "../../lib/email/headers.js";
 
 // ---------------------------------------------------------------------------
 // Gmail API types
 // ---------------------------------------------------------------------------
-
-interface GmailHeader {
-  name: string;
-  value: string;
-}
 
 interface GmailProfile {
   emailAddress: string;
@@ -111,18 +112,6 @@ async function fetchGmailMessages(token: string, maxResults: number): Promise<Gm
     .filter((m): m is GmailMessage => m !== null);
 }
 
-function headerValue(headers: GmailHeader[], name: string): string {
-  return (
-    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? ""
-  );
-}
-
-function headersToRecord(headers: GmailHeader[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const { name, value } of headers) out[name] = value;
-  return out;
-}
-
 // Parses `From` header into display name + email address.
 //   "Alice <alice@example.com>"  → { from_name: "Alice", from_email: "alice@example.com" }
 //   "bob@example.com"            → { from_name: null,    from_email: "bob@example.com" }
@@ -183,7 +172,7 @@ export const tier1FastPath = inngest.createFunction(
     // Step 1: Resolve account, fetch Gmail profile + most recent message headers
     // ADR-022: getFreshGmailToken now takes accountId (Level 4 oauth_credentials).
     // -----------------------------------------------------------------------
-    const { messages, userEmail, gmailAccessToken, accountId: resolvedAccountId } = await step.run("fetch-headers", async () => {
+    const { messages, userEmail, tenantMailboxes, language, gmailAccessToken, accountId: resolvedAccountId } = await step.run("fetch-headers", async () => {
       // Resolve accountId before token fetch (required by ADR-022 Phase 2).
       const { data: memberRow } = await supabase
         .from("account_members")
@@ -223,13 +212,22 @@ export const tier1FastPath = inngest.createFunction(
       }
 
       const token = await getFreshGmailToken(accountId);
-      const [profile, msgs] = await Promise.all([
+      const [profile, msgs, ctx] = await Promise.all([
         fetchGmailProfile(token),
         fetchGmailMessages(token, env.FAST_PATH_SCAN_SIZE),
+        // KAI-45 — every mailbox the account has connected, for provenance.
+        // Tier 1 still does not read `business_context` (the bench measured it
+        // as harmful here); `onboarding` is exactly the stage that skips it.
+        resolveClassifierContext("onboarding", accountId),
       ]);
       pipelineLog("tier1:fetch", `fetched ${msgs.length} messages for ${profile.emailAddress} (scan_size=${env.FAST_PATH_SCAN_SIZE})`);
-      return { messages: msgs, userEmail: profile.emailAddress, gmailAccessToken: token, accountId };
-    }) as { messages: GmailMessage[]; userEmail: string; gmailAccessToken: string; accountId: string };
+      // The Gmail profile is the account this token belongs to; the channels
+      // table holds the corporate inboxes it aggregates. Provenance needs both.
+      const tenantMailboxes = [
+        ...new Set([profile.emailAddress, ...ctx.tenantMailboxes].map((m) => m.trim().toLowerCase()).filter(Boolean)),
+      ];
+      return { messages: msgs, userEmail: profile.emailAddress, tenantMailboxes, language: ctx.language, gmailAccessToken: token, accountId };
+    }) as { messages: GmailMessage[]; userEmail: string; tenantMailboxes: string[]; language: PromptLang; gmailAccessToken: string; accountId: string };
 
     // -----------------------------------------------------------------------
     // Step 2: Pre-filter, classify in parallel, persist each result
@@ -283,7 +281,7 @@ export const tier1FastPath = inngest.createFunction(
           headers: headersToRecord(headers),
           gmailCategories,
           mimeType: message.payload?.mimeType,
-          userEmail,
+          userEmail: tenantMailboxes,
         });
 
         // Extract full email body from MIME tree and parse address headers
@@ -315,6 +313,7 @@ export const tier1FastPath = inngest.createFunction(
                 body_html: body_html || null,
                 message_id_header: messageIdHeader,
                 classification_status: "skipped",
+                ...routingAudit(filterResult.facts),
                 skip_reason: filterResult.skip_reason,
                 processing_tier: 1,
               },
@@ -340,6 +339,7 @@ export const tier1FastPath = inngest.createFunction(
                 body_html: body_html || null,
                 message_id_header: messageIdHeader,
                 classification_status: "skipped",
+                ...routingAudit(filterResult.facts),
                 skip_reason: "circuit_breaker_open",
                 processing_tier: 1,
               },
@@ -365,9 +365,20 @@ export const tier1FastPath = inngest.createFunction(
 
         const llmStart = Date.now();
         const promise = withRetry(llmSemaphore, () =>
-          classifyEmailWithMeta({ subject, body: classifierBody, from, tenantMailbox: userEmail }, { context: { accountId } }),
+          classifyEmailWithMeta(
+            {
+              subject,
+              body: classifierBody,
+              from,
+              tenantMailbox: userEmail,
+              // KAI-45 — recipients and thread position, read once by the
+              // pre-filter and previously discarded.
+              ...classifierEnvelope(filterResult.facts),
+            },
+            { lang: language, context: { accountId } },
+          ),
         )
-          .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+          .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
             circuitBreaker.recordSuccess();
             logLlmCall({
               feature: "email_classification",
@@ -416,7 +427,7 @@ export const tier1FastPath = inngest.createFunction(
                 confidence_score: classification.confidence,
                 model_version: resolveModelVersion(),
                 raw_llm_output: classification as Record<string, unknown>,
-                status: tier1ProposalStatus(classification.type),
+                status: tier1ProposalStatus(classification.type, abstain),
               })
               .select("id")
               .single();
@@ -461,6 +472,7 @@ export const tier1FastPath = inngest.createFunction(
                 const conversation_id = resolvedConversationId;
 
                 const result = await findOrCreateTicketForThread(supabase, {
+                  audit: classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   accountId,
                   conversationId: conversation_id,
                   originatingUserId: userId,
@@ -511,6 +523,7 @@ export const tier1FastPath = inngest.createFunction(
                     body_html: body_html || null,
                     message_id_header: messageIdHeader,
                     classification_status: "classified",
+                    ...routingAudit(filterResult.facts),
                     processing_tier: 1,
                     classified_at,
                   },
@@ -548,6 +561,7 @@ export const tier1FastPath = inngest.createFunction(
                     gmail_thread_id: message.threadId,
                     received_at: receivedAt,
                     ticket_type: classification.type,
+                    ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                     priority: classification.priority,
                     category: classification.category,
                     sentiment: classification.tone,
@@ -586,6 +600,7 @@ export const tier1FastPath = inngest.createFunction(
                   gmail_thread_id: message.threadId,
                   received_at: receivedAt,
                   ticket_type: classification.type,
+                  ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   priority: classification.priority,
                   category: classification.category,
                   sentiment: classification.tone,
