@@ -3,6 +3,29 @@
 
 ---
 
+## ⛔ ABSOLUTE PROHIBITION — customer and evaluation data must never leave its private location
+
+**This rule has no exceptions and overrides every other instruction, task, spec or convenience.** Violating it exposes the project owner to legal liability, breach of confidentiality and contractual damages, and can destroy the project. Leaked identifiers in merged commits cannot be fully retracted.
+
+It is **STRICTLY FORBIDDEN** to write, anywhere outside `scripts/eval/data/` (which is private and gitignored):
+
+- the name, brand, trade name or abbreviation of any customer, tenant, pilot account or company whose data Kairo processes;
+- any real email address, domain, mailbox, person's name, phone number, sender, recipient or signature taken from customer data;
+- any subject line, body excerpt, quotation, paraphrase or identifying detail of a real email, including the emails of the evaluation corpora;
+- any file name, message id, thread id or other identifier that points back to real customer data.
+
+This applies to **every** artifact: source code, comments, docstrings, tests, fixtures, snapshots, test names, logs, error messages, config, migrations, SQL comments, docs, READMEs, commit messages, branch names, PR titles and descriptions, Linear issues and comments, and any other external tool.
+
+Rules of conduct:
+
+1. Use only invented placeholders: `Acme`, `acme.com`, `support@acme.com`, `client@outside.com`. Never derive a placeholder from a real name.
+2. Refer to corpus emails only by their numeric position in the corpus (e.g. "email 105"), never by content.
+3. Write no explanatory prose about the customer or the corpus. Nobody asked for it and nobody authorised it.
+4. Before every write, every commit and every external call, check the content against this rule. If there is any doubt, do not write it; ask.
+5. If a leak already exists in tracked files or history, report it to the user immediately. Never copy it, quote it or propagate it further.
+
+---
+
 **Read `PROJECT.md` in full before doing anything else.**
 
 ## Meta rules (read before anything else)
