@@ -1,4 +1,5 @@
 import { classifyEmailWithMeta, DEFAULT_LANG, type PromptLang } from "@kairo/intelligence";
+import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import type { TicketType } from "@kairo/intelligence";
 import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import type { ClassifierContext } from "../../lib/classifier-input.js";
@@ -293,6 +294,7 @@ async function classifyWindow(
             body_plain: null,
             body_html: null,
             classification_status: "skipped",
+            ...routingAudit(filterResult.facts),
             skip_reason: filterResult.skip_reason,
             processing_tier: 3,
           },
@@ -316,6 +318,7 @@ async function classifyWindow(
             body_plain: null,
             body_html: null,
             classification_status: "skipped",
+            ...routingAudit(filterResult.facts),
             skip_reason: "circuit_breaker_open",
             processing_tier: 3,
           },
@@ -345,7 +348,7 @@ async function classifyWindow(
         { lang: classifierContext.language, context: { accountId } },
       ),
     )
-      .then(async ({ result: classification, abstain, meta, prompt, promptVersion }) => {
+      .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
         circuitBreaker.recordSuccess();
         logLlmCall({
           feature: "email_classification",
@@ -417,6 +420,7 @@ async function classifyWindow(
             });
 
             const result = await findOrCreateTicketForThread(supabase, {
+              audit: classificationAudit({ verdict, ensemble, abstain, promptVersion }),
               accountId,
               conversationId: conversation_id,
               originatingUserId: userId,
@@ -469,6 +473,7 @@ async function classifyWindow(
                 body_plain: body_plain || null,
                 body_html: body_html || null,
                 classification_status: "classified",
+                ...routingAudit(filterResult.facts),
                 processing_tier: 3,
                 classified_at,
               },
@@ -507,6 +512,7 @@ async function classifyWindow(
                 gmail_thread_id: threadId,
                 received_at: receivedAt,
                 ticket_type: classification.type,
+                ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                 priority: classification.priority,
                 category: classification.category,
                 sentiment: classification.tone,
@@ -546,6 +552,7 @@ async function classifyWindow(
                 body_plain: body_plain || null,
                 body_html: body_html || null,
                 classification_status: "classified",
+                ...routingAudit(filterResult.facts),
                 processing_tier: 3,
                 classified_at,
               },
@@ -565,6 +572,7 @@ async function classifyWindow(
               gmail_thread_id: threadId,
               received_at: receivedAt,
               ticket_type: classification.type,
+              ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
               priority: classification.priority,
               category: classification.category,
               sentiment: classification.tone,

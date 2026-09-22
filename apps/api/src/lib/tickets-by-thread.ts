@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { classificationAudit } from "./classification-audit.js";
 import { transitionTicketStatus, TICKET_CREATED_TRIGGER } from "./ticket-transition.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,6 +32,13 @@ export interface FindOrCreateTicketArgs {
   classifiedAt: string;
   classificationTier: number;
   priorityScore: number | null;
+  /**
+   * What produced this classification — the model's axes, the table and the
+   * rubric (KAI-45 F5). Required, not optional: every path that creates a
+   * ticket from a classification has these in hand, and an optional field is
+   * how one of them quietly stops recording them.
+   */
+  audit: ReturnType<typeof classificationAudit>;
 }
 
 export interface FindOrCreateTicketResult {
@@ -53,7 +61,7 @@ export async function findOrCreateTicketForThread(
   client: DbClient,
   args: FindOrCreateTicketArgs
 ): Promise<FindOrCreateTicketResult> {
-  const { accountId, conversationId, originatingUserId, classification, originMessage, classifiedAt, classificationTier, priorityScore } = args;
+  const { accountId, conversationId, originatingUserId, classification, originMessage, classifiedAt, classificationTier, priorityScore, audit } = args;
 
   // 1. Look for an existing active ticket for this conversation
   const { data: existing } = await client
@@ -92,6 +100,7 @@ export async function findOrCreateTicketForThread(
       gmail_thread_id: originMessage.gmail_thread_id,
       received_at: originMessage.received_at,
       ticket_type: classification.type,
+      ...audit,
       priority: classification.priority,
       category: classification.category,
       sentiment: classification.tone,

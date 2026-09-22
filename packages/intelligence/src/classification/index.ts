@@ -7,6 +7,7 @@ export {
   TONE,
   URGENCY,
   type ClassificationResult,
+  type ModelVerdictResult,
   type TicketType,
   type Priority,
   type Category,

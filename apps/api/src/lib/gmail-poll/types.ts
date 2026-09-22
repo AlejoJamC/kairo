@@ -7,7 +7,7 @@
 // ---------------------------------------------------------------------------
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ClassificationResult, PromptLang } from "@kairo/intelligence";
+import type { ClassificationResult, ModelVerdictResult, PromptLang, TicketType } from "@kairo/intelligence";
 import type { ClassifierContext, ClassifierStage } from "../classifier-input.js";
 import type { GmailHeader } from "../email/headers.js";
 import type { EmailMetadata, PreFilterResult } from "../email/pre-filter.js";
@@ -106,7 +106,16 @@ export interface GmailPollDeps {
     // KAI-45 F4 — the tenant's rubric language. The poll resolves it with the
     // rest of the classifier context and passes it like every other path.
     options?: { lang?: PromptLang; context?: { accountId?: string } },
-  ) => Promise<ClassificationResult>;
+  // KAI-45 F5 — the model's verdict and the versions travel with the result, so
+  // a ticket the poll creates records what produced it like every other path.
+  // Wired to classifyEmailWithMeta, whose return is a superset of this.
+  ) => Promise<{
+    result: ClassificationResult;
+    verdict: ModelVerdictResult;
+    ensemble: { model: string; type: TicketType } | null;
+    abstain: boolean;
+    promptVersion: string | null;
+  }>;
   upsertConversationByThread: (
     client: DbClient,
     args: {

@@ -1230,6 +1230,11 @@ CREATE TABLE IF NOT EXISTS "public"."classification_feedback" (
     "notes" "text",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "account_id" "uuid" NOT NULL,
+    "ai_mail_facts" "jsonb",
+    "ai_model_verdict" "jsonb",
+    "ai_routing_policy_version" "text",
+    "ai_derivation_version" "text",
+    "ai_prompt_version" "text",
     CONSTRAINT "chk_cf_category" CHECK ((("correct_category" IS NULL) OR ("correct_category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_cf_priority" CHECK ((("correct_priority" IS NULL) OR ("correct_priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
     CONSTRAINT "chk_cf_sentiment" CHECK ((("correct_sentiment" IS NULL) OR ("correct_sentiment" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
@@ -1415,6 +1420,8 @@ CREATE TABLE IF NOT EXISTS "public"."messages" (
     "subject" "text",
     "classification_attempt_count" integer DEFAULT 0 NOT NULL,
     "last_classification_attempt_at" timestamp with time zone,
+    "mail_facts" "jsonb",
+    "routing_policy_version" "text",
     CONSTRAINT "messages_classification_status_check" CHECK ((("classification_status" IS NULL) OR ("classification_status" = ANY (ARRAY['pending'::"text", 'classified'::"text", 'skipped'::"text", 'failed'::"text", 'failed_permanent'::"text"])))),
     CONSTRAINT "messages_delivery_status_check" CHECK ((("delivery_status" IS NULL) OR ("delivery_status" = ANY (ARRAY['queued'::"text", 'sending'::"text", 'sent'::"text", 'failed'::"text"]))))
 );
@@ -1440,6 +1447,14 @@ COMMENT ON COLUMN "public"."messages"."send_attempts" IS 'Number of send attempt
 
 
 COMMENT ON COLUMN "public"."messages"."message_id_header" IS 'RFC 2822 Message-ID header value (e.g. <abc@mail.gmail.com>) stored for inbound messages; used as In-Reply-To / References in outbound sends (KAI-115)';
+
+
+
+COMMENT ON COLUMN "public"."messages"."mail_facts" IS 'MailFacts computed from the envelope before routing (apps/api/src/lib/email/mail-facts.ts). Facts, never a judgement.';
+
+
+
+COMMENT ON COLUMN "public"."messages"."routing_policy_version" IS 'ROUTING_POLICY_VERSION that decided this message''s route. Scheme in docs/versioning.md.';
 
 
 
@@ -2076,6 +2091,10 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     "auto_replied_at" timestamp with time zone,
     "account_id" "uuid" NOT NULL,
     "short_id" "text" GENERATED ALWAYS AS ("substring"(("id")::"text", 1, 8)) STORED,
+    "model_verdict" "jsonb",
+    "derivation_version" "text",
+    "prompt_version" "text",
+    "abstain" boolean DEFAULT false NOT NULL,
     CONSTRAINT "chk_category" CHECK ((("category" IS NULL) OR ("category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
     CONSTRAINT "chk_emotion" CHECK ((("emotion" IS NULL) OR ("emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
     CONSTRAINT "chk_priority" CHECK ((("priority" IS NULL) OR ("priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
@@ -2090,6 +2109,22 @@ ALTER TABLE "public"."tickets" OWNER TO "postgres";
 
 
 COMMENT ON COLUMN "public"."tickets"."short_id" IS 'First 8 hex chars of ticket UUID used as stable token [KAIRO-<shortid>] in outbound email subject/footer for broken-thread re-association (KAI-115)';
+
+
+
+COMMENT ON COLUMN "public"."tickets"."model_verdict" IS 'What the model answered for the current classification — the two axes and the other fields, before the derivation table — plus the ensemble''s second answer when one ran.';
+
+
+
+COMMENT ON COLUMN "public"."tickets"."derivation_version" IS 'DERIVATION_VERSION of the table that turned provenance and the axes into ticket_type.';
+
+
+
+COMMENT ON COLUMN "public"."tickets"."prompt_version" IS 'Rubric version the current classification was made with.';
+
+
+
+COMMENT ON COLUMN "public"."tickets"."abstain" IS 'The classification ensemble disagreed on the type. Such a ticket is never auto-approved.';
 
 
 

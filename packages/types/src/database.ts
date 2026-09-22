@@ -356,8 +356,13 @@ export type Database = {
           account_id: string
           ai_category: string | null
           ai_confidence: number | null
+          ai_derivation_version: string | null
+          ai_mail_facts: Json | null
+          ai_model_verdict: Json | null
           ai_model_version: string | null
           ai_priority: string | null
+          ai_prompt_version: string | null
+          ai_routing_policy_version: string | null
           ai_sentiment: string | null
           ai_ticket_type: string | null
           correct_category: string | null
@@ -375,8 +380,13 @@ export type Database = {
           account_id: string
           ai_category?: string | null
           ai_confidence?: number | null
+          ai_derivation_version?: string | null
+          ai_mail_facts?: Json | null
+          ai_model_verdict?: Json | null
           ai_model_version?: string | null
           ai_priority?: string | null
+          ai_prompt_version?: string | null
+          ai_routing_policy_version?: string | null
           ai_sentiment?: string | null
           ai_ticket_type?: string | null
           correct_category?: string | null
@@ -394,8 +404,13 @@ export type Database = {
           account_id?: string
           ai_category?: string | null
           ai_confidence?: number | null
+          ai_derivation_version?: string | null
+          ai_mail_facts?: Json | null
+          ai_model_verdict?: Json | null
           ai_model_version?: string | null
           ai_priority?: string | null
+          ai_prompt_version?: string | null
+          ai_routing_policy_version?: string | null
           ai_sentiment?: string | null
           ai_ticket_type?: string | null
           correct_category?: string | null
@@ -926,11 +941,13 @@ export type Database = {
           external_id: string | null
           id: string
           last_classification_attempt_at: string | null
+          mail_facts: Json | null
           message_id_header: string | null
           processing_batch: string | null
           processing_tier: number | null
           raw_payload: Json | null
           received_at: string
+          routing_policy_version: string | null
           send_attempts: number
           send_error: Json | null
           sender_display_name: string | null
@@ -955,11 +972,13 @@ export type Database = {
           external_id?: string | null
           id?: string
           last_classification_attempt_at?: string | null
+          mail_facts?: Json | null
           message_id_header?: string | null
           processing_batch?: string | null
           processing_tier?: number | null
           raw_payload?: Json | null
           received_at: string
+          routing_policy_version?: string | null
           send_attempts?: number
           send_error?: Json | null
           sender_display_name?: string | null
@@ -984,11 +1003,13 @@ export type Database = {
           external_id?: string | null
           id?: string
           last_classification_attempt_at?: string | null
+          mail_facts?: Json | null
           message_id_header?: string | null
           processing_batch?: string | null
           processing_tier?: number | null
           raw_payload?: Json | null
           received_at?: string
+          routing_policy_version?: string | null
           send_attempts?: number
           send_error?: Json | null
           sender_display_name?: string | null
@@ -2072,6 +2093,7 @@ export type Database = {
       }
       tickets: {
         Row: {
+          abstain: boolean
           account_id: string
           ai_reasoning: string | null
           archived_at: string | null
@@ -2089,6 +2111,7 @@ export type Database = {
           client_id: string | null
           conversation_id: string | null
           created_at: string | null
+          derivation_version: string | null
           embedding: string | null
           embedding_updated_at: string | null
           emotion: string | null
@@ -2102,10 +2125,12 @@ export type Database = {
           id: string
           last_response_at: string | null
           merged_into_ticket_id: string | null
+          model_verdict: Json | null
           originating_user_id: string | null
           parent_ticket_id: string | null
           priority: string | null
           priority_score: number | null
+          prompt_version: string | null
           received_at: string | null
           resolution_summary: string | null
           resolved_at: string | null
@@ -2123,6 +2148,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          abstain?: boolean
           account_id: string
           ai_reasoning?: string | null
           archived_at?: string | null
@@ -2140,6 +2166,7 @@ export type Database = {
           client_id?: string | null
           conversation_id?: string | null
           created_at?: string | null
+          derivation_version?: string | null
           embedding?: string | null
           embedding_updated_at?: string | null
           emotion?: string | null
@@ -2153,10 +2180,12 @@ export type Database = {
           id?: string
           last_response_at?: string | null
           merged_into_ticket_id?: string | null
+          model_verdict?: Json | null
           originating_user_id?: string | null
           parent_ticket_id?: string | null
           priority?: string | null
           priority_score?: number | null
+          prompt_version?: string | null
           received_at?: string | null
           resolution_summary?: string | null
           resolved_at?: string | null
@@ -2174,6 +2203,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          abstain?: boolean
           account_id?: string
           ai_reasoning?: string | null
           archived_at?: string | null
@@ -2191,6 +2221,7 @@ export type Database = {
           client_id?: string | null
           conversation_id?: string | null
           created_at?: string | null
+          derivation_version?: string | null
           embedding?: string | null
           embedding_updated_at?: string | null
           emotion?: string | null
@@ -2204,10 +2235,12 @@ export type Database = {
           id?: string
           last_response_at?: string | null
           merged_into_ticket_id?: string | null
+          model_verdict?: Json | null
           originating_user_id?: string | null
           parent_ticket_id?: string | null
           priority?: string | null
           priority_score?: number | null
+          prompt_version?: string | null
           received_at?: string | null
           resolution_summary?: string | null
           resolved_at?: string | null

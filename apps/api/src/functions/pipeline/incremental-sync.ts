@@ -1,4 +1,5 @@
 import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
@@ -337,6 +338,7 @@ export const incrementalSync = inngest.createFunction(
               .from("messages")
               .update({
                 classification_status: "skipped",
+                ...routingAudit(filterResult.facts),
                 skip_reason: filterResult.skip_reason,
               })
               .eq("external_id", message.id)
@@ -368,7 +370,7 @@ export const incrementalSync = inngest.createFunction(
           },
           { lang: classifierContext.language, context: { accountId } },
         )
-          .then(async ({ result: classification, meta, prompt, promptVersion }) => {
+          .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",
               model: meta.model,
@@ -401,6 +403,7 @@ export const incrementalSync = inngest.createFunction(
                 });
 
                 const result = await findOrCreateTicketForThread(supabase, {
+                  audit: classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   accountId,
                   conversationId: conversation_id,
                   originatingUserId: userId,
@@ -440,6 +443,7 @@ export const incrementalSync = inngest.createFunction(
                   .update({
                     conversation_id,
                     classification_status: "classified",
+                    ...routingAudit(filterResult.facts),
                     processing_tier: 0,
                     classified_at,
                   })
@@ -486,6 +490,7 @@ export const incrementalSync = inngest.createFunction(
                     gmail_thread_id: threadId,
                     received_at: receivedAt,
                     ticket_type: classification.type,
+                    ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                     priority: classification.priority,
                     category: classification.category,
                     sentiment: classification.tone,
@@ -505,7 +510,12 @@ export const incrementalSync = inngest.createFunction(
 
                 await supabase
                   .from("messages")
-                  .update({ classification_status: "classified", processing_tier: 0, classified_at })
+                  .update({
+                    classification_status: "classified",
+                    processing_tier: 0,
+                    classified_at,
+                    ...routingAudit(filterResult.facts),
+                  })
                   .eq("external_id", messageId)
                   .eq("channel_integration_id", channelIntegrationId);
               }
@@ -522,6 +532,7 @@ export const incrementalSync = inngest.createFunction(
                   gmail_thread_id: threadId,
                   received_at: receivedAt,
                   ticket_type: classification.type,
+                  ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   priority: classification.priority,
                   category: classification.category,
                   sentiment: classification.tone,

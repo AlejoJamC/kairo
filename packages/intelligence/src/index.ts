@@ -30,6 +30,7 @@ export type {
   AuthResult,
   DerivationKey,
   ModelVerdict,
+  ModelVerdictResult,
   ClassifyOptions,
   LangfuseContext,
   PromptLang,

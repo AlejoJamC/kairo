@@ -1,4 +1,5 @@
 import { classifyEmailWithMeta, DEFAULT_LANG, type PromptLang } from "@kairo/intelligence";
+import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -341,6 +342,7 @@ export const tier2Background = inngest.createFunction(
                 body_plain: null,
                 body_html: null,
                 classification_status: "skipped",
+                ...routingAudit(filterResult.facts),
                 skip_reason: filterResult.skip_reason,
                 processing_tier: 2,
               },
@@ -364,6 +366,7 @@ export const tier2Background = inngest.createFunction(
                 body_plain: null,
                 body_html: null,
                 classification_status: "skipped",
+                ...routingAudit(filterResult.facts),
                 skip_reason: "circuit_breaker_open",
                 processing_tier: 2,
               },
@@ -394,7 +397,7 @@ export const tier2Background = inngest.createFunction(
             { lang: language, context: { accountId } },
           ),
         )
-          .then(async ({ result: classification, abstain, meta, prompt, promptVersion }) => {
+          .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
             circuitBreaker.recordSuccess();
             logLlmCall({
               feature: "email_classification",
@@ -468,6 +471,7 @@ export const tier2Background = inngest.createFunction(
                 });
 
                 const result = await findOrCreateTicketForThread(supabase, {
+                  audit: classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   accountId,
                   conversationId: conversation_id,
                   originatingUserId: userId,
@@ -520,6 +524,7 @@ export const tier2Background = inngest.createFunction(
                     body_plain: body_plain || null,
                     body_html: body_html || null,
                     classification_status: "classified",
+                    ...routingAudit(filterResult.facts),
                     processing_tier: 2,
                     classified_at,
                   },
@@ -558,6 +563,7 @@ export const tier2Background = inngest.createFunction(
                     gmail_thread_id: threadId,
                     received_at: receivedAt,
                     ticket_type: classification.type,
+                    ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                     priority: classification.priority,
                     category: classification.category,
                     sentiment: classification.tone,
@@ -597,6 +603,7 @@ export const tier2Background = inngest.createFunction(
                     body_plain: body_plain || null,
                     body_html: body_html || null,
                     classification_status: "classified",
+                    ...routingAudit(filterResult.facts),
                     processing_tier: 2,
                     classified_at,
                   },
@@ -616,6 +623,7 @@ export const tier2Background = inngest.createFunction(
                   gmail_thread_id: threadId,
                   received_at: receivedAt,
                   ticket_type: classification.type,
+                  ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   priority: classification.priority,
                   category: classification.category,
                   sentiment: classification.tone,

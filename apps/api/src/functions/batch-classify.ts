@@ -1,5 +1,6 @@
 import { classifyEmailWithMeta, DEFAULT_LANG, type PromptLang } from "@kairo/intelligence";
 import { inngest } from "../lib/inngest.js";
+import { classificationAudit } from "../lib/classification-audit.js";
 import { supabase } from "../lib/supabase.js";
 import { logLlmCall } from "../lib/llm-logging.js";
 import { buildClassifierBody, resolveClassifierContext } from "../lib/classifier-input.js";
@@ -110,7 +111,7 @@ export const batchClassify = inngest.createFunction(
         // Classify
         const llmStart = Date.now();
         try {
-          const { result: classification, meta, prompt, promptVersion } = await classifyEmailWithMeta(
+          const { result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion } = await classifyEmailWithMeta(
             {
               subject: ticket.subject,
               body: buildClassifierBody("backfill", ticket.body_plain),
@@ -142,6 +143,7 @@ export const batchClassify = inngest.createFunction(
             .from("tickets")
             .update({
               ticket_type: classification.type,
+              ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
               priority: classification.priority,
               category: classification.category,
               sentiment: classification.tone,

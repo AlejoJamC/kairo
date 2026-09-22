@@ -18,6 +18,7 @@
 // ---------------------------------------------------------------------------
 
 import { inngest } from "../../lib/inngest.js";
+import { classificationAudit } from "../../lib/classification-audit.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { getNumericFlag } from "@kairo/feature-flags";
@@ -131,7 +132,7 @@ export const classificationRetrySweep = inngest.createFunction(
           }
 
           try {
-            const { result: classification, meta, prompt, promptVersion } = await withRetry(llmSemaphore, () =>
+            const { result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion } = await withRetry(llmSemaphore, () =>
               classifyEmailWithMeta(
                 { subject, body: classifierBody, from, ...classifierContext },
                 { lang: classifierContext.language, context: { accountId: message.account_id } }
@@ -174,6 +175,7 @@ export const classificationRetrySweep = inngest.createFunction(
             });
 
             const ticketResult = await findOrCreateTicketForThread(supabase, {
+              audit: classificationAudit({ verdict, ensemble, abstain, promptVersion }),
               accountId: message.account_id,
               conversationId: conversation_id,
               originatingUserId: null,

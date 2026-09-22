@@ -19,6 +19,7 @@ import {
 import { recordClassificationFailure } from "../classification-outcome.js";
 import { env } from "../../env.js";
 // Pure function, no I/O — safe to import directly rather than inject.
+import { classificationAudit, routingAudit } from "../classification-audit.js";
 import { buildClassifierBody, classifierEnvelope } from "../classifier-input.js";
 import type { ClassifierContext } from "../classifier-input.js";
 import { headerValue, headersToRecord } from "../email/headers.js";
@@ -130,6 +131,7 @@ async function ingestMessages(
         snippet,
         message_id_header: messageIdHeader,
         classification_status: filterResult.status === "skip" ? "skipped" : "pending",
+        ...routingAudit(filterResult.facts),
         skip_reason: filterResult.status === "skip" ? filterResult.skip_reason ?? null : null,
         processing_batch: "gmail-poll",
       })
@@ -206,7 +208,7 @@ async function ingestMessages(
       // This path only ever has the Gmail snippet — it does not decode the
       // MIME body — but it goes through the same rule as every other queued
       // path, and it sends the tenant fields the rubric needs.
-      const classification = await deps.classifyEmail({
+      const { result: classification, verdict, ensemble, abstain, promptVersion } = await deps.classifyEmail({
         subject,
         body: buildClassifierBody("backfill", null, snippet),
         from,
@@ -216,6 +218,7 @@ async function ingestMessages(
       const classifiedAt = new Date().toISOString();
 
       const result = await deps.findOrCreateTicketForThread(deps.db, {
+        audit: classificationAudit({ verdict, ensemble, abstain, promptVersion }),
         accountId,
         conversationId: conversation_id,
         originatingUserId: null,
@@ -249,6 +252,7 @@ async function ingestMessages(
         .update({
           conversation_id,
           classification_status: "classified",
+          ...routingAudit(filterResult.facts),
           processing_tier: 0,
           classified_at: classifiedAt,
         })

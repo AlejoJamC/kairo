@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { classificationAudit, feedbackAudit } from "../../lib/classification-audit.js";
 import { startObservation, propagateAttributes } from "@langfuse/tracing";
 import { classifyEmailWithMeta, generateEmbedding, extractPromptVersion } from "@kairo/intelligence";
 import { logLlmCall } from "../../lib/llm-logging.js";
@@ -367,10 +368,13 @@ tickets.post("/:id/classify", async (c) => {
   }
 
   let classification;
+  // Hoisted with `classification` for the same reason: the update that stores
+  // them runs after the try block that produced them.
+  let audit: ReturnType<typeof classificationAudit> | undefined;
   const llmStart = Date.now();
   try {
     const classifierContext = await resolveClassifierContext("backfill", ctx.accountId);
-    const { result, meta, prompt, promptVersion } = await classifyEmailWithMeta(
+    const { result, verdict, ensemble, abstain, meta, prompt, promptVersion } = await classifyEmailWithMeta(
       {
         subject: ticket.subject,
         body: buildClassifierBody("backfill", ticket.body_plain),
@@ -380,6 +384,7 @@ tickets.post("/:id/classify", async (c) => {
       { lang: classifierContext.language, context: { ticketId: id, accountId: ctx.accountId } },
     );
     classification = result;
+    audit = classificationAudit({ verdict, ensemble, abstain, promptVersion });
 
     logLlmCall({
       feature: "email_classification",
@@ -423,6 +428,7 @@ tickets.post("/:id/classify", async (c) => {
     .from("tickets")
     .update({
       ticket_type: classification.type,
+      ...audit,
       priority: classification.priority,
       category: classification.category,
       sentiment: classification.tone,
@@ -608,7 +614,7 @@ tickets.post("/classify-batch", async (c) => {
     // Classify
     const llmStart = Date.now();
     try {
-      const { result: classification, meta, prompt, promptVersion } = await classifyEmailWithMeta(
+      const { result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion } = await classifyEmailWithMeta(
         {
           subject: ticket.subject,
           body: buildClassifierBody("backfill", ticket.body_plain),
@@ -639,6 +645,7 @@ tickets.post("/classify-batch", async (c) => {
         .from("tickets")
         .update({
           ticket_type: classification.type,
+          ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
           priority: classification.priority,
           category: classification.category,
           sentiment: classification.tone,
@@ -2383,7 +2390,7 @@ tickets.post("/:id/correct-classification", async (c) => {
   // Load ticket — verify tenant ownership
   const { data: ticket, error: fetchErr } = await supabase
     .from("tickets")
-    .select("id, originating_user_id, ticket_type, priority, category, sentiment, classification_confidence, classified_at")
+    .select("id, originating_user_id, ticket_type, priority, category, sentiment, classification_confidence, classified_at, model_verdict, derivation_version, prompt_version")
     .eq("id", ticketId)
     .eq("account_id", ctx.accountId)
     .single();
@@ -2399,6 +2406,19 @@ tickets.post("/:id/correct-classification", async (c) => {
     .limit(1)
     .single();
 
+  // KAI-45 F5 — the envelope facts and the routing policy live on the message
+  // the ticket was created from, not on the ticket. Best-effort like the
+  // proposal lookup above: a correction is still worth saving without them.
+  const { data: origin } = await supabase
+    .from("ticket_messages")
+    .select("messages(mail_facts, routing_policy_version)")
+    .eq("ticket_id", ticketId)
+    .eq("is_origin", true)
+    .limit(1)
+    .maybeSingle();
+  const originMessage = (origin as { messages?: { mail_facts: unknown; routing_policy_version: string | null } | null } | null)
+    ?.messages ?? null;
+
   // Insert feedback row
   const { data: feedback, error: insertErr } = await supabase
     .from("classification_feedback")
@@ -2412,6 +2432,7 @@ tickets.post("/:id/correct-classification", async (c) => {
       ai_sentiment:     ticket.sentiment,
       ai_model_version: latestProposal?.model_version ?? null,
       ai_confidence:    ticket.classification_confidence ? Number(ticket.classification_confidence) : null,
+      ...feedbackAudit({ ticket, originMessage }),
       correct_ticket_type: parsed.data.correct_ticket_type ?? null,
       correct_priority:    parsed.data.correct_priority    ?? null,
       correct_category:    parsed.data.correct_category    ?? null,

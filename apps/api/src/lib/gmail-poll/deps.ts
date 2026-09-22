@@ -5,7 +5,7 @@
 // direct imports of shared modules — everything flows through GmailPollDeps.
 // ---------------------------------------------------------------------------
 
-import { classifyEmail } from "@kairo/intelligence";
+import { classifyEmailWithMeta } from "@kairo/intelligence";
 import { supabase } from "../supabase.js";
 import { getFreshGmailToken } from "../gmail-token.js";
 import { resolveClassifierContext } from "../classifier-input.js";
@@ -28,7 +28,7 @@ export function createGmailPollDeps(): GmailPollDeps {
     messagesList,
     getMessage,
     preFilterEmail,
-    classifyEmail,
+    classifyEmail: classifyEmailWithMeta,
     upsertConversationByThread,
     findOrCreateTicketForThread,
     linkMessageToTicket,

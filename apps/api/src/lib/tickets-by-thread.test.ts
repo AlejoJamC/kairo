@@ -50,6 +50,22 @@ const BASE_ARGS = {
   classifiedAt: new Date().toISOString(),
   classificationTier: 1,
   priorityScore: 0.85,
+  audit: {
+    model_verdict: {
+      actionability: "needs_action" as const,
+      subject_matter: "service" as const,
+      priority: "P2" as const,
+      category: "billing" as const,
+      tone: "frustrated" as const,
+      urgency: "medium" as const,
+      reasoning: "Test",
+      confidence: 0.95,
+      ensemble: null,
+    },
+    derivation_version: "1.1.0",
+    prompt_version: "1.5.1",
+    abstain: false,
+  },
 };
 
 const APPLIED_CREATION_RPC = {
@@ -104,6 +120,20 @@ function makeMockClient({
 }
 
 describe("findOrCreateTicketForThread", () => {
+  // KAI-45 F5 — a ticket is stored with what produced its type: the model's
+  // axes, the derivation table and the rubric. Without them a stored
+  // `ticket_type` cannot be traced back to the layer that got it wrong.
+  it("stores the classification audit on the ticket it creates", async () => {
+    const client = makeMockClient({ insertedTicket: { id: "ticket-new", ticket_number: 101 } });
+    await findOrCreateTicketForThread(client, BASE_ARGS);
+
+    const insertPayload = client._insertFn.mock.calls[0][0];
+    expect(insertPayload.model_verdict).toEqual(BASE_ARGS.audit.model_verdict);
+    expect(insertPayload.derivation_version).toBe("1.1.0");
+    expect(insertPayload.prompt_version).toBe("1.5.1");
+    expect(insertPayload.abstain).toBe(false);
+  });
+
   it("returns existing ticket when found (was_created=false)", async () => {
     const client = makeMockClient({ existingTicket: { id: "ticket-existing", ticket_number: 42, status: "open" } });
     const result = await findOrCreateTicketForThread(client, BASE_ARGS);

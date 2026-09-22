@@ -1,4 +1,5 @@
 import { classifyEmailWithMeta, detectEscalationTriggers, type PromptLang } from "@kairo/intelligence";
+import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import {
   buildClassifierBody,
   classifierEnvelope,
@@ -312,6 +313,7 @@ export const tier1FastPath = inngest.createFunction(
                 body_html: body_html || null,
                 message_id_header: messageIdHeader,
                 classification_status: "skipped",
+                ...routingAudit(filterResult.facts),
                 skip_reason: filterResult.skip_reason,
                 processing_tier: 1,
               },
@@ -337,6 +339,7 @@ export const tier1FastPath = inngest.createFunction(
                 body_html: body_html || null,
                 message_id_header: messageIdHeader,
                 classification_status: "skipped",
+                ...routingAudit(filterResult.facts),
                 skip_reason: "circuit_breaker_open",
                 processing_tier: 1,
               },
@@ -375,7 +378,7 @@ export const tier1FastPath = inngest.createFunction(
             { lang: language, context: { accountId } },
           ),
         )
-          .then(async ({ result: classification, abstain, meta, prompt, promptVersion }) => {
+          .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
             circuitBreaker.recordSuccess();
             logLlmCall({
               feature: "email_classification",
@@ -469,6 +472,7 @@ export const tier1FastPath = inngest.createFunction(
                 const conversation_id = resolvedConversationId;
 
                 const result = await findOrCreateTicketForThread(supabase, {
+                  audit: classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   accountId,
                   conversationId: conversation_id,
                   originatingUserId: userId,
@@ -519,6 +523,7 @@ export const tier1FastPath = inngest.createFunction(
                     body_html: body_html || null,
                     message_id_header: messageIdHeader,
                     classification_status: "classified",
+                    ...routingAudit(filterResult.facts),
                     processing_tier: 1,
                     classified_at,
                   },
@@ -556,6 +561,7 @@ export const tier1FastPath = inngest.createFunction(
                     gmail_thread_id: message.threadId,
                     received_at: receivedAt,
                     ticket_type: classification.type,
+                    ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                     priority: classification.priority,
                     category: classification.category,
                     sentiment: classification.tone,
@@ -594,6 +600,7 @@ export const tier1FastPath = inngest.createFunction(
                   gmail_thread_id: message.threadId,
                   received_at: receivedAt,
                   ticket_type: classification.type,
+                  ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
                   priority: classification.priority,
                   category: classification.category,
                   sentiment: classification.tone,
