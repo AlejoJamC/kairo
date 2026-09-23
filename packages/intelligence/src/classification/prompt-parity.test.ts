@@ -18,24 +18,46 @@
 // ---------------------------------------------------------------------------
 
 import { describe, it, expect } from 'bun:test';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync, statSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 import { SUPPORTED_LANGS, DEFAULT_LANG, type PromptLang } from './prompt';
 
-const PROMPTS = join(dirname(fileURLToPath(import.meta.url)), '../../prompts/email-classification');
+const PROMPTS_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../prompts');
 
-const read = (lang: PromptLang): string =>
-  readFileSync(join(PROMPTS, `${lang}.md`), 'utf-8');
+/** Every prompt directory, so a new feature's prompt is held to parity with no edit here. */
+const PROMPT_IDS = readdirSync(PROMPTS_ROOT)
+  .filter((name) => statSync(join(PROMPTS_ROOT, name)).isDirectory())
+  .sort();
 
-/** `## 2. subject_matter` → `2. subject_matter`, in file order. */
-const sections = (text: string): string[] =>
-  [...text.matchAll(/^##\s+(.+)$/gm)].map((m) => m[1]!.trim());
+const read = (promptId: string, lang: PromptLang): string =>
+  readFileSync(join(PROMPTS_ROOT, promptId, `${lang}.md`), 'utf-8');
 
 /** `{{body}}` → `body`, deduplicated and sorted. */
 const placeholders = (text: string): string[] =>
   [...new Set([...text.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]!))].sort();
+
+/**
+ * The sections in file order, each as its heading key and the placeholders it
+ * renders.
+ *
+ * A heading that is an identifier (`## 2. subject_matter`) is a field name and
+ * must match exactly. A prose heading (`## Ticket context`) is translated by
+ * design, so it is compared by position and by what the section feeds the
+ * model — a placeholder that moves to another section is still drift.
+ */
+const IDENTIFIER_HEADING = /^[\d.\s]*[a-z][a-z0-9_]*$/;
+const sections = (text: string): { key: string; placeholders: string[] }[] => {
+  const parts = text.split(/^##\s+/m).slice(1);
+  return parts.map((part) => {
+    const heading = part.split('\n', 1)[0]!.trim();
+    return {
+      key: IDENTIFIER_HEADING.test(heading) ? heading : '(prose heading)',
+      placeholders: placeholders(part),
+    };
+  });
+};
 
 /** The version in the h1, which `extractPromptVersion` reads at runtime. */
 const version = (text: string): string | null =>
@@ -54,15 +76,19 @@ const values = (text: string): string[] =>
 
 const others = SUPPORTED_LANGS.filter((l) => l !== DEFAULT_LANG);
 
-describe('rubric parity across languages', () => {
+describe('prompt parity across languages', () => {
   it('has more than one language to compare, or this file is dead weight', () => {
     expect(others.length).toBeGreaterThan(0);
   });
 
-  for (const lang of others) {
-    describe(`${DEFAULT_LANG} vs ${lang}`, () => {
-      const base = read(DEFAULT_LANG);
-      const other = read(lang);
+  it('finds the prompt directories', () => {
+    expect(PROMPT_IDS).toContain('email-classification');
+  });
+
+  for (const promptId of PROMPT_IDS) for (const lang of others) {
+    describe(`${promptId}: ${DEFAULT_LANG} vs ${lang}`, () => {
+      const base = read(promptId, DEFAULT_LANG);
+      const other = read(promptId, lang);
 
       // The section list is the rubric's table of contents and the order is the
       // order the model is asked to decide in. A section present in one file

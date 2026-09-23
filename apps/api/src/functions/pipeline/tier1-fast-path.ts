@@ -425,7 +425,7 @@ export const tier1FastPath = inngest.createFunction(
                 proposed_emotion: classification.tone,
                 emotion_confidence: classification.confidence,
                 confidence_score: classification.confidence,
-                model_version: resolveModelVersion(),
+                model_version: meta.model,
                 raw_llm_output: classification as Record<string, unknown>,
                 status: tier1ProposalStatus(classification.type, abstain),
               })

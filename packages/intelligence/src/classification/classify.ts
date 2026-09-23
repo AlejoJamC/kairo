@@ -1,4 +1,3 @@
-import { startObservation, propagateAttributes } from '@langfuse/tracing';
 import { createCompletionProvider } from '../config/providers';
 import { resolveEnsembleTarget } from '../config/ensemble';
 import { ModelVerdictSchema, type ClassificationResult, type ModelVerdictResult } from './schema';
@@ -8,12 +7,9 @@ import { generationResultMetadata, generationStartMetadata } from './telemetry';
 import type { EmailMessage } from './types';
 import type { TicketType } from '@kairo/types';
 import type { CompletionMeta, CompletionOptions } from '../providers/base';
+import { usageDetails, withGeneration, type LangfuseContext } from '../harness/generation';
 
-/** Business identifiers to correlate a generation back to a ticket/tenant in Langfuse (KAI-189). */
-export interface LangfuseContext {
-  ticketId?: string;
-  accountId?: string;
-}
+export type { LangfuseContext };
 
 export interface ClassifyOptions extends Pick<CompletionOptions, 'temperature'> {
   lang?: PromptLang;
@@ -86,34 +82,31 @@ export async function classifyEmailWithMeta(
   const promptVersion = await getPromptVersion(lang);
   const { ticketId, accountId } = options?.context ?? {};
 
-  const run = async () => {
-    // KAI-126: Langfuse generation trace. A no-op when LANGFUSE_* env vars are
-    // unset (OTel API falls back to a no-op tracer), so this never blocks
-    // classification.
-    const generation = startObservation(
-      'email-classification',
-      {
-        model: provider.model,
-        input: prompt,
-        metadata: generationStartMetadata({
-          promptVersion,
-          lang,
-          ensembleModel: ensembleTarget ? `${ensembleTarget.provider}:${ensembleTarget.model}` : null,
-          ensembleMisconfigured,
-          ticketId,
-          accountId,
-        }),
-      },
-      { asType: 'generation' },
-    );
+  // KAI-126: Langfuse generation trace, grouped per ticket (KAI-189) so a
+  // ticket's full tier journey is one story. A no-op when LANGFUSE_* env vars
+  // are unset, so this never blocks classification.
+  return withGeneration(
+    {
+      name: 'email-classification',
+      model: provider.model,
+      input: prompt,
+      metadata: generationStartMetadata({
+        promptVersion,
+        lang,
+        ensembleModel: ensembleTarget ? `${ensembleTarget.provider}:${ensembleTarget.model}` : null,
+        ensembleMisconfigured,
+        ticketId,
+        accountId,
+      }),
+      context: { ...(ticketId ? { ticketId } : {}), ...(accountId ? { accountId } : {}) },
+    },
+    async (generation) => {
+      const completionOptions = {
+        ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+      };
 
-    const completionOptions = {
-      ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-    };
+      let ensembleFailed = false;
 
-    let ensembleFailed = false;
-
-    try {
       // KAI-45 F3 — the second opinion runs alongside the first, not after it,
       // so the ensemble costs the slower model's latency rather than the sum.
       // Its failure is caught here and only here: the primary's classification
@@ -181,13 +174,9 @@ export async function classifyEmailWithMeta(
       const ensemble = second && secondType ? { model: second.model, type: secondType } : null;
       const abstain = ensemble !== null && ensemble.type !== data.type;
 
-      const usageDetails: Record<string, number> = {};
-      if (meta.usage.promptTokens != null) usageDetails.input = meta.usage.promptTokens;
-      if (meta.usage.completionTokens != null) usageDetails.output = meta.usage.completionTokens;
-
       generation.update({
         output: meta.rawText,
-        ...(Object.keys(usageDetails).length > 0 ? { usageDetails } : {}),
+        ...usageDetails(meta.usage),
         metadata: generationResultMetadata({
           provenance: provenanceOf(message.facts ?? EXTERNAL_FALLBACK_FACTS),
           factsPresent: message.facts !== undefined,
@@ -200,22 +189,6 @@ export async function classifyEmailWithMeta(
       });
 
       return { result: data, verdict, abstain, ensemble, meta, prompt, promptVersion };
-    } catch (err) {
-      generation.update({ level: 'ERROR', statusMessage: err instanceof Error ? err.message : String(err) });
-      throw err;
-    } finally {
-      generation.end();
-    }
-  };
-
-  // KAI-189: groups this generation (and any siblings for the same ticket,
-  // e.g. tier2/tier3 re-classification) into one Langfuse trace instead of an
-  // orphan generation, so a ticket's full tier journey is visible as one story.
-  if (ticketId || accountId) {
-    return propagateAttributes(
-      { ...(ticketId ? { sessionId: ticketId } : {}), ...(accountId ? { metadata: { accountId } } : {}) },
-      run,
-    );
-  }
-  return run();
+    },
+  );
 }

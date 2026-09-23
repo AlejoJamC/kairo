@@ -26,45 +26,57 @@ Only with one of these, cited in the PR:
 | [`kairo-llm-feature`](../../skills/kairo-llm-feature/SKILL.md) | Adding or changing any LLM or embedding feature; changing the rubric, routing policy, derivation table or a proposal gate; letting a model output act without a person |
 | [`kairo-ai-evaluation`](../../skills/kairo-ai-evaluation/SKILL.md) | Baselines, corpus and stage choice, clean runs, layer attribution, deciding whether evidence is enough, reading production signals |
 
-## Tool contracts
+## Tools
 
-Any implementation of these must follow the contract.
+| Tool | Kind | Where | Consumers |
+|---|---|---|---|
+| `runLlmFeature`, `runLlmTextFeature` | runtime | `packages/intelligence/src/harness/run-llm-feature.ts` | reply suggestion; every new LLM feature |
+| `withGeneration`, `loadPromptTemplate`, `fillTemplate` | runtime | `packages/intelligence/src/harness/` | `runLlmFeature`, `classifyEmailWithMeta`, `generateEmbedding(s)` |
+| `recordLlmCall` | runtime | `apps/api/src/lib/llm-logging.ts` | the `logger` every `runLlmFeature` call in `apps/api` passes |
+| `retrieveTicketContext`, `findResolvedCases`, `findRelevantKb` | runtime | `apps/api/src/lib/ticket-context.ts` | reply suggestion, `/knowledge-context`, `/related-history` |
+| `check-llm-feature` | agent script | `skills/kairo-llm-feature/scripts/check-llm-feature.ts` | `kairo-llm-feature` step 13; its own test keeps the repo clean |
+| `export_feedback` | agent script | not built — contract below | `kairo-ai-evaluation`; the auto-approval recompute job |
 
-### `runLlmFeature` (runtime, `packages/intelligence`)
+### `runLlmFeature`
 
-The single path for an LLM call.
+The single path for an LLM call from product code.
 
 ```ts
-interface LlmFeatureRequest<T> {
-  feature: string;                 // snake_case, the llm_calls.feature value
-  promptId: string;                // directory under packages/intelligence/prompts/
-  lang: PromptLang;                // the tenant's language, resolved by the caller
-  vars: Record<string, string>;    // placeholder values; an unfilled placeholder is an error
-  schema?: z.ZodSchema<T>;         // present → completeJSONWithMeta; absent → completeWithMeta
-  options?: CompletionOptions;
-  context: { ticketId?: string; accountId?: string; userId?: string };
-  provider?: CompletionProvider;   // injection for tests and ensemble targets
-  logger?: (entry: LlmCallRecord) => Promise<string | null>; // writes llm_calls, returns the row id
-}
-
-interface LlmFeatureResult<T> {
-  data: T | string;
-  promptVersion: string | null;
-  model: string;                   // as reported by the provider
-  usage: CompletionUsage;
-  latencyMs: number;
-  llmCallId: string | null;
-  prompt: string;
-}
+runLlmFeature<T>({
+  feature,        // snake_case: llm_calls.feature and the Langfuse generation name
+  promptId,       // directory under packages/intelligence/prompts/
+  lang,           // the tenant's language (resolveTenantLanguage), never guessed
+  vars,           // placeholder values; an unfilled placeholder throws before any model call
+  schema,         // Zod schema; the provider validates the answer against it
+  confidenceOf?,  // which answer field is stored as llm_calls.confidence_score (recorded, never decided on)
+  options?, context?: { ticketId, accountId, userId },
+  provider?,      // injection for tests and second opinions
+  logger?,        // recordLlmCall in apps/api
+}): Promise<{ data, prompt, promptVersion, model /* reported */, usage, latencyMs, llmCallId }>
 ```
 
-- Loads `prompts/<promptId>/<lang>.md`, reads the version with `extractPromptVersion`, fills placeholders, opens one Langfuse generation named after `feature` under `sessionId = ticketId`, calls the provider, calls `logger` on success and on failure.
-- `ProviderError` passes through unchanged. A missing template or unfilled placeholder is a non-retriable `LlmFeatureError`. A logging failure never throws.
-- Out of scope: retry and concurrency (callers use `apps/api/src/lib/retry.ts`), derivation, ensemble, gating.
-- The logger is supplied by `apps/api` (over `logLlmCall`), because `packages/intelligence` has no database client.
-- Tests: fake provider and logger; template and version; unfilled placeholder; schema vs text path; Langfuse metadata; logger called on success and failure; `ProviderError` passthrough.
+`runLlmTextFeature` is the same without `schema`, returning text. `ProviderError` passes through unchanged; a missing template or unfilled placeholder is a non-retriable `LlmFeatureError`; a logging failure never throws. Retry, concurrency, derivation and gating stay with the caller.
 
-### `export_feedback` (agent script, `scripts/eval/`)
+### `retrieveTicketContext`
+
+The single source of similar resolved tickets and KB articles, for prompts and the agent panel.
+
+```ts
+retrieveTicketContext({ ticketId, accountId, queryText, kbLimit?, casesLimit? })
+  : Promise<{ kbArticles: KbArticle[]; resolvedCases: ResolvedCase[]; degraded: ContextDegradation[] }>
+```
+
+A ticket is resolved in any final state of `RESOLVED_STATUSES` (`ai_resolved` included); a match counts from `RELATED_CONTEXT_THRESHOLD`. KB articles are ranked matches only, with content, in rank order. Never throws: a failed source is listed in `degraded`, and resolved cases are still returned when the embedding service is down. `/similar` (grouping) and the escalation past-L2 check ask different questions and keep their own calls.
+
+### `check-llm-feature`
+
+```bash
+bun skills/kairo-llm-feature/scripts/check-llm-feature.ts <files or dirs> | --all
+```
+
+Deterministic check of the `kairo-llm-feature` rules: regex JSON extraction, direct provider calls from `apps/`, prompt files read outside `packages/intelligence`, hand-opened Langfuse generations, hardcoded `model_version`, keyword language guessing, `llm_calls` written outside `llm-logging.ts`, tests that redefine the function they test, prompt directories missing a language or a version heading. Prints `path:line rule message`; exits 1 on any violation.
+
+### `export_feedback` (contract)
 
 Turns human-verified classifications into an eval dataset.
 
@@ -73,27 +85,6 @@ Turns human-verified classifications into an eval dataset.
 - Errors: missing credentials, a path outside `scripts/eval/data/`, or zero rows exit non-zero. Rows without provenance are counted and reported, never guessed.
 - `eval:attribute` gains an option to read provenance from `layers.csv` instead of `.eml` files.
 - Tests: pure mapping functions with `Acme` fixtures; the path guard; no network.
-
-### `retrieveTicketContext` (runtime, `apps/api/src/lib/`)
-
-The single source of similar resolved tickets and KB articles for LLM prompts and the agent panel.
-
-```ts
-retrieveTicketContext(input: {
-  ticketId: string; accountId: string;
-  queryText?: string;              // default: subject + body preview
-  kbLimit?: number; casesLimit?: number;
-}): Promise<{
-  kbArticles: { id: string; title: string; content: string; similarity: number | null }[];
-  resolvedCases: { id: string; ticketNumber: number; subject: string | null; resolutionSummary: string | null; similarity: number | null }[];
-  degraded: ('embedding_unavailable' | 'kb_rpc_failed' | 'cases_rpc_failed')[];
-}>
-```
-
-- One embedding, `find_relevant_kb` and `find_similar_tickets` in parallel, one threshold and one status filter for every consumer. Whether `ai_resolved` counts as resolved is decided once, explicitly.
-- Never throws; failures go to `degraded`. Every query is scoped to `accountId`.
-- Not for `/similar` (grouping) or the escalation past-L2 check: they answer different questions.
-- Tests: fake Supabase and embed function; each degradation; threshold filtering; tenant scoping.
 
 ## Not Skills or Tools
 

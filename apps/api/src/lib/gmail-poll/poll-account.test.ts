@@ -41,6 +41,7 @@ interface FakeDbOptions {
 function createFakeDb(opts: FakeDbOptions) {
   const updates: { table: string; payload: Record<string, unknown> }[] = [];
   const inserts: { table: string; payload: Record<string, unknown> }[] = [];
+  const upserts: { table: string; payload: Record<string, unknown> }[] = [];
   const existing = new Set(opts.existingExternalIds ?? []);
 
   const db = {
@@ -78,7 +79,14 @@ function createFakeDb(opts: FakeDbOptions) {
                   data: ids.filter((id) => existing.has(id)).map((id) => ({ external_id: id })),
                   error: null,
                 }),
+              // recordClassificationFailure reads the prior attempt count.
+              maybeSingle: () => Promise.resolve({ data: null, error: null }),
             };
+          },
+          // recordClassificationFailure persists the failed message.
+          upsert(payload: Record<string, unknown>) {
+            upserts.push({ table, payload });
+            return Promise.resolve({ data: null, error: null });
           },
           insert(payload: Record<string, unknown>) {
             inserts.push({ table, payload });
@@ -109,7 +117,7 @@ function createFakeDb(opts: FakeDbOptions) {
     },
   };
 
-  return { db: db as unknown as DbClient, updates, inserts };
+  return { db: db as unknown as DbClient, updates, inserts, upserts };
 }
 
 function baseDeps(overrides: Partial<GmailPollDeps>): GmailPollDeps {
@@ -161,7 +169,16 @@ function baseDeps(overrides: Partial<GmailPollDeps>): GmailPollDeps {
       ensemble: null,
       abstain: false,
       promptVersion: "1.5.1",
+      meta: {
+        rawText: '{"stub":true}',
+        model: "reported-model",
+        usage: { promptTokens: 100, completionTokens: 20 },
+        tokensPerSecond: null,
+      },
+      prompt: "resolved prompt",
     }),
+    logLlmCall: () => undefined,
+    configuredModel: () => "configured-model",
     upsertConversationByThread: async () => ({ conversation_id: "conv-1", was_created: true }),
     findOrCreateTicketForThread: async () => ({
       ticket_id: "ticket-1",
@@ -735,5 +752,64 @@ describe("pollGmailAccount — no integration", () => {
 
     expect(result.outcome).toBe("no_integration");
     expect(result.newHistoryId).toBeNull();
+  });
+});
+
+describe("pollGmailAccount — llm_calls logging", () => {
+  const oneMessage = {
+    historyList: async () => ({
+      history: [{ id: "h1", messagesAdded: [{ message: { id: "msg-log", threadId: "thread-log" } }] }],
+      historyId: "1050",
+    }),
+  };
+
+  it("writes one llm_calls entry per classified message, with the model the provider reported", async () => {
+    const { db } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+    const logLlmCall = mock((_entry: Parameters<GmailPollDeps["logLlmCall"]>[0]) => undefined);
+
+    await pollGmailAccount(baseDeps({ db, ...oneMessage, logLlmCall }), ACCOUNT_ID);
+
+    expect(logLlmCall).toHaveBeenCalledTimes(1);
+    expect(logLlmCall.mock.calls[0]![0]).toMatchObject({
+      feature: "email_classification",
+      model: "reported-model",
+      promptVersion: "1.5.1",
+      promptText: "resolved prompt",
+      promptTokens: 100,
+      completionTokens: 20,
+      accountId: ACCOUNT_ID,
+    });
+    expect(logLlmCall.mock.calls[0]![0].errorCode).toBeUndefined();
+  });
+
+  it("writes an error entry when the classifier fails, and still records the failure", async () => {
+    const { db, upserts } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+    const logLlmCall = mock((_entry: Parameters<GmailPollDeps["logLlmCall"]>[0]) => undefined);
+
+    const result = await pollGmailAccount(
+      baseDeps({
+        db,
+        ...oneMessage,
+        logLlmCall,
+        classifyEmail: async () => {
+          throw new Error("model unavailable");
+        },
+      }),
+      ACCOUNT_ID
+    );
+
+    expect(result.ticketsCreated).toBe(0);
+    expect(upserts.some((u) => u.payload.classification_status === "failed")).toBe(true);
+    expect(logLlmCall).toHaveBeenCalledTimes(1);
+    expect(logLlmCall.mock.calls[0]![0]).toMatchObject({
+      feature: "email_classification",
+      model: "configured-model",
+      errorCode: "LLM_ERROR",
+      errorDetail: "model unavailable",
+    });
   });
 });

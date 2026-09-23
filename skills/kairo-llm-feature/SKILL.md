@@ -31,7 +31,7 @@ LLM feature progress:
 - [ ] 10. Resilience
 - [ ] 11. Human in the loop and the automation gate
 - [ ] 12. Evaluate before shipping
-- [ ] 13. Flag, tests, typecheck
+- [ ] 13. Validator, tests, typecheck
 ```
 
 ### 0. Inventory what already exists
@@ -68,27 +68,32 @@ Define a Zod schema; call `provider.completeJSONWithMeta(prompt, schema, options
 ### 5. Input contract and tenant context
 
 - One module decides everything that reaches the model for this feature (body cap, quote stripping, which context fields per stage). Model: `apps/api/src/lib/classifier-input.ts`. If the feature has stages, use the eval's stage names (`scripts/eval/lib/run-label.ts`) so a measured cell and a production path share a name.
-- Language is the tenant's (`accounts.language`, read as in `readAccountSettings` in `classifier-input.ts`), never guessed from keywords.
+- Language is the tenant's: `resolveTenantLanguage(accountId)` in `classifier-input.ts`, the same resolution the classifier uses. Never guessed from keywords.
 - State verified facts; **omit** unknown ones instead of rendering them as negatives or `N/A`; mark missing inputs with the `(no disponible)` convention (`packages/intelligence/src/classification/prompt.ts`, `renderFacts`).
 - Resolve per-account context once per batch or request, not per item.
 
 ### 6. Retrieval
 
-Similar resolved tickets and KB articles come from one function, not from ad-hoc `supabase.rpc("find_similar_tickets" | "find_relevant_kb")` calls with their own thresholds and status filters. If `retrieveTicketContext` exists in `apps/api/src/lib/`, call it. If not, reuse the parameters of `GET /:id/knowledge-context` in `apps/api/src/routes/v1/tickets.ts` and say in the PR that the shared function is still missing. Decide explicitly whether `ai_resolved` tickets count as resolved (`RESOLVED_STATUSES` in `@kairo/types` says they do).
+Similar resolved tickets and KB articles come from `apps/api/src/lib/ticket-context.ts`: `retrieveTicketContext` for both, `findResolvedCases` or `findRelevantKb` for one. Never call `supabase.rpc("find_similar_tickets" | "find_relevant_kb")` directly for LLM or panel context: the module holds the one threshold (`RELATED_CONTEXT_THRESHOLD`) and the one status filter (every final state in `RESOLVED_STATUSES`, `ai_resolved` included). A model only receives ranked matches; an unranked "latest articles" list is a panel fallback. Reference consumer: `apps/api/src/lib/reply-suggestion.ts`.
 
 ### 7. Call through the harness
 
-If `runLlmFeature` exists in `packages/intelligence/src/`, the feature calls it and nothing else. Otherwise the call site must do all of what it would do. Copy the shape of `classifyEmailWithMeta` (`packages/intelligence/src/classification/classify.ts`), not the reply-suggestion route:
+Every model call goes through `runLlmFeature` (structured answer) or `runLlmTextFeature` (free text) from `@kairo/intelligence` (`packages/intelligence/src/harness/`). Pass `logger: recordLlmCall` from `apps/api/src/lib/llm-logging.ts`. The harness loads the versioned prompt, fails on an unfilled placeholder, validates the answer against the schema, opens one Langfuse generation under `sessionId = ticketId`, writes one `llm_calls` row on success and on failure, and returns the model the provider reported and the row id for outcome writeback.
 
-- template loaded and version read from `packages/intelligence` (no second loader);
-- `completeJSONWithMeta` (step 4);
-- one Langfuse generation with `propagateAttributes({ sessionId: ticketId, metadata: { accountId } })`;
-- one `llm_calls` row through `logLlmCall` (`apps/api/src/lib/llm-logging.ts`), or an awaited insert only when the row id must be returned for outcome writeback;
-- errors left as `ProviderError`.
+```ts
+const result = await runLlmFeature({
+  feature: "reply_suggestion", promptId: "reply-suggestion", lang, vars,
+  schema: ReplySuggestionSchema,
+  context: { ticketId, accountId, userId },
+  logger: recordLlmCall,
+});
+```
+
+Do not open Langfuse generations, read prompt files or insert into `llm_calls` by hand in `apps/`. Classification keeps `classifyEmailWithMeta`, which shares the harness's generation wrapper and template loader. Keep the feature's logic in a `lib/` module with injectable dependencies; the route only maps the result to HTTP.
 
 ### 8. Provenance
 
-Every stored AI decision records what produced it: `prompt_version`, the model **the provider reported** (`meta.model`), and any decision-layer version it passed through. Build the columns in one helper, as `classificationAudit` / `routingAudit` / `feedbackAudit` do in `apps/api/src/lib/classification-audit.ts`. Never write `resolveModelVersion()` (`apps/api/src/lib/model-version.ts`) into a new column: it is a hardcoded id, not the model that answered.
+Every stored AI decision records what produced it: `prompt_version`, the model **the provider reported** (`result.model` / `meta.model`), and any decision-layer version it passed through. Build the columns in one helper, as `classificationAudit` / `routingAudit` / `feedbackAudit` do in `apps/api/src/lib/classification-audit.ts`. Never write `resolveModelVersion()` (`apps/api/src/lib/model-version.ts`) into a new column: it is a hardcoded id, not the model that answered.
 
 ### 9. Telemetry
 
@@ -98,8 +103,8 @@ Every stored AI decision records what produced it: `prompt_version`, the model *
 
 ### 10. Resilience
 
-- Providers throw `ProviderError{retriable, retryAfterMs}` (`packages/intelligence/src/providers/base.ts`). Keep the distinction up to the response: retriable → 503-style "try again", non-retriable → a bug to surface.
-- Batch paths wrap the call in `withRetry(semaphore, fn)` from `apps/api/src/lib/retry.ts` and a per-run `createCircuitBreaker`, and persist failures with `recordClassificationFailure`-style status (`failed` / `failed_permanent`). Do not import `withRetry` from `packages/intelligence/src/utils/retry.ts`; nothing uses it.
+- Providers throw `ProviderError{retriable, retryAfterMs}` (`packages/intelligence/src/providers/base.ts`); the harness passes it through unchanged. Keep the distinction up to the response: retriable → 503 with `retryable: true`, anything else → 500 (see `POST /:id/suggest-reply`). A harness misuse throws `LlmFeatureError` (non-retriable).
+- Batch paths wrap the call in `withRetry(semaphore, fn)` from `apps/api/src/lib/retry.ts` and a per-run `createCircuitBreaker`, and persist failures with `recordClassificationFailure`-style status (`failed` / `failed_permanent`).
 - A request path (a user waiting) does not retry with multi-second backoff; it degrades per missing context source and fails only when the model call fails.
 
 ### 11. Human in the loop and the automation gate
@@ -112,11 +117,19 @@ If any output may act without a person (auto-approve, auto-send, auto-promote), 
 
 A new feature needs a baseline and a corpus before its prompt is tuned; a change to an existing one needs a before/after on the same cell. Follow `skills/kairo-ai-evaluation/SKILL.md`. Do not run evals the user did not ask for.
 
-### 13. Flag, tests, typecheck
+### 13. Validate, test, typecheck
 
-- Default-off flag (Hard rules).
-- Tests import the real exported function. Never redefine the function under test inside the test file.
-- `bun test`; after any `apps/dashboard/` change also `turbo run typecheck --filter=@kairo/dashboard`.
+Run the validator over the files you touched and fix every violation before finishing:
+
+```bash
+bun skills/kairo-llm-feature/scripts/check-llm-feature.ts <changed files or dirs>
+```
+
+It fails on: JSON extracted with a regex, a model called directly from `apps/`, a prompt file read outside `packages/intelligence`, a hand-opened Langfuse generation, a hardcoded model stored as `model_version`, a keyword language guess, `llm_calls` written outside `llm-logging.ts`, a test that redefines the function it tests, and a prompt directory missing a language or a version heading. `--all` checks the whole repo; it must stay clean. Re-run until it prints `OK`.
+
+- Default-off flag for a new feature (Hard rules).
+- Tests import the real exported function.
+- `bun test`; `bunx tsc --noEmit -p apps/api/tsconfig.json` and `-p packages/intelligence/tsconfig.json` after changes there; after any `apps/dashboard/` change also `turbo run typecheck --filter=@kairo/dashboard`.
 
 ## Changing a decision layer
 
