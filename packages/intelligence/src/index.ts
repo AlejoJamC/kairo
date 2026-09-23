@@ -43,6 +43,24 @@ export type {
 
 export { generateEmbedding, generateEmbeddings } from './embeddings';
 
+export {
+  runLlmFeature,
+  runLlmTextFeature,
+  withGeneration,
+  usageDetails,
+  loadPromptTemplate,
+  fillTemplate,
+  LlmFeatureError,
+} from './harness';
+export type {
+  LlmCallRecord,
+  LlmCallLogger,
+  LlmFeatureJsonRequest,
+  LlmFeatureResult,
+  LlmFeatureErrorCode,
+  GenerationSpec,
+} from './harness';
+
 export { ProviderError } from './providers/base';
 export type {
   CompletionProvider,

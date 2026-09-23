@@ -32,9 +32,9 @@ async function recordAiClassification(
   accountId: string,
   ticketId: string,
   classification: { category: string | null; priority: string; confidence: number },
+  modelVersion: string,
   occurredAt: string
 ): Promise<void> {
-  const modelVersion = resolveModelVersion();
   if (classification.category) {
     await emitTicketClassification({
       accountId,
@@ -437,7 +437,7 @@ export const tier2Background = inngest.createFunction(
                 proposed_emotion: classification.tone,
                 emotion_confidence: classification.confidence,
                 confidence_score: classification.confidence,
-                model_version: resolveModelVersion(),
+                model_version: meta.model,
                 raw_llm_output: classification as Record<string, unknown>,
                 // No human is anywhere near this stage, so nothing stands on
                 // its own without the tenant context, and no class is
@@ -540,7 +540,7 @@ export const tier2Background = inngest.createFunction(
                 }
 
                 if (was_created && ticketId) {
-                  await recordAiClassification(accountId, ticketId, classification, classified_at);
+                  await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
                 }
 
                 if (!was_created) {
@@ -581,7 +581,7 @@ export const tier2Background = inngest.createFunction(
                 ticketId = fallbackTicket?.id ?? null;
 
                 if (ticketId) {
-                  await recordAiClassification(accountId, ticketId, classification, classified_at);
+                  await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
                 }
 
                 if (proposal?.id && ticketId) {
@@ -641,7 +641,7 @@ export const tier2Background = inngest.createFunction(
               ticketId = bareTicket?.id ?? null;
 
               if (ticketId) {
-                await recordAiClassification(accountId, ticketId, classification, classified_at);
+                await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
               }
 
               if (proposal?.id && ticketId) {

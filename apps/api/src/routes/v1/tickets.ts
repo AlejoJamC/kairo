@@ -3,8 +3,9 @@ import { z } from "zod";
 import { classificationAudit, feedbackAudit } from "../../lib/classification-audit.js";
 import { correctionAttributes, recordDecision } from "../../lib/decision-telemetry.js";
 import { sendTypeCorrectionScore } from "../../lib/langfuse-scores.js";
-import { startObservation, propagateAttributes } from "@langfuse/tracing";
-import { classifyEmailWithMeta, generateEmbedding, extractPromptVersion } from "@kairo/intelligence";
+import { classifyEmailWithMeta, ProviderError } from "@kairo/intelligence";
+import { suggestReply } from "../../lib/reply-suggestion.js";
+import { findResolvedCases, retrieveTicketContext, ticketQueryText } from "../../lib/ticket-context.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { supabase } from "../../lib/supabase.js";
 import { resolveUserAndAccount, resolveMemberRole } from "../../lib/auth.js";
@@ -26,13 +27,10 @@ import { attachOperationalSla, buildConfigByPriority } from "../../lib/operation
 import { emitTicketActivity, emitTicketClassification, type ClassificationDimension } from "../../lib/ticket-events.js";
 import { fanOutNoteMentions, resolveMentionNames, markOwnMentions } from "../../lib/note-mention-fanout.js";
 import { extractMentionUserIds } from "../../lib/note-mentions.js";
-import { createCompletionProvider, detectEscalationTriggers } from "@kairo/intelligence";
+import { detectEscalationTriggers } from "@kairo/intelligence";
 import type { EscalationContext } from "@kairo/intelligence";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { planScoreFromTier, computeClientFlags } from "../../lib/client-profile.js";
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
 import {
   isValidTransition,
   getTransitionError,
@@ -248,21 +246,16 @@ tickets.get("/:id/related-history", async (c) => {
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
-  // Primary: pgvector RPC
-  const { data: rpcData, error: rpcError } = await supabase.rpc("find_similar_tickets", {
-    p_ticket_id: id,
-    p_account_id: ctx.accountId,
-    p_limit: 3,
-    p_status_filter: RESOLVED_STATUSES.join(","),
-  });
+  // Primary: the shared resolved-case search (lib/ticket-context.ts)
+  const cases = await findResolvedCases({ ticketId: id, accountId: ctx.accountId, limit: 3 });
 
-  if (!rpcError && rpcData && rpcData.length > 0) {
-    const results = (rpcData ?? []).map((r: Record<string, unknown>) => ({
-      id: r.ticket_id,
+  if (cases && cases.length > 0) {
+    const results = cases.map((r) => ({
+      id: r.id,
       subject: r.subject,
-      resolved_at: r.resolved_at,
-      resolution_summary: r.resolution_summary ?? null,
-      ticket_number: r.ticket_number,
+      resolved_at: r.resolvedAt,
+      resolution_summary: r.resolutionSummary,
+      ticket_number: r.ticketNumber,
       similarity: r.similarity,
     }));
     return c.json({ data: results });
@@ -373,6 +366,8 @@ tickets.post("/:id/classify", async (c) => {
   // Hoisted with `classification` for the same reason: the update that stores
   // them runs after the try block that produced them.
   let audit: ReturnType<typeof classificationAudit> | undefined;
+  // The model the provider reports having answered with, for the history rows.
+  let reportedModel: string | undefined;
   const llmStart = Date.now();
   try {
     const classifierContext = await resolveClassifierContext("backfill", ctx.accountId);
@@ -387,6 +382,7 @@ tickets.post("/:id/classify", async (c) => {
     );
     classification = result;
     audit = classificationAudit({ verdict, ensemble, abstain, promptVersion });
+    reportedModel = meta.model;
 
     logLlmCall({
       feature: "email_classification",
@@ -453,7 +449,6 @@ tickets.post("/:id/classify", async (c) => {
 
   // KAI-191: ai_classified/human_classified moved from the old events
   // table to ticket_classification_history — one row per dimension actually changed.
-  const classifyModelVersion = resolveModelVersion();
   const classifyDimensionChanges: [ClassificationDimension, string | null, string | null][] = [
     ["ticket_type", ticket.ticket_type ?? null, classification.type],
     ["priority", ticket.priority ?? null, classification.priority],
@@ -473,7 +468,7 @@ tickets.post("/:id/classify", async (c) => {
       fromValue,
       toValue,
       confidence: classification.confidence,
-      modelVersion: classifyModelVersion,
+      modelVersion: reportedModel ?? null,
       occurredAt: classified_at,
     });
   }
@@ -1786,246 +1781,32 @@ tickets.post("/:id/classify-approve", async (c) => {
 
 // ---------------------------------------------------------------------------
 // POST /v1/tickets/:id/suggest-reply — context-aware reply suggestion (KAI-31)
-// Assembles 5 context sources, calls Claude, stores in ticket_proposals.
-// All context sources degrade gracefully — partial context is better than no call.
+// The work lives in lib/reply-suggestion.ts; this maps it to HTTP. A retriable
+// provider failure is a 503 the client may retry; anything else is a 500.
 // ---------------------------------------------------------------------------
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-// 5 levels up from apps/api/src/routes/v1 reaches the repo root.
-const PROMPT_DIR = join(__dirname, "../../../../../packages/intelligence/prompts/reply-suggestion");
-
-function loadPromptTemplate(lang: "es" | "en"): string {
-  try {
-    return readFileSync(join(PROMPT_DIR, `${lang}.md`), "utf-8");
-  } catch {
-    return readFileSync(join(PROMPT_DIR, "es.md"), "utf-8");
-  }
-}
-
-function detectLanguage(texts: string[]): "es" | "en" {
-  const sample = texts.join(" ").toLowerCase().slice(0, 2000);
-  const esSignals = (sample.match(/\b(hola|gracias|por favor|necesito|tengo|problema|ayuda|buenas|estimado)\b/g) ?? []).length;
-  const enSignals = (sample.match(/\b(hello|thank|please|need|have|problem|help|dear|hi|issue)\b/g) ?? []).length;
-  return enSignals > esSignals ? "en" : "es";
-}
-
-function fillTemplate(template: string, vars: Record<string, string>): string {
-  return Object.entries(vars).reduce(
-    (t, [k, v]) => t.replaceAll(`{{${k}}}`, v),
-    template
-  );
-}
-
-const SuggestReplyResponseSchema = z.object({
-  suggestion: z.string(),
-  confidence: z.number().min(0).max(1),
-  detected_language: z.enum(["es", "en"]),
-});
 
 tickets.post("/:id/suggest-reply", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
   if (!ctx) return c.json({ error: "Unauthorized" }, 401);
 
-  const id = c.req.param("id");
-
-  // 1. Ticket — required; fail hard only here
-  const { data: ticket, error: ticketErr } = await supabase
-    .from("tickets")
-    .select("id, subject, ticket_type, priority, category, emotion, conversation_id, client_id, from_email")
-    .eq("id", id)
-    .eq("account_id", ctx.accountId)
-    .single();
-
-  if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
-
-  // 2. Message history — graceful degrade
-  let messageHistory = "No hay historial de mensajes disponible.";
-  if (ticket.conversation_id) {
-    const { data: msgs } = await supabase
-      .from("messages")
-      .select("direction, sender_display_name, body_plain, received_at")
-      .eq("conversation_id", ticket.conversation_id)
-      .order("received_at", { ascending: false })
-      .limit(10);
-
-    if (msgs && msgs.length > 0) {
-      messageHistory = msgs
-        .reverse()
-        .map((m) => `[${m.direction === "inbound" ? "Cliente" : "Agente"} — ${m.received_at}]\n${m.body_plain ?? ""}`)
-        .join("\n\n");
-    }
-  }
-
-  // 3. Client profile — graceful degrade
-  let clientProfile = "Sin perfil de cliente disponible.";
-  if (ticket.client_id) {
-    const { data: client } = await supabase
-      .from("clients")
-      .select("name, plan_type, sla_level")
-      .eq("id", ticket.client_id)
-      .single();
-
-    if (client) {
-      clientProfile = `Nombre: ${client.name} | Plan: ${client.plan_type ?? "N/A"} | SLA: ${client.sla_level ?? "N/A"}`;
-    }
-  }
-
-  // 4. Similar resolved case — graceful degrade (RPC may not be available)
-  let similarCase = "No hay casos similares resueltos disponibles.";
-  const { data: similar } = await Promise.resolve(
-    supabase.rpc("find_similar_tickets", {
-      p_ticket_id: id,
-      p_account_id: ctx.accountId,
-      p_limit: 1,
-      p_status_filter: "resolved",
-    }),
-  ).catch(() => ({ data: null }));
-
-  if (similar && similar.length > 0) {
-    const s = similar[0] as { subject?: string; resolution_summary?: string };
-    similarCase = `Asunto: ${s.subject ?? "N/A"}\nResolución: ${s.resolution_summary ?? "Sin resumen"}`;
-  }
-
-  // 5. KB articles — graceful degrade (find_relevant_kb RPC not yet implemented — ADR-012 pending)
-  // TODO: wire find_relevant_kb() once kb_articles table and pgvector index are built.
-  const referencedKbArticles: string[] = [];
-  const kbArticlesText = "No hay artículos de base de conocimiento disponibles aún.";
-
-  // Detect language from message history
-  const lang = detectLanguage([messageHistory, ticket.subject ?? ""]);
-  const promptTemplate = loadPromptTemplate(lang);
-
-  const prompt = fillTemplate(promptTemplate, {
-    subject: ticket.subject ?? "",
-    ticket_type: ticket.ticket_type ?? "N/A",
-    priority: ticket.priority ?? "N/A",
-    category: ticket.category ?? "N/A",
-    emotion: ticket.emotion ?? "neutral",
-    client_profile: clientProfile,
-    message_history: messageHistory,
-    similar_case: similarCase,
-    kb_articles: kbArticlesText,
-  });
-
-  // Call Claude
-  const provider = createCompletionProvider();
-  const promptVersion = extractPromptVersion(promptTemplate);
-  let suggestion: string;
-  let confidence: number;
-  const llmStart = Date.now();
-  let meta: Awaited<ReturnType<typeof provider.completeWithMeta>> | null = null;
-
-  // KAI-189: this call bypasses packages/intelligence's classify.ts wrapper
-  // (it's the raw provider, not classifyEmailWithMeta), so it previously had
-  // zero Langfuse coverage — only the parallel llm_calls Postgres log below.
-  // Grouped into the ticket's Langfuse trace, same as classification/embedding.
-  const generation = await propagateAttributes(
-    { sessionId: id, metadata: { accountId: ctx.accountId } },
-    async () =>
-      startObservation(
-        "suggest-reply",
-        { model: provider.model, input: prompt, metadata: { promptVersion, ticketId: id, accountId: ctx.accountId } },
-        { asType: "generation" },
-      ),
-  );
-
   try {
-    meta = await provider.completeWithMeta(prompt, { maxTokens: 1500, temperature: 0.4 });
-    const jsonMatch = meta.rawText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in response");
+    const outcome = await suggestReply({ ticketId: c.req.param("id"), accountId: ctx.accountId, userId: ctx.userId });
+    if (!outcome) return c.json({ error: "Ticket not found" }, 404);
 
-    const parsed = SuggestReplyResponseSchema.parse(JSON.parse(jsonMatch[0]));
-    suggestion = parsed.suggestion;
-    confidence = parsed.confidence;
-
-    const usageDetails: Record<string, number> = {};
-    if (meta.usage.promptTokens != null) usageDetails.input = meta.usage.promptTokens;
-    if (meta.usage.completionTokens != null) usageDetails.output = meta.usage.completionTokens;
-    generation.update({
-      output: meta.rawText,
-      ...(Object.keys(usageDetails).length > 0 ? { usageDetails } : {}),
+    return c.json({
+      suggestion: outcome.suggestion,
+      referencedKbArticles: outcome.referencedKbArticles,
+      confidence: outcome.confidence,
+      proposal_id: outcome.proposalId,
+      llm_call_id: outcome.llmCallId,
     });
-    generation.end();
   } catch (err) {
-    generation.update({ level: "ERROR", statusMessage: err instanceof Error ? err.message : String(err) });
-    generation.end();
     const detail = err instanceof Error ? err.message : String(err);
-    logLlmCall({
-      feature: "reply_suggestion",
-      model: meta?.model ?? resolveModelVersion(),
-      promptVersion,
-      promptText: prompt,
-      responseText: meta?.rawText ?? null,
-      promptTokens: meta?.usage.promptTokens ?? null,
-      completionTokens: meta?.usage.completionTokens ?? null,
-      latencyMs: Date.now() - llmStart,
-      errorCode: "LLM_ERROR",
-      errorDetail: detail,
-      triggeredByUserId: ctx.userId,
-      accountId: ctx.accountId,
-      ticketId: id,
-    });
-    return c.json(
-      { error: "Suggestion failed", detail },
-      500
-    );
+    if (err instanceof ProviderError && err.retriable) {
+      return c.json({ error: "Suggestion temporarily unavailable", detail, retryable: true }, 503);
+    }
+    return c.json({ error: "Suggestion failed", detail }, 500);
   }
-
-  // KAI-110: awaited insert into llm_calls — we need the row id to return to
-  // the client so the agent's eventual outcome (accepted/edited/...) can be
-  // written back. Wrapped so a logging failure degrades to llm_call_id: null
-  // and never fails the suggestion itself.
-  let llmCallId: string | null = null;
-  try {
-    const { data: llmCall, error: llmCallErr } = await supabase
-      .from("llm_calls")
-      .insert({
-        triggered_by_user_id: ctx.userId,
-        account_id: ctx.accountId,
-        ticket_id: id,
-        feature: "reply_suggestion",
-        provider: process.env["INTELLIGENCE_PROVIDER"] ?? "ollama",
-        model: meta.model,
-        prompt_version: promptVersion,
-        prompt_text: prompt,
-        response_text: meta.rawText,
-        prompt_tokens: meta.usage.promptTokens,
-        completion_tokens: meta.usage.completionTokens,
-        confidence_score: confidence,
-        latency_ms: Date.now() - llmStart,
-      })
-      .select("id")
-      .single();
-    if (llmCallErr) console.error("[llm_calls] log failed", llmCallErr.message);
-    else llmCallId = llmCall?.id ?? null;
-  } catch (err) {
-    console.error("[llm_calls] log failed", err instanceof Error ? err.message : String(err));
-  }
-
-  // Store in ticket_proposals
-  const { data: proposal } = await supabase
-    .from("ticket_proposals")
-    .insert({
-      ticket_id: id,
-      conversation_id: ticket.conversation_id ?? null,
-      message_ids: [],
-      proposed_reply: suggestion,
-      referenced_kb_articles: referencedKbArticles,
-      confidence_score: confidence,
-      model_version: resolveModelVersion(),
-      raw_llm_output: { suggestion, confidence, lang },
-      status: "pending",
-    })
-    .select("id")
-    .single();
-
-  return c.json({
-    suggestion,
-    referencedKbArticles,
-    confidence,
-    proposal_id: proposal?.id ?? null,
-    llm_call_id: llmCallId,
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2515,18 +2296,16 @@ tickets.post("/:id/correct-classification", async (c) => {
 
 // ---------------------------------------------------------------------------
 // GET /v1/tickets/:id/knowledge-context — KAI-42
-// Returns the right-panel "Artículos" payload:
-//   { kbArticles: [...], similarResolvedCases: [...] }
-// Primary: pgvector RPC find_relevant_kb (threshold 0.75).
-// Fallback: if embedding unavailable or RPC returns 0 results, list all
-//   published articles for the user (useful in dev / before embeddings exist).
-// Articles are enriched with content + tags from the kb_articles table.
+// The right-panel "Artículos" payload: { kbArticles, similarResolvedCases }.
+// Ranked context comes from lib/ticket-context.ts, the same source the reply
+// suggestion reads. When nothing ranks (no embeddings yet, embedding service
+// down) the panel lists the latest published articles instead, flagged
+// `degraded` when a source failed. That fallback is for the panel only; a
+// model never receives unranked articles.
 // ---------------------------------------------------------------------------
 
-const KNOWLEDGE_CONTEXT_THRESHOLD = 0.75;
-const KB_LIMIT = 3;
-const SIMILAR_CASES_LIMIT = 2;
-const BODY_PREVIEW_CHARS = 200;
+const PANEL_KB_LIMIT = 3;
+const PANEL_CASES_LIMIT = 2;
 
 tickets.get("/:id/knowledge-context", async (c) => {
   const ctx = await resolveUserAndAccount(c.req.header("Authorization") ?? "");
@@ -2544,103 +2323,43 @@ tickets.get("/:id/knowledge-context", async (c) => {
 
   if (ticketErr || !ticket) return c.json({ error: "Ticket not found" }, 404);
 
-  // Helper: fetch published articles and optionally enrich with similarity
-  async function fetchPublishedArticles(ids?: string[], similarities?: Map<string, number>) {
-    const q = supabase
+  const context = await retrieveTicketContext({
+    ticketId: id,
+    accountId,
+    queryText: ticketQueryText(ticket.subject, ticket.body_plain),
+    kbLimit: PANEL_KB_LIMIT,
+    casesLimit: PANEL_CASES_LIMIT,
+  });
+
+  let kbArticles = context.kbArticles;
+  if (kbArticles.length === 0) {
+    const { data } = await supabase
       .from("kb_articles")
       .select("id, title, content, tags")
       .eq("account_id", accountId)
-      .eq("is_published", true);
-
-    if (ids && ids.length > 0) {
-      q.in("id", ids);
-    } else {
-      q.limit(KB_LIMIT);
-    }
-
-    const { data } = await q;
-    return (data ?? []).map((a) => ({
-      id:         a.id,
-      title:      a.title,
-      content:    a.content,
-      tags:       a.tags ?? [],
-      similarity: similarities?.get(a.id) ?? null,
+      .eq("is_published", true)
+      .limit(PANEL_KB_LIMIT);
+    kbArticles = (data ?? []).map((a) => ({
+      id: a.id,
+      title: a.title,
+      content: a.content,
+      tags: a.tags ?? [],
+      similarity: null,
     }));
   }
 
-  const subject = (ticket.subject ?? "").trim();
-  const bodyPreview = (ticket.body_plain ?? "").trim().slice(0, BODY_PREVIEW_CHARS);
-  const queryText = [subject, bodyPreview].filter(Boolean).join("\n\n");
+  const similarResolvedCases = context.resolvedCases.map((r) => ({
+    id: r.id,
+    ticket_number: r.ticketNumber,
+    subject: r.subject,
+    resolved_at: r.resolvedAt,
+    resolution_summary: r.resolutionSummary,
+    similarity: r.similarity,
+  }));
 
-  // No text to embed — fall back to listing published articles
-  if (queryText.length === 0) {
-    const kbArticles = await fetchPublishedArticles();
-    return c.json({ kbArticles, similarResolvedCases: [] });
-  }
-
-  let queryVector: number[];
-  try {
-    queryVector = await generateEmbedding(queryText, { ticketId: id, accountId });
-  } catch (err) {
-    console.error(`[knowledge-context] generateEmbedding failed for ticket ${id}:`, err);
-    // Embedding service unavailable — fall back to published list
-    const kbArticles = await fetchPublishedArticles();
-    return c.json({ kbArticles, similarResolvedCases: [], degraded: true });
-  }
-
-  const [kbResult, similarResult] = await Promise.allSettled([
-    supabase.rpc("find_relevant_kb", {
-      p_query_embedding: queryVector,
-      p_account_id: accountId,
-      p_limit: KB_LIMIT,
-    }),
-    supabase.rpc("find_similar_tickets", {
-      p_ticket_id: id,
-      p_account_id: accountId,
-      p_limit: SIMILAR_CASES_LIMIT,
-      p_threshold: KNOWLEDGE_CONTEXT_THRESHOLD,
-      p_status_filter: "resolved",
-    }),
-  ]);
-
-  type KbRow = { article_id: string; title: string; similarity: number };
-  type SimilarRow = {
-    ticket_id: string;
-    subject: string | null;
-    resolved_at: string | null;
-    resolution_summary: string | null;
-    ticket_number: number;
-    similarity: number;
-  };
-
-  // Build similarity map from RPC result
-  const rpcRows: KbRow[] =
-    kbResult.status === "fulfilled" && !kbResult.value.error
-      ? ((kbResult.value.data ?? []) as KbRow[]).filter(
-          (r) => r.similarity > KNOWLEDGE_CONTEXT_THRESHOLD,
-        )
-      : [];
-
-  let kbArticles: Awaited<ReturnType<typeof fetchPublishedArticles>>;
-  if (rpcRows.length > 0) {
-    const simMap = new Map(rpcRows.map((r) => [r.article_id, r.similarity]));
-    kbArticles = await fetchPublishedArticles(rpcRows.map((r) => r.article_id), simMap);
-  } else {
-    // RPC returned nothing (no embeddings yet) — fall back to published list
-    kbArticles = await fetchPublishedArticles();
-  }
-
-  const similarResolvedCases =
-    similarResult.status === "fulfilled" && !similarResult.value.error
-      ? ((similarResult.value.data ?? []) as SimilarRow[]).map((r) => ({
-          id: r.ticket_id,
-          ticket_number: r.ticket_number,
-          subject: r.subject,
-          resolved_at: r.resolved_at,
-          resolution_summary: r.resolution_summary,
-          similarity: r.similarity,
-        }))
-      : [];
-
-  return c.json({ kbArticles, similarResolvedCases });
+  return c.json({
+    kbArticles,
+    similarResolvedCases,
+    ...(context.degraded.length > 0 ? { degraded: true } : {}),
+  });
 });

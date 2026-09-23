@@ -263,6 +263,17 @@ async function readAccountSettings(
 }
 
 /**
+ * The tenant's language, the one every LLM feature answers and reads in.
+ *
+ * The same resolution the classifier uses, so a tenant is never classified in
+ * one language and answered in another. Falls back to {@link DEFAULT_LANG}.
+ */
+export async function resolveTenantLanguage(accountId: string): Promise<PromptLang> {
+  const { language } = await readAccountSettings(accountId, []);
+  return language;
+}
+
+/**
  * The tenant fields to hand the classifier for a given stage.
  *
  * Resolve this once per batch — per Inngest step, per poll, per request — and

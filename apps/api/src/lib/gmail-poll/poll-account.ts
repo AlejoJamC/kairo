@@ -208,13 +208,45 @@ async function ingestMessages(
       // This path only ever has the Gmail snippet — it does not decode the
       // MIME body — but it goes through the same rule as every other queued
       // path, and it sends the tenant fields the rubric needs.
-      const { result: classification, verdict, ensemble, abstain, promptVersion } = await deps.classifyEmail({
-        subject,
-        body: buildClassifierBody("backfill", null, snippet),
-        from,
-        ...classifierContext,
-        ...classifierEnvelope(filterResult.facts),
-      }, { lang: classifierContext.language, context: { accountId } });
+      //
+      // Every classification writes one `llm_calls` row, success or failure,
+      // like the other ingestion paths — otherwise this path's cost and errors
+      // are invisible to every query over that table.
+      const llmStart = Date.now();
+      let classified: Awaited<ReturnType<GmailPollDeps["classifyEmail"]>>;
+      try {
+        classified = await deps.classifyEmail({
+          subject,
+          body: buildClassifierBody("backfill", null, snippet),
+          from,
+          ...classifierContext,
+          ...classifierEnvelope(filterResult.facts),
+        }, { lang: classifierContext.language, context: { accountId } });
+      } catch (err) {
+        deps.logLlmCall({
+          feature: "email_classification",
+          model: deps.configuredModel(),
+          promptText: `${from} | ${subject}`,
+          latencyMs: Date.now() - llmStart,
+          errorCode: "LLM_ERROR",
+          errorDetail: err instanceof Error ? err.message : String(err),
+          accountId,
+        });
+        throw err;
+      }
+      const { result: classification, verdict, ensemble, abstain, promptVersion, meta, prompt } = classified;
+      deps.logLlmCall({
+        feature: "email_classification",
+        model: meta.model,
+        promptVersion,
+        promptText: prompt,
+        responseText: meta.rawText,
+        promptTokens: meta.usage.promptTokens,
+        completionTokens: meta.usage.completionTokens,
+        confidenceScore: classification.confidence,
+        latencyMs: Date.now() - llmStart,
+        accountId,
+      });
       const classifiedAt = new Date().toISOString();
 
       const result = await deps.findOrCreateTicketForThread(deps.db, {

@@ -1,26 +1,17 @@
-import { readFile } from 'fs/promises';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { extractPromptVersion, loadPromptTemplate } from '../harness/template';
 import type { EmailMessage } from './types';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+export { extractPromptVersion };
 
 export type PromptLang = 'es' | 'en' | 'pt';
 
 export const SUPPORTED_LANGS: readonly PromptLang[] = ['es', 'en'] as const;
 export const DEFAULT_LANG: PromptLang = 'es';
 
-const cache = new Map<PromptLang, string>();
+const PROMPT_ID = 'email-classification';
 
-async function loadTemplate(lang: PromptLang): Promise<string> {
-  const cached = cache.get(lang);
-  if (cached) return cached;
-
-  const promptPath = join(__dirname, `../../prompts/email-classification/${lang}.md`);
-  const content = await readFile(promptPath, 'utf-8');
-  cache.set(lang, content);
-  return content;
+function loadTemplate(lang: PromptLang): Promise<string> {
+  return loadPromptTemplate(PROMPT_ID, lang);
 }
 
 // A field the caller could not supply is not the same as an empty one: the
@@ -223,16 +214,6 @@ export async function buildPrompt(
       },
     )
     .replaceAll('{{body}}', message.body);
-}
-
-/**
- * Extracts the prompt version from the first heading line, e.g.
- * `# Prompt de Clasificación de Emails (ES) — v1.0.0` → `1.0.0`.
- * Returns null if no version marker is present (KAI-110).
- */
-export function extractPromptVersion(template: string): string | null {
-  const match = template.match(/v(\d+\.\d+\.\d+)/);
-  return match ? match[1] : null;
 }
 
 export async function getPromptVersion(lang: PromptLang = DEFAULT_LANG): Promise<string | null> {

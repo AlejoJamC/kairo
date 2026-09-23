@@ -33,9 +33,9 @@ async function recordAiClassification(
   accountId: string,
   ticketId: string,
   classification: { category: string | null; priority: string; confidence: number },
+  modelVersion: string,
   occurredAt: string
 ): Promise<void> {
-  const modelVersion = resolveModelVersion();
   if (classification.category) {
     await emitTicketClassification({
       accountId,
@@ -388,7 +388,7 @@ async function classifyWindow(
             proposed_emotion: classification.tone,
             emotion_confidence: classification.confidence,
             confidence_score: classification.confidence,
-            model_version: resolveModelVersion(),
+            model_version: meta.model,
             raw_llm_output: classification as Record<string, unknown>,
             // Same rule as Tier 2 — see backfill-proposal-status.ts. Nobody is
             // watching here either.
@@ -489,7 +489,7 @@ async function classifyWindow(
             }
 
             if (was_created && ticketId) {
-              await recordAiClassification(accountId, ticketId, classification, classified_at);
+              await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
             }
 
             if (!was_created) {
@@ -530,7 +530,7 @@ async function classifyWindow(
             ticketId = fallbackTicket?.id ?? null;
 
             if (ticketId) {
-              await recordAiClassification(accountId, ticketId, classification, classified_at);
+              await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
             }
 
             if (proposal?.id && ticketId) {
@@ -590,7 +590,7 @@ async function classifyWindow(
           ticketId = bareTicket?.id ?? null;
 
           if (ticketId) {
-            await recordAiClassification(accountId, ticketId, classification, classified_at);
+            await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
           }
 
           if (proposal?.id && ticketId) {

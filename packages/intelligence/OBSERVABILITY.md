@@ -20,6 +20,18 @@ The offline eval scripts in `scripts/eval/` currently use synthetic `.eml` files
 
 ## How to instrument a new LLM call site
 
+**A new LLM feature does not instrument anything by hand.** It calls
+`runLlmFeature` (or `runLlmTextFeature`) from `@kairo/intelligence` with
+`logger: recordLlmCall` from `apps/api/src/lib/llm-logging.ts`. The harness
+opens the Langfuse generation under `sessionId = ticketId`, writes one
+`llm_calls` row on success and on failure (with `prompt_version` and the model
+the provider reported), and returns the row id for outcome writeback. See
+`apps/api/src/lib/reply-suggestion.ts` for a complete consumer and
+`skills/kairo-llm-feature/SKILL.md` for the procedure.
+
+The rest of this section describes the classification call sites, which log
+through `logLlmCall` after `classifyEmailWithMeta`.
+
 `@kairo/intelligence` providers expose `completeWithMeta()` / `completeJSONWithMeta()`
 in addition to the original `complete()` / `completeJSON()`. The `*WithMeta` variants
 return `{ text | data, rawText, model, usage: { promptTokens, completionTokens } }`,
@@ -119,13 +131,16 @@ should be stored client-side until the agent acts on the suggestion.
 
 ## Prompt versioning
 
-Every prompt file should carry a version in its frontmatter (or first comment line). Use semver:
+Every prompt file carries its version in the first heading:
 
 ```markdown
 # Reply Suggestion Prompt (ES) — v1.0.0
 ```
 
-Bump `PATCH` for wording fixes, `MINOR` for structural changes, `MAJOR` for intent changes. Always update `prompt_version` in the call site when bumping.
+The version is **not semver**: X is frozen at 1, Y is for a block rewritten
+whole or a field the model stops answering, Z is everything else. The rule and
+its worked examples are in `packages/intelligence/prompts/README.md`. The
+harness reads the version from the heading, so no call site hardcodes it.
 
 ---
 
@@ -186,7 +201,8 @@ GROUP BY model;
 | `email_classification` — incremental sync (`functions/pipeline/incremental-sync.ts`) | ✅ done (KAI-110) |
 | `email_classification` — batch classify (`functions/batch-classify.ts`) | ✅ done (KAI-110) |
 | `email_classification` — manual classify (`routes/v1/tickets.ts` `POST /:id/classify`, `POST /classify-batch`) | ✅ done (KAI-110) |
-| `reply_suggestion` (KAI-31, `routes/v1/tickets.ts` `POST /:id/suggest-reply`) | ✅ done (KAI-110) — `llm_call_id` returned to client; outcome writeback via `PATCH /:id/suggest-reply/:llmCallId/outcome` |
+| `email_classification` — Gmail poll (`lib/gmail-poll/poll-account.ts`) | ✅ done — success and failure rows through the injected `logLlmCall` |
+| `reply_suggestion` (`lib/reply-suggestion.ts`, route `POST /:id/suggest-reply`) | ✅ done — through `runLlmFeature` + `recordLlmCall`; `llm_call_id` returned to client; outcome writeback via `PATCH /:id/suggest-reply/:llmCallId/outcome` |
 | `kb_search` | ⏳ not built yet (ADR-012 pending) |
 | `resolution_summary` | ⏳ pending |
 

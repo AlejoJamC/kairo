@@ -30,9 +30,9 @@ async function recordAiClassification(
   accountId: string,
   ticketId: string,
   classification: { category: string | null; priority: string; confidence: number },
+  modelVersion: string,
   occurredAt: string
 ): Promise<void> {
-  const modelVersion = resolveModelVersion();
   if (classification.category) {
     await emitTicketClassification({
       accountId,
@@ -467,7 +467,7 @@ export const incrementalSync = inngest.createFunction(
                 }
 
                 if (was_created && ticketId) {
-                  await recordAiClassification(accountId, ticketId, classification, classified_at);
+                  await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
                 }
 
                 if (!was_created) {
@@ -505,7 +505,7 @@ export const incrementalSync = inngest.createFunction(
                 ticketNumber = fallbackTicket?.ticket_number ?? null;
 
                 if (ticketId) {
-                  await recordAiClassification(accountId, ticketId, classification, classified_at);
+                  await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
                 }
 
                 await supabase
@@ -547,7 +547,7 @@ export const incrementalSync = inngest.createFunction(
               ticketNumber = bareTicket?.ticket_number ?? null;
 
               if (ticketId) {
-                await recordAiClassification(accountId, ticketId, classification, classified_at);
+                await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
               }
             }
 

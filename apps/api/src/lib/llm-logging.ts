@@ -1,3 +1,5 @@
+import type { LlmCallLogger, LlmCallRecord } from "@kairo/intelligence";
+
 import { supabase } from "./supabase.js";
 
 // ---------------------------------------------------------------------------
@@ -56,3 +58,42 @@ export function logLlmCall(entry: LlmCallLogEntry): void {
       if (error) console.error("[llm_calls] log failed", error.message);
     });
 }
+
+/**
+ * The `llm_calls` writer `runLlmFeature` calls for every call it makes.
+ *
+ * Awaited, unlike {@link logLlmCall}, because a feature with outcome writeback
+ * has to hand the row id to the client. Returns null instead of throwing, and
+ * writes nothing in test environments.
+ */
+export const recordLlmCall: LlmCallLogger = async (record: LlmCallRecord) => {
+  if (process.env["NODE_ENV"] === "test") return null;
+
+  const { data, error } = await supabase
+    .from("llm_calls")
+    .insert({
+      triggered_by_user_id: record.userId ?? null,
+      account_id: record.accountId ?? null,
+      ticket_id: record.ticketId ?? null,
+      feature: record.feature,
+      provider: process.env["INTELLIGENCE_PROVIDER"] ?? "ollama",
+      model: record.model,
+      prompt_version: record.promptVersion,
+      prompt_text: record.promptText,
+      response_text: record.responseText,
+      prompt_tokens: record.promptTokens,
+      completion_tokens: record.completionTokens,
+      confidence_score: record.confidenceScore,
+      latency_ms: record.latencyMs,
+      error_code: record.errorCode,
+      error_detail: record.errorDetail,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("[llm_calls] log failed", error.message);
+    return null;
+  }
+  return (data?.id as string | undefined) ?? null;
+};

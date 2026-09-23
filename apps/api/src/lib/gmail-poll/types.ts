@@ -7,8 +7,9 @@
 // ---------------------------------------------------------------------------
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ClassificationResult, ModelVerdictResult, PromptLang, TicketType } from "@kairo/intelligence";
+import type { ClassificationResult, CompletionMeta, ModelVerdictResult, PromptLang, TicketType } from "@kairo/intelligence";
 import type { ClassifierContext, ClassifierStage } from "../classifier-input.js";
+import type { LlmCallLogEntry } from "../llm-logging.js";
 import type { GmailHeader } from "../email/headers.js";
 import type { EmailMetadata, PreFilterResult } from "../email/pre-filter.js";
 
@@ -115,7 +116,15 @@ export interface GmailPollDeps {
     ensemble: { model: string; type: TicketType } | null;
     abstain: boolean;
     promptVersion: string | null;
+    // What `llm_calls` records for the call: the resolved prompt and the
+    // provider's own report of model and usage.
+    meta: CompletionMeta;
+    prompt: string;
   }>;
+  /** Writes the `llm_calls` row every classification path records. Fire-and-forget. */
+  logLlmCall: (entry: LlmCallLogEntry) => void;
+  /** The configured completion model, for the failure row when no provider answered. */
+  configuredModel: () => string;
   upsertConversationByThread: (
     client: DbClient,
     args: {
