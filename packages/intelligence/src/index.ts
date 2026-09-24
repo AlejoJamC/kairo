@@ -70,9 +70,14 @@ export type {
   CompletionMeta,
 } from './providers/base';
 
+export type { DecisionProvider, DecisionResult, TypedDecisionInput } from './providers/decision';
+export { JevDecisionProvider } from './providers/jev/decision';
+
 export {
   createCompletionProvider,
   createEmbeddingProvider,
+  createDecisionProvider,
+  type DecisionProviderId,
 } from './config/providers';
 
 export { detectEscalationTriggers } from './escalation';
