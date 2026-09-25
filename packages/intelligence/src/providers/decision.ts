@@ -10,6 +10,9 @@
 // ---------------------------------------------------------------------------
 
 export interface DecisionProvider {
+  /** The provider family, e.g. "jev" — stable identity, unlike `model`. Needed to log a call that failed before producing a `DecisionResult`. */
+  readonly provider: string;
+  /** The specific model/version this instance is configured to call. */
   readonly model: string;
   decide<TDecision>(input: TypedDecisionInput): Promise<DecisionResult<TDecision>>;
 }

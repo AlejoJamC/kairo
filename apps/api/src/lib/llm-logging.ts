@@ -76,7 +76,7 @@ export const recordLlmCall: LlmCallLogger = async (record: LlmCallRecord) => {
       account_id: record.accountId ?? null,
       ticket_id: record.ticketId ?? null,
       feature: record.feature,
-      provider: process.env["INTELLIGENCE_PROVIDER"] ?? "ollama",
+      provider: record.provider ?? process.env["INTELLIGENCE_PROVIDER"] ?? "ollama",
       model: record.model,
       prompt_version: record.promptVersion,
       prompt_text: record.promptText,

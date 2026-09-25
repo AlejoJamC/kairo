@@ -53,6 +53,7 @@ function singleConfidence(answers: Record<string, JevAnswer>): number | null {
 }
 
 export class JevDecisionProvider implements DecisionProvider {
+  public readonly provider = 'jev';
   public readonly model: string;
   private readonly client: TypeSafeClient;
 
@@ -72,7 +73,7 @@ export class JevDecisionProvider implements DecisionProvider {
       return {
         value: response.answers as TDecision,
         confidence: singleConfidence(response.answers as Record<string, JevAnswer>),
-        provider: 'jev',
+        provider: this.provider,
         modelVersion: response.model,
         latencyMs: Date.now() - start,
         rawMetadata: { usage: response.usage },

@@ -46,6 +46,7 @@ export { generateEmbedding, generateEmbeddings } from './embeddings';
 export {
   runLlmFeature,
   runLlmTextFeature,
+  runDecisionFeature,
   withGeneration,
   usageDetails,
   loadPromptTemplate,
@@ -59,6 +60,8 @@ export type {
   LlmFeatureResult,
   LlmFeatureErrorCode,
   GenerationSpec,
+  DecisionFeatureRequest,
+  DecisionFeatureResult,
 } from './harness';
 
 export { ProviderError } from './providers/base';
