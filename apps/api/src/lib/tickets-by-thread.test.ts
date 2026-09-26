@@ -79,6 +79,12 @@ function makeMockClient({
   insertError = null as { code: string; message: string } | null,
   raceTicket = null as { id: string; ticket_number: number; status: string } | null,
   rpcResult = APPLIED_CREATION_RPC as { data: unknown; error: unknown },
+  // KAI-55: account_members active for BASE_ARGS.accountId, and each
+  // active agent's most recent assignment. Both empty by default so every
+  // pre-existing test here keeps asserting on a ticket created unassigned,
+  // exactly as before this feature existed.
+  activeMembers = [] as { user_id: string }[],
+  recentlyAssigned = [] as { assigned_to: string; created_at: string }[],
 } = {}) {
   // Track how many times maybeSingle is called so we can return different values
   // for the initial SELECT (existingTicket) and the race re-read (raceTicket).
@@ -99,17 +105,34 @@ function makeMockClient({
 
   // select chain: .from("tickets").select().eq().eq().is().limit().maybeSingle()
   const isFn = mock(() => ({ limit: mock(() => ({ maybeSingle: maybeSingleFn })) }));
-  const eqFn = mock(() => ({ eq: eqFn, is: isFn }));
+  // KAI-55: .from("tickets").select().eq().in().order().limit() — the
+  // recent-assignments lookup, a second divergent path off the same eqFn.
+  const inFn = mock(() => ({
+    order: mock(() => ({ limit: mock(async () => ({ data: recentlyAssigned, error: null })) })),
+  }));
+  const eqFn = mock(() => ({ eq: eqFn, is: isFn, in: inFn }));
   const selectChain = mock(() => ({ eq: eqFn }));
 
   // insert chain: .from("tickets").insert(payload).select().single()
   const insertSelectFn = mock(() => ({ single: singleInsertFn }));
   const insertFn = mock((_payload: Record<string, unknown>) => ({ select: insertSelectFn }));
 
-  const fromFn = mock((_table: string) => ({
-    select: selectChain,
-    insert: insertFn,
+  // account_members chain: .from("account_members").select().eq().eq() — a
+  // plain awaitable result, not a builder shared with the tickets chain
+  // above (that one terminates in .maybeSingle(), this one doesn't).
+  const accountMembersEqFn = mock(() => ({
+    eq: mock(async () => ({ data: activeMembers, error: null })),
   }));
+  const accountMembersSelectFn = mock(() => ({ eq: accountMembersEqFn }));
+
+  const fromFn = mock((_table: string) =>
+    _table === "account_members"
+      ? { select: accountMembersSelectFn }
+      : {
+          select: selectChain,
+          insert: insertFn,
+        },
+  );
 
   // transitionTicketStatus() -> client.rpc("apply_ticket_transition", {...})
   const rpcFn = mock(async (_fnName: string, _args: Record<string, unknown>) => rpcResult);
@@ -158,6 +181,58 @@ describe("findOrCreateTicketForThread", () => {
     // independent of whether the follow-up trail-row call succeeds.
     const insertPayload = client._insertFn.mock.calls[0][0];
     expect(insertPayload.status).toBe("open");
+  });
+
+  // KAI-55 — the one routing rule decided so far.
+  describe("auto-assignment", () => {
+    it("assigns a new ticket to the account's one active member", async () => {
+      const client = makeMockClient({
+        insertedTicket: { id: "ticket-new", ticket_number: 101 },
+        activeMembers: [{ user_id: "user-sole-agent" }],
+      });
+      await findOrCreateTicketForThread(client, BASE_ARGS);
+
+      const insertPayload = client._insertFn.mock.calls[0][0];
+      expect(insertPayload.assigned_to).toBe("user-sole-agent");
+    });
+
+    it("leaves a new ticket unassigned when the account has no active member", async () => {
+      const client = makeMockClient({
+        insertedTicket: { id: "ticket-new", ticket_number: 101 },
+        activeMembers: [],
+      });
+      await findOrCreateTicketForThread(client, BASE_ARGS);
+
+      const insertPayload = client._insertFn.mock.calls[0][0];
+      expect(insertPayload.assigned_to).toBeNull();
+    });
+
+    it("with more than one active member, round-robins to whoever has gone longest without a ticket", async () => {
+      const client = makeMockClient({
+        insertedTicket: { id: "ticket-new", ticket_number: 101 },
+        activeMembers: [{ user_id: "user-1" }, { user_id: "user-2" }],
+        recentlyAssigned: [
+          { assigned_to: "user-1", created_at: "2026-09-26T12:00:00Z" },
+          { assigned_to: "user-2", created_at: "2026-09-20T08:00:00Z" },
+        ],
+      });
+      await findOrCreateTicketForThread(client, BASE_ARGS);
+
+      const insertPayload = client._insertFn.mock.calls[0][0];
+      expect(insertPayload.assigned_to).toBe("user-2");
+    });
+
+    it("an active member with no assignment history yet goes ahead of one who has been assigned before", async () => {
+      const client = makeMockClient({
+        insertedTicket: { id: "ticket-new", ticket_number: 101 },
+        activeMembers: [{ user_id: "user-1" }, { user_id: "user-2" }],
+        recentlyAssigned: [{ assigned_to: "user-1", created_at: "2026-09-26T12:00:00Z" }],
+      });
+      await findOrCreateTicketForThread(client, BASE_ARGS);
+
+      const insertPayload = client._insertFn.mock.calls[0][0];
+      expect(insertPayload.assigned_to).toBe("user-2");
+    });
   });
 
   it("records the creation transition (from_state=NULL, trigger=ticket_created) for a genuinely new ticket", async () => {

@@ -86,7 +86,8 @@ emails, and routes/responds based on learned behavior per client.
 - Shared component library (`packages/ui`) with ShadCN
 - Shared types (`packages/types`) with core schema
 - Centralized env validation (`packages/env`) via `@t3-oss/env-core` + Zod
-- Intelligence layer (`packages/intelligence`) — modular LLM provider abstraction (Ollama / Anthropic)
+- Intelligence layer (`packages/intelligence`) — modular provider abstraction: `CompletionProvider` (Ollama / Anthropic) and `DecisionProvider` (JEV, TypeSafe AI — see ADR-029). `classifyEmailWithJev()` exists and is tested, not yet wired into any pipeline tier.
+- Ticket auto-assignment — round-robin among an account's active members on ticket creation (`tickets-by-thread.ts`); with exactly one active member it always goes to them
 - Email classification prompt versioned as markdown artifact (`packages/intelligence/prompts/email-classification.md`)
   - Frontmatter is single source of truth for allowed enum values (tipo, prioridad, categoria, tono, urgencia)
   - Zod schema built dynamically from frontmatter — never hardcoded separately

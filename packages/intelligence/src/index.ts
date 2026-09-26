@@ -86,6 +86,8 @@ export {
 
 export { initialLearningStatus } from './learning';
 
+export { resolveRoundRobinAssignee, type AgentWorkload } from './routing';
+
 export { detectEscalationTriggers } from './escalation';
 export type {
   EscalationContext,

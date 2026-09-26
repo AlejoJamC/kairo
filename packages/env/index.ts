@@ -9,6 +9,11 @@ export const env = createEnv({
         ANTHROPIC_API_KEY: z.string().min(1).optional(),
         // Overrides the hardcoded default in AnthropicCompletionProvider (claude-sonnet-4-20250514).
         ANTHROPIC_MODEL: z.string().min(1).optional(),
+        // KAI-55/KAI-61: JEV (TypeSafe AI) decision provider. Only required to
+        // call createDecisionProvider('jev') (packages/intelligence/src/config/providers.ts).
+        TYPESAFE_API_KEY: z.string().min(1).optional(),
+        // Overrides the hardcoded default in JevDecisionProvider (jev-latest).
+        JEV_MODEL: z.string().min(1).optional(),
         OLLAMA_BASE_URL: z.string().url().optional(),
         OLLAMA_MODEL: z.string().optional().default("granite4.1:3b"),
         OLLAMA_EMBEDDING_MODEL: z.string().optional().default("nomic-embed-text-v2-moe"),
