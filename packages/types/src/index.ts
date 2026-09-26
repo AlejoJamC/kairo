@@ -2,6 +2,7 @@ export * from './database.js';
 export * from './admin.js';
 export * from './classification.js';
 export * from './operational-sla.js';
+export * from './operational-learning.js';
 
 import type { Tables } from './database.js';
 import type { OperationalSlaTiming } from './operational-sla.js';

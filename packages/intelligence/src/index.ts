@@ -84,6 +84,8 @@ export {
   type DecisionProviderId,
 } from './config/providers';
 
+export { initialLearningStatus } from './learning';
+
 export { detectEscalationTriggers } from './escalation';
 export type {
   EscalationContext,
