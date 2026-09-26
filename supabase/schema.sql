@@ -1495,6 +1495,51 @@ CREATE TABLE IF NOT EXISTS "public"."oauth_credentials" (
 ALTER TABLE "public"."oauth_credentials" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."operational_learning" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "origin" "text" NOT NULL,
+    "status" "text" NOT NULL,
+    "learning_type" "text" NOT NULL,
+    "summary" "text" NOT NULL,
+    "ticket_ids" "uuid"[] DEFAULT '{}'::"uuid"[] NOT NULL,
+    "source_count" integer DEFAULT 0 NOT NULL,
+    "confidence" double precision,
+    "reviewed_by" "uuid",
+    "reviewed_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "chk_operational_learning_confidence" CHECK ((("confidence" IS NULL) OR (("confidence" >= (0)::double precision) AND ("confidence" <= (1)::double precision)))),
+    CONSTRAINT "chk_operational_learning_origin" CHECK (("origin" = ANY (ARRAY['human_correction'::"text", 'system_derived'::"text"]))),
+    CONSTRAINT "chk_operational_learning_source_count" CHECK (("source_count" >= 0)),
+    CONSTRAINT "chk_operational_learning_status" CHECK (("status" = ANY (ARRAY['approved'::"text", 'pending_review'::"text", 'rejected'::"text"]))),
+    CONSTRAINT "chk_operational_learning_type" CHECK (("learning_type" = ANY (ARRAY['resolution'::"text", 'diagnostic_pattern'::"text", 'routing_rule'::"text", 'policy'::"text", 'exception'::"text", 'evaluation_example'::"text"])))
+);
+
+
+ALTER TABLE "public"."operational_learning" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."operational_learning" IS 'What Kairo has learned from operating one account''s support — resolutions, diagnostic patterns, routing rules and the like. Not kb_articles: that is external documentation the client owns; this is Kairo''s own operational knowledge, scoped to account_id, never shared across accounts today.';
+
+
+
+COMMENT ON COLUMN "public"."operational_learning"."origin" IS 'human_correction: a person''s correction is the approval, written already approved. system_derived: Kairo inferred this alone — starts pending_review.';
+
+
+
+COMMENT ON COLUMN "public"."operational_learning"."status" IS 'approved rows are usable. pending_review and rejected are not — a caller reads only approved unless it is specifically building the review queue.';
+
+
+
+COMMENT ON COLUMN "public"."operational_learning"."ticket_ids" IS 'The tickets this was derived or corrected from. A row with no evidence approves nothing.';
+
+
+
+COMMENT ON COLUMN "public"."operational_learning"."confidence" IS 'Null for human_correction — the person''s action is the trust signal, not a score.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."plans" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "code" "text" NOT NULL,
@@ -2309,6 +2354,11 @@ ALTER TABLE ONLY "public"."oauth_credentials"
 
 
 
+ALTER TABLE ONLY "public"."operational_learning"
+    ADD CONSTRAINT "operational_learning_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."plans"
     ADD CONSTRAINT "plans_code_key" UNIQUE ("code");
 
@@ -2706,6 +2756,10 @@ CREATE INDEX "idx_oauth_credentials_granted_by" ON "public"."oauth_credentials" 
 
 
 
+CREATE INDEX "idx_operational_learning_account_status" ON "public"."operational_learning" USING "btree" ("account_id", "status");
+
+
+
 CREATE INDEX "idx_profiles_email" ON "public"."profiles" USING "btree" ("email");
 
 
@@ -2911,6 +2965,10 @@ CREATE OR REPLACE TRIGGER "on_conversations_updated" BEFORE UPDATE ON "public"."
 
 
 CREATE OR REPLACE TRIGGER "on_oauth_credentials_updated" BEFORE UPDATE ON "public"."oauth_credentials" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_operational_learning_updated" BEFORE UPDATE ON "public"."operational_learning" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
 
 
 
@@ -3145,6 +3203,16 @@ ALTER TABLE ONLY "public"."oauth_credentials"
 
 ALTER TABLE ONLY "public"."oauth_credentials"
     ADD CONSTRAINT "oauth_credentials_granted_by_user_id_fkey" FOREIGN KEY ("granted_by_user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."operational_learning"
+    ADD CONSTRAINT "operational_learning_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."operational_learning"
+    ADD CONSTRAINT "operational_learning_reviewed_by_fkey" FOREIGN KEY ("reviewed_by") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
 
 
@@ -3587,6 +3655,13 @@ ALTER TABLE "public"."oauth_credentials" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "oauth_credentials_access_by_account" ON "public"."oauth_credentials" USING (("account_id" = "public"."current_account_id"()));
+
+
+
+ALTER TABLE "public"."operational_learning" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "operational_learning_access_by_account" ON "public"."operational_learning" USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -4077,6 +4152,12 @@ GRANT ALL ON TABLE "public"."notifications" TO "service_role";
 GRANT ALL ON TABLE "public"."oauth_credentials" TO "anon";
 GRANT ALL ON TABLE "public"."oauth_credentials" TO "authenticated";
 GRANT ALL ON TABLE "public"."oauth_credentials" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."operational_learning" TO "anon";
+GRANT ALL ON TABLE "public"."operational_learning" TO "authenticated";
+GRANT ALL ON TABLE "public"."operational_learning" TO "service_role";
 
 
 

@@ -1157,6 +1157,62 @@ export type Database = {
           },
         ]
       }
+      operational_learning: {
+        Row: {
+          account_id: string
+          confidence: number | null
+          created_at: string
+          id: string
+          learning_type: string
+          origin: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_count: number
+          status: string
+          summary: string
+          ticket_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          learning_type: string
+          origin: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_count?: number
+          status: string
+          summary: string
+          ticket_ids?: string[]
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          learning_type?: string
+          origin?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_count?: number
+          status?: string
+          summary?: string
+          ticket_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operational_learning_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plans: {
         Row: {
           code: string
