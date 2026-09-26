@@ -20,6 +20,15 @@
 //                                  (or a supervisor/admin fallback) via an in-app
 //                                  notification once a ticket crosses its priority's
 //                                  configured escalation threshold. OFF by default.
+//   enable_auto_approval_recompute — KAI-55: run the cron that turns human review
+//                                  actions in ticket_classification_history into
+//                                  ticket_type_auto_approval's current_precision /
+//                                  current_sample_count / auto_approval_enabled —
+//                                  the computation ADR-027's table never got after
+//                                  its predecessor (category_confidence_thresholds)
+//                                  was dropped. OFF by default: until this runs,
+//                                  backfill (tier2/tier3) auto-approves nothing,
+//                                  same as today.
 //
 // Runtime-overrideable numeric flags (server-only, via FEATURE_FLAG_<UPPER_SNAKE> env vars):
 //   gmail_poll_cron_interval_minutes — KAI-248: how often (in minutes) the Gmail
@@ -40,6 +49,11 @@
 //                                  through withRetry's own 4 attempts with backoff before
 //                                  landing here, so this cron's own interval is the next
 //                                  layer of backoff, not a tight retry loop.
+//   auto_approval_recompute_interval_minutes — KAI-55: how often (in minutes) the
+//                                  auto-approval recompute cron re-derives trust stats
+//                                  from ticket_classification_history. Default: 30 —
+//                                  same cadence as the retry sweep; this is a batch
+//                                  aggregation over review activity, not a tight loop.
 // =============================================================================
 
 // ─── Static dashboard flags (build-time, no env override) ────────────────────
@@ -64,6 +78,7 @@ const FLAG_DEFAULTS = {
   enable_contact_extraction: false,
   enable_ticket_acknowledgement: false,
   enable_operational_sla_escalation: false,
+  enable_auto_approval_recompute: false,
 } as const;
 
 type RuntimeFlagName = keyof typeof FLAG_DEFAULTS;
@@ -92,6 +107,7 @@ const NUMERIC_FLAG_DEFAULTS = {
   gmail_poll_cron_interval_minutes: 5,
   operational_sla_escalation_check_interval_minutes: 5,
   classification_retry_sweep_cron_interval_minutes: 30,
+  auto_approval_recompute_interval_minutes: 30,
 } as const;
 
 type NumericFlagName = keyof typeof NUMERIC_FLAG_DEFAULTS;

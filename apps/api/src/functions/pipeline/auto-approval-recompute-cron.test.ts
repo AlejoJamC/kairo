@@ -1,0 +1,42 @@
+import { describe, it, expect, afterEach, mock } from "bun:test";
+
+// Same rationale as escalation-check-cron.test.ts / gmail-poll-cron.test.ts:
+// lib/supabase.js validates env vars via @kairo/env at import time, which
+// `bun test` doesn't provide.
+mock.module("../../lib/supabase.js", () => ({
+  supabase: { from: () => ({ select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) }) }) },
+}));
+
+mock.module("../../lib/inngest.js", () => ({
+  inngest: {
+    send: () => Promise.resolve(),
+    createFunction: (opts: unknown) => ({ opts }),
+  },
+}));
+
+const ENV_KEY_INTERVAL = "FEATURE_FLAG_AUTO_APPROVAL_RECOMPUTE_INTERVAL_MINUTES";
+const MODULE_PATH = "./auto-approval-recompute-cron.ts";
+
+afterEach(() => {
+  delete process.env[ENV_KEY_INTERVAL];
+});
+
+describe("autoApprovalRecomputeCron — interval flag wiring", () => {
+  it("uses the default 30-minute cron when the flag is unset", async () => {
+    delete process.env[ENV_KEY_INTERVAL];
+    const mod = await import(`${MODULE_PATH}?t=${Date.now()}-a`);
+    expect(mod.autoApprovalRecomputeCron.opts.triggers[0].cron).toBe("*/30 * * * *");
+  });
+
+  it("reflects the flag override in the cron expression", async () => {
+    process.env[ENV_KEY_INTERVAL] = "15";
+    const mod = await import(`${MODULE_PATH}?t=${Date.now()}-b`);
+    expect(mod.autoApprovalRecomputeCron.opts.triggers[0].cron).toBe("*/15 * * * *");
+  });
+
+  it("steps the hour field for whole-hour intervals (e.g. 720 = every 12h)", async () => {
+    process.env[ENV_KEY_INTERVAL] = "720";
+    const mod = await import(`${MODULE_PATH}?t=${Date.now()}-c`);
+    expect(mod.autoApprovalRecomputeCron.opts.triggers[0].cron).toBe("0 */12 * * *");
+  });
+});

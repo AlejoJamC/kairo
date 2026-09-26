@@ -88,6 +88,14 @@ export { initialLearningStatus } from './learning';
 
 export { resolveRoundRobinAssignee, type AgentWorkload } from './routing';
 
+export {
+  computeTrustStatsByType,
+  resolveAutoApprovalEnabled,
+  TRUST_REVIEW_WINDOW,
+  type ClassificationReviewRow,
+  type TicketTypeTrustStats,
+} from './autonomy';
+
 export { detectEscalationTriggers } from './escalation';
 export type {
   EscalationContext,
