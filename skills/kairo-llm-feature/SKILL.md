@@ -91,6 +91,8 @@ const result = await runLlmFeature({
 
 Do not open Langfuse generations, read prompt files or insert into `llm_calls` by hand in `apps/`. Classification keeps `classifyEmailWithMeta`, which shares the harness's generation wrapper and template loader. Keep the feature's logic in a `lib/` module with injectable dependencies; the route only maps the result to HTTP.
 
+A `DecisionProvider` call (JEV — typed questions against a state, not a prompt; see ADR-029) goes through `runDecisionFeature` instead of `runLlmFeature` — same `logger: recordLlmCall` contract, no prompt template or Zod schema to pass. `classifyEmailWithJev()` follows classification's own pattern (`withGeneration` directly, not the generic harness) because it derives `ticket_type` before the generation closes.
+
 ### 8. Provenance
 
 Every stored AI decision records what produced it: `prompt_version`, the model **the provider reported** (`result.model` / `meta.model`), and any decision-layer version it passed through. Build the columns in one helper, as `classificationAudit` / `routingAudit` / `feedbackAudit` do in `apps/api/src/lib/classification-audit.ts`. Never write `resolveModelVersion()` (`apps/api/src/lib/model-version.ts`) into a new column: it is a hardcoded id, not the model that answered.

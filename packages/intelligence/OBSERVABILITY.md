@@ -29,6 +29,17 @@ the provider reported), and returns the row id for outcome writeback. See
 `apps/api/src/lib/reply-suggestion.ts` for a complete consumer and
 `skills/kairo-llm-feature/SKILL.md` for the procedure.
 
+A `DecisionProvider` call (JEV — see ADR-029) uses `runDecisionFeature`
+instead, the same file: same `withGeneration`/`llm_calls` contract, no prompt
+template or Zod schema (a decision call has neither). `recordLlmCall` reads
+`record.provider` when the call sets it (JEV always does) instead of
+defaulting to `INTELLIGENCE_PROVIDER` — a decision provider is never that
+variable. `classifyEmailWithJev()` (`classification/classify-with-jev.ts`)
+calls the provider directly under its own `withGeneration`, the same way
+`classifyEmailWithMeta` does, rather than through `runDecisionFeature` — like
+classification, it needs to derive `ticket_type` from the answer before the
+generation closes.
+
 The rest of this section describes the classification call sites, which log
 through `logLlmCall` after `classifyEmailWithMeta`.
 
@@ -205,5 +216,6 @@ GROUP BY model;
 | `reply_suggestion` (`lib/reply-suggestion.ts`, route `POST /:id/suggest-reply`) | ✅ done — through `runLlmFeature` + `recordLlmCall`; `llm_call_id` returned to client; outcome writeback via `PATCH /:id/suggest-reply/:llmCallId/outcome` |
 | `kb_search` | ⏳ not built yet (ADR-012 pending) |
 | `resolution_summary` | ⏳ pending |
+| JEV ticket verdict (`classifyEmailWithJev`) | ⏳ built and tested (`runDecisionFeature`, `withGeneration`), not called from any pipeline tier — KAI-55 Fase 1 of 6 |
 
 Table exists and is now actively populated by the call sites above.

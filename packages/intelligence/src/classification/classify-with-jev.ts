@@ -8,16 +8,23 @@
 // the isolated, callable unit that phase will call — the state a caller
 // assembles from EmailMessage, no derived business decision besides the same
 // deriveClassification() every other provider already goes through.
+//
+// Wrapped in withGeneration like classifyEmailWithMeta, not
+// classification-audit.ts's telemetry helpers — those are shaped around the
+// completion ensemble (ensembleModel, abstain, ...), which has no equivalent
+// here yet; JEV's own metadata is enough to trace this call without
+// borrowing fields that don't apply to it.
 // ---------------------------------------------------------------------------
 
 import type { DecisionProvider, DecisionResult } from '../providers/decision';
 import { buildTicketVerdictQuestions, parseTicketVerdictAnswers } from '../providers/jev/ticket-verdict';
+import { withGeneration, type LangfuseContext } from '../harness/generation';
 import { EXTERNAL_FALLBACK_FACTS } from './classify';
-import { deriveClassification } from './derive';
+import { deriveClassification, provenanceOf } from './derive';
 import type { ClassificationResult, ModelVerdictResult } from './schema';
 import type { EmailMessage } from './types';
 
-export type { DecisionResult };
+export type { DecisionResult, LangfuseContext };
 
 /**
  * The state JEV evaluates: the same fields the text prompt renders
@@ -46,36 +53,62 @@ function stateFromMessage(message: EmailMessage): Record<string, unknown> {
 export async function classifyEmailWithJev(
   message: EmailMessage,
   provider: DecisionProvider,
+  context?: LangfuseContext,
 ): Promise<{
   result: ClassificationResult;
   verdict: ModelVerdictResult;
   decision: DecisionResult<ModelVerdictResult>;
 }> {
-  const decision = await provider.decide<ModelVerdictResult>({
-    state: stateFromMessage(message),
-    questions: buildTicketVerdictQuestions(),
-  });
+  const state = stateFromMessage(message);
+  const { ticketId, accountId } = context ?? {};
 
-  // decision.value carries JEV's raw per-question answers (see
-  // ticket-verdict.ts); parseTicketVerdictAnswers turns it into the same
-  // ModelVerdictResult Anthropic/Ollama produce via completeJSONWithMeta.
-  const verdict = parseTicketVerdictAnswers(
-    decision.value as unknown as Parameters<typeof parseTicketVerdictAnswers>[0],
-  );
-
-  const result = deriveClassification(
-    message.facts ?? EXTERNAL_FALLBACK_FACTS,
+  return withGeneration(
     {
-      actionability: verdict.actionability,
-      subjectMatter: verdict.subject_matter,
-      priority: verdict.priority,
-      tone: verdict.tone,
-      urgency: verdict.urgency,
-      reasoning: verdict.reasoning,
+      name: 'email-classification-jev',
+      model: provider.model,
+      input: state,
+      metadata: { provider: provider.provider },
+      context: { ...(ticketId ? { ticketId } : {}), ...(accountId ? { accountId } : {}) },
     },
-    verdict.category,
-    verdict.confidence,
-  );
+    async (generation) => {
+      const decision = await provider.decide<ModelVerdictResult>({
+        state,
+        questions: buildTicketVerdictQuestions(),
+      });
 
-  return { result, verdict, decision };
+      // decision.value carries JEV's raw per-question answers (see
+      // ticket-verdict.ts); parseTicketVerdictAnswers turns it into the same
+      // ModelVerdictResult Anthropic/Ollama produce via completeJSONWithMeta.
+      const verdict = parseTicketVerdictAnswers(
+        decision.value as unknown as Parameters<typeof parseTicketVerdictAnswers>[0],
+      );
+
+      const facts = message.facts ?? EXTERNAL_FALLBACK_FACTS;
+      const result = deriveClassification(
+        facts,
+        {
+          actionability: verdict.actionability,
+          subjectMatter: verdict.subject_matter,
+          priority: verdict.priority,
+          tone: verdict.tone,
+          urgency: verdict.urgency,
+          reasoning: verdict.reasoning,
+        },
+        verdict.category,
+        verdict.confidence,
+      );
+
+      generation.update({
+        output: decision.value,
+        metadata: {
+          provenance: provenanceOf(facts),
+          factsPresent: message.facts !== undefined,
+          type: result.type,
+          modelVersion: decision.modelVersion,
+        },
+      });
+
+      return { result, verdict, decision };
+    },
+  );
 }

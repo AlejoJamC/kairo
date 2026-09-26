@@ -13,6 +13,8 @@ Skills: [`kairo-llm-feature`](../../skills/kairo-llm-feature/SKILL.md) (building
 | Reply suggestion | `suggestReply` in `apps/api/src/lib/reply-suggestion.ts` (tenant language, shared retrieval, `runLlmFeature`); routes `POST /v1/tickets/:id/suggest-reply` and `PATCH …/suggest-reply/:llmCallId/outcome` in `apps/api/src/routes/v1/tickets.ts`; prompts `packages/intelligence/prompts/reply-suggestion/{es,en}.md` | Structured draft (`ReplySuggestionSchema`) | Agent accepts, edits or rejects | `kairo-llm-feature` |
 | LLM feature harness | `runLlmFeature`, `runLlmTextFeature`, `withGeneration`, `loadPromptTemplate` in `packages/intelligence/src/harness/`; logger `recordLlmCall` in `apps/api/src/lib/llm-logging.ts` | Versioned prompt, schema-validated answer, Langfuse generation, `llm_calls` row | — | `kairo-llm-feature` step 7 |
 | Embeddings | `generateEmbedding`, `generateEmbeddings` in `packages/intelligence/src/embeddings/embed.ts`; writers `apps/api/src/lib/ticket-embedding.ts`, `apps/api/src/lib/kb-embedding.ts` | Vectors for tickets and KB articles | None | `kairo-llm-feature` |
+| JEV ticket verdict | `classifyEmailWithJev` in `packages/intelligence/src/classification/classify-with-jev.ts`; `DecisionProvider` in `providers/decision.ts`; adapter `providers/jev/decision.ts`; questions `providers/jev/ticket-verdict.ts` reproduce `ModelVerdictSchema` — same axes, same `deriveClassification` table, no separate vocabulary | Typed Choice questions, not a prompt; JEV has no free-text primitive so `reasoning` is a fixed placeholder | Not wired to any pipeline tier yet (KAI-55 Fase 1 of 6) | `kairo-llm-feature` |
+| Decision-provider harness | `runDecisionFeature` in `packages/intelligence/src/harness/run-decision-feature.ts` — the `DecisionProvider` counterpart of `runLlmFeature`, same `withGeneration`/`llm_calls` contract | Langfuse generation + `llm_calls` row per call | — | `kairo-llm-feature` step 7 |
 | Retrieval | `retrieveTicketContext`, `findResolvedCases`, `findRelevantKb` in `apps/api/src/lib/ticket-context.ts` (RPCs `find_similar_tickets`, `find_relevant_kb`); consumed by reply suggestion, `/related-history`, `/knowledge-context`. `/similar` and escalation past-L2 call the RPC for other questions | Similar resolved tickets and relevant KB articles | Agent reads the panel | `kairo-llm-feature` step 6 |
 
 ## Deterministic layers around the model
@@ -39,6 +41,7 @@ Not governed by an AI Skill: changes to these are product decisions.
 | Priority score | `computePriorityScore` in `apps/api/src/lib/scoring.ts` (tenant-configurable weights) |
 | Contact extraction, heuristic pass | `contactExtraction` in `apps/api/src/functions/contact-extraction/extract.ts`, behind `enable_contact_extraction`. An LLM pass over signatures is a future feature built with `kairo-llm-feature` |
 | Assistant panel | `apps/dashboard/src/components/triage/AssistantPanel.tsx` renders scripted answers; its backend is a future feature built with `kairo-llm-feature` |
+| Ticket auto-assignment | `resolveRoundRobinAssignee` in `packages/intelligence/src/routing/assignment.ts`; wired in `apps/api/src/lib/tickets-by-thread.ts`. Least-recently-assigned active account member gets a new ticket; no model, no team/department concept |
 
 ## Evaluation
 
