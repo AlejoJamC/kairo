@@ -8,3 +8,8 @@ export {
   type LlmFeatureJsonRequest,
   type LlmFeatureResult,
 } from './run-llm-feature';
+export {
+  runDecisionFeature,
+  type DecisionFeatureRequest,
+  type DecisionFeatureResult,
+} from './run-decision-feature';

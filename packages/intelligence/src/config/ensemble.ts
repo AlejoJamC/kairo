@@ -4,11 +4,21 @@
 // Its own module, apart from providers.ts, so it can be tested as the pure
 // function it is: providers.ts is replaced wholesale in the ensemble wiring
 // test, and a module mock in bun reaches every file in the same run.
+//
+// KAI-61: the provider name is validated against completion-registry.ts
+// instead of a hardcoded union repeated here — a provider added to the
+// registry is usable in INTELLIGENCE_ENSEMBLE with no edit in this file.
 // ---------------------------------------------------------------------------
+
+import {
+  COMPLETION_PROVIDER_IDS,
+  isCompletionProviderId,
+  type CompletionProviderId,
+} from './completion-registry';
 
 /** A provider and the model to ask on it. */
 export interface CompletionTarget {
-  provider: 'ollama' | 'anthropic';
+  provider: CompletionProviderId;
   model: string;
 }
 
@@ -34,9 +44,10 @@ export function resolveEnsembleTarget(
   const provider = colon === -1 ? raw : raw.slice(0, colon);
   const model = colon === -1 ? '' : raw.slice(colon + 1).trim();
 
-  if ((provider !== 'ollama' && provider !== 'anthropic') || model === '') {
+  if (!isCompletionProviderId(provider) || model === '') {
     console.warn(
-      `[intelligence] INTELLIGENCE_ENSEMBLE="${raw}" is not "provider:model" with provider ollama|anthropic; ensemble disabled`,
+      `[intelligence] INTELLIGENCE_ENSEMBLE="${raw}" is not "provider:model" with provider ` +
+        `${COMPLETION_PROVIDER_IDS.join('|')}; ensemble disabled`,
     );
     return null;
   }

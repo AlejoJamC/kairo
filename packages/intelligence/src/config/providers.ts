@@ -1,30 +1,26 @@
-import { z } from 'zod';
+// ---------------------------------------------------------------------------
+// KAI-61 — where any provider Kairo executes gets resolved from configuration.
+//
+// Completion and embedding used to each carry a Zod schema enumerating every
+// provider inline, so adding one meant editing a schema that already knew
+// about the others. Completion now resolves from completion-registry.ts, the
+// single list ensemble.ts validates against too. Embedding has only ever had
+// two providers and nothing outside this file needs its id, so its registry
+// stays here — the fix was removing the shared schema, not the file.
+// ---------------------------------------------------------------------------
+
 import type { CompletionProvider, EmbeddingProvider } from '../providers/base';
-import { OllamaCompletionProvider } from '../providers/ollama/completion';
+import type { DecisionProvider } from '../providers/decision';
 import { OllamaEmbeddingProvider } from '../providers/ollama/embedding';
-import { AnthropicCompletionProvider } from '../providers/anthropic/completion';
 import { VoyageEmbeddingProvider } from '../providers/voyage/embedding';
+import { JevDecisionProvider } from '../providers/jev/decision';
 import { OLLAMA_DEFAULT_BASE_URL } from './constants';
+import { findCompletionProvider } from './completion-registry';
 import type { CompletionTarget } from './ensemble';
 
 // Re-exported so callers keep one import site for provider configuration.
 export { resolveEnsembleTarget, type CompletionTarget } from './ensemble';
-
-const CompletionConfigSchema = z.object({
-  completionMode: z.enum(['ollama', 'anthropic']).default('ollama'),
-  ollamaBaseUrl: z.string().url().optional(),
-  ollamaModel: z.string().optional(),
-  anthropicApiKey: z.string().optional(),
-  anthropicModel: z.string().optional(),
-});
-
-const EmbeddingConfigSchema = z.object({
-  embeddingMode: z.enum(['ollama', 'voyage']).default('ollama'),
-  ollamaBaseUrl: z.string().url().optional(),
-  ollamaModel: z.string().optional(),
-  ollamaDimensions: z.coerce.number().optional(),
-  voyageApiKey: z.string().optional(),
-});
+export { COMPLETION_PROVIDER_IDS, type CompletionProviderId } from './completion-registry';
 
 /**
  * The completion provider for a classification.
@@ -35,52 +31,77 @@ const EmbeddingConfigSchema = z.object({
  * API key from the environment.
  */
 export function createCompletionProvider(target?: CompletionTarget): CompletionProvider {
-  const config = CompletionConfigSchema.parse({
-    completionMode: target?.provider ?? process.env['INTELLIGENCE_PROVIDER'] ?? 'ollama',
-    ollamaBaseUrl: process.env['OLLAMA_BASE_URL'],
-    ollamaModel: target?.provider === 'ollama' ? target.model : process.env['OLLAMA_MODEL'],
-    anthropicApiKey: process.env['ANTHROPIC_API_KEY'],
-    anthropicModel: target?.provider === 'anthropic' ? target.model : process.env['ANTHROPIC_MODEL'],
-  });
-
-  switch (config.completionMode) {
-    case 'anthropic':
-      if (!config.anthropicApiKey) {
-        throw new Error('ANTHROPIC_API_KEY required when INTELLIGENCE_PROVIDER=anthropic');
-      }
-      return new AnthropicCompletionProvider(config.anthropicApiKey, config.anthropicModel);
-
-    case 'ollama':
-    default:
-      return new OllamaCompletionProvider(
-        config.ollamaBaseUrl ?? OLLAMA_DEFAULT_BASE_URL,
-        config.ollamaModel ?? 'llama3.2'
-      );
-  }
+  const id = target?.provider ?? process.env['INTELLIGENCE_PROVIDER'] ?? 'ollama';
+  return findCompletionProvider(id).create(process.env, target?.model);
 }
 
+type Env = Record<string, string | undefined>;
+
+interface EmbeddingProviderEntry {
+  id: string;
+  create(env: Env): EmbeddingProvider;
+}
+
+const EMBEDDING_PROVIDERS = [
+  {
+    id: 'ollama',
+    create: (env) =>
+      new OllamaEmbeddingProvider(
+        env['OLLAMA_BASE_URL'] ?? OLLAMA_DEFAULT_BASE_URL,
+        env['OLLAMA_EMBEDDING_MODEL'] ?? 'nomic-embed-text',
+        env['OLLAMA_EMBEDDING_DIMENSIONS'] ? Number(env['OLLAMA_EMBEDDING_DIMENSIONS']) : 384,
+      ),
+  },
+  {
+    id: 'voyage',
+    create: (env) => {
+      const apiKey = env['VOYAGE_API_KEY'];
+      if (!apiKey) throw new Error('VOYAGE_API_KEY required when EMBEDDING_PROVIDER=voyage');
+      return new VoyageEmbeddingProvider(apiKey);
+    },
+  },
+] as const satisfies readonly EmbeddingProviderEntry[];
+
 export function createEmbeddingProvider(): EmbeddingProvider {
-  const config = EmbeddingConfigSchema.parse({
-    embeddingMode: process.env['EMBEDDING_PROVIDER'] ?? 'ollama',
-    ollamaBaseUrl: process.env['OLLAMA_BASE_URL'],
-    ollamaModel: process.env['OLLAMA_EMBEDDING_MODEL'],
-    ollamaDimensions: process.env['OLLAMA_EMBEDDING_DIMENSIONS'],
-    voyageApiKey: process.env['VOYAGE_API_KEY'],
-  });
-
-  switch (config.embeddingMode) {
-    case 'voyage':
-      if (!config.voyageApiKey) {
-        throw new Error('VOYAGE_API_KEY required when EMBEDDING_PROVIDER=voyage');
-      }
-      return new VoyageEmbeddingProvider(config.voyageApiKey);
-
-    case 'ollama':
-    default:
-      return new OllamaEmbeddingProvider(
-        config.ollamaBaseUrl ?? OLLAMA_DEFAULT_BASE_URL,
-        config.ollamaModel ?? 'nomic-embed-text',
-        config.ollamaDimensions ?? 384
-      );
+  const id = process.env['EMBEDDING_PROVIDER'] ?? 'ollama';
+  const entry = EMBEDDING_PROVIDERS.find((p) => p.id === id);
+  if (!entry) {
+    throw new Error(
+      `Unknown embedding provider "${id}". Known providers: ${EMBEDDING_PROVIDERS.map((p) => p.id).join(', ')}`,
+    );
   }
+  return entry.create(process.env);
+}
+
+interface DecisionProviderEntry {
+  id: string;
+  create(env: Env): DecisionProvider;
+}
+
+// One entry today. The point of this registry is not the count — it is that
+// JEV, the technology that proved CompletionProvider cannot host every
+// provider shape (KAI-55), plugs in the same way a second decision provider
+// would, with no switch to extend.
+const DECISION_PROVIDERS = [
+  {
+    id: 'jev',
+    create: (env) => {
+      const apiKey = env['TYPESAFE_API_KEY'];
+      if (!apiKey) throw new Error('TYPESAFE_API_KEY required to use the jev decision provider');
+      return new JevDecisionProvider(apiKey, env['JEV_MODEL']);
+    },
+  },
+] as const satisfies readonly DecisionProviderEntry[];
+
+export type DecisionProviderId = (typeof DECISION_PROVIDERS)[number]['id'];
+
+/** The decision provider named by `id` — "jev" is the only one today. */
+export function createDecisionProvider(id: DecisionProviderId = 'jev'): DecisionProvider {
+  const entry = DECISION_PROVIDERS.find((p) => p.id === id);
+  if (!entry) {
+    throw new Error(
+      `Unknown decision provider "${id}". Known providers: ${DECISION_PROVIDERS.map((p) => p.id).join(', ')}`,
+    );
+  }
+  return entry.create(process.env);
 }

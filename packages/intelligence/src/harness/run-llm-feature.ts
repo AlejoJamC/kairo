@@ -9,6 +9,15 @@ import { extractPromptVersion, fillTemplate, loadPromptTemplate } from './templa
 /** One row for `llm_calls`, built by the harness for every call, success or failure. */
 export interface LlmCallRecord {
   feature: string;
+  /**
+   * The provider family this call ran against (e.g. "anthropic", "jev").
+   * Optional because `runLlmFeature`/`runLlmTextFeature` predate it and the
+   * writer falls back to `INTELLIGENCE_PROVIDER` for those — correct only
+   * because that variable happens to also select the completion provider.
+   * `runDecisionFeature` always sets it, since a decision provider is never
+   * the one `INTELLIGENCE_PROVIDER` names.
+   */
+  provider?: string;
   model: string;
   promptVersion: string | null;
   promptText: string;

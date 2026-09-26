@@ -46,6 +46,7 @@ export { generateEmbedding, generateEmbeddings } from './embeddings';
 export {
   runLlmFeature,
   runLlmTextFeature,
+  runDecisionFeature,
   withGeneration,
   usageDetails,
   loadPromptTemplate,
@@ -59,6 +60,8 @@ export type {
   LlmFeatureResult,
   LlmFeatureErrorCode,
   GenerationSpec,
+  DecisionFeatureRequest,
+  DecisionFeatureResult,
 } from './harness';
 
 export { ProviderError } from './providers/base';
@@ -70,9 +73,14 @@ export type {
   CompletionMeta,
 } from './providers/base';
 
+export type { DecisionProvider, DecisionResult, TypedDecisionInput } from './providers/decision';
+export { JevDecisionProvider } from './providers/jev/decision';
+
 export {
   createCompletionProvider,
   createEmbeddingProvider,
+  createDecisionProvider,
+  type DecisionProviderId,
 } from './config/providers';
 
 export { detectEscalationTriggers } from './escalation';

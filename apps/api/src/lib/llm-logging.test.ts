@@ -2,12 +2,23 @@ import { describe, it, expect, mock, beforeEach } from "bun:test";
 
 // ---------------------------------------------------------------------------
 // KAI-110: logLlmCall unit tests
+// KAI-61: recordLlmCall — provider column must come from the record when the
+// caller supplies one (a DecisionProvider call is never INTELLIGENCE_PROVIDER),
+// falling back to the env var only for callers that predate that field.
 // ---------------------------------------------------------------------------
+
+let selectSingleResult: { data: { id: string } | null; error: { message: string } | null } = {
+  data: { id: "row-1" },
+  error: null,
+};
 
 const insertMock = mock((_row: Record<string, unknown>) => ({
   then: (cb: (res: { error: { message: string } | null }) => void) => {
     cb({ error: null });
   },
+  select: (_fields: string) => ({
+    single: async () => selectSingleResult,
+  }),
 }));
 const fromMock = mock(() => ({ insert: insertMock }));
 
@@ -15,12 +26,13 @@ mock.module("./supabase.js", () => ({
   supabase: { from: fromMock },
 }));
 
-const { logLlmCall } = await import("./llm-logging.js");
+const { logLlmCall, recordLlmCall } = await import("./llm-logging.js");
 
 describe("logLlmCall", () => {
   beforeEach(() => {
     insertMock.mockClear();
     fromMock.mockClear();
+    selectSingleResult = { data: { id: "row-1" }, error: null };
   });
 
   it("skips insert entirely in test environment", () => {
@@ -100,6 +112,123 @@ describe("logLlmCall", () => {
       process.env["NODE_ENV"] = originalEnv;
       if (originalProvider === undefined) delete process.env["INTELLIGENCE_PROVIDER"];
       else process.env["INTELLIGENCE_PROVIDER"] = originalProvider;
+    }
+  });
+});
+
+describe("recordLlmCall", () => {
+  beforeEach(() => {
+    insertMock.mockClear();
+    fromMock.mockClear();
+    selectSingleResult = { data: { id: "row-1" }, error: null };
+  });
+
+  it("returns null and skips insert in test environment", async () => {
+    expect(process.env["NODE_ENV"]).toBe("test");
+
+    const id = await recordLlmCall({
+      feature: "email_classification",
+      model: "llama3.2",
+      promptVersion: null,
+      promptText: "p",
+      responseText: null,
+      promptTokens: null,
+      completionTokens: null,
+      confidenceScore: null,
+      latencyMs: 1,
+      errorCode: null,
+      errorDetail: null,
+    });
+
+    expect(id).toBeNull();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("writes the record's own provider, not INTELLIGENCE_PROVIDER — a decision provider is never that variable", async () => {
+    const originalEnv = process.env["NODE_ENV"];
+    const originalProvider = process.env["INTELLIGENCE_PROVIDER"];
+    process.env["NODE_ENV"] = "production";
+    process.env["INTELLIGENCE_PROVIDER"] = "ollama";
+
+    try {
+      const id = await recordLlmCall({
+        feature: "ticket_category",
+        provider: "jev",
+        model: "jev-latest",
+        promptVersion: null,
+        promptText: '{"state":"x"}',
+        responseText: '{"category":"billing"}',
+        promptTokens: 30,
+        completionTokens: 5,
+        confidenceScore: 0.9,
+        latencyMs: 12,
+        errorCode: null,
+        errorDetail: null,
+      });
+
+      expect(id).toBe("row-1");
+      const row = insertMock.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(row["provider"]).toBe("jev");
+    } finally {
+      process.env["NODE_ENV"] = originalEnv;
+      if (originalProvider === undefined) delete process.env["INTELLIGENCE_PROVIDER"];
+      else process.env["INTELLIGENCE_PROVIDER"] = originalProvider;
+    }
+  });
+
+  it("falls back to INTELLIGENCE_PROVIDER for a caller that predates the field", async () => {
+    const originalEnv = process.env["NODE_ENV"];
+    const originalProvider = process.env["INTELLIGENCE_PROVIDER"];
+    process.env["NODE_ENV"] = "production";
+    process.env["INTELLIGENCE_PROVIDER"] = "anthropic";
+
+    try {
+      await recordLlmCall({
+        feature: "reply_suggestion",
+        model: "claude-sonnet-4-20250514",
+        promptVersion: "1.0.0",
+        promptText: "p",
+        responseText: "r",
+        promptTokens: 1,
+        completionTokens: 1,
+        confidenceScore: null,
+        latencyMs: 1,
+        errorCode: null,
+        errorDetail: null,
+      });
+
+      const row = insertMock.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(row["provider"]).toBe("anthropic");
+    } finally {
+      process.env["NODE_ENV"] = originalEnv;
+      if (originalProvider === undefined) delete process.env["INTELLIGENCE_PROVIDER"];
+      else process.env["INTELLIGENCE_PROVIDER"] = originalProvider;
+    }
+  });
+
+  it("returns null when the insert errors, instead of throwing", async () => {
+    const original = process.env["NODE_ENV"];
+    process.env["NODE_ENV"] = "production";
+    selectSingleResult = { data: null, error: { message: "insert failed" } };
+
+    try {
+      const id = await recordLlmCall({
+        feature: "ticket_category",
+        provider: "jev",
+        model: "jev-latest",
+        promptVersion: null,
+        promptText: "p",
+        responseText: null,
+        promptTokens: null,
+        completionTokens: null,
+        confidenceScore: null,
+        latencyMs: 1,
+        errorCode: null,
+        errorDetail: null,
+      });
+      expect(id).toBeNull();
+    } finally {
+      process.env["NODE_ENV"] = original;
     }
   });
 });
