@@ -1,6 +1,7 @@
 export {
   classifyEmail,
   classifyEmailWithMeta,
+  classifyEmailWithJev,
   buildPrompt,
   getPromptVersion,
   extractPromptVersion,

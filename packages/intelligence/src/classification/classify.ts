@@ -21,9 +21,10 @@ export interface ClassifyOptions extends Pick<CompletionOptions, 'temperature'> 
  * The provenance a caller with no headers gets: outside the company.
  *
  * Only the two fields `provenanceOf` reads matter on this path; the rest is
- * never consulted.
+ * never consulted. Exported so classify-with-jev.ts (KAI-55) shares the same
+ * fallback instead of redeclaring it.
  */
-const EXTERNAL_FALLBACK_FACTS = {
+export const EXTERNAL_FALLBACK_FACTS = {
   senderIsTenantAddress: false,
   senderIsTenantDomain: false,
 } as Parameters<typeof provenanceOf>[0];

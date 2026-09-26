@@ -1,4 +1,5 @@
 export { classifyEmail, classifyEmailWithMeta, type ClassifyOptions, type LangfuseContext } from './classify';
+export { classifyEmailWithJev } from './classify-with-jev';
 export {
   ClassificationSchema,
   TICKET_TYPE,
