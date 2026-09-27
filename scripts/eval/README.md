@@ -28,10 +28,17 @@ not comparable. The endpoint is also written on every output row.
 
 `bun run eval:pipeline-jev` runs the same corpus through `classifyEmailWithJev`
 (a `DecisionProvider`, not a completion provider — no prompt, no temperature,
-no tokens-per-second) and writes the same `predicted_*`/`confidence`/`error`
-columns to its own run directory (`jev`, or `jev-onboarding` with
-`EVAL_STAGE=onboarding`), so `bun run eval:metrics jev` reads it exactly like
-any other run. Requires `TYPESAFE_API_KEY`.
+no tokens-per-second) with the same input `eval:matrix` sends: envelope facts
+from `data/input/tenant_mailboxes.txt`, the tenant mailbox, and on `backfill`
+the business context from `data/input/business_context.txt`. It writes the
+same `predicted_*`/`confidence`/`error` columns to its own run directory
+(`jev`, or `jev-onboarding` with `EVAL_STAGE=onboarding`), so
+`bun run eval:metrics jev` reads it exactly like any other run. The
+`confidence` column is the confidence of the two answers that derive
+`ticket_type` (`actionability`, `subject_matter`), because that is what the
+calibration table scores it against; the six-axis minimum is in
+`verdict_confidence`. It refuses to overwrite an existing run directory —
+archive it first. Requires `TYPESAFE_API_KEY`.
 
 ### Two runs against one endpoint
 

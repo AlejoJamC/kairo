@@ -1,55 +1,73 @@
 import { join } from 'path';
 import { readdir, readFile, writeFile, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 // Relative import: scripts/eval is not a workspace package, so the
 // `@kairo/intelligence` specifier does not resolve at runtime (the tsconfig
 // `paths` alias only covers type-checking)
 import { classifyEmailWithJev, createDecisionProvider, stripQuotedThread } from '../../packages/intelligence/src/index';
+import { extractMailFacts } from '../../apps/api/src/lib/email/mail-facts';
 import { parseEml } from './lib/parse-eml';
+import { readEmlHeaders, tenantMailboxes } from './lib/eml-headers';
 import { STAGE_BODY_RULES, slugify, type PipelineStage } from './lib/run-label';
 import { PIPELINE_OUTPUT } from './lib/run-files';
 import { writeCsv } from './lib/write-csv';
 import { resolveCorpus } from './lib/corpus';
 
 // ---------------------------------------------------------------------------
-// KAI-55 Fase 4 — JEV as one more run against the same corpus/ground truth
-// run_pipeline_eval.ts already measures Anthropic/Ollama against. Writes the
-// same pipeline_output.csv shape (predicted_* + confidence + error) into its
-// own run directory, so `eval:metrics jev` reads it with no changes to
-// compute_metrics.ts. JEV has no prompt/temperature/tokens-per-second, so
-// those columns are simply left blank for this run.
+// KAI-55 Fase 4 — JEV against the same corpus and ground truth the matrix
+// bench measures Anthropic/Ollama against, with the same input: every message
+// carries the envelope facts (provenance), the tenant mailbox, and — on the
+// backfill stage — the tenant's business context, built exactly as
+// run_matrix_eval.ts builds them. A run that withholds any of the three is
+// not comparable to the bench: provenance is a coordinate of the derivation
+// key, and the business context is what separates `service` from `admin`.
 //
-// A run's slug never changes between runs (there is only one JEV provider),
-// so unlike run_pipeline_eval.ts's per-model directory there is nothing to
-// keep a second run from silently overwriting the first — this script
-// refuses instead, the same way run_matrix_eval.ts's assertSameRubric
-// refuses to mix two measurements in one file. Archive the run directory or
-// set EVAL_OUTPUT_ROOT before running again.
+// Writes the same pipeline_output.csv shape (predicted_* + confidence +
+// error) into its own run directory, so `eval:metrics jev` reads it with no
+// changes to compute_metrics.ts.
+//
+// The slug never changes between runs (there is one JEV provider), so this
+// script refuses to overwrite an existing run instead of silently replacing
+// it. Archive the run directory before running again.
 // ---------------------------------------------------------------------------
 
 const SCRIPT_DIR = new URL('.', import.meta.url).pathname;
 const CORPUS = resolveCorpus();
 const INPUT_DIR = join(SCRIPT_DIR, CORPUS.emlDir);
+const BC_FILE = join(SCRIPT_DIR, 'data/input/business_context.txt');
 
 const STAGE: PipelineStage = process.env['EVAL_STAGE'] === 'onboarding' ? 'onboarding' : 'backfill';
 const BODY_RULE = STAGE_BODY_RULES[STAGE];
 
+// Same cell naming as run_matrix_eval.ts's cellSlug: backfill always carries
+// the business context, onboarding never does — the stage names the cell.
 const SLUG = slugify('jev') + (STAGE === 'onboarding' ? '-onboarding' : '');
-const OUTPUT_ROOT = process.env['EVAL_OUTPUT_ROOT'] ?? join(SCRIPT_DIR, 'data/output');
-const OUTPUT_DIR = join(OUTPUT_ROOT, CORPUS.outputSubdir, SLUG);
+const OUTPUT_DIR = join(SCRIPT_DIR, 'data/output', CORPUS.outputSubdir, SLUG);
 const OUTPUT_CSV = join(OUTPUT_DIR, PIPELINE_OUTPUT);
 const LOG_FILE = join(OUTPUT_DIR, 'pipeline_eval_run.log');
 
 function refuseIfRunExists(): void {
   if (!existsSync(OUTPUT_CSV)) return;
   console.error(`✗ ${OUTPUT_CSV} already exists.`);
-  console.error('  A second run would silently overwrite it before spending a single call is worth it.');
-  console.error('  Archive that directory (see scripts/eval/data/output/archive/), or set EVAL_OUTPUT_ROOT to a fresh one.');
+  console.error('  Running again would overwrite it. Archive that directory first (scripts/eval/data/output/archive/).');
   process.exit(1);
 }
 
-const TENANT_MAILBOX = process.env['EVAL_TENANT_MAILBOX'] ?? '';
-const BUSINESS_CONTEXT = process.env['EVAL_BUSINESS_CONTEXT'] ?? '';
+// Provenance needs every mailbox the tenant reads; the rendered state carries
+// the first, as production does.
+const TENANT_MAILBOXES_FOR_FACTS = tenantMailboxes();
+const TENANT_MAILBOX = TENANT_MAILBOXES_FOR_FACTS[0]!;
+
+/** backfill: the file's content, required. onboarding: never sent, as classifier-input.ts enforces. */
+function resolveBusinessContext(): string | undefined {
+  if (STAGE === 'onboarding') return undefined;
+  const text = existsSync(BC_FILE) ? readFileSync(BC_FILE, 'utf-8').trim() : '';
+  if (!text) {
+    console.error(`✗ ${BC_FILE} is missing or empty. The backfill stage always carries the business context.`);
+    process.exit(1);
+  }
+  return text;
+}
 
 // If this many emails fail consecutively from the very start, the provider is
 // systematically unreachable (bad key, model name, outage) — abort instead of
@@ -67,7 +85,18 @@ interface OutputRow {
   predicted_category: string;
   predicted_tone: string;
   predicted_urgency: string;
+  /**
+   * min(actionability.confidence, subject_matter.confidence) — the two answers
+   * derive.ts's TYPE_DERIVATION actually uses to produce `predicted_ticket_type`
+   * (derive.ts:71). eval:metrics' calibration table buckets this column against
+   * ticket_type correctness only (lib/calibration.ts), so this is the confidence
+   * that question is actually asking about — the six-axis verdict confidence
+   * (below) would fold in category/priority/tone/urgency, which ticket_type does
+   * not depend on, and made the calibration table meaningless.
+   */
   confidence: number | string;
+  /** min across all six axes — the same number `logLlmCall` records in production shadow mode. Not read by eval:metrics; kept for reference. */
+  verdict_confidence: number | string;
   processing_tier: number | string;
   processing_time_ms: number | string;
   raw_reasoning: string;
@@ -77,9 +106,27 @@ interface OutputRow {
 const CSV_COLUMNS: (keyof OutputRow)[] = [
   'email_id', 'filename', 'provider', 'model', 'pipeline_stage',
   'predicted_ticket_type', 'predicted_priority', 'predicted_category',
-  'predicted_tone', 'predicted_urgency', 'confidence',
+  'predicted_tone', 'predicted_urgency', 'confidence', 'verdict_confidence',
   'processing_tier', 'processing_time_ms', 'raw_reasoning', 'error',
 ];
+
+/** The raw per-question answer shape `decision.value` actually carries at runtime — see classify-with-jev.ts's own `as unknown as` cast for the same fact. */
+interface RawChoiceAnswer {
+  confidence: number;
+}
+
+/**
+ * The confidence of the two answers that determine `predicted_ticket_type`,
+ * not the six-axis verdict confidence `result.confidence` folds every field
+ * into. See the `confidence` field doc above for why this is the number
+ * eval:metrics' calibration table needs.
+ */
+function ticketTypeConfidence(decisionValue: unknown): number {
+  const answers = decisionValue as Record<string, RawChoiceAnswer>;
+  const actionability = answers['actionability']?.confidence ?? 0;
+  const subjectMatter = answers['subject_matter']?.confidence ?? 0;
+  return Math.min(actionability, subjectMatter);
+}
 
 function pad(n: number, width: number): string {
   return String(n).padStart(width, '0');
@@ -94,6 +141,7 @@ function formatDuration(ms: number): string {
 
 async function main(): Promise<void> {
   refuseIfRunExists();
+  const businessContext = resolveBusinessContext();
   await mkdir(OUTPUT_DIR, { recursive: true });
 
   const provider = createDecisionProvider('jev');
@@ -110,6 +158,7 @@ async function main(): Promise<void> {
     `Stage:  ${STAGE} — body ${BODY_RULE.stripQuotes ? 'stripped of quoted thread' : 'raw, quotes intact'}, ` +
     `capped at ${BODY_RULE.maxChars.toLocaleString()} chars`
   );
+  console.log(`Context: envelope facts yes · tenant mailbox yes · business context ${businessContext ? 'yes' : 'no'}`);
   console.log(`Dataset: ${INPUT_DIR} (${total} files)`);
   console.log('─'.repeat(44));
 
@@ -118,6 +167,7 @@ async function main(): Promise<void> {
     `[${new Date().toISOString()}] Kairo Pipeline Eval — JEV`,
     `Run: jev / ${provider.model}`,
     `Stage: ${STAGE} (strip=${BODY_RULE.stripQuotes}, cap=${BODY_RULE.maxChars})`,
+    `Context: facts=yes tenant_mailbox=yes business_context=${businessContext ? 'yes' : 'no'}`,
     `Dataset: ${INPUT_DIR} (${total} files)`,
     '',
   ];
@@ -141,6 +191,16 @@ async function main(): Promise<void> {
         BODY_RULE.stripQuotes ? stripQuotedThread(parsed.body) : parsed.body
       ).slice(0, BODY_RULE.maxChars);
 
+      // The envelope facts production computes before classifying, built as
+      // run_matrix_eval.ts builds them. Without them deriveClassification
+      // falls back to external provenance for every message.
+      const facts = extractMailFacts({
+        from: parsed.from,
+        subject: parsed.subject,
+        headers: readEmlHeaders(rawContent),
+        tenantMailbox: TENANT_MAILBOXES_FOR_FACTS,
+      });
+
       const message = {
         subject: parsed.subject,
         from: parsed.from,
@@ -149,8 +209,9 @@ async function main(): Promise<void> {
         body: classifierBody,
         threadDepth: parsed.threadDepth,
         attachments: parsed.attachments,
-        ...(TENANT_MAILBOX ? { tenantMailbox: TENANT_MAILBOX } : {}),
-        ...(BUSINESS_CONTEXT ? { businessContext: BUSINESS_CONTEXT } : {}),
+        tenantMailbox: TENANT_MAILBOX,
+        facts,
+        ...(businessContext ? { businessContext } : {}),
       };
 
       const { result, decision } = await classifyEmailWithJev(message, provider);
@@ -174,7 +235,8 @@ async function main(): Promise<void> {
         predicted_category: result.category,
         predicted_tone: result.tone,
         predicted_urgency: result.urgency,
-        confidence: result.confidence,
+        confidence: ticketTypeConfidence(decision.value),
+        verdict_confidence: result.confidence,
         processing_tier: 0,
         processing_time_ms: elapsed,
         raw_reasoning: result.reasoning,
@@ -199,6 +261,7 @@ async function main(): Promise<void> {
         predicted_tone: '',
         predicted_urgency: '',
         confidence: '',
+        verdict_confidence: '',
         processing_tier: '',
         processing_time_ms: elapsed,
         raw_reasoning: '',

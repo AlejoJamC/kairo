@@ -11,19 +11,22 @@
 // Same axes is not the same question unless the criteria carry the same
 // rubric: the text prompt (prompts/email-classification/en.md) gives
 // Anthropic/Ollama a paragraph of decision rules per label — an undescribed
-// `{P1: null, P2: null, P3: null}` gives JEV the label and nothing else,
-// which is not a fair comparison of the model, only of how much the label
-// name alone happens to convey. Each criterion below is that same rubric,
-// condensed to what a Choice description needs (TypeSafe's own guidance:
-// "Score levels must describe concrete situations and stand on their own").
-// Keep the two in sync when the prompt's rubric changes.
+// `{P1: null, P2: null, P3: null}` gives JEV the label and nothing else.
+// Each criterion below is that same rubric, condensed to what a Choice
+// description needs. Keep the two in sync when the prompt's rubric changes.
+//
+// Every axis is one label per email, so every axis is a Choice (TypeSafe:
+// "If the answer is one of several options, use a Choice"). Instructions
+// name the state fields they depend on in backticks — `tenantMailbox` and
+// `businessContext` are what tell JEV which side of the email is the
+// company, the same job the prompt's "company whose inbox you are reading"
+// block does for the text models.
 //
 // JEV has no free-text primitive, so `reasoning` cannot come from it —
 // NO_REASONING says so rather than fabricating an explanation. Confidence is
 // one number per question, not one per call, so the call's confidence is the
 // minimum across the six answers: a verdict is only as sure as its least sure
-// axis, which fits how category_confidence_thresholds (ADR-027) already
-// treats confidence as something that must be earned, not averaged up.
+// axis.
 // ---------------------------------------------------------------------------
 
 import { choice, type ChoiceCriteria, type Questions } from '@typesafe-ai/sdk';
@@ -31,15 +34,16 @@ import { choice, type ChoiceCriteria, type Questions } from '@typesafe-ai/sdk';
 import { ModelVerdictSchema, type ModelVerdictResult } from '../../classification/schema';
 
 const ACTIONABILITY_CRITERIA = {
-  needs_action: 'The sender expects the company to do, decide or answer something — a claim, a request, a pending matter.',
-  fyi: 'Informs, confirms, announces or offers, and expects nothing back.',
+  needs_action:
+    'The sender expects the company to do, decide or answer something — a claim, a request, a question, a pending matter. Also when the company sent the email and something is still open on the other side.',
+  fyi: 'Informs, confirms, announces or offers, and expects nothing back. Courtesy lines do not open anything.',
 } as const satisfies ChoiceCriteria;
 
 const SUBJECT_MATTER_CRITERIA = {
-  service: 'The service the company provides to its customers — a delivery, a fault, an existing account issue.',
-  commercial_demand: 'The sender wants to buy from the company: an inquiry, a request for a quote, a lead.',
-  commercial_offer: 'The sender wants to sell to the company: a supplier, an agency, a third-party promotion.',
-  admin: "The company's own running — hiring, compliance, paperwork, records its own systems emit.",
+  service: 'The service the company provides to its customers — a delivery, a fault, the status of a pending matter, an existing account.',
+  commercial_demand: 'The sender wants to buy from the company: a prospect asking about the service, an invitation to bid, a request for a quote.',
+  commercial_offer: 'The sender wants to sell to the company: a supplier, an agency, an invitation to a commercial event, a third-party promotion.',
+  admin: "The company's own running — hiring, compliance, summonses, paperwork, anything its own systems emit.",
 } as const satisfies ChoiceCriteria;
 
 const PRIORITY_CRITERIA = {
@@ -49,7 +53,8 @@ const PRIORITY_CRITERIA = {
 } as const satisfies ChoiceCriteria;
 
 const CATEGORY_CRITERIA = {
-  technical: 'The delivery of the service itself was not fulfilled, was fulfilled poorly or partially, or arrived late.',
+  technical:
+    'The delivery of the service itself — not fulfilled, fulfilled poorly, partially or late, or has to be undone. Not about IT: it is whatever the company delivers.',
   billing: 'The matter is money — invoicing, payments, charges, refunds, credit notes.',
   account: 'The matter is access or identity — users, permissions, credentials, profile data.',
   general: 'Informs or coordinates without an incident to resolve.',
@@ -57,11 +62,11 @@ const CATEGORY_CRITERIA = {
 } as const satisfies ChoiceCriteria;
 
 const TONE_CRITERIA = {
-  aggressive: 'Hostile, threatening or confrontational language.',
+  aggressive: 'Hostile, threatening or confrontational language — insults, ultimatums, all-caps anger.',
   frustrated:
-    'Annoyed from insistence, even when the wording stays polite: repeated urgency language, cited dates or attempt counts, or two or more prior messages in the same thread.',
+    'Annoyed or fed up without hostility, decided by insistence, not vocabulary — even when polite: repeated exclamation marks or "this is unacceptable", cited dates, elapsed days or broken commitments, or `threadDepth` of 2 or more.',
   neutral: 'Professional, calm and informative, with none of the frustration signals.',
-  positive: 'Friendly, grateful or enthusiastic about something already resolved.',
+  positive: 'Friendly, grateful or enthusiastic about something already resolved. Courtesy formulas alone are not positive.',
 } as const satisfies ChoiceCriteria;
 
 const URGENCY_CRITERIA = {
@@ -73,19 +78,25 @@ const URGENCY_CRITERIA = {
 
 export function buildTicketVerdictQuestions(): Questions {
   return {
-    actionability: choice('Does the sender expect the company to do something?', ACTIONABILITY_CRITERIA),
+    actionability: choice(
+      'The company is the owner of `tenantMailbox`. If nobody at the company answers this email, is something left undone?',
+      ACTIONABILITY_CRITERIA,
+    ),
     subject_matter: choice(
-      "What is this message about, in terms of the company's own activity? What separates a demand from an offer is the direction of the sale: who ends up invoicing whom.",
+      'What is this email about, in terms of what the company does (`businessContext`; when it is null, decide from the email alone)? A demand and an offer differ only in the direction of the sale: who ends up invoicing whom.',
       SUBJECT_MATTER_CRITERIA,
     ),
     // Ranks how important the case is — not how much time there is to act;
     // that is `urgency`, asked separately below. A case can be P1 and medium
     // at once.
     priority: choice(
-      'How important is this case for the business, independent of how much time there is to act on it?',
+      'How important is this case for the company, independent of how much time there is to act on it? `threadDepth` counts the earlier messages in the same case.',
       PRIORITY_CRITERIA,
     ),
-    category: choice('What department does this concern?', CATEGORY_CRITERIA),
+    category: choice(
+      'What is the matter of this email, in terms of what the company delivers (`businessContext`)?',
+      CATEGORY_CRITERIA,
+    ),
     tone: choice("What is the sender's tone?", TONE_CRITERIA),
     // Measures how much time there is to resolve — not how important the
     // case is; that is `priority`, asked separately above.
