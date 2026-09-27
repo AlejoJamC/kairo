@@ -8,7 +8,7 @@ import { logLlmCall, type LlmCallLogEntry } from "./llm-logging.js";
 import { pipelineLog } from "./pipeline-logger.js";
 
 // ---------------------------------------------------------------------------
-// KAI-55 Fase 3 — modo shadow. JEV runs alongside the real classification for
+// KAI-55 — shadow mode. JEV runs alongside the real classification for
 // a brand-new ticket, never applies its decision, and never affects the
 // ticket the real classifier already wrote. The outcome is logged to
 // `llm_calls` exactly like every other model call (KAI-110), so it can be

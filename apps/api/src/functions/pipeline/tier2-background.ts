@@ -543,7 +543,7 @@ export const tier2Background = inngest.createFunction(
                 if (was_created && ticketId) {
                   await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
 
-                  // KAI-55 Fase 3 — shadow classification (fire-and-forget, non-blocking).
+                  // KAI-55 — shadow classification (fire-and-forget, non-blocking).
                   if (getFlag("enable_jev_shadow_classification")) {
                     runJevShadowClassification(emailMessage, { accountId, ticketId });
                   }
@@ -589,7 +589,7 @@ export const tier2Background = inngest.createFunction(
                 if (ticketId) {
                   await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
 
-                  // KAI-55 Fase 3 — shadow classification (fire-and-forget, non-blocking).
+                  // KAI-55 — shadow classification (fire-and-forget, non-blocking).
                   if (getFlag("enable_jev_shadow_classification")) {
                     runJevShadowClassification(emailMessage, { accountId, ticketId });
                   }
@@ -654,7 +654,7 @@ export const tier2Background = inngest.createFunction(
               if (ticketId) {
                 await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
 
-                // KAI-55 Fase 3 — shadow classification (fire-and-forget, non-blocking).
+                // KAI-55 — shadow classification (fire-and-forget, non-blocking).
                 if (getFlag("enable_jev_shadow_classification")) {
                   runJevShadowClassification(emailMessage, { accountId, ticketId });
                 }

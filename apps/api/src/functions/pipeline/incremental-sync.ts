@@ -553,7 +553,7 @@ export const incrementalSync = inngest.createFunction(
             }
 
             if (ticketId && was_created) {
-              // KAI-55 Fase 3 — shadow classification (fire-and-forget, non-blocking).
+              // KAI-55 — shadow classification (fire-and-forget, non-blocking).
               if (getFlag("enable_jev_shadow_classification")) {
                 runJevShadowClassification(emailMessage, { accountId, ticketId });
               }

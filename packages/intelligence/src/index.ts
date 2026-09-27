@@ -92,8 +92,13 @@ export {
   computeTrustStatsByType,
   resolveAutoApprovalEnabled,
   TRUST_REVIEW_WINDOW,
+  authorizeTicketTypeAction,
   type ClassificationReviewRow,
   type TicketTypeTrustStats,
+  type ActionAuthorization,
+  type ActionAuthorizationReason,
+  type ActionMode,
+  type AuthorizeTicketTypeActionInput,
 } from './autonomy';
 
 export { detectEscalationTriggers } from './escalation';

@@ -650,7 +650,7 @@ export const tier1FastPath = inngest.createFunction(
             }
 
             if (ticket?.id && was_created) {
-              // KAI-55 Fase 3 — shadow classification (fire-and-forget, non-blocking).
+              // KAI-55 — shadow classification (fire-and-forget, non-blocking).
               // Only on ticket creation — not for follow-up messages.
               if (getFlag("enable_jev_shadow_classification")) {
                 runJevShadowClassification(emailMessage, { accountId, ticketId: ticket.id });

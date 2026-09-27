@@ -1,12 +1,11 @@
 // ---------------------------------------------------------------------------
-// KAI-55 Fase 1 — JEV asked the same verdict Anthropic/Ollama already answer.
+// KAI-55 — JEV asked the same verdict Anthropic/Ollama already answer.
 //
 // Deliberately not wired into classifyEmail/classifyEmailWithMeta or any
-// apps/api call site: KAI-55's own plan (Fase 3, "modo shadow") is where a
-// real ticket starts flowing through this, and that needs a comparison
-// harness and a storage table this module has no business assuming. This is
-// the isolated, callable unit that phase will call — the state a caller
-// assembles from EmailMessage, no derived business decision besides the same
+// apps/api call site directly: callers run this in shadow, alongside the
+// real classification, without applying its result. This is the isolated,
+// callable unit a shadow caller wraps — the state a caller assembles from
+// EmailMessage, no derived business decision besides the same
 // deriveClassification() every other provider already goes through.
 //
 // Wrapped in withGeneration like classifyEmailWithMeta, not

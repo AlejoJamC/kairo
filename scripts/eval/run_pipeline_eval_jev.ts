@@ -14,7 +14,7 @@ import { writeCsv } from './lib/write-csv';
 import { resolveCorpus } from './lib/corpus';
 
 // ---------------------------------------------------------------------------
-// KAI-55 Fase 4 — JEV against the same corpus and ground truth the matrix
+// KAI-55 — JEV against the same corpus and ground truth the matrix
 // bench measures Anthropic/Ollama against, with the same input: every message
 // carries the envelope facts (provenance), the tenant mailbox, and — on the
 // backfill stage — the tenant's business context, built exactly as
