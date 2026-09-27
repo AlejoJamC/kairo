@@ -24,6 +24,15 @@ A non-default endpoint gets its own run directory (`…-at-<host>`), because the
 same model on a laptop and on a remote GPU produces latency figures that are
 not comparable. The endpoint is also written on every output row.
 
+### Running JEV instead
+
+`bun run eval:pipeline-jev` runs the same corpus through `classifyEmailWithJev`
+(a `DecisionProvider`, not a completion provider — no prompt, no temperature,
+no tokens-per-second) and writes the same `predicted_*`/`confidence`/`error`
+columns to its own run directory (`jev`, or `jev-onboarding` with
+`EVAL_STAGE=onboarding`), so `bun run eval:metrics jev` reads it exactly like
+any other run. Requires `TYPESAFE_API_KEY`.
+
 ### Two runs against one endpoint
 
 Starting a second run against an endpoint already serving a model does not

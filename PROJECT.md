@@ -134,6 +134,7 @@ Webapp translation files: `apps/dashboard/src/i18n/resources/{en,es}/*.json`
 | `bun run build` | Turbo full monorepo build |
 | `bun test` | Run Vitest across all packages |
 | `bun run eval:pipeline` | Run 50 .eml files through classification pipeline → `scripts/eval/data/output/pipeline_output_50.csv` |
+| `bun run eval:pipeline-jev` | Run the same corpus through `classifyEmailWithJev` → `scripts/eval/data/output/jev/pipeline_output.csv`, read by `eval:metrics jev` |
 | `bun run eval:metrics` | Join ground truth + pipeline output → `eval_report.json` + `eval_report.md` (requires both input files) |
 | `supabase db diff --schema public` | Check for uncommitted schema changes |
 | `supabase migration new <name>` | Create a new migration file |

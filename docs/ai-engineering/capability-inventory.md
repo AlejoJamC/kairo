@@ -48,6 +48,7 @@ Not governed by an AI Skill: changes to these are product decisions.
 | Entry point | Answers |
 |---|---|
 | `bun run eval:pipeline` | one model, one stage |
+| `bun run eval:pipeline-jev` | JEV against the same corpus and ground truth, read by `eval:metrics jev` |
 | `bun run eval:metrics` | macro-F1 against the labelled sheet, majority-class baseline, calibration bands, annotator agreement |
 | `bun run eval:matrix` | which model and variant, in one process, resumable |
 | `bun run eval:layered` | the pipeline layer by layer, with routing |
