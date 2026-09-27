@@ -1,4 +1,5 @@
-import { classifyEmailWithMeta, detectEscalationTriggers, type PromptLang } from "@kairo/intelligence";
+import { classifyEmailWithMeta, detectEscalationTriggers, type EmailMessage, type PromptLang } from "@kairo/intelligence";
+import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import {
   buildClassifierBody,
@@ -363,20 +364,19 @@ export const tier1FastPath = inngest.createFunction(
 
         pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
 
+        const emailMessage: EmailMessage = {
+          subject,
+          body: classifierBody,
+          from,
+          tenantMailbox: userEmail,
+          // KAI-45 — recipients and thread position, read once by the
+          // pre-filter and previously discarded.
+          ...classifierEnvelope(filterResult.facts),
+        };
+
         const llmStart = Date.now();
         const promise = withRetry(llmSemaphore, () =>
-          classifyEmailWithMeta(
-            {
-              subject,
-              body: classifierBody,
-              from,
-              tenantMailbox: userEmail,
-              // KAI-45 — recipients and thread position, read once by the
-              // pre-filter and previously discarded.
-              ...classifierEnvelope(filterResult.facts),
-            },
-            { lang: language, context: { accountId } },
-          ),
+          classifyEmailWithMeta(emailMessage, { lang: language, context: { accountId } }),
         )
           .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
             circuitBreaker.recordSuccess();
@@ -650,6 +650,12 @@ export const tier1FastPath = inngest.createFunction(
             }
 
             if (ticket?.id && was_created) {
+              // KAI-55 Fase 3 — shadow classification (fire-and-forget, non-blocking).
+              // Only on ticket creation — not for follow-up messages.
+              if (getFlag("enable_jev_shadow_classification")) {
+                runJevShadowClassification(emailMessage, { accountId, ticketId: ticket.id });
+              }
+
               // KAI-225 — Emit contact-extraction trigger (fire-and-forget, non-blocking).
               // Only on ticket creation — not for follow-up messages.
               if (getFlag("enable_contact_extraction")) {

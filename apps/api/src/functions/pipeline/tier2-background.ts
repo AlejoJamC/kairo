@@ -1,4 +1,6 @@
-import { classifyEmailWithMeta, DEFAULT_LANG, type PromptLang } from "@kairo/intelligence";
+import { classifyEmailWithMeta, DEFAULT_LANG, type EmailMessage, type PromptLang } from "@kairo/intelligence";
+import { getFlag } from "@kairo/feature-flags";
+import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
@@ -383,19 +385,18 @@ export const tier2Background = inngest.createFunction(
         const { body_plain, body_html } = extractBody(message.payload);
         const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
 
+        const emailMessage: EmailMessage = {
+          subject,
+          body: classifierBody,
+          from,
+          tenantMailbox: userEmail,
+          ...(businessContext ? { businessContext } : {}),
+          ...classifierEnvelope(filterResult.facts),
+        };
+
         const llmStart = Date.now();
         const promise = withRetry(llmSemaphore, () =>
-          classifyEmailWithMeta(
-            {
-              subject,
-              body: classifierBody,
-              from,
-              tenantMailbox: userEmail,
-              ...(businessContext ? { businessContext } : {}),
-              ...classifierEnvelope(filterResult.facts),
-            },
-            { lang: language, context: { accountId } },
-          ),
+          classifyEmailWithMeta(emailMessage, { lang: language, context: { accountId } }),
         )
           .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
             circuitBreaker.recordSuccess();
@@ -541,6 +542,11 @@ export const tier2Background = inngest.createFunction(
 
                 if (was_created && ticketId) {
                   await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
+
+                  // KAI-55 Fase 3 — shadow classification (fire-and-forget, non-blocking).
+                  if (getFlag("enable_jev_shadow_classification")) {
+                    runJevShadowClassification(emailMessage, { accountId, ticketId });
+                  }
                 }
 
                 if (!was_created) {
@@ -582,6 +588,11 @@ export const tier2Background = inngest.createFunction(
 
                 if (ticketId) {
                   await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
+
+                  // KAI-55 Fase 3 — shadow classification (fire-and-forget, non-blocking).
+                  if (getFlag("enable_jev_shadow_classification")) {
+                    runJevShadowClassification(emailMessage, { accountId, ticketId });
+                  }
                 }
 
                 if (proposal?.id && ticketId) {
@@ -642,6 +653,11 @@ export const tier2Background = inngest.createFunction(
 
               if (ticketId) {
                 await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
+
+                // KAI-55 Fase 3 — shadow classification (fire-and-forget, non-blocking).
+                if (getFlag("enable_jev_shadow_classification")) {
+                  runJevShadowClassification(emailMessage, { accountId, ticketId });
+                }
               }
 
               if (proposal?.id && ticketId) {

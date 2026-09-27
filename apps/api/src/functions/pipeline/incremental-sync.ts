@@ -1,7 +1,9 @@
-import { classifyEmailWithMeta } from "@kairo/intelligence";
+import { classifyEmailWithMeta, type EmailMessage } from "@kairo/intelligence";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
+import { getFlag } from "@kairo/feature-flags";
+import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
@@ -358,18 +360,17 @@ export const incrementalSync = inngest.createFunction(
 
         const threadId = message.threadId;
 
+        const emailMessage: EmailMessage = {
+          subject,
+          body: classifierBody,
+          from,
+          tenantMailbox: userEmail,
+          ...(businessContext ? { businessContext } : {}),
+          ...classifierEnvelope(filterResult.facts),
+        };
+
         const llmStart = Date.now();
-        const promise = classifyEmailWithMeta(
-          {
-            subject,
-            body: classifierBody,
-            from,
-            tenantMailbox: userEmail,
-            ...(businessContext ? { businessContext } : {}),
-            ...classifierEnvelope(filterResult.facts),
-          },
-          { lang: classifierContext.language, context: { accountId } },
-        )
+        const promise = classifyEmailWithMeta(emailMessage, { lang: classifierContext.language, context: { accountId } })
           .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
             logLlmCall({
               feature: "email_classification",
@@ -552,6 +553,11 @@ export const incrementalSync = inngest.createFunction(
             }
 
             if (ticketId && was_created) {
+              // KAI-55 Fase 3 — shadow classification (fire-and-forget, non-blocking).
+              if (getFlag("enable_jev_shadow_classification")) {
+                runJevShadowClassification(emailMessage, { accountId, ticketId });
+              }
+
               // KAI-246: send the acknowledgement first. If it goes out, skip the
               // out-of-hours reply for this creation — the customer should not get
               // two auto-replies for the same inbound email. When the flag is off

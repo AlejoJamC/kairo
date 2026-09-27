@@ -29,6 +29,14 @@
 //                                  was dropped. OFF by default: until this runs,
 //                                  backfill (tier2/tier3) auto-approves nothing,
 //                                  same as today.
+//   enable_jev_shadow_classification — KAI-55 Fase 3: for every brand-new ticket
+//                                  created by tier1/tier2/tier3/incremental-sync,
+//                                  also run JEV's classifyEmailWithJev in
+//                                  parallel and log the outcome to `llm_calls`
+//                                  (feature: email_classification_jev_shadow).
+//                                  JEV's decision is never applied to the
+//                                  ticket. OFF by default, and requires
+//                                  TYPESAFE_API_KEY when on.
 //
 // Runtime-overrideable numeric flags (server-only, via FEATURE_FLAG_<UPPER_SNAKE> env vars):
 //   gmail_poll_cron_interval_minutes — KAI-248: how often (in minutes) the Gmail
@@ -79,6 +87,7 @@ const FLAG_DEFAULTS = {
   enable_ticket_acknowledgement: false,
   enable_operational_sla_escalation: false,
   enable_auto_approval_recompute: false,
+  enable_jev_shadow_classification: false,
 } as const;
 
 type RuntimeFlagName = keyof typeof FLAG_DEFAULTS;

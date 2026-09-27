@@ -216,6 +216,6 @@ GROUP BY model;
 | `reply_suggestion` (`lib/reply-suggestion.ts`, route `POST /:id/suggest-reply`) | ✅ done — through `runLlmFeature` + `recordLlmCall`; `llm_call_id` returned to client; outcome writeback via `PATCH /:id/suggest-reply/:llmCallId/outcome` |
 | `kb_search` | ⏳ not built yet (ADR-012 pending) |
 | `resolution_summary` | ⏳ pending |
-| JEV ticket verdict (`classifyEmailWithJev`) | ⏳ built and tested (`runDecisionFeature`, `withGeneration`), not called from any pipeline tier — KAI-55 Fase 1 of 6 |
+| JEV ticket verdict (`classifyEmailWithJev`) | ✅ Langfuse generation via `withGeneration`; called in shadow from every brand-new-ticket path (`apps/api/src/lib/jev-shadow-classification.ts`), logged to `llm_calls` with `feature: email_classification_jev_shadow`, gated by `enable_jev_shadow_classification` (off by default) |
 
 Table exists and is now actively populated by the call sites above.
