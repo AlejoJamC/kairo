@@ -1,6 +1,7 @@
 import { classifyEmailWithMeta, DEFAULT_LANG, type EmailMessage, type PromptLang } from "@kairo/intelligence";
 import { getFlag } from "@kairo/feature-flags";
 import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
+import { isJevCanaryAccount, jevCanaryUpgrade } from "../../lib/jev-canary.js";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
@@ -426,6 +427,32 @@ export const tier2Background = inngest.createFunction(
               DEFAULT_WEIGHTS
             );
 
+            // No human is anywhere near this stage, so nothing stands on its
+            // own without the tenant context, and no class is privileged in
+            // code — the permission is per account and per class, resolved
+            // once above.
+            const autoApprovalEnabled = autoApproved.includes(classification.type);
+            let proposalStatus = backfillProposalStatus({
+              type: classification.type,
+              businessContext,
+              autoApprovalEnabled,
+              abstain,
+            });
+
+            // Canary — strictly additive, only for an account on the
+            // allowlist, only ever turns a pending proposal into an
+            // auto_approved one, never the type itself.
+            if (proposalStatus === "pending" && isJevCanaryAccount(accountId)) {
+              const upgraded = await jevCanaryUpgrade({
+                accountId,
+                message: emailMessage,
+                primaryType: classification.type,
+                autoApprovalEnabled,
+                hasBusinessContext: Boolean(businessContext),
+              });
+              if (upgraded) proposalStatus = "auto_approved";
+            }
+
             const { data: proposal } = await supabase
               .from("ticket_proposals")
               .insert({
@@ -440,16 +467,7 @@ export const tier2Background = inngest.createFunction(
                 confidence_score: classification.confidence,
                 model_version: meta.model,
                 raw_llm_output: classification as Record<string, unknown>,
-                // No human is anywhere near this stage, so nothing stands on
-                // its own without the tenant context, and no class is
-                // privileged in code — the permission is per account and per
-                // class, resolved once above.
-                status: backfillProposalStatus({
-                  type: classification.type,
-                  businessContext,
-                  autoApprovalEnabled: autoApproved.includes(classification.type),
-                  abstain,
-                }),
+                status: proposalStatus,
               })
               .select("id")
               .single();

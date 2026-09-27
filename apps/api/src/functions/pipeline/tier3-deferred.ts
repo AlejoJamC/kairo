@@ -6,6 +6,7 @@ import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { getFlag } from "@kairo/feature-flags";
 import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
+import { isJevCanaryAccount, jevCanaryUpgrade } from "../../lib/jev-canary.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
@@ -377,6 +378,30 @@ async function classifyWindow(
           DEFAULT_WEIGHTS
         );
 
+        // Same rule as Tier 2 — see backfill-proposal-status.ts. Nobody is
+        // watching here either.
+        const autoApprovalEnabled = autoApproved.includes(classification.type);
+        let proposalStatus = backfillProposalStatus({
+          type: classification.type,
+          businessContext: classifierContext.businessContext,
+          autoApprovalEnabled,
+          abstain,
+        });
+
+        // Canary — strictly additive, only for an account on the allowlist,
+        // only ever turns a pending proposal into an auto_approved one,
+        // never the type itself.
+        if (proposalStatus === "pending" && isJevCanaryAccount(accountId)) {
+          const upgraded = await jevCanaryUpgrade({
+            accountId,
+            message: emailMessage,
+            primaryType: classification.type,
+            autoApprovalEnabled,
+            hasBusinessContext: Boolean(classifierContext.businessContext),
+          });
+          if (upgraded) proposalStatus = "auto_approved";
+        }
+
         const { data: proposal } = await supabase
           .from("ticket_proposals")
           .insert({
@@ -391,14 +416,7 @@ async function classifyWindow(
             confidence_score: classification.confidence,
             model_version: meta.model,
             raw_llm_output: classification as Record<string, unknown>,
-            // Same rule as Tier 2 — see backfill-proposal-status.ts. Nobody is
-            // watching here either.
-            status: backfillProposalStatus({
-              type: classification.type,
-              businessContext: classifierContext.businessContext,
-              autoApprovalEnabled: autoApproved.includes(classification.type),
-              abstain,
-            }),
+            status: proposalStatus,
           })
           .select("id")
           .single();

@@ -29,7 +29,7 @@
 //                                  was dropped. OFF by default: until this runs,
 //                                  backfill (tier2/tier3) auto-approves nothing,
 //                                  same as today.
-//   enable_jev_shadow_classification — KAI-55 Fase 3: for every brand-new ticket
+//   enable_jev_shadow_classification — KAI-55: for every brand-new ticket
 //                                  created by tier1/tier2/tier3/incremental-sync,
 //                                  also run JEV's classifyEmailWithJev in
 //                                  parallel and log the outcome to `llm_calls`
@@ -37,6 +37,20 @@
 //                                  JEV's decision is never applied to the
 //                                  ticket. OFF by default, and requires
 //                                  TYPESAFE_API_KEY when on.
+//   enable_jev_canary            — KAI-55: for tier2/tier3 backfill proposals on
+//                                  an account listed in
+//                                  FEATURE_FLAG_JEV_CANARY_ACCOUNT_IDS (comma-
+//                                  separated account ids, read directly —
+//                                  not a flags.ts concept): ask JEV, and
+//                                  upgrade a `pending` proposal to
+//                                  `auto_approved` only when JEV agrees with
+//                                  the type classifyEmailWithMeta already
+//                                  chose and its own confidence clears
+//                                  authorizeTicketTypeAction's bar. Strictly
+//                                  additive — never downgrades, never
+//                                  changes the type written. OFF by default,
+//                                  and the account allowlist is empty by
+//                                  default even when on.
 //
 // Runtime-overrideable numeric flags (server-only, via FEATURE_FLAG_<UPPER_SNAKE> env vars):
 //   gmail_poll_cron_interval_minutes — KAI-248: how often (in minutes) the Gmail
@@ -88,6 +102,7 @@ const FLAG_DEFAULTS = {
   enable_operational_sla_escalation: false,
   enable_auto_approval_recompute: false,
   enable_jev_shadow_classification: false,
+  enable_jev_canary: false,
 } as const;
 
 type RuntimeFlagName = keyof typeof FLAG_DEFAULTS;
