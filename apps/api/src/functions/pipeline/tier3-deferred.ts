@@ -6,7 +6,7 @@ import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { getFlag } from "@kairo/feature-flags";
 import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
-import { isJevCanaryAccount, jevCanaryUpgrade } from "../../lib/jev-canary.js";
+import { isJevCanaryTenant, jevCanaryUpgrade } from "../../lib/jev-canary.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
@@ -391,7 +391,7 @@ async function classifyWindow(
         // Canary — strictly additive, only for an account on the allowlist,
         // only ever turns a pending proposal into an auto_approved one,
         // never the type itself.
-        if (proposalStatus === "pending" && isJevCanaryAccount(accountId)) {
+        if (proposalStatus === "pending" && isJevCanaryTenant(classifierContext.tenantMailbox)) {
           const upgraded = await jevCanaryUpgrade({
             accountId,
             message: emailMessage,

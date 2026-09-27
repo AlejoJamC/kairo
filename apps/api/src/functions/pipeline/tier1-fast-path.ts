@@ -1,5 +1,6 @@
 import { classifyEmailWithMeta, detectEscalationTriggers, type EmailMessage, type PromptLang } from "@kairo/intelligence";
 import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
+import { isJevCanaryTenant, jevCanaryUpgradeTier1 } from "../../lib/jev-canary.js";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import {
   buildClassifierBody,
@@ -413,6 +414,22 @@ export const tier1FastPath = inngest.createFunction(
             // this insert fails outright. What changes is that a `pending` label
             // stops claiming a review that did not happen, and POST
             // /v1/tickets/:id/classify-approve has something to act on.
+            let proposalStatus = tier1ProposalStatus(classification.type, abstain);
+
+            // Canary — strictly additive, only for a tenant mailbox on the
+            // allowlist, only ever turns a pending proposal into an
+            // auto_approved one. No earned-history requirement here, same
+            // as tier1ProposalStatus's own rule: a human is already
+            // reviewing the onboarding scan.
+            if (proposalStatus === "pending" && isJevCanaryTenant(userEmail)) {
+              const upgraded = await jevCanaryUpgradeTier1({
+                accountId,
+                message: emailMessage,
+                primaryType: classification.type,
+              });
+              if (upgraded) proposalStatus = "auto_approved";
+            }
+
             const { data: proposal, error: proposalErr } = await supabase
               .from("ticket_proposals")
               .insert({
@@ -427,7 +444,7 @@ export const tier1FastPath = inngest.createFunction(
                 confidence_score: classification.confidence,
                 model_version: meta.model,
                 raw_llm_output: classification as Record<string, unknown>,
-                status: tier1ProposalStatus(classification.type, abstain),
+                status: proposalStatus,
               })
               .select("id")
               .single();

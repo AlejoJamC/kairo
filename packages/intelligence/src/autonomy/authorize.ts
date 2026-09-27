@@ -59,7 +59,7 @@ export interface AuthorizeTicketTypeActionInput {
   confidenceThreshold?: number;
 }
 
-const DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
+export const DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
 
 /**
  * The account+type permission is a statement about the class on average

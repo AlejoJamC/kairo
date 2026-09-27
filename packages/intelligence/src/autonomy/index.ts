@@ -8,6 +8,7 @@ export {
 
 export {
   authorizeTicketTypeAction,
+  DEFAULT_CONFIDENCE_THRESHOLD,
   type ActionAuthorization,
   type ActionAuthorizationReason,
   type ActionMode,

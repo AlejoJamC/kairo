@@ -5,6 +5,14 @@ Kairo is an AI-powered support cockpit that helps support teams manage
 customer support more intelligently. It connects to Gmail, classifies incoming
 emails, and routes/responds based on learned behavior per client.
 
+**Read `docs/what-is-kairo.md` before working on the classification pipeline
+or its tiers.** It describes the staged first pass every account goes
+through once — fast first ticket (tier1-fast-path, the onboarding scan),
+last two weeks (tier2-background), older mail back to about three months
+(tier3-deferred) — and the ongoing poll after that (incremental-sync). The
+tier boundaries, their scan sizes, and which ones a human is watching live
+there, not here.
+
 ## Monorepo Structure (Turborepo)
 ```
 /

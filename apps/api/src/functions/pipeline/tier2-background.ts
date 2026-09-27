@@ -1,7 +1,7 @@
 import { classifyEmailWithMeta, DEFAULT_LANG, type EmailMessage, type PromptLang } from "@kairo/intelligence";
 import { getFlag } from "@kairo/feature-flags";
 import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
-import { isJevCanaryAccount, jevCanaryUpgrade } from "../../lib/jev-canary.js";
+import { isJevCanaryTenant, jevCanaryUpgrade } from "../../lib/jev-canary.js";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
@@ -442,7 +442,7 @@ export const tier2Background = inngest.createFunction(
             // Canary — strictly additive, only for an account on the
             // allowlist, only ever turns a pending proposal into an
             // auto_approved one, never the type itself.
-            if (proposalStatus === "pending" && isJevCanaryAccount(accountId)) {
+            if (proposalStatus === "pending" && isJevCanaryTenant(userEmail)) {
               const upgraded = await jevCanaryUpgrade({
                 accountId,
                 message: emailMessage,

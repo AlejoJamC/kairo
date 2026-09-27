@@ -37,20 +37,25 @@
 //                                  JEV's decision is never applied to the
 //                                  ticket. OFF by default, and requires
 //                                  TYPESAFE_API_KEY when on.
-//   enable_jev_canary            — KAI-55: for tier2/tier3 backfill proposals on
-//                                  an account listed in
-//                                  FEATURE_FLAG_JEV_CANARY_ACCOUNT_IDS (comma-
-//                                  separated account ids, read directly —
-//                                  not a flags.ts concept): ask JEV, and
-//                                  upgrade a `pending` proposal to
+//   enable_jev_canary            — KAI-55: for tier1/tier2/tier3 proposals on a
+//                                  tenant mailbox listed in
+//                                  FEATURE_FLAG_JEV_CANARY_MAILBOXES (comma-
+//                                  separated addresses, read directly — not a
+//                                  flags.ts concept; a mailbox, not
+//                                  account_id, because an account can be torn
+//                                  down and recreated per test run): ask JEV,
+//                                  and upgrade a `pending` proposal to
 //                                  `auto_approved` only when JEV agrees with
 //                                  the type classifyEmailWithMeta already
-//                                  chose and its own confidence clears
-//                                  authorizeTicketTypeAction's bar. Strictly
-//                                  additive — never downgrades, never
-//                                  changes the type written. OFF by default,
-//                                  and the account allowlist is empty by
-//                                  default even when on.
+//                                  chose. tier2/tier3 also require the
+//                                  account to have separately earned
+//                                  auto-approval for that type
+//                                  (authorizeTicketTypeAction); tier1 does
+//                                  not, matching tier1ProposalStatus's own
+//                                  no-earned-history rule. Strictly additive
+//                                  — never downgrades, never changes the type
+//                                  written. OFF by default, and the mailbox
+//                                  allowlist is empty by default even when on.
 //
 // Runtime-overrideable numeric flags (server-only, via FEATURE_FLAG_<UPPER_SNAKE> env vars):
 //   gmail_poll_cron_interval_minutes — KAI-248: how often (in minutes) the Gmail

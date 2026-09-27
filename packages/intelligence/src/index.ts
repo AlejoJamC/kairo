@@ -93,6 +93,7 @@ export {
   resolveAutoApprovalEnabled,
   TRUST_REVIEW_WINDOW,
   authorizeTicketTypeAction,
+  DEFAULT_CONFIDENCE_THRESHOLD,
   type ClassificationReviewRow,
   type TicketTypeTrustStats,
   type ActionAuthorization,
