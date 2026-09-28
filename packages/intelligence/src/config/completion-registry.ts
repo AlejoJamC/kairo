@@ -53,6 +53,13 @@ export function isCompletionProviderId(value: string): value is CompletionProvid
 export function findCompletionProvider(id: string): CompletionProviderEntry {
   const entry = COMPLETION_PROVIDERS.find((p) => p.id === id);
   if (!entry) {
+    if (id === 'jev') {
+      throw new Error(
+        'INTELLIGENCE_PROVIDER=jev has no free-text completion — classifyEmailWithMeta dispatches ' +
+          'to it directly and never reaches this registry. A feature that generates text (reply ' +
+          'suggestions, summaries) still needs a CompletionProvider; JEV cannot be that provider.',
+      );
+    }
     throw new Error(`Unknown completion provider "${id}". Known providers: ${COMPLETION_PROVIDER_IDS.join(', ')}`);
   }
   return entry;

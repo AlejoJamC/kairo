@@ -1,12 +1,10 @@
 // ---------------------------------------------------------------------------
 // KAI-55 — JEV asked the same verdict Anthropic/Ollama already answer.
 //
-// Deliberately not wired into classifyEmail/classifyEmailWithMeta or any
-// apps/api call site directly: callers run this in shadow, alongside the
-// real classification, without applying its result. This is the isolated,
-// callable unit a shadow caller wraps — the state a caller assembles from
-// EmailMessage, no derived business decision besides the same
-// deriveClassification() every other provider already goes through.
+// classifyEmailWithMeta dispatches here when INTELLIGENCE_PROVIDER=jev, and
+// the shadow caller runs it alongside another provider's classification.
+// The state is assembled from EmailMessage; no derived business decision
+// besides the same deriveClassification() every other provider goes through.
 //
 // Wrapped in withGeneration like classifyEmailWithMeta, not
 // classification-audit.ts's telemetry helpers — those are shaped around the
@@ -18,8 +16,7 @@
 import type { DecisionProvider, DecisionResult } from '../providers/decision';
 import { buildTicketVerdictQuestions, parseTicketVerdictAnswers } from '../providers/jev/ticket-verdict';
 import { withGeneration, type LangfuseContext } from '../harness/generation';
-import { EXTERNAL_FALLBACK_FACTS } from './classify';
-import { deriveClassification, provenanceOf } from './derive';
+import { deriveClassification, provenanceOf, EXTERNAL_FALLBACK_FACTS } from './derive';
 import type { ClassificationResult, ModelVerdictResult } from './schema';
 import type { EmailMessage } from './types';
 

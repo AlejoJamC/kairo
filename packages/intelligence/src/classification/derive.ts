@@ -49,6 +49,18 @@ import type { MailFacts } from './types';
 export const DERIVATION_VERSION = '1.1.0';
 
 /**
+ * The provenance a caller with no headers gets: outside the company.
+ *
+ * Only the two fields `provenanceOf` reads matter on this path; the rest is
+ * never consulted. Lives here, not in classify.ts, so both classify.ts and
+ * classify-with-jev.ts can import it without one importing the other.
+ */
+export const EXTERNAL_FALLBACK_FACTS = {
+  senderIsTenantAddress: false,
+  senderIsTenantDomain: false,
+} as Parameters<typeof provenanceOf>[0];
+
+/**
  * Where the message came from, from the envelope. Three reachable states.
  *
  * Not a label and not a decision: on the coverage corpus the eleven messages
