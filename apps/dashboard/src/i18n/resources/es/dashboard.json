@@ -107,6 +107,7 @@
     "allTickets": "Todos los Tickets",
     "settings": "Configuración",
     "escalation": "Escalado",
+    "aiReview": "Clasificación IA",
     "resolved": "Resuelto",
     "clients": "Clientes"
   },
@@ -159,6 +160,24 @@
     "subtitle": "Tickets cerrados, en modo solo lectura.",
     "empty": "Todavía no hay tickets resueltos.",
     "ticketNumber": "#{{number}}"
+  },
+  "aiReviewView": {
+    "title": "Clasificación IA",
+    "subtitle": "Lo que la IA clasificó en cada ticket. Confirmar o rechazar cada propuesta es lo que le enseña a Kairo cuándo puede actuar sola.",
+    "tabPending": "Por revisar",
+    "tabAutoApproved": "Aprobadas por la IA",
+    "emptyPending": "No hay clasificaciones por revisar.",
+    "emptyAutoApproved": "No hay clasificaciones aprobadas por la IA pendientes de verificar.",
+    "proposalTitle": "Propuesta de la IA",
+    "fieldType": "Tipo",
+    "fieldCategory": "Categoría",
+    "fieldPriority": "Prioridad",
+    "fieldTone": "Tono",
+    "fieldConfidence": "Confianza",
+    "fieldModel": "Modelo",
+    "confirm": "Confirmar",
+    "reject": "Rechazar",
+    "error": "No se pudo guardar la revisión."
   },
   "escalatedView": {
     "title": "Escalados",

@@ -107,6 +107,7 @@
     "allTickets": "All Tickets",
     "settings": "Settings",
     "escalation": "Escalated",
+    "aiReview": "AI Classification",
     "resolved": "Resolved",
     "clients": "Clients"
   },
@@ -159,6 +160,24 @@
     "subtitle": "Closed tickets, shown in read-only mode.",
     "empty": "No resolved tickets yet.",
     "ticketNumber": "#{{number}}"
+  },
+  "aiReviewView": {
+    "title": "AI Classification",
+    "subtitle": "What the AI classified on each ticket. Confirming or rejecting each proposal is how Kairo learns when it can act on its own.",
+    "tabPending": "To review",
+    "tabAutoApproved": "Approved by AI",
+    "emptyPending": "No classifications to review.",
+    "emptyAutoApproved": "No AI-approved classifications waiting to be verified.",
+    "proposalTitle": "AI proposal",
+    "fieldType": "Type",
+    "fieldCategory": "Category",
+    "fieldPriority": "Priority",
+    "fieldTone": "Tone",
+    "fieldConfidence": "Confidence",
+    "fieldModel": "Model",
+    "confirm": "Confirm",
+    "reject": "Reject",
+    "error": "The review could not be saved."
   },
   "escalatedView": {
     "title": "Escalated",

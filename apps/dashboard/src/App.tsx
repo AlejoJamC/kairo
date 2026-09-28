@@ -10,6 +10,7 @@ import { ChangePasswordSettings } from "@/components/change-password-settings";
 import { AwaitingCustomerView } from "@/components/awaiting-customer-view";
 import { ResolvedView } from "@/components/resolved-view";
 import { EscalatedView } from "@/components/escalated-view";
+import { AiReviewView } from "@/components/ai-review-view";
 import { ChannelsSettings } from "@/components/channels-settings";
 import type { AppView } from "@/types";
 
@@ -83,6 +84,7 @@ function AppContent() {
     if (activeView === "awaiting") return <AwaitingCustomerView onViewChange={setActiveView} />;
     if (activeView === "resolved") return <ResolvedView onViewChange={setActiveView} />;
     if (activeView === "escalated") return <EscalatedView onViewChange={setActiveView} />;
+    if (activeView === "ai-review") return <AiReviewView onViewChange={setActiveView} />;
     if (activeView === "settings") return <ProfileSettings onViewChange={setActiveView} />;
     if (activeView === "change-password") return <ChangePasswordSettings onViewChange={setActiveView} />;
     if (activeView === "channels") return <ChannelsSettings onViewChange={setActiveView} />;
