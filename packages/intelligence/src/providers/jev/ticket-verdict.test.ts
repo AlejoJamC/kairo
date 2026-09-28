@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 
 import { ACTIONABILITY_VALUES, CATEGORY, PRIORITY, SUBJECT_MATTER_VALUES, TONE, URGENCY } from '../../classification/schema';
-import { buildTicketVerdictQuestions, NO_REASONING, parseTicketVerdictAnswers } from './ticket-verdict';
+import { buildTicketVerdictQuestions, parseTicketVerdictAnswers } from './ticket-verdict';
 
 describe('buildTicketVerdictQuestions', () => {
   it('asks exactly the six ModelVerdictSchema axes, each a choice question', () => {
@@ -50,7 +50,7 @@ describe('parseTicketVerdictAnswers', () => {
     });
   });
 
-  it('never fabricates a reasoning string — JEV has no text primitive', () => {
+  it('reasoning is a readout of the six typed answers with their confidences, not generated prose', () => {
     const verdict = parseTicketVerdictAnswers({
       actionability: answer('fyi', 0.9),
       subject_matter: answer('admin', 0.9),
@@ -59,7 +59,9 @@ describe('parseTicketVerdictAnswers', () => {
       tone: answer('neutral', 0.9),
       urgency: answer('low', 0.9),
     });
-    expect(verdict.reasoning).toBe(NO_REASONING);
+    expect(verdict.reasoning).toBe(
+      'actionability=fyi (0.90) · subject_matter=admin (0.90) · priority=P3 (0.90) · category=general (0.90) · tone=neutral (0.90) · urgency=low (0.90)',
+    );
   });
 
   it('the verdict confidence is the minimum across the six answers, not an average', () => {

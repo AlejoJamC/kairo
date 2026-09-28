@@ -2,7 +2,6 @@ import { describe, it, expect, mock } from 'bun:test';
 
 import type { DecisionProvider } from '../providers/decision';
 import { classifyEmailWithJev } from './classify-with-jev';
-import { NO_REASONING } from '../providers/jev/ticket-verdict';
 
 function answer(choiceValue: string, confidence: number) {
   return { type: 'choice' as const, choice: choiceValue, confidence };
@@ -45,7 +44,9 @@ describe('classifyEmailWithJev', () => {
     expect(result.tone).toBe('neutral');
     expect(result.urgency).toBe('medium');
     expect(result.confidence).toBe(0.9);
-    expect(result.reasoning).toBe(NO_REASONING);
+    expect(result.reasoning).toBe(
+      'actionability=needs_action (0.95) · subject_matter=service (0.90) · priority=P2 (0.90) · category=technical (0.90) · tone=neutral (0.90) · urgency=medium (0.90)',
+    );
     expect(verdict.subject_matter).toBe('service');
   });
 

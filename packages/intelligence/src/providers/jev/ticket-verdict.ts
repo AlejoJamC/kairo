@@ -22,8 +22,9 @@
 // company, the same job the prompt's "company whose inbox you are reading"
 // block does for the text models.
 //
-// JEV has no free-text primitive, so `reasoning` cannot come from it —
-// NO_REASONING says so rather than fabricating an explanation. Confidence is
+// JEV has no free-text primitive, so `reasoning` is not prose it wrote: it is
+// a readout of the six typed answers and the confidence JEV gave each, so the
+// ticket shows what was actually decided instead of a placeholder. Confidence is
 // one number per question, not one per call, so the call's confidence is the
 // minimum across the six answers: a verdict is only as sure as its least sure
 // axis.
@@ -104,13 +105,20 @@ export function buildTicketVerdictQuestions(): Questions {
   };
 }
 
-/** No provider reports a text explanation for a JEV verdict — this says so, honestly. */
-export const NO_REASONING = '(JEV: typed decision, no generated reasoning text)';
-
 interface JevChoiceAnswer {
   type: 'choice';
   choice: string;
   confidence: number;
+}
+
+const READOUT_ORDER = ['actionability', 'subject_matter', 'priority', 'category', 'tone', 'urgency'] as const;
+
+/** What JEV answered on each axis and how sure it was — the only "reasoning" a typed decision has. */
+export function verdictReadout(answers: Record<string, JevChoiceAnswer>): string {
+  return READOUT_ORDER.flatMap((key) => {
+    const answer = answers[key];
+    return answer ? [`${key}=${answer.choice} (${answer.confidence.toFixed(2)})`] : [];
+  }).join(' · ');
 }
 
 /**
@@ -130,7 +138,7 @@ export function parseTicketVerdictAnswers(answers: Record<string, JevChoiceAnswe
     category: answers['category']?.choice,
     tone: answers['tone']?.choice,
     urgency: answers['urgency']?.choice,
-    reasoning: NO_REASONING,
+    reasoning: verdictReadout(answers),
     confidence: confidences.length > 0 ? Math.min(...confidences) : 0,
   });
 }

@@ -108,6 +108,7 @@
     "settings": "Configuración",
     "escalation": "Escalado",
     "aiReview": "Clasificación IA",
+    "knowledge": "Conocimiento",
     "resolved": "Resuelto",
     "clients": "Clientes"
   },
@@ -178,6 +179,23 @@
     "confirm": "Confirmar",
     "reject": "Rechazar",
     "error": "No se pudo guardar la revisión."
+  },
+  "knowledgeView": {
+    "title": "Conocimiento",
+    "subtitle": "Artículos de la base de conocimiento. Los borradores los redacta la IA a partir de tickets resueltos y no se publican hasta que una persona los apruebe.",
+    "tabDrafts": "Borradores",
+    "tabPublished": "Publicados",
+    "emptyDrafts": "No hay borradores por revisar.",
+    "emptyPublished": "No hay artículos publicados.",
+    "aiDraft": "Borrador de la IA",
+    "manual": "Manual",
+    "fieldTitle": "Título",
+    "fieldContent": "Contenido",
+    "publish": "Publicar",
+    "save": "Guardar",
+    "discard": "Descartar",
+    "delete": "Eliminar",
+    "error": "No se pudo completar la acción."
   },
   "escalatedView": {
     "title": "Escalados",

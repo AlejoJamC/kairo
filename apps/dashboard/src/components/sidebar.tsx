@@ -9,6 +9,7 @@ import {
   CircleCheck,
   ArrowUpCircle,
   Sparkles,
+  BookOpen,
   Users,
   Settings,
 } from "lucide-react";
@@ -113,6 +114,7 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
     { icon: CircleCheck,   label: t("dashboard:sidebar.resolved"),       view: "resolved" },
     { icon: ArrowUpCircle, label: t("dashboard:sidebar.escalation"),     view: "escalated" },
     { icon: Sparkles,      label: t("dashboard:sidebar.aiReview"),       view: "ai-review" },
+    { icon: BookOpen,      label: t("dashboard:sidebar.knowledge"),      view: "knowledge" },
   ];
 
   const adminNavItems: NavItem[] = [

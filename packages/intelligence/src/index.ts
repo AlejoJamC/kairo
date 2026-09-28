@@ -79,6 +79,8 @@ export { JevDecisionProvider } from './providers/jev/decision';
 
 export {
   createCompletionProvider,
+  createTextProvider,
+  resolveTextProviderId,
   createEmbeddingProvider,
   createDecisionProvider,
   type DecisionProviderId,
@@ -109,3 +111,17 @@ export type {
   EscalationDetectionResult,
   EscalationTriggerId,
 } from './escalation';
+
+export {
+  KNOWLEDGE_TYPES,
+  EVIDENCE_QUALITIES,
+  KnowledgeDecisionSchema,
+  KnowledgeDraftSchema,
+  buildKnowledgeQuestions,
+  parseKnowledgeAnswers,
+  shouldDraftKnowledge,
+  type KnowledgeType,
+  type EvidenceQuality,
+  type KnowledgeDecision,
+  type KnowledgeDraft,
+} from './knowledge';

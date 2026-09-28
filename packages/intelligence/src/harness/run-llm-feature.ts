@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 
-import { createCompletionProvider } from '../config/providers';
+import { createTextProvider, resolveTextProviderId } from '../config/providers';
 import type { PromptLang } from '../classification/prompt';
 import type { CompletionOptions, CompletionProvider, CompletionUsage } from '../providers/base';
 import { usageDetails, withGeneration } from './generation';
@@ -11,11 +11,10 @@ export interface LlmCallRecord {
   feature: string;
   /**
    * The provider family this call ran against (e.g. "anthropic", "jev").
-   * Optional because `runLlmFeature`/`runLlmTextFeature` predate it and the
-   * writer falls back to `INTELLIGENCE_PROVIDER` for those — correct only
-   * because that variable happens to also select the completion provider.
-   * `runDecisionFeature` always sets it, since a decision provider is never
-   * the one `INTELLIGENCE_PROVIDER` names.
+   * Optional because callers that pass their own provider predate it and the
+   * writer falls back to `INTELLIGENCE_PROVIDER` for those. Calls that resolve
+   * their provider from configuration set it from `TEXT_PROVIDER`, and
+   * `runDecisionFeature` always sets it.
    */
   provider?: string;
   model: string;
@@ -113,7 +112,8 @@ async function run<D>(request: LlmFeatureRequestBase, call: Call<D>): Promise<Ll
   const template = await loadPromptTemplate(request.promptId, request.lang);
   const promptVersion = extractPromptVersion(template);
   const prompt = fillTemplate(template, request.vars);
-  const provider = request.provider ?? createCompletionProvider();
+  const provider = request.provider ?? createTextProvider();
+  const providerFamily = request.provider ? {} : { provider: resolveTextProviderId() };
   const { ticketId, accountId, userId } = request.context ?? {};
   const ids = {
     ...(ticketId ? { ticketId } : {}),
@@ -147,6 +147,7 @@ async function run<D>(request: LlmFeatureRequestBase, call: Call<D>): Promise<Ll
       } catch (err) {
         await log({
           feature: request.feature,
+          ...providerFamily,
           model: provider.model,
           promptVersion,
           promptText: prompt,
@@ -168,6 +169,7 @@ async function run<D>(request: LlmFeatureRequestBase, call: Call<D>): Promise<Ll
 
       const llmCallId = await log({
         feature: request.feature,
+        ...providerFamily,
         model: meta.model,
         promptVersion,
         promptText: prompt,

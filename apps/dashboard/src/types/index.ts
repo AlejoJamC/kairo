@@ -57,6 +57,7 @@ export type AppView =
   | "resolved"
   | "escalated"
   | "ai-review"
+  | "knowledge"
   | "clients"
   | "settings"
   | "change-password"

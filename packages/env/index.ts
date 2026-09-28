@@ -6,6 +6,8 @@ export const env = createEnv({
         SUPABASE_URL: z.string().url(),
         SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
         INTELLIGENCE_PROVIDER: z.enum(["ollama", "anthropic", "jev"]).default("ollama"),
+        // Provider for features that generate text (reply suggestions, knowledge drafts). Defaults to INTELLIGENCE_PROVIDER, or ollama when that is jev.
+        TEXT_PROVIDER: z.enum(["ollama", "anthropic"]).optional(),
         ANTHROPIC_API_KEY: z.string().min(1).optional(),
         // Overrides the hardcoded default in AnthropicCompletionProvider (claude-sonnet-4-20250514).
         ANTHROPIC_MODEL: z.string().min(1).optional(),

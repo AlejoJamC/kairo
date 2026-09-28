@@ -108,6 +108,7 @@
     "settings": "Settings",
     "escalation": "Escalated",
     "aiReview": "AI Classification",
+    "knowledge": "Knowledge",
     "resolved": "Resolved",
     "clients": "Clients"
   },
@@ -178,6 +179,23 @@
     "confirm": "Confirm",
     "reject": "Reject",
     "error": "The review could not be saved."
+  },
+  "knowledgeView": {
+    "title": "Knowledge",
+    "subtitle": "Knowledge base articles. Drafts are written by the AI from resolved tickets and stay unpublished until a person approves them.",
+    "tabDrafts": "Drafts",
+    "tabPublished": "Published",
+    "emptyDrafts": "No drafts to review.",
+    "emptyPublished": "No published articles.",
+    "aiDraft": "AI draft",
+    "manual": "Manual",
+    "fieldTitle": "Title",
+    "fieldContent": "Content",
+    "publish": "Publish",
+    "save": "Save",
+    "discard": "Discard",
+    "delete": "Delete",
+    "error": "The action could not be completed."
   },
   "escalatedView": {
     "title": "Escalated",
