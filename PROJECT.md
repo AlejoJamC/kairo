@@ -30,7 +30,7 @@ there, not here.
 │   ├── feature-flags/  # static + runtime feature flags
 │   ├── identity/       # email/phone normalization, contact dedup
 │   ├── claude_design/  # Pencil design token package
-│   └── intelligence/   # modular LLM provider (Ollama / Anthropic)
+│   └── intelligence/   # decision provider (JEV) and text providers (Ollama / Anthropic)
 │       └── prompts/    # versioned LLM prompts (YAML frontmatter + markdown)
 ├── supabase/
 │   └── migrations/     # shared DB migrations (Postgres via Supabase)
@@ -69,7 +69,7 @@ there, not here.
 | API         | Bun + Hono + Inngest              |
 | Mobile      | Expo (React Native)               |
 | Database    | Supabase (Postgres + Auth)        |
-| AI          | Claude API (prod) / Ollama (local)|
+| AI          | JEV (classification) + Claude API / Ollama (text) |
 | Email       | Gmail API (OAuth, sync active)    |
 | Observability | Langfuse (LLM tracing) + ClickStack/HyperDX (OTel app tracing) — self-hosted local, see `docs/observability.md` |
 | Deploy      | Vercel                            |
@@ -94,7 +94,9 @@ there, not here.
 - Shared component library (`packages/ui`) with ShadCN
 - Shared types (`packages/types`) with core schema
 - Centralized env validation (`packages/env`) via `@t3-oss/env-core` + Zod
-- Intelligence layer (`packages/intelligence`) — modular provider abstraction: `CompletionProvider` (Ollama / Anthropic) and `DecisionProvider` (JEV, TypeSafe AI — see ADR-029). `classifyEmailWithJev()` runs in shadow alongside every brand-new ticket's real classification (tier1/tier2/tier3, incremental-sync), logging to `llm_calls` without ever touching the ticket; gated by `enable_jev_shadow_classification`, off by default.
+- Intelligence layer (`packages/intelligence`) — modular provider abstraction: `CompletionProvider` (Ollama / Anthropic) and `DecisionProvider` (JEV, TypeSafe AI — see ADR-029). `INTELLIGENCE_PROVIDER` selects the classifier; with `jev`, every classification path (tier1/tier2/tier3, incremental sync, batch and manual classify) is answered by JEV. `TEXT_PROVIDER` (`ollama` | `anthropic`) selects the model for features that generate text, since JEV cannot. Optional flags: `enable_jev_shadow_classification` logs JEV's opinion next to another provider's classification, and `enable_jev_canary` lets JEV upgrade a pending proposal for listed mailboxes.
+- AI classification review — the "Clasificación IA" view (`ai-review-view.tsx`) lists each ticket's AI proposal, split into to-review and approved-by-AI; confirming or rejecting calls `POST /v1/tickets/:id/classify-approve` and feeds the trust history that unlocks auto-approval.
+- Knowledge drafts — when a ticket is resolved, JEV decides whether its thread is worth keeping and a text model drafts the article into `kb_articles` as unpublished; the "Conocimiento" view (`knowledge-view.tsx`) edits, publishes or discards drafts. Gated by `enable_knowledge_candidates`.
 - Ticket auto-assignment — round-robin among an account's active members on ticket creation (`tickets-by-thread.ts`); with exactly one active member it always goes to them
 - Email classification prompt versioned as markdown artifact (`packages/intelligence/prompts/email-classification.md`)
   - Frontmatter is single source of truth for allowed enum values (tipo, prioridad, categoria, tono, urgencia)

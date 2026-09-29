@@ -14,7 +14,7 @@ Kairo is a bet that support triage is a trust problem, not a tooling problem. Su
 | Landing | Next.js 15 |
 | Admin (Kelan) | Next.js 15 |
 | Database | Supabase (Postgres + Auth) |
-| AI | Claude API (prod) / Ollama (local) |
+| AI | JEV (classification decisions) + Claude API / Ollama (text) |
 | Email | Gmail API |
 | Deploy | Vercel (webapp/landing/kelan) + Railway (api) |
 | Language | TypeScript (strict) |
@@ -37,7 +37,7 @@ kairo/
 │   ├── feature-flags/  # static + runtime feature flags
 │   ├── identity/       # email/phone normalization, contact dedup
 │   ├── claude_design/  # Pencil design token package
-│   └── intelligence/   # modular LLM provider (Ollama / Anthropic)
+│   └── intelligence/   # decision provider (JEV) and text providers (Ollama / Anthropic)
 │       └── prompts/    # versioned LLM prompts, per-language subdirs
 ├── supabase/
 │   └── migrations/     # shared DB migrations (Postgres via Supabase)

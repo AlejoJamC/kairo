@@ -79,7 +79,9 @@ const result = await jev.decide({
 });
 ```
 
-`classifyEmailWithJev()` runs a JEV verdict through the same `deriveClassification()` `classifyEmail()` uses — same output shape, different provider underneath.
+`classifyEmailWithJev()` runs a JEV verdict through the same `deriveClassification()` `classifyEmail()` uses — same output shape, different provider underneath. With `INTELLIGENCE_PROVIDER=jev`, `classifyEmail()` and `classifyEmailWithMeta()` dispatch to it, so every caller is answered by JEV with no change of its own. JEV has no free-text primitive: the ticket's `reasoning` is a readout of its typed answers and their confidence.
+
+`src/knowledge/decision.ts` holds the questions JEV answers about a resolved thread: whether it is worth keeping, what type of knowledge it is, whether it is reusable and how well it shows the answer worked. Only a confident candidate goes on to a text model.
 
 ## Configuration
 
@@ -109,8 +111,10 @@ export VOYAGE_API_KEY=pa-xxx
 ### Decision provider (JEV)
 
 ```bash
+export INTELLIGENCE_PROVIDER=jev   # JEV classifies
 export TYPESAFE_API_KEY=ts-xxx
-export JEV_MODEL=jev-latest   # optional, this is the default
+export JEV_MODEL=jev-latest        # optional, this is the default
+export TEXT_PROVIDER=ollama        # ollama | anthropic — text features cannot use JEV
 ```
 
 ## Provider matrix
@@ -119,10 +123,12 @@ export JEV_MODEL=jev-latest   # optional, this is the default
 |------------------------|--------------|------------------------------|
 | `INTELLIGENCE_PROVIDER`| `ollama`     | Ollama (`llama3.2`)          |
 | `INTELLIGENCE_PROVIDER`| `anthropic`  | Claude (`claude-sonnet-4-*`) |
+| `INTELLIGENCE_PROVIDER`| `jev`        | JEV (TypeSafe AI) — classification only |
+| `TEXT_PROVIDER`        | `ollama` \| `anthropic` | Text features (reply suggestion, knowledge drafts); defaults to `INTELLIGENCE_PROVIDER`, or `ollama` when that is `jev` |
 | `EMBEDDING_PROVIDER`   | `ollama`     | Ollama (`nomic-embed-text`)  |
 | `EMBEDDING_PROVIDER`   | `voyage`     | Voyage AI (`voyage-2`)       |
 
-`createDecisionProvider(id)` has one entry today: `'jev'` (TypeSafe AI), configured via `TYPESAFE_API_KEY` / `JEV_MODEL` — not gated by an `INTELLIGENCE_*` mode variable, since it's a separate provider shape (`DecisionProvider`), not a `CompletionProvider` variant.
+`createDecisionProvider(id)` has one entry today: `'jev'` (TypeSafe AI), configured via `TYPESAFE_API_KEY` / `JEV_MODEL`. It is a separate provider shape (`DecisionProvider`), not a `CompletionProvider` variant, so `createCompletionProvider()` rejects `jev`; features that generate text call `createTextProvider()`.
 
 ## Testing
 

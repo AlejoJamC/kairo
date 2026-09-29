@@ -91,7 +91,7 @@ const result = await runLlmFeature({
 
 Do not open Langfuse generations, read prompt files or insert into `llm_calls` by hand in `apps/`. Classification keeps `classifyEmailWithMeta`, which shares the harness's generation wrapper and template loader. Keep the feature's logic in a `lib/` module with injectable dependencies; the route only maps the result to HTTP.
 
-A `DecisionProvider` call (JEV — typed questions against a state, not a prompt; see ADR-029) goes through `runDecisionFeature` instead of `runLlmFeature` — same `logger: recordLlmCall` contract, no prompt template or Zod schema to pass. `classifyEmailWithJev()` follows classification's own pattern (`withGeneration` directly, not the generic harness) because it derives `ticket_type` before the generation closes.
+A `DecisionProvider` call (JEV — typed questions against a state, not a prompt; see ADR-029) goes through `runDecisionFeature` instead of `runLlmFeature` — same `logger: recordLlmCall` contract, no prompt template or Zod schema to pass. `classifyEmailWithJev()` follows classification's own pattern (`withGeneration` directly, not the generic harness) because it derives `ticket_type` before the generation closes. A feature that needs both a decision and text splits them: JEV decides through `runDecisionFeature`, and only a confident answer reaches a text model through `runLlmFeature`. Text features take their model from `TEXT_PROVIDER`, never from `INTELLIGENCE_PROVIDER`, which can be `jev`.
 
 ### 8. Provenance
 
