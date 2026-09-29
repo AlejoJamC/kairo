@@ -1,9 +1,12 @@
-import { classifyEmailWithMeta, DEFAULT_LANG, type PromptLang } from "@kairo/intelligence";
+import { classifyEmailWithMeta, DEFAULT_LANG, type EmailMessage, type PromptLang } from "@kairo/intelligence";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import type { TicketType } from "@kairo/intelligence";
 import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
 import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
+import { getFlag } from "@kairo/feature-flags";
+import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
+import { isJevCanaryTenant, jevCanaryUpgrade } from "../../lib/jev-canary.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
@@ -334,19 +337,18 @@ async function classifyWindow(
     const { body_plain, body_html } = extractBody(message.payload);
     const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
 
+    const emailMessage: EmailMessage = {
+      subject,
+      body: classifierBody,
+      from,
+      tenantMailbox: classifierContext.tenantMailbox,
+      ...(classifierContext.businessContext ? { businessContext: classifierContext.businessContext } : {}),
+      ...classifierEnvelope(filterResult.facts),
+    };
+
     const llmStart = Date.now();
     const promise = withRetry(llmSemaphore, () =>
-      classifyEmailWithMeta(
-        {
-          subject,
-          body: classifierBody,
-          from,
-          tenantMailbox: classifierContext.tenantMailbox,
-          ...(classifierContext.businessContext ? { businessContext: classifierContext.businessContext } : {}),
-          ...classifierEnvelope(filterResult.facts),
-        },
-        { lang: classifierContext.language, context: { accountId } },
-      ),
+      classifyEmailWithMeta(emailMessage, { lang: classifierContext.language, context: { accountId } }),
     )
       .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
         circuitBreaker.recordSuccess();
@@ -376,6 +378,30 @@ async function classifyWindow(
           DEFAULT_WEIGHTS
         );
 
+        // Same rule as Tier 2 — see backfill-proposal-status.ts. Nobody is
+        // watching here either.
+        const autoApprovalEnabled = autoApproved.includes(classification.type);
+        let proposalStatus = backfillProposalStatus({
+          type: classification.type,
+          businessContext: classifierContext.businessContext,
+          autoApprovalEnabled,
+          abstain,
+        });
+
+        // Canary — strictly additive, only for an account on the allowlist,
+        // only ever turns a pending proposal into an auto_approved one,
+        // never the type itself.
+        if (proposalStatus === "pending" && isJevCanaryTenant(classifierContext.tenantMailbox)) {
+          const upgraded = await jevCanaryUpgrade({
+            accountId,
+            message: emailMessage,
+            primaryType: classification.type,
+            autoApprovalEnabled,
+            hasBusinessContext: Boolean(classifierContext.businessContext),
+          });
+          if (upgraded) proposalStatus = "auto_approved";
+        }
+
         const { data: proposal } = await supabase
           .from("ticket_proposals")
           .insert({
@@ -390,14 +416,7 @@ async function classifyWindow(
             confidence_score: classification.confidence,
             model_version: meta.model,
             raw_llm_output: classification as Record<string, unknown>,
-            // Same rule as Tier 2 — see backfill-proposal-status.ts. Nobody is
-            // watching here either.
-            status: backfillProposalStatus({
-              type: classification.type,
-              businessContext: classifierContext.businessContext,
-              autoApprovalEnabled: autoApproved.includes(classification.type),
-              abstain,
-            }),
+            status: proposalStatus,
           })
           .select("id")
           .single();
@@ -490,6 +509,11 @@ async function classifyWindow(
 
             if (was_created && ticketId) {
               await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
+
+              // KAI-55 — shadow classification (fire-and-forget, non-blocking).
+              if (getFlag("enable_jev_shadow_classification")) {
+                runJevShadowClassification(emailMessage, { accountId, ticketId });
+              }
             }
 
             if (!was_created) {
@@ -531,6 +555,11 @@ async function classifyWindow(
 
             if (ticketId) {
               await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
+
+              // KAI-55 — shadow classification (fire-and-forget, non-blocking).
+              if (getFlag("enable_jev_shadow_classification")) {
+                runJevShadowClassification(emailMessage, { accountId, ticketId });
+              }
             }
 
             if (proposal?.id && ticketId) {
@@ -591,6 +620,11 @@ async function classifyWindow(
 
           if (ticketId) {
             await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
+
+            // KAI-55 — shadow classification (fire-and-forget, non-blocking).
+            if (getFlag("enable_jev_shadow_classification")) {
+              runJevShadowClassification(emailMessage, { accountId, ticketId });
+            }
           }
 
           if (proposal?.id && ticketId) {

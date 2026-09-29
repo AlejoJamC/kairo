@@ -29,6 +29,18 @@ the provider reported), and returns the row id for outcome writeback. See
 `apps/api/src/lib/reply-suggestion.ts` for a complete consumer and
 `skills/kairo-llm-feature/SKILL.md` for the procedure.
 
+A `DecisionProvider` call (JEV — see ADR-029) uses `runDecisionFeature`
+instead, the same file: same `withGeneration`/`llm_calls` contract, no prompt
+template or Zod schema (a decision call has neither). `recordLlmCall` reads
+`record.provider` when the call sets it (JEV always does, and text features
+set it from `TEXT_PROVIDER`) instead of defaulting to `INTELLIGENCE_PROVIDER`,
+which can be `jev` and so names neither a text provider nor, for a decision
+call, the one that ran. `classifyEmailWithJev()` (`classification/classify-with-jev.ts`)
+calls the provider directly under its own `withGeneration`, the same way
+`classifyEmailWithMeta` does, rather than through `runDecisionFeature` — like
+classification, it needs to derive `ticket_type` from the answer before the
+generation closes.
+
 The rest of this section describes the classification call sites, which log
 through `logLlmCall` after `classifyEmailWithMeta`.
 
@@ -205,5 +217,8 @@ GROUP BY model;
 | `reply_suggestion` (`lib/reply-suggestion.ts`, route `POST /:id/suggest-reply`) | ✅ done — through `runLlmFeature` + `recordLlmCall`; `llm_call_id` returned to client; outcome writeback via `PATCH /:id/suggest-reply/:llmCallId/outcome` |
 | `kb_search` | ⏳ not built yet (ADR-012 pending) |
 | `resolution_summary` | ⏳ pending |
+| JEV ticket verdict (`classifyEmailWithJev`) | ✅ Langfuse generation via `withGeneration`. With `INTELLIGENCE_PROVIDER=jev` it is the classification on every path above; with the shadow flag on (`apps/api/src/lib/jev-shadow-classification.ts`) it also runs beside another provider, logged to `llm_calls` with `feature: email_classification_jev_shadow` |
+| `knowledge_decision` (`lib/knowledge-candidate.ts`) | ✅ JEV decision through `runDecisionFeature` + `recordLlmCall`; gated by `enable_knowledge_candidates` |
+| `knowledge_draft` (`lib/knowledge-candidate.ts`) | ✅ text model through `runLlmFeature` + `recordLlmCall`, only for a confident candidate; prompt `knowledge-draft` |
 
 Table exists and is now actively populated by the call sites above.

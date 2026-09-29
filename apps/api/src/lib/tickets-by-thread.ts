@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveRoundRobinAssignee, type AgentWorkload } from "@kairo/intelligence";
 import type { classificationAudit } from "./classification-audit.js";
 import { transitionTicketStatus, TICKET_CREATED_TRIGGER } from "./ticket-transition.js";
 
@@ -48,6 +49,46 @@ export interface FindOrCreateTicketResult {
   prior_status: string | null; // when was_created=false; for transitions
 }
 
+/** How many of an agent's most recent assignments to look at before treating them as never-assigned. Fairness only needs the most recent one; this bounds the query. */
+const RECENT_ASSIGNMENTS_WINDOW = 200;
+
+/**
+ * The active agent who should get the account's next ticket — whoever's own
+ * most recent assignment is the oldest (KAI-55, confirmed round-robin).
+ * Null when the account has no active member.
+ */
+async function resolveAutoAssignee(client: DbClient, accountId: string): Promise<string | null> {
+  const { data: activeMembers } = await client
+    .from("account_members")
+    .select("user_id")
+    .eq("account_id", accountId)
+    .eq("status", "active");
+  const activeUserIds = (activeMembers ?? []).map((m: { user_id: string }) => m.user_id);
+  if (activeUserIds.length === 0) return null;
+
+  const { data: recentlyAssigned } = await client
+    .from("tickets")
+    .select("assigned_to, created_at")
+    .eq("account_id", accountId)
+    .in("assigned_to", activeUserIds)
+    .order("created_at", { ascending: false })
+    .limit(RECENT_ASSIGNMENTS_WINDOW);
+
+  // First row per agent, in descending order, is that agent's most recent
+  // assignment — everyone else defaults to null (never assigned, within the
+  // window), which fairness treats as the oldest possible turn.
+  const lastAssignedAt = new Map<string, string>();
+  for (const row of (recentlyAssigned ?? []) as { assigned_to: string; created_at: string }[]) {
+    if (!lastAssignedAt.has(row.assigned_to)) lastAssignedAt.set(row.assigned_to, row.created_at);
+  }
+
+  const agents: AgentWorkload[] = activeUserIds.map((userId: string) => ({
+    userId,
+    lastAssignedAt: lastAssignedAt.get(userId) ?? null,
+  }));
+  return resolveRoundRobinAssignee(agents);
+}
+
 /**
  * Find or create the canonical ticket for a conversation thread.
  *
@@ -83,11 +124,19 @@ export async function findOrCreateTicketForThread(
   }
 
   // 2. No existing ticket — create one
+  //
+  // KAI-55: round-robin among active agents — whoever has gone longest
+  // without a new ticket gets this one. Confirmed by the user: round-robin
+  // among available agents; per-ticket at arrival, not a priority-ordered
+  // batch sweep (there is no batch here, one ticket is being created).
+  const assignedTo = await resolveAutoAssignee(client, accountId);
+
   const { data: inserted, error: insertErr } = await client
     .from("tickets")
     .insert({
       account_id: accountId,
       conversation_id: conversationId,
+      assigned_to: assignedTo,
       originating_user_id: originatingUserId,
       subject: originMessage.subject,
       from_email: originMessage.from_email,

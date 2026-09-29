@@ -61,6 +61,9 @@ mock.module('../config/providers', () => ({
     secondCalls++;
     return fakeProvider(target.model, () => secondAnswer);
   },
+  createDecisionProvider: () => {
+    throw new Error('createDecisionProvider is not used by the ensemble tests');
+  },
 }));
 
 const { classifyEmailWithMeta } = await import('./classify');

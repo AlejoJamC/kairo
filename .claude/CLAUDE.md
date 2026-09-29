@@ -26,6 +26,18 @@ Rules of conduct:
 
 ---
 
+## ⛔ No dates or phase labels in source code comments
+
+A comment citing a Linear ticket carries only the bare id (`KAI-55` — already
+the codebase's own convention). Never a date, never "Fase N" / "Phase N",
+never sample sizes or an execution narrative ("measured on n=50, 27-sep").
+That belongs in the Linear comment, never in the code — it rots immediately
+and nobody reads a commit message through a source file. Before writing or
+editing any comment that cites a ticket, check it for anything beyond the
+bare id and strip it.
+
+---
+
 **Read `PROJECT.md` in full before doing anything else.**
 
 ## Meta rules (read before anything else)

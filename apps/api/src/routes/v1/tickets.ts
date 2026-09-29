@@ -851,6 +851,20 @@ tickets.patch("/:id/status", async (c) => {
   // ticket_state_history by transitionTicketStatus() above — no second copy
   // anywhere else.
 
+  // KAI-55: a freshly resolved ticket may hold knowledge worth keeping. The
+  // event is best effort — a failure to send it never fails the transition.
+  if (toStatus === "resolved" && fromStatus !== "resolved") {
+    try {
+      await inngest.send({
+        id: `knowledge-candidate:${id}`,
+        name: "tickets/ticket.resolved",
+        data: { ticketId: id, accountId: ctx.accountId },
+      });
+    } catch (err) {
+      console.error(`[knowledge-candidate] event not sent for ticket ${id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   return c.json({ success: true, ticket: updatedTicket });
 });
 

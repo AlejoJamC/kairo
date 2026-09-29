@@ -85,10 +85,10 @@ describe("dispatchOnboardingClassification — success path", () => {
     expect(payload.data.gmailAccessToken).toBe(SECRET_TOKEN);
     expect(payload.data.source).toBe("oauth-callback");
     expect(typeof payload.data.since).toBe("string");
-    expect(payload.id.startsWith("tier1-onboard:user-1:")).toBe(true);
+    expect(payload.id).toBe("tier1-onboard:acc-1");
   });
 
-  it("uses a stable idempotency key per (user, day) — same key for repeated calls", async () => {
+  it("uses a stable idempotency key per account, with no date component — same key for repeated calls on different days", async () => {
     await dispatchOnboardingClassification({
       userId: "user-2",
       accountId: "acc-2",
@@ -105,6 +105,23 @@ describe("dispatchOnboardingClassification — success path", () => {
     const second = sendMock.mock.calls[1]?.[0] as { id: string };
     // Same id → Inngest deduplicates server-side
     expect(first.id).toBe(second.id);
+  });
+
+  it("uses a different idempotency key for a different account under the same user — no cross-account collision", async () => {
+    await dispatchOnboardingClassification({
+      userId: "user-3",
+      accountId: "acc-3a",
+      gmailAccessToken: SECRET_TOKEN,
+    });
+    await dispatchOnboardingClassification({
+      userId: "user-3",
+      accountId: "acc-3b",
+      gmailAccessToken: SECRET_TOKEN,
+    });
+
+    const first = sendMock.mock.calls[0]?.[0] as { id: string };
+    const second = sendMock.mock.calls[1]?.[0] as { id: string };
+    expect(first.id).not.toBe(second.id);
   });
 });
 

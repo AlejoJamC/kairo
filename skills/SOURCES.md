@@ -1,6 +1,6 @@
 # Vendored skills
 
-Skills below are vendored from official upstream repos for the Langfuse + ClickHouse/ClickStack observability work (KAI-126). Update by re-copying the `skills/<name>` folder from the source repo.
+Skills below are vendored from official upstream repos for the Langfuse + ClickHouse/ClickStack observability work (KAI-126). Update by re-copying the `skills/<name>` folder from the source repo into `skills/<name>/`.
 
 | Skill | Source | License |
 |---|---|---|

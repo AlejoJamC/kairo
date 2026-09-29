@@ -20,6 +20,48 @@
 //                                  (or a supervisor/admin fallback) via an in-app
 //                                  notification once a ticket crosses its priority's
 //                                  configured escalation threshold. OFF by default.
+//   enable_auto_approval_recompute — KAI-55: run the cron that turns human review
+//                                  actions in ticket_classification_history into
+//                                  ticket_type_auto_approval's current_precision /
+//                                  current_sample_count / auto_approval_enabled —
+//                                  the computation ADR-027's table never got after
+//                                  its predecessor (category_confidence_thresholds)
+//                                  was dropped. OFF by default: until this runs,
+//                                  backfill (tier2/tier3) auto-approves nothing,
+//                                  same as today.
+//   enable_jev_shadow_classification — KAI-55: for every brand-new ticket
+//                                  created by tier1/tier2/tier3/incremental-sync,
+//                                  also run JEV's classifyEmailWithJev in
+//                                  parallel and log the outcome to `llm_calls`
+//                                  (feature: email_classification_jev_shadow).
+//                                  JEV's decision is never applied to the
+//                                  ticket. OFF by default, and requires
+//                                  TYPESAFE_API_KEY when on.
+//   enable_knowledge_candidates  — KAI-55: when a ticket is resolved, ask JEV
+//                                  whether its thread is worth keeping as
+//                                  knowledge; if so a text model (TEXT_PROVIDER)
+//                                  drafts a kb_articles row with
+//                                  is_published = false. Requires
+//                                  TYPESAFE_API_KEY when on.
+//   enable_jev_canary            — KAI-55: for tier1/tier2/tier3 proposals on a
+//                                  tenant mailbox listed in
+//                                  FEATURE_FLAG_JEV_CANARY_MAILBOXES (comma-
+//                                  separated addresses, read directly — not a
+//                                  flags.ts concept; a mailbox, not
+//                                  account_id, because an account can be torn
+//                                  down and recreated per test run): ask JEV,
+//                                  and upgrade a `pending` proposal to
+//                                  `auto_approved` only when JEV agrees with
+//                                  the type classifyEmailWithMeta already
+//                                  chose. tier2/tier3 also require the
+//                                  account to have separately earned
+//                                  auto-approval for that type
+//                                  (authorizeTicketTypeAction); tier1 does
+//                                  not, matching tier1ProposalStatus's own
+//                                  no-earned-history rule. Strictly additive
+//                                  — never downgrades, never changes the type
+//                                  written. OFF by default, and the mailbox
+//                                  allowlist is empty by default even when on.
 //
 // Runtime-overrideable numeric flags (server-only, via FEATURE_FLAG_<UPPER_SNAKE> env vars):
 //   gmail_poll_cron_interval_minutes — KAI-248: how often (in minutes) the Gmail
@@ -40,6 +82,11 @@
 //                                  through withRetry's own 4 attempts with backoff before
 //                                  landing here, so this cron's own interval is the next
 //                                  layer of backoff, not a tight retry loop.
+//   auto_approval_recompute_interval_minutes — KAI-55: how often (in minutes) the
+//                                  auto-approval recompute cron re-derives trust stats
+//                                  from ticket_classification_history. Default: 30 —
+//                                  same cadence as the retry sweep; this is a batch
+//                                  aggregation over review activity, not a tight loop.
 // =============================================================================
 
 // ─── Static dashboard flags (build-time, no env override) ────────────────────
@@ -64,6 +111,10 @@ const FLAG_DEFAULTS = {
   enable_contact_extraction: false,
   enable_ticket_acknowledgement: false,
   enable_operational_sla_escalation: false,
+  enable_auto_approval_recompute: false,
+  enable_jev_shadow_classification: false,
+  enable_jev_canary: false,
+  enable_knowledge_candidates: false,
 } as const;
 
 type RuntimeFlagName = keyof typeof FLAG_DEFAULTS;
@@ -92,6 +143,7 @@ const NUMERIC_FLAG_DEFAULTS = {
   gmail_poll_cron_interval_minutes: 5,
   operational_sla_escalation_check_interval_minutes: 5,
   classification_retry_sweep_cron_interval_minutes: 30,
+  auto_approval_recompute_interval_minutes: 30,
 } as const;
 
 type NumericFlagName = keyof typeof NUMERIC_FLAG_DEFAULTS;

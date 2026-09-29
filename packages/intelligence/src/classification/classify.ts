@@ -1,9 +1,10 @@
-import { createCompletionProvider } from '../config/providers';
+import { createCompletionProvider, createDecisionProvider } from '../config/providers';
 import { resolveEnsembleTarget } from '../config/ensemble';
 import { ModelVerdictSchema, type ClassificationResult, type ModelVerdictResult } from './schema';
-import { deriveClassification, provenanceOf } from './derive';
+import { deriveClassification, provenanceOf, EXTERNAL_FALLBACK_FACTS } from './derive';
 import { buildPrompt, getPromptVersion, type PromptLang, DEFAULT_LANG } from './prompt';
 import { generationResultMetadata, generationStartMetadata } from './telemetry';
+import { classifyEmailWithJev } from './classify-with-jev';
 import type { EmailMessage } from './types';
 import type { TicketType } from '@kairo/types';
 import type { CompletionMeta, CompletionOptions } from '../providers/base';
@@ -17,16 +18,7 @@ export interface ClassifyOptions extends Pick<CompletionOptions, 'temperature'> 
   context?: LangfuseContext;
 }
 
-/**
- * The provenance a caller with no headers gets: outside the company.
- *
- * Only the two fields `provenanceOf` reads matter on this path; the rest is
- * never consulted.
- */
-const EXTERNAL_FALLBACK_FACTS = {
-  senderIsTenantAddress: false,
-  senderIsTenantDomain: false,
-} as Parameters<typeof provenanceOf>[0];
+export { EXTERNAL_FALLBACK_FACTS };
 
 export async function classifyEmail(
   message: EmailMessage,
@@ -36,15 +28,7 @@ export async function classifyEmail(
   return result;
 }
 
-/**
- * Like {@link classifyEmail}, but also surfaces provider metadata (raw text,
- * model, token usage) and the resolved prompt — for LLM observability
- * (KAI-110).
- */
-export async function classifyEmailWithMeta(
-  message: EmailMessage,
-  options?: ClassifyOptions,
-): Promise<{
+interface ClassifyEmailWithMetaResult {
   result: ClassificationResult;
   /**
    * What the model actually answered, before the table turned it into a type.
@@ -72,7 +56,53 @@ export async function classifyEmailWithMeta(
   meta: CompletionMeta;
   prompt: string;
   promptVersion: string | null;
-}> {
+}
+
+/**
+ * `INTELLIGENCE_PROVIDER=jev` — the same slot `ollama`/`anthropic` already
+ * occupy, so every existing call site (tier1/tier2/tier3, incremental-sync,
+ * batch-classify, the manual /classify routes) gets JEV as the classifier
+ * that writes the ticket with no change of its own. JEV has no rendered
+ * prompt or ensemble concept, so those fields are filled with what actually
+ * describes a DecisionProvider call instead of borrowed CompletionProvider
+ * ones.
+ */
+async function classifyEmailWithJevAsMeta(
+  message: EmailMessage,
+  options?: ClassifyOptions,
+): Promise<ClassifyEmailWithMetaResult> {
+  const provider = createDecisionProvider('jev');
+  const { result, verdict, decision } = await classifyEmailWithJev(message, provider, options?.context);
+
+  return {
+    result,
+    verdict,
+    abstain: false,
+    ensemble: null,
+    meta: {
+      rawText: JSON.stringify(decision.value),
+      model: decision.modelVersion,
+      usage: { promptTokens: null, completionTokens: null },
+      tokensPerSecond: null,
+    },
+    prompt: JSON.stringify({ state: message }),
+    promptVersion: null,
+  };
+}
+
+/**
+ * Like {@link classifyEmail}, but also surfaces provider metadata (raw text,
+ * model, token usage) and the resolved prompt — for LLM observability
+ * (KAI-110).
+ */
+export async function classifyEmailWithMeta(
+  message: EmailMessage,
+  options?: ClassifyOptions,
+): Promise<ClassifyEmailWithMetaResult> {
+  if (process.env['INTELLIGENCE_PROVIDER'] === 'jev') {
+    return classifyEmailWithJevAsMeta(message, options);
+  }
+
   const provider = createCompletionProvider();
   const ensembleTarget = resolveEnsembleTarget();
   const ensembleMisconfigured = Boolean(process.env['INTELLIGENCE_ENSEMBLE']?.trim()) && ensembleTarget === null;

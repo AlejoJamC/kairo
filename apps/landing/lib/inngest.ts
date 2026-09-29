@@ -37,18 +37,18 @@ export interface OnboardingClassificationInput {
   sinceDays?: number;
 }
 
-function todayUtcDate(): string {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-}
-
 /**
  * Dispatch the onboarding/initial classification pipeline for a freshly
  * authorized Gmail account.
  *
  * Design notes:
  *  - Idempotency: the Inngest event `id` field deduplicates events with the
- *    same key within Inngest's window. Key = `tier1-onboard:{userId}:{date}`,
- *    so a user reconnecting Gmail on the same day produces a no-op.
+ *    same key within Inngest's window. Key = `tier1-onboard:{accountId}`, no
+ *    date component — tier1 runs at most once per account, ever (see the
+ *    "already onboarded" guard in tier1-fast-path.ts), so the key matches
+ *    that lifetime, not a day. Keying on userId instead would collide across
+ *    two different accounts the same user opens the same day, and reset
+ *    every midnight even for the same account.
  *  - Failure isolation: this never throws. The OAuth callback uses the
  *    return value purely for logging — auth flow must always proceed.
  *  - Token hygiene: the access token is never written to any log line.
@@ -81,7 +81,7 @@ export async function dispatchOnboardingClassification(
   const since = new Date(
     Date.now() - sinceDays * 24 * 60 * 60 * 1000
   ).toISOString();
-  const idempotencyKey = `tier1-onboard:${input.userId}:${todayUtcDate()}`;
+  const idempotencyKey = `tier1-onboard:${input.accountId}`;
 
   try {
     await inngest.send({

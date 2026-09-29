@@ -1,6 +1,6 @@
 ---
 name: kairo-ai-evaluation
-description: Procedure for measuring Kairo's LLM pipeline and deciding whether a change is supported by evidence, using the offline harness in scripts/eval (eval:pipeline, eval:metrics, eval:matrix, eval:layered, eval:attribute, eval:ablation) and production signals (llm_calls, classification_feedback, Langfuse scores, ClickStack decision spans). Use when choosing a model, establishing a baseline for a new LLM feature, comparing before/after a prompt, routing or derivation change, attributing a wrong ticket_type to a layer, reading calibration or annotator agreement, or reporting quality, cost or latency.
+description: Procedure for measuring Kairo's LLM pipeline and deciding whether a change is supported by evidence, using the offline harness in scripts/eval (eval:pipeline, eval:pipeline-jev, eval:metrics, eval:matrix, eval:layered, eval:attribute, eval:ablation) and production signals (llm_calls, classification_feedback, Langfuse scores, ClickStack decision spans). Use when choosing a model, establishing a baseline for a new LLM feature, comparing before/after a prompt, routing or derivation change, attributing a wrong ticket_type to a layer, reading calibration or annotator agreement, or reporting quality, cost or latency.
 ---
 
 # Evaluating Kairo's AI
@@ -19,6 +19,7 @@ description: Procedure for measuring Kairo's LLM pipeline and deciding whether a
 |---|---|---|
 | Which model / variant is best? | `bun run eval:matrix` | `EVAL_MODELS`, `EVAL_CORPUS`, `EVAL_MAX_MINUTES`, `EVAL_MAX_CALLS`, `EVAL_MATRIX_DRY=1` |
 | One model, one stage | `bun run eval:pipeline` | `INTELLIGENCE_PROVIDER`, `OLLAMA_MODEL`/`ANTHROPIC_MODEL`, `EVAL_STAGE`, `EVAL_BUSINESS_CONTEXT`, `EVAL_TENANT_MAILBOX`, `EVAL_NO_CONTEXT=1` |
+| JEV against the same corpus | `bun run eval:pipeline-jev` | `TYPESAFE_API_KEY`, `JEV_MODEL`, `EVAL_STAGE`, `EVAL_CORPUS`; facts, tenant mailboxes and business context built as `eval:matrix` builds them — writes to run dir `jev` / `jev-onboarding`, refuses to overwrite an existing one |
 | Score a run against the sheet | `bun run eval:metrics [<run-dir>]` | the run directory |
 | The whole pipeline, layer by layer (L1 facts → L2 routing → L3 model → L4 table) | `bun run eval:layered` | `EVAL_STAGE` (default `backfill`), `EVAL_OUTPUT_ROOT`, `EVAL_LAYERED_DRY=1` |
 | Which layer made a wrong type? (no model call) | `bun run eval:attribute` | an existing layered run |

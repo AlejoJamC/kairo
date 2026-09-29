@@ -1,6 +1,7 @@
 export {
   classifyEmail,
   classifyEmailWithMeta,
+  classifyEmailWithJev,
   buildPrompt,
   getPromptVersion,
   extractPromptVersion,
@@ -78,10 +79,30 @@ export { JevDecisionProvider } from './providers/jev/decision';
 
 export {
   createCompletionProvider,
+  createTextProvider,
+  resolveTextProviderId,
   createEmbeddingProvider,
   createDecisionProvider,
   type DecisionProviderId,
 } from './config/providers';
+
+export { initialLearningStatus } from './learning';
+
+export { resolveRoundRobinAssignee, type AgentWorkload } from './routing';
+
+export {
+  computeTrustStatsByType,
+  resolveAutoApprovalEnabled,
+  TRUST_REVIEW_WINDOW,
+  authorizeTicketTypeAction,
+  DEFAULT_CONFIDENCE_THRESHOLD,
+  type ClassificationReviewRow,
+  type TicketTypeTrustStats,
+  type ActionAuthorization,
+  type ActionAuthorizationReason,
+  type ActionMode,
+  type AuthorizeTicketTypeActionInput,
+} from './autonomy';
 
 export { detectEscalationTriggers } from './escalation';
 export type {
@@ -90,3 +111,17 @@ export type {
   EscalationDetectionResult,
   EscalationTriggerId,
 } from './escalation';
+
+export {
+  KNOWLEDGE_TYPES,
+  EVIDENCE_QUALITIES,
+  KnowledgeDecisionSchema,
+  KnowledgeDraftSchema,
+  buildKnowledgeQuestions,
+  parseKnowledgeAnswers,
+  shouldDraftKnowledge,
+  type KnowledgeType,
+  type EvidenceQuality,
+  type KnowledgeDecision,
+  type KnowledgeDraft,
+} from './knowledge';

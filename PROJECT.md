@@ -5,6 +5,14 @@ Kairo is an AI-powered support cockpit that helps support teams manage
 customer support more intelligently. It connects to Gmail, classifies incoming
 emails, and routes/responds based on learned behavior per client.
 
+**Read `docs/what-is-kairo.md` before working on the classification pipeline
+or its tiers.** It describes the staged first pass every account goes
+through once — fast first ticket (tier1-fast-path, the onboarding scan),
+last two weeks (tier2-background), older mail back to about three months
+(tier3-deferred) — and the ongoing poll after that (incremental-sync). The
+tier boundaries, their scan sizes, and which ones a human is watching live
+there, not here.
+
 ## Monorepo Structure (Turborepo)
 ```
 /
@@ -22,7 +30,7 @@ emails, and routes/responds based on learned behavior per client.
 │   ├── feature-flags/  # static + runtime feature flags
 │   ├── identity/       # email/phone normalization, contact dedup
 │   ├── claude_design/  # Pencil design token package
-│   └── intelligence/   # modular LLM provider (Ollama / Anthropic)
+│   └── intelligence/   # decision provider (JEV) and text providers (Ollama / Anthropic)
 │       └── prompts/    # versioned LLM prompts (YAML frontmatter + markdown)
 ├── supabase/
 │   └── migrations/     # shared DB migrations (Postgres via Supabase)
@@ -61,7 +69,7 @@ emails, and routes/responds based on learned behavior per client.
 | API         | Bun + Hono + Inngest              |
 | Mobile      | Expo (React Native)               |
 | Database    | Supabase (Postgres + Auth)        |
-| AI          | Claude API (prod) / Ollama (local)|
+| AI          | JEV (classification) + Claude API / Ollama (text) |
 | Email       | Gmail API (OAuth, sync active)    |
 | Observability | Langfuse (LLM tracing) + ClickStack/HyperDX (OTel app tracing) — self-hosted local, see `docs/observability.md` |
 | Deploy      | Vercel                            |
@@ -86,7 +94,10 @@ emails, and routes/responds based on learned behavior per client.
 - Shared component library (`packages/ui`) with ShadCN
 - Shared types (`packages/types`) with core schema
 - Centralized env validation (`packages/env`) via `@t3-oss/env-core` + Zod
-- Intelligence layer (`packages/intelligence`) — modular LLM provider abstraction (Ollama / Anthropic)
+- Intelligence layer (`packages/intelligence`) — modular provider abstraction: `CompletionProvider` (Ollama / Anthropic) and `DecisionProvider` (JEV, TypeSafe AI — see ADR-029). `INTELLIGENCE_PROVIDER` selects the classifier; with `jev`, every classification path (tier1/tier2/tier3, incremental sync, batch and manual classify) is answered by JEV. `TEXT_PROVIDER` (`ollama` | `anthropic`) selects the model for features that generate text, since JEV cannot. Optional flags: `enable_jev_shadow_classification` logs JEV's opinion next to another provider's classification, and `enable_jev_canary` lets JEV upgrade a pending proposal for listed mailboxes.
+- AI classification review — the "Clasificación IA" view (`ai-review-view.tsx`) lists each ticket's AI proposal, split into to-review and approved-by-AI; confirming or rejecting calls `POST /v1/tickets/:id/classify-approve` and feeds the trust history that unlocks auto-approval.
+- Knowledge drafts — when a ticket is resolved, JEV decides whether its thread is worth keeping and a text model drafts the article into `kb_articles` as unpublished; the "Conocimiento" view (`knowledge-view.tsx`) edits, publishes or discards drafts. Gated by `enable_knowledge_candidates`.
+- Ticket auto-assignment — round-robin among an account's active members on ticket creation (`tickets-by-thread.ts`); with exactly one active member it always goes to them
 - Email classification prompt versioned as markdown artifact (`packages/intelligence/prompts/email-classification.md`)
   - Frontmatter is single source of truth for allowed enum values (tipo, prioridad, categoria, tono, urgencia)
   - Zod schema built dynamically from frontmatter — never hardcoded separately
@@ -133,6 +144,7 @@ Webapp translation files: `apps/dashboard/src/i18n/resources/{en,es}/*.json`
 | `bun run build` | Turbo full monorepo build |
 | `bun test` | Run Vitest across all packages |
 | `bun run eval:pipeline` | Run 50 .eml files through classification pipeline → `scripts/eval/data/output/pipeline_output_50.csv` |
+| `bun run eval:pipeline-jev` | Run the same corpus through `classifyEmailWithJev` → `scripts/eval/data/output/jev/pipeline_output.csv`, read by `eval:metrics jev` |
 | `bun run eval:metrics` | Join ground truth + pipeline output → `eval_report.json` + `eval_report.md` (requires both input files) |
 | `supabase db diff --schema public` | Check for uncommitted schema changes |
 | `supabase migration new <name>` | Create a new migration file |

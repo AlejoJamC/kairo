@@ -35,6 +35,22 @@ export function createCompletionProvider(target?: CompletionTarget): CompletionP
   return findCompletionProvider(id).create(process.env, target?.model);
 }
 
+/**
+ * The provider id for any feature that generates text (reply suggestions,
+ * knowledge drafts). `TEXT_PROVIDER` wins; otherwise `INTELLIGENCE_PROVIDER`,
+ * unless that is `jev`, which cannot generate text.
+ */
+export function resolveTextProviderId(): string {
+  const explicit = process.env['TEXT_PROVIDER'];
+  if (explicit) return explicit;
+  const classifier = process.env['INTELLIGENCE_PROVIDER'];
+  return classifier && classifier !== 'jev' ? classifier : 'ollama';
+}
+
+export function createTextProvider(): CompletionProvider {
+  return findCompletionProvider(resolveTextProviderId()).create(process.env);
+}
+
 type Env = Record<string, string | undefined>;
 
 interface EmbeddingProviderEntry {

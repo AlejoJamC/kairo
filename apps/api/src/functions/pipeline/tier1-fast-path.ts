@@ -1,4 +1,6 @@
-import { classifyEmailWithMeta, detectEscalationTriggers, type PromptLang } from "@kairo/intelligence";
+import { classifyEmailWithMeta, detectEscalationTriggers, type EmailMessage, type PromptLang } from "@kairo/intelligence";
+import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
+import { isJevCanaryTenant, jevCanaryUpgradeTier1 } from "../../lib/jev-canary.js";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import {
   buildClassifierBody,
@@ -363,20 +365,19 @@ export const tier1FastPath = inngest.createFunction(
 
         pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
 
+        const emailMessage: EmailMessage = {
+          subject,
+          body: classifierBody,
+          from,
+          tenantMailbox: userEmail,
+          // KAI-45 — recipients and thread position, read once by the
+          // pre-filter and previously discarded.
+          ...classifierEnvelope(filterResult.facts),
+        };
+
         const llmStart = Date.now();
         const promise = withRetry(llmSemaphore, () =>
-          classifyEmailWithMeta(
-            {
-              subject,
-              body: classifierBody,
-              from,
-              tenantMailbox: userEmail,
-              // KAI-45 — recipients and thread position, read once by the
-              // pre-filter and previously discarded.
-              ...classifierEnvelope(filterResult.facts),
-            },
-            { lang: language, context: { accountId } },
-          ),
+          classifyEmailWithMeta(emailMessage, { lang: language, context: { accountId } }),
         )
           .then(async ({ result: classification, verdict, ensemble, abstain, meta, prompt, promptVersion }) => {
             circuitBreaker.recordSuccess();
@@ -413,6 +414,22 @@ export const tier1FastPath = inngest.createFunction(
             // this insert fails outright. What changes is that a `pending` label
             // stops claiming a review that did not happen, and POST
             // /v1/tickets/:id/classify-approve has something to act on.
+            let proposalStatus = tier1ProposalStatus(classification.type, abstain);
+
+            // Canary — strictly additive, only for a tenant mailbox on the
+            // allowlist, only ever turns a pending proposal into an
+            // auto_approved one. No earned-history requirement here, same
+            // as tier1ProposalStatus's own rule: a human is already
+            // reviewing the onboarding scan.
+            if (proposalStatus === "pending" && isJevCanaryTenant(userEmail)) {
+              const upgraded = await jevCanaryUpgradeTier1({
+                accountId,
+                message: emailMessage,
+                primaryType: classification.type,
+              });
+              if (upgraded) proposalStatus = "auto_approved";
+            }
+
             const { data: proposal, error: proposalErr } = await supabase
               .from("ticket_proposals")
               .insert({
@@ -427,7 +444,7 @@ export const tier1FastPath = inngest.createFunction(
                 confidence_score: classification.confidence,
                 model_version: meta.model,
                 raw_llm_output: classification as Record<string, unknown>,
-                status: tier1ProposalStatus(classification.type, abstain),
+                status: proposalStatus,
               })
               .select("id")
               .single();
@@ -650,6 +667,12 @@ export const tier1FastPath = inngest.createFunction(
             }
 
             if (ticket?.id && was_created) {
+              // KAI-55 — shadow classification (fire-and-forget, non-blocking).
+              // Only on ticket creation — not for follow-up messages.
+              if (getFlag("enable_jev_shadow_classification")) {
+                runJevShadowClassification(emailMessage, { accountId, ticketId: ticket.id });
+              }
+
               // KAI-225 — Emit contact-extraction trigger (fire-and-forget, non-blocking).
               // Only on ticket creation — not for follow-up messages.
               if (getFlag("enable_contact_extraction")) {

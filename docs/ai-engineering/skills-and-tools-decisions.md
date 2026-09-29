@@ -30,8 +30,9 @@ Only with one of these, cited in the PR:
 
 | Tool | Kind | Where | Consumers |
 |---|---|---|---|
-| `runLlmFeature`, `runLlmTextFeature` | runtime | `packages/intelligence/src/harness/run-llm-feature.ts` | reply suggestion; every new LLM feature |
+| `runLlmFeature`, `runLlmTextFeature` | runtime | `packages/intelligence/src/harness/run-llm-feature.ts` | reply suggestion, knowledge draft; every new LLM feature |
 | `withGeneration`, `loadPromptTemplate`, `fillTemplate` | runtime | `packages/intelligence/src/harness/` | `runLlmFeature`, `classifyEmailWithMeta`, `generateEmbedding(s)` |
+| `runDecisionFeature` | runtime | `packages/intelligence/src/harness/run-decision-feature.ts` | `DecisionProvider` calls (JEV), including the knowledge decision; `classifyEmailWithJev` uses `withGeneration` directly instead, same reason `classifyEmailWithMeta` does |
 | `recordLlmCall` | runtime | `apps/api/src/lib/llm-logging.ts` | the `logger` every `runLlmFeature` call in `apps/api` passes |
 | `retrieveTicketContext`, `findResolvedCases`, `findRelevantKb` | runtime | `apps/api/src/lib/ticket-context.ts` | reply suggestion, `/knowledge-context`, `/related-history` |
 | `check-llm-feature` | agent script | `skills/kairo-llm-feature/scripts/check-llm-feature.ts` | `kairo-llm-feature` step 13; its own test keeps the repo clean |
