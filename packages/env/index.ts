@@ -9,6 +9,7 @@ export const env = createEnv({
         // Provider for features that generate text (reply suggestions, knowledge drafts). Defaults to INTELLIGENCE_PROVIDER, or ollama when that is jev.
         TEXT_PROVIDER: z.enum(["ollama", "gateway", "anthropic"]).optional(),
         AI_GATEWAY_API_KEY: z.string().min(1).optional(),
+        AI_GATEWAY_PROVIDER_ROUTES: z.string().min(1).optional(),
         CLASSIFICATION_MODE: z.enum(['language', 'decision']).optional(),
         AI_GATEWAY_CLASSIFICATION_MODEL: z.string().min(1).optional(),
         AI_GATEWAY_DECISION_MODEL: z.string().min(1).optional(),

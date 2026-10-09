@@ -1,15 +1,15 @@
 import { generateText, Output } from 'ai';
 import type { z } from 'zod';
 import type { CompletionMeta, CompletionOptions, CompletionProvider } from '../base';
-import { GatewayClient, gatewayError, gatewayProvenance } from './client';
+import { GatewayClient, gatewayError, gatewayProvenance, gatewayProviderOptions, gatewayFetch } from './client';
 
 export class GatewayCompletionProvider implements CompletionProvider {
   readonly model: string;
   readonly gateway: GatewayClient;
 
-  constructor(apiKey: string, model: string) {
+  constructor(apiKey: string, model: string, transport: typeof fetch = gatewayFetch) {
     this.model = model;
-    this.gateway = new GatewayClient(apiKey);
+    this.gateway = new GatewayClient(apiKey, transport);
   }
 
   async complete(prompt: string, options?: CompletionOptions): Promise<string> {
@@ -25,6 +25,7 @@ export class GatewayCompletionProvider implements CompletionProvider {
       await this.gateway.requireModel(this.model, 'language');
       const result = await generateText({
         model: this.gateway.sdk.languageModel(this.model),
+        providerOptions: gatewayProviderOptions(this.model),
         prompt,
         maxOutputTokens: options.maxTokens ?? 1000,
         stopSequences: options.stopSequences,
@@ -44,6 +45,7 @@ export class GatewayCompletionProvider implements CompletionProvider {
       await this.gateway.requireModel(this.model, 'language');
       const result = await generateText({
         model: this.gateway.sdk.languageModel(this.model),
+        providerOptions: gatewayProviderOptions(this.model),
         prompt,
         output: Output.object({ schema }),
         maxOutputTokens: options.maxTokens ?? 1000,

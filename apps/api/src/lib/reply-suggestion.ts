@@ -15,6 +15,7 @@ import {
   type LlmFeatureJsonRequest,
   type LlmFeatureResult,
   type PromptLang,
+  type LlmCallLogger,
 } from "@kairo/intelligence";
 
 import { CLASSIFIER_BODY_RULES, resolveTenantLanguage } from "./classifier-input.js";
@@ -148,6 +149,7 @@ type Db = import("@supabase/supabase-js").SupabaseClient<any>;
 
 export interface SuggestReplyDeps {
   supabase?: Db;
+  logger?: LlmCallLogger;
   resolveLanguage?: (accountId: string) => Promise<PromptLang>;
   retrieve?: typeof retrieveTicketContext;
   run?: (request: LlmFeatureJsonRequest<ReplySuggestion>) => Promise<LlmFeatureResult<ReplySuggestion>>;
@@ -228,7 +230,7 @@ export async function suggestReply(
     confidenceOf: (d) => d.confidence,
     options: { maxTokens: 1500, temperature: 0.4, abortSignal: input.signal },
     context: { ticketId: t.id, accountId: input.accountId, userId: input.userId },
-    logger: recordLlmCall,
+    logger: deps.logger ?? recordLlmCall,
   });
 
   input.signal?.throwIfAborted();

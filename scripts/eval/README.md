@@ -4,13 +4,16 @@ All remote evaluations use Vercel AI Gateway. Local Ollama is the only exception
 
 ## Synthetic Gateway validation
 
-After the user confirms the key is configured:
+Remote checks are currently blocked before inference: Vercel's documented BYOK-to-system fallback violates the mandatory BYOK-only policy. The commands remain available for a future Gateway contract that can enforce that policy. They do not enable the assistant UI or access private data.
 
 ```sh
-bun --env-file=.env.local scripts/eval/run_gateway_smoke.ts
+bun run test:gateway:contracts
+bun run test:gateway
 ```
 
 The smoke runner uses invented inputs. It checks native decisions and generative classification separately for onboarding, history and new mail. It prints model identity, dimensions, review coverage, latency and provider-reported cost. Missing cost remains unknown. It does not access private data or mutate product records.
+
+`test:gateway` runs the real exported backend services and AI SDK tool loop, with real model responses and isolated synthetic storage/retrieval dependencies. It checks all three tools, knowledge decisions and drafts, pending proposal persistence, rejected writes and degraded retrieval. This is not a Supabase or Gmail network integration test. Bun loads the runtime environment; agents must not inspect or edit `.env.local`.
 
 ## Private evaluation
 

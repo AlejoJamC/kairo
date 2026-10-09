@@ -1,14 +1,14 @@
 import { embedMany } from 'ai';
 import { ProviderError, type EmbeddingProvider } from '../base';
-import { GatewayClient, gatewayError } from './client';
+import { GatewayClient, gatewayError, gatewayProviderOptions, gatewayFetch } from './client';
 
 export class GatewayEmbeddingProvider implements EmbeddingProvider {
   readonly model: string;
   readonly dimensions: number;
   private readonly gateway: GatewayClient;
 
-  constructor(apiKey: string, model: string, dimensions = 512) {
-    this.gateway = new GatewayClient(apiKey);
+  constructor(apiKey: string, model: string, dimensions = 512, transport: typeof fetch = gatewayFetch) {
+    this.gateway = new GatewayClient(apiKey, transport);
     this.model = model;
     this.dimensions = dimensions;
   }
@@ -23,6 +23,7 @@ export class GatewayEmbeddingProvider implements EmbeddingProvider {
       await this.gateway.requireModel(this.model, 'embedding');
       const { embeddings } = await embedMany({
         model: this.gateway.sdk.embeddingModel(this.model),
+        providerOptions: gatewayProviderOptions(this.model),
         values: texts,
         maxRetries: 0,
         abortSignal: AbortSignal.timeout(120_000),

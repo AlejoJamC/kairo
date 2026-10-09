@@ -50,6 +50,8 @@ export interface CompletionMeta {
   provider?: string;
   /** USD reported by the Gateway; null when no billing metadata is available. */
   costUsd?: number | null;
+  inferenceProvider?: string | null;
+  credentialType?: 'byok' | 'system' | null;
   usage: CompletionUsage;
   /**
    * Generation throughput reported by the provider, when it reports one.

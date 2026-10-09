@@ -2,7 +2,8 @@ import { resolveModelRoute } from '../config/model-roles';
 import { generateText, isStepCount, tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 import type { PromptLang } from '../classification/prompt';
-import { GatewayClient, gatewayError, gatewayKey, gatewayProvenance } from '../providers/gateway/client';
+import { GatewayClient, gatewayError, gatewayKey, gatewayProvenance, gatewayProviderOptions } from '../providers/gateway/client';
+import { ProviderError } from '../providers/base';
 import { withGeneration, usageDetails } from './generation';
 import { extractPromptVersion, loadPromptTemplate } from './template';
 import type { LlmCallLogger, LlmCallRecord } from './run-llm-feature';
@@ -33,9 +34,9 @@ export interface AgentFeatureRequest {
 }
 
 /** A bounded tool loop; account identity and permissions live in tool closures. */
-export async function runAgentFeature(request: AgentFeatureRequest) {
+export async function runAgentFeature(request: AgentFeatureRequest, deps: { transport?: typeof fetch } = {}) {
   const { model } = resolveModelRoute('assistant');
-  const gateway = new GatewayClient(gatewayKey());
+  const gateway = new GatewayClient(gatewayKey(), deps.transport);
   const prompt = await loadPromptTemplate('ticket-assistant', request.lang);
   const promptVersion = extractPromptVersion(prompt);
   const operations: { tool: string; result: OperationResult }[] = [];
@@ -72,6 +73,7 @@ export async function runAgentFeature(request: AgentFeatureRequest) {
       await gateway.requireModel(model, 'language');
       const result = await generateText({
         model: gateway.sdk.languageModel(model),
+        providerOptions: gatewayProviderOptions(model),
         system: prompt,
         messages: request.messages,
         tools,
@@ -83,6 +85,9 @@ export async function runAgentFeature(request: AgentFeatureRequest) {
         maxRetries: 0,
         abortSignal: request.signal ? AbortSignal.any([request.signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
       });
+      if (!result.text.trim()) throw new ProviderError(result.finishReason === 'length'
+        ? 'Gateway assistant exceeded its token budget'
+        : `Gateway assistant returned no final answer (finish=${result.finishReason}, steps=${result.steps.length})`, false);
       const usage = { promptTokens: result.totalUsage.inputTokens ?? null, completionTokens: result.totalUsage.outputTokens ?? null };
       const provenance = gatewayProvenance(result.providerMetadata, result.response.modelId);
       const stepCosts = result.steps.map((step) => gatewayProvenance(step.providerMetadata, step.response.modelId).costUsd);
@@ -96,7 +101,7 @@ export async function runAgentFeature(request: AgentFeatureRequest) {
         ...usage, confidenceScore: null, latencyMs: Date.now() - started, errorCode: null, errorDetail: null,
         ...request.context,
       });
-      return { text: result.text, operations, ...provenance, promptVersion, usage };
+      return { text: result.text, operations, ...provenance, promptVersion, usage, finishReason: result.finishReason };
     } catch (error) {
       const safe = gatewayError(error);
       await log({

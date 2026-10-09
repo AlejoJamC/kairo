@@ -22,7 +22,7 @@ function mockSystemOne(body: unknown, status = 200): void {
   lastInit = {};
   globalThis.fetch = (async (url: string, init: RequestInit) => {
     if (String(url).endsWith('/config')) return new Response(JSON.stringify({ models: [{
-      id: 'typesafe-ai/jev', name: 'JEV', modelType: 'decision', specification: { specificationVersion: 'v4', provider: 'gateway', modelId: 'typesafe-ai/jev' },
+      id: 'typesafe-ai/jev', name: 'JEV', modelType: 'evaluation', specification: { specificationVersion: 'v4', provider: 'gateway', modelId: 'typesafe-ai/jev' },
     }] }), { headers: { 'content-type': 'application/json' } });
     lastUrl = url;
     lastInit = init;
@@ -33,7 +33,7 @@ function mockSystemOne(body: unknown, status = 200): void {
   }) as unknown as typeof fetch;
 }
 
-const provider = () => new JevDecisionProvider('test-key', 'jev-latest');
+const provider = () => new JevDecisionProvider('test-key', 'jev-latest', globalThis.fetch);
 
 describe('JevDecisionProvider', () => {
   it('forwards state and questions to POST /v1/systemone, unchanged', async () => {
@@ -53,6 +53,7 @@ describe('JevDecisionProvider', () => {
     expect(sent.state).toEqual({ document: 'I was charged twice' });
     expect(sent.questions).toEqual({ category: { type: 'choice', criteria: { billing: null } } });
     expect(sent.model).toBe('typesafe-ai/jev');
+    expect(sent.providerOptions.gateway.only).toEqual(['typesafe-ai']);
   });
 
   it('authenticates with a bearer token built from the api key', async () => {

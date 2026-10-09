@@ -17,10 +17,11 @@ function transport(responses: { content: unknown[]; reason: string }[]) {
   process.env['AI_GATEWAY_ASSISTANT_MODEL'] = 'acme/tool-model';
   process.env['AI_GATEWAY_API_KEY'] = 'synthetic-key';
   let index = 0;
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     if (String(input).endsWith('/config')) return Response.json({ models: [{ id: 'acme/tool-model',
       name: 'Synthetic model', modelType: 'language', specification: { specificationVersion: 'v4', provider: 'gateway', modelId: 'acme/tool-model' } }] });
     const response = responses[index++];
+    expect(JSON.parse(init?.body as string).providerOptions.gateway.only).toEqual(['acme']);
     if (!response) throw new Error('Unexpected model request');
     return Response.json({ content: response.content, finishReason: { unified: response.reason, raw: response.reason },
       usage: { inputTokens: { total: 4 }, outputTokens: { total: 2 } }, warnings: [],
@@ -44,7 +45,7 @@ it('executes real tools once, retains proposal status and returns a final answer
         execute: async () => ({ status: 'completed', authorization: 'read', data: {}, missing: [], needsReview: false }) },
       { name: 'draft_reply', description: 'Store a pending draft', inputSchema: z.object({}).strict(),
         execute: async () => { drafts++; return proposal; } },
-    ] });
+    ] }, { transport: globalThis.fetch });
   expect(drafts).toBe(1);
   expect(result.operations.filter((operation) => operation.tool === 'draft_reply').every((operation) => operation.result.status === 'proposed')).toBe(true);
   expect(result.text).toBe('A draft is ready for review.');
@@ -59,6 +60,29 @@ it('returns failed tool evidence when a domain service fails instead of claiming
   ]);
   const result = await runAgentFeature({ lang: 'en', context, messages: [{ role: 'user', content: 'Read this ticket.' }],
     tools: [{ name: 'inspect_ticket', description: 'Read context', inputSchema: z.object({}).strict(),
-      execute: async () => { throw new Error('Synthetic persistence failure'); } }] });
+      execute: async () => { throw new Error('Synthetic persistence failure'); } }] }, { transport: globalThis.fetch });
   expect(result.operations[0]?.result).toMatchObject({ status: 'failed', authorization: 'denied', missing: ['tool_unavailable'], needsReview: true });
+});
+
+it('rejects an empty final model answer instead of reporting a successful conversation', async () => {
+  transport([
+    { content: [toolCall('inspect_ticket', 'read')], reason: 'tool-calls' },
+    { content: [], reason: 'stop' },
+  ]);
+  await expect(runAgentFeature({ lang: 'en', context, messages: [{ role: 'user', content: 'Read this ticket.' }],
+    tools: [{ name: 'inspect_ticket', description: 'Read context', inputSchema: z.object({}).strict(),
+      execute: async () => ({ status: 'completed', authorization: 'read', data: {}, missing: [], needsReview: false }) }] }, { transport: globalThis.fetch }))
+    .rejects.toThrow(/no final answer/);
+});
+
+it('blocks the production tool loop before model requests or tool effects when BYOK-only cannot be enforced', async () => {
+  transport([]);
+  let executions = 0;
+  await expect(runAgentFeature({ lang: 'en', context, messages: [{ role: 'user', content: 'Read this ticket.' }],
+    tools: [{ name: 'inspect_ticket', description: 'Read context', inputSchema: z.object({}).strict(),
+      execute: async () => {
+        executions++;
+        return { status: 'completed', authorization: 'read', data: {}, missing: [], needsReview: false };
+      } }] })).rejects.toThrow(/BYOK-only/);
+  expect(executions).toBe(0);
 });

@@ -1,9 +1,10 @@
 import {
   classifyEmailWithDecision, classifyEmailWithMeta, GatewayDecisionProvider,
-  resolveModelRoute, ProviderError, type EmailMessage, type ModelVerdictResult,
+  resolveModelRoute, ProviderError, type EmailMessage, type ModelVerdictResult, type TypedDecisionInput,
 } from '../../packages/intelligence/src/index';
 import { gatewayKey } from '../../packages/intelligence/src/providers/gateway/client';
 import { extractMailFacts } from '../../apps/api/src/lib/email/mail-facts';
+import { TicketAnswersSchema } from '../../packages/intelligence/src/classification/decision-questions';
 
 // Invented compatibility examples. No corpus files or product database access.
 const examples = [
@@ -12,7 +13,7 @@ const examples = [
   { subject: 'Request for a quote', body: 'We want to buy Acme support software. Please send a quote.',
     expected: { type: 'prospect', actionability: 'needs_action', subject_matter: 'commercial_demand', category: 'general' } },
   { subject: 'Payment received', body: 'This confirms payment for the Acme subscription. No action or reply is needed.',
-    expected: { type: 'other', actionability: 'fyi', subject_matter: 'service', category: 'billing' } },
+    expected: { type: 'support', actionability: 'fyi', subject_matter: 'service', category: 'billing' } },
 ] as const;
 
 const stages = ['onboarding', 'backfill', 'new_email'] as const;
@@ -52,7 +53,17 @@ try {
       const message = messageFor(stage, example);
       for (const model of nativeModels) {
         const started = performance.now();
-        const output = await classifyEmailWithDecision(message, new GatewayDecisionProvider(key, model));
+        const provider = new GatewayDecisionProvider(key, model);
+        const output = await classifyEmailWithDecision(message, {
+          provider: provider.provider, model: provider.model,
+          async decide<T>(input: TypedDecisionInput) {
+            const result = await provider.decide<T>(input);
+            const validated = TicketAnswersSchema.safeParse(result.value);
+            if (!validated.success) console.error(JSON.stringify({ stage, model,
+              validation: validated.error.issues.map(({ code, path, message }) => ({ code, path, message })) }));
+            return result;
+          },
+        });
         measurements.push({ stage, capability: 'decision', model: output.decision.modelVersion,
           latencyMs: Math.round(performance.now() - started),
           costUsd: typeof output.decision.rawMetadata?.['costUsd'] === 'number' ? output.decision.rawMetadata['costUsd'] : null,
@@ -69,6 +80,7 @@ try {
         typeCorrect: output.result.type === example.expected.type,
         dimensions: dimensions(output.verdict, example), needsReview: output.abstain });
     }
+    console.log(JSON.stringify({ stage, completed: measurements.filter((item) => item.stage === stage).length }));
   }
   console.log(JSON.stringify({ purpose: 'synthetic_compatibility', measurements,
     productionCalibration: 'not_measured', automaticCoverage: 'not_authorized_by_this_check' }, null, 2));

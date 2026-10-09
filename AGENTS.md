@@ -54,6 +54,9 @@ Kairo — AI support cockpit for support teams. Monorepo: dashboard (Vite+React1
 ## Implementation and workflow
 
 - When a Linear issue is referenced, its description is the specification and its acceptance criteria define completion. Read the applicable specification in full before implementing.
+- Preserve the approved Linear issue description during execution. Only change existing acceptance-criteria checkbox states, based on evidence. Never append implementation logs, progress, validation reports or explanations to the issue body, and never rewrite or add acceptance criteria without explicit user authorization.
+- Put relevant implementation findings, validation results and blockers in a brief execution comment on the same issue. Keep the comment factual and useful as a source of knowledge; do not repeat the specification or conversation.
+- If the user explicitly authorizes a specification correction, retain the original text with strikethrough, add the correction date and write the replacement. Never silently replace or delete the original specification. A user-authorized proposed acceptance criterion must remain unchecked and italicized until the user accepts it.
 - Inspect affected files before implementing. Resolve routine implementation choices from the code and existing context; ask about material ambiguity in product behavior.
 - Inspect Git status and preserve existing work. Do not create or switch branches, create worktrees, or start a Git flow unless the user explicitly instructs it. Never require a clean checkout by discarding changes.
 - All code, code comments and commit messages must be in English. User-facing strings must follow the project's EN/ES localization requirements.

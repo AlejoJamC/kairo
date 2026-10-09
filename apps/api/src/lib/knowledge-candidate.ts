@@ -24,6 +24,7 @@ import {
   type KnowledgeDecision,
   type KnowledgeDraft,
   type PromptLang,
+  type LlmCallLogger,
 } from "@kairo/intelligence";
 
 import { CLASSIFIER_BODY_RULES, resolveTenantLanguage } from "./classifier-input.js";
@@ -58,6 +59,7 @@ export type KnowledgeCandidateOutcome =
 
 export interface KnowledgeCandidateDeps {
   supabase?: SupabaseClient;
+  logger?: LlmCallLogger;
   resolveLanguage?: (accountId: string) => Promise<PromptLang>;
   decide?: (input: {
     ticketId: string;
@@ -87,14 +89,14 @@ function threadText(messages: ThreadMessage[]): string {
     .join("\n\n");
 }
 
-async function decideWithNativeModel(input: { ticketId: string; accountId: string; state: unknown }): Promise<KnowledgeDecision> {
+async function decideWithNativeModel(input: { ticketId: string; accountId: string; state: unknown }, logger: LlmCallLogger): Promise<KnowledgeDecision> {
   const { data } = await runDecisionFeature<KnowledgeAnswers>({
     feature: KNOWLEDGE_DECISION_FEATURE,
     provider: createDecisionProvider("gateway", "knowledge_decision"),
     state: input.state,
     questions: buildKnowledgeQuestions(),
     context: { ticketId: input.ticketId, accountId: input.accountId },
-    logger: recordLlmCall,
+    logger,
     versions: { state: "1.0.0", questions: KNOWLEDGE_QUESTIONS_VERSION },
   });
   const parsed = KnowledgeAnswersSchema.safeParse(data.value);
@@ -112,7 +114,7 @@ async function draftWithTextModel(input: {
   accountId: string;
   lang: PromptLang;
   vars: Record<string, string>;
-}): Promise<KnowledgeDraft> {
+}, logger: LlmCallLogger): Promise<KnowledgeDraft> {
   const result = await runLlmFeature({
     feature: KNOWLEDGE_DRAFT_FEATURE,
     promptId: DRAFT_PROMPT_ID,
@@ -122,7 +124,7 @@ async function draftWithTextModel(input: {
     schema: KnowledgeDraftSchema,
     options: { maxTokens: 1500, temperature: 0.3 },
     context: { ticketId: input.ticketId, accountId: input.accountId },
-    logger: recordLlmCall,
+    logger,
   });
   return result.data;
 }
@@ -169,7 +171,7 @@ export async function draftKnowledgeFromTicket(
   const thread = threadText(messages);
   if (!thread) return { status: "skipped", reason: "no_thread" };
 
-  const decision = await (deps.decide ?? decideWithNativeModel)({
+  const decision = await (deps.decide ?? ((request) => decideWithNativeModel(request, deps.logger ?? recordLlmCall)))({
     ticketId: t.id,
     accountId: input.accountId,
     state: { stateVersion: "1.0.0", scope: "account", truncated: messages.length === THREAD_MESSAGES, subject: t.subject, category: t.category, ticketType: t.ticket_type, thread },
@@ -177,7 +179,7 @@ export async function draftKnowledgeFromTicket(
   if (!shouldDraftKnowledge(decision)) return { status: "skipped", reason: "not_candidate" };
 
   const lang = await (deps.resolveLanguage ?? resolveTenantLanguage)(input.accountId);
-  const draft = await (deps.draft ?? draftWithTextModel)({
+  const draft = await (deps.draft ?? ((request) => draftWithTextModel(request, deps.logger ?? recordLlmCall)))({
     ticketId: t.id,
     accountId: input.accountId,
     lang,
