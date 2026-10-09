@@ -87,7 +87,7 @@ describe("prompt inputs", () => {
     expect(cases).toBe("Subject: Login loop\nResolution: Cleared the session");
 
     const kb = formatKbArticles([{ id: "kb-1", title: "Reset access", content: "x".repeat(5000), tags: [], similarity: 0.8 }], "en");
-    expect(kb.startsWith("### Reset access\n")).toBe(true);
+    expect(kb.startsWith("### [kb-1] Reset access\n")).toBe(true);
     expect(kb.length).toBeLessThan(5000);
   });
 });
@@ -152,7 +152,7 @@ describe("suggestReply", () => {
         run: async (r) => {
           request = r;
           return {
-            data: { suggestion: "Hello from Acme", confidence: 0.7, detected_language: "en" },
+            data: { suggestion: "Hello from Acme", confidence: 0.7, detected_language: "en", referenced_kb_articles: ["kb-1"] },
             prompt: "p",
             promptVersion: "1.0.1",
             model: "reported-model",

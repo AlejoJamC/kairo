@@ -7,7 +7,6 @@
 // ---------------------------------------------------------------------------
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ClassificationResult, CompletionMeta, ModelVerdictResult, PromptLang, TicketType } from "@kairo/intelligence";
 import type { ClassifierContext, ClassifierStage } from "../classifier-input.js";
 import type { LlmCallLogEntry } from "../llm-logging.js";
 import type { GmailHeader } from "../email/headers.js";
@@ -21,6 +20,9 @@ export type DbClient = SupabaseClient<any>;
 export type { GmailHeader };
 
 export interface GmailMessagePayload {
+  body?: { data?: string };
+  filename?: string;
+  parts?: GmailMessagePayload[];
   headers?: GmailHeader[];
   mimeType?: string;
 }
@@ -77,6 +79,7 @@ export class GmailHistoryExpiredError extends Error {
  * `mock.module()`, which leaks across test files.
  */
 export interface GmailPollDeps {
+  runMessage?: <T>(key: string, handler: () => Promise<T>) => Promise<T>;
   db: DbClient;
   getFreshGmailToken: (accountId: string) => Promise<string>;
   resolveClassifierContext: (
@@ -86,9 +89,10 @@ export interface GmailPollDeps {
   getProfile: (token: string) => Promise<GmailProfile>;
   historyList: (
     token: string,
-    startHistoryId: string
+    startHistoryId: string,
+    pageToken?: string
   ) => Promise<GmailHistoryListResponse>;
-  messagesList: (token: string) => Promise<GmailMessageListResponse>;
+  messagesList: (token: string, pageToken?: string) => Promise<GmailMessageListResponse>;
   getMessage: (token: string, messageId: string) => Promise<GmailMessage>;
   // KAI-45 — the real types rather than a structural copy. The copy was written
   // when the result was a two-value enum and cost nothing to restate; it now
@@ -96,32 +100,7 @@ export interface GmailPollDeps {
   // is a drift waiting to happen. The seam is still a seam: a test injects any
   // function of this shape, it just no longer gets to disagree about the shape.
   preFilterEmail: (metadata: EmailMetadata) => PreFilterResult;
-  classifyEmail: (
-    message: {
-      subject: string;
-      body: string;
-      from: string;
-      tenantMailbox?: string;
-      businessContext?: string;
-    },
-    // KAI-45 F4 — the tenant's rubric language. The poll resolves it with the
-    // rest of the classifier context and passes it like every other path.
-    options?: { lang?: PromptLang; context?: { accountId?: string } },
-  // KAI-45 F5 — the model's verdict and the versions travel with the result, so
-  // a ticket the poll creates records what produced it like every other path.
-  // Wired to classifyEmailWithMeta, whose return is a superset of this.
-  ) => Promise<{
-    result: ClassificationResult;
-    verdict: ModelVerdictResult;
-    ensemble: { model: string; type: TicketType } | null;
-    abstain: boolean;
-    promptVersion: string | null;
-    // What `llm_calls` records for the call: the resolved prompt and the
-    // provider's own report of model and usage.
-    meta: CompletionMeta;
-    prompt: string;
-  }>;
-  /** Writes the `llm_calls` row every classification path records. Fire-and-forget. */
+  classifyEmail: typeof import('@kairo/intelligence').classifyEmailWithMeta;
   logLlmCall: (entry: LlmCallLogEntry) => void;
   /** The configured completion model, for the failure row when no provider answered. */
   configuredModel: () => string;

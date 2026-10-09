@@ -59,7 +59,7 @@ import {
 import { parseEml } from './lib/parse-eml';
 import { readEmlHeaders, tenantMailboxes } from './lib/eml-headers';
 import { resolveCorpus } from './lib/corpus';
-import { STAGE_BODY_RULES, slugify, LOCAL_OLLAMA, type PipelineStage } from './lib/run-label';
+import { STAGE_BODY_RULES, slugify, LOCAL_OLLAMA, resolveRunLabel, resolveEvalStage } from './lib/run-label';
 import { parseCsv, adaptGroundTruth, canonicalEmailId } from './compute_metrics';
 
 const SCRIPT_DIR = new URL('.', import.meta.url).pathname;
@@ -73,17 +73,10 @@ const BC_FILE = join(SCRIPT_DIR, 'data/input/business_context.txt');
 // is comparable to it. Which corpus a row came from is a column.
 const OUTPUT_ROOT = process.env['EVAL_OUTPUT_ROOT'] ?? join(SCRIPT_DIR, 'data/output/rearchitecture');
 
-const PROVIDER = (process.env['INTELLIGENCE_PROVIDER'] ?? 'ollama') as 'ollama' | 'anthropic';
-const MODEL =
-  process.env['EVAL_MODEL'] ??
-  (PROVIDER === 'ollama'
-    ? (process.env['OLLAMA_MODEL'] ?? 'muse-glimmer:30b')
-    : (process.env['ANTHROPIC_MODEL'] ?? 'claude-sonnet-4-6'));
-
-// The production path this reproduces. `backfill` is tier 2/3, incremental
-// sync, the poll and the reclassify endpoints — everything except the one-time
-// onboarding scan — so it is the default.
-const STAGE = (process.env['EVAL_STAGE'] ?? 'backfill') as PipelineStage;
+const CONFIGURED_RUN = resolveRunLabel();
+const PROVIDER = CONFIGURED_RUN.provider;
+const MODEL = process.env['EVAL_MODEL'] ?? CONFIGURED_RUN.model;
+const STAGE = resolveEvalStage(process.env['EVAL_STAGE']);
 
 const TEMPERATURE = 0;
 const DRY = process.env['EVAL_LAYERED_DRY'] === '1';
@@ -252,7 +245,7 @@ async function main(): Promise<void> {
 
   process.env['INTELLIGENCE_PROVIDER'] = PROVIDER;
   if (PROVIDER === 'ollama') process.env['OLLAMA_MODEL'] = MODEL;
-  else process.env['ANTHROPIC_MODEL'] = MODEL;
+  else process.env['AI_GATEWAY_CLASSIFICATION_MODEL'] = MODEL;
 
   const promptVersion = (await getPromptVersion(DEFAULT_LANG)) ?? 'unknown';
   // The rubric exactly as the model will receive it, minus the email.
@@ -260,7 +253,7 @@ async function main(): Promise<void> {
   resolveRunDir(promptVersion, digest);
 
   const businessContext =
-    STAGE === 'backfill' && existsSync(BC_FILE) ? readFileSync(BC_FILE, 'utf-8').trim() : '';
+    STAGE !== 'onboarding' && existsSync(BC_FILE) ? readFileSync(BC_FILE, 'utf-8').trim() : '';
   const rule = STAGE_BODY_RULES[STAGE];
   const gold = goldLabels();
   const emails = (await readdir(INPUT_DIR)).filter((f) => f.endsWith('.eml')).sort();
@@ -268,7 +261,7 @@ async function main(): Promise<void> {
   const endpoint =
     PROVIDER === 'ollama'
       ? (process.env['OLLAMA_BASE_URL'] ?? LOCAL_OLLAMA)
-      : 'https://api.anthropic.com';
+      : CONFIGURED_RUN.endpoint;
 
   console.log('Kairo layered pipeline eval — KAI-45');
   console.log('L1 facts → L2 routing → L3 two axes → L4 derivation table');
@@ -344,6 +337,7 @@ async function main(): Promise<void> {
       const { result, verdict, meta } = await classifyEmailWithMeta(
         {
           subject: parsed.subject, from: parsed.from, to: parsed.to, cc: parsed.cc,
+          stage: STAGE, evidence: { bodySource: 'full', truncated: body.length >= rule.maxChars, missing: [] },
           body, threadDepth: parsed.threadDepth, attachments: parsed.attachments,
           tenantMailbox: TENANT_MAILBOX,
           facts,

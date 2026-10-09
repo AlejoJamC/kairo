@@ -36,13 +36,13 @@
 //                                  (feature: email_classification_jev_shadow).
 //                                  JEV's decision is never applied to the
 //                                  ticket. OFF by default, and requires
-//                                  TYPESAFE_API_KEY when on.
+//                                  AI_GATEWAY_API_KEY when on.
 //   enable_knowledge_candidates  — KAI-55: when a ticket is resolved, ask JEV
 //                                  whether its thread is worth keeping as
 //                                  knowledge; if so a text model (TEXT_PROVIDER)
 //                                  drafts a kb_articles row with
 //                                  is_published = false. Requires
-//                                  TYPESAFE_API_KEY when on.
+//                                  AI_GATEWAY_API_KEY when on.
 //   enable_jev_canary            — KAI-55: for tier1/tier2/tier3 proposals on a
 //                                  tenant mailbox listed in
 //                                  FEATURE_FLAG_JEV_CANARY_MAILBOXES (comma-
@@ -115,6 +115,7 @@ const FLAG_DEFAULTS = {
   enable_jev_shadow_classification: false,
   enable_jev_canary: false,
   enable_knowledge_candidates: false,
+  enable_ticket_assistant: false,
 } as const;
 
 type RuntimeFlagName = keyof typeof FLAG_DEFAULTS;

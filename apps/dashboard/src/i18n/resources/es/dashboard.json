@@ -543,7 +543,15 @@
     "assistantNoTicketTitle": "Sin ticket seleccionado",
     "assistantNoTicketBody": "Elige un ticket de la bandeja para conversar sobre él con el copiloto.",
     "assistantUnknownSender": "el cliente",
-    "resizeHint": "Arrastra para redimensionar · doble clic para restablecer"
+    "resizeHint": "Arrastra para redimensionar · doble clic para restablecer",
+    "assistantToolInspect": "Consultar ticket y conocimiento",
+    "assistantToolDecide": "Proponer clasificación",
+    "assistantToolDraft": "Preparar propuesta de respuesta",
+    "assistantOperation_completed": "Completado",
+    "assistantOperation_proposed": "Requiere revisión humana",
+    "assistantOperation_failed": "Fallido",
+    "assistantRequestFailed": "Asistente no disponible. Inténtalo de nuevo.",
+    "assistantWaiting": "Consultando el ticket…"
   },
   "relatedHistory": {
     "title": "Historial relacionado",

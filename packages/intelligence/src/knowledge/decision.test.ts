@@ -74,8 +74,9 @@ describe('shouldDraftKnowledge', () => {
     expect(shouldDraftKnowledge({ ...base, knowledgeType: 'none' })).toBe(false);
   });
 
-  it('does not draft below the confidence threshold, and honours a custom one', () => {
-    expect(shouldDraftKnowledge({ ...base, confidence: 0.5 })).toBe(false);
+  it('requires explicit calibration before applying a confidence threshold', () => {
+    expect(shouldDraftKnowledge({ ...base, confidence: 0.5 })).toBe(true);
+    expect(shouldDraftKnowledge({ ...base, confidence: 0.5 }, 0.8)).toBe(false);
     expect(shouldDraftKnowledge({ ...base, confidence: 0.5 }, 0.4)).toBe(true);
   });
 });

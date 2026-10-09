@@ -1,3 +1,5 @@
+import { resolveModelRoute } from '../../../packages/intelligence/src/config/model-roles';
+
 // Identity of an eval run: which provider/model produced the results.
 //
 // Mirrors the provider-selection logic in
@@ -51,7 +53,7 @@ export interface RunLabel {
 /** Ollama's default when OLLAMA_BASE_URL is unset. */
 export const LOCAL_OLLAMA = 'http://localhost:11434';
 
-export type PipelineStage = 'onboarding' | 'backfill';
+export type PipelineStage = 'onboarding' | 'backfill' | 'new_email';
 
 /** Body handling per stage, mirroring the production call sites exactly. */
 export const STAGE_BODY_RULES: Record<
@@ -60,22 +62,17 @@ export const STAGE_BODY_RULES: Record<
 > = {
   onboarding: { maxChars: 20_000, stripQuotes: false },
   backfill: { maxChars: 2_000, stripQuotes: true },
+  new_email: { maxChars: 2_000, stripQuotes: true },
 };
 
 export function resolveRunLabel(env: NodeJS.ProcessEnv = process.env): RunLabel {
-  const provider = env['INTELLIGENCE_PROVIDER'] ?? 'ollama';
-  const model =
-    provider === 'anthropic'
-      ? (env['ANTHROPIC_MODEL'] ?? 'claude-sonnet-4-6')
-      : (env['OLLAMA_MODEL'] ?? 'llama3.2');
+  const route = resolveModelRoute('classification', env);
+  const { provider, model } = route;
   const withoutContext = env['EVAL_NO_CONTEXT'] === '1';
-  const stage: PipelineStage =
-    env['EVAL_STAGE'] === 'onboarding' ? 'onboarding' : 'backfill';
-
-  const endpoint =
-    provider === 'anthropic'
-      ? 'https://api.anthropic.com'
-      : (env['OLLAMA_BASE_URL'] ?? LOCAL_OLLAMA);
+  const stage = resolveEvalStage(env['EVAL_STAGE']);
+  const endpoint = provider === 'gateway'
+    ? route.capability === 'decision' ? 'https://ai-gateway.vercel.sh/typesafe' : 'https://ai-gateway.vercel.sh/v1'
+    : env['OLLAMA_BASE_URL'] ?? LOCAL_OLLAMA;
 
   // Every switch that changes what was measured joins the run's identity, so
   // no run can overwrite the one it is meant to be compared against. A remote
@@ -84,7 +81,7 @@ export function resolveRunLabel(env: NodeJS.ProcessEnv = process.env): RunLabel 
   // suffix, so existing run directories keep their names.
   const remote = provider === 'ollama' && endpoint !== LOCAL_OLLAMA;
   const suffix =
-    (stage === 'onboarding' ? '-onboarding' : '') +
+    (stage === 'backfill' ? '' : `-${stage}`) +
     (withoutContext ? '-nocontext' : '') +
     (remote ? `-at-${slugify(endpoint.replace(/^https?:\/\//, ''))}` : '');
 
@@ -104,4 +101,10 @@ export function slugify(raw: string): string {
   return raw
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+export function resolveEvalStage(value?: string): PipelineStage {
+  if (!value) return 'backfill';
+  if (value === 'onboarding' || value === 'backfill' || value === 'new_email') return value;
+  throw new Error('EVAL_STAGE must be onboarding, backfill or new_email');
 }

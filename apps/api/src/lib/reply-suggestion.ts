@@ -10,6 +10,7 @@
 import { z } from "zod";
 import {
   runLlmFeature,
+  ProviderError,
   stripQuotedThread,
   type LlmFeatureJsonRequest,
   type LlmFeatureResult,
@@ -47,6 +48,7 @@ export const ReplySuggestionSchema = z.object({
   suggestion: z.string(),
   confidence: z.number().min(0).max(1),
   detected_language: z.enum(["es", "en"]),
+  referenced_kb_articles: z.array(z.string()).optional(),
 });
 export type ReplySuggestion = z.infer<typeof ReplySuggestionSchema>;
 
@@ -116,7 +118,7 @@ export function formatResolvedCases(cases: ResolvedCase[], lang: PromptLang): st
 
 export function formatKbArticles(articles: KbArticle[], lang: PromptLang): string {
   if (articles.length === 0) return LABELS[lang].unavailable;
-  return articles.map((a) => `### ${a.title}\n${a.content.slice(0, KB_ARTICLE_MAX_CHARS)}`).join("\n\n");
+  return articles.map((a) => `### [${a.id}] ${a.title}\n${a.content.slice(0, KB_ARTICLE_MAX_CHARS)}`).join("\n\n");
 }
 
 /** Every placeholder of the reply-suggestion prompt, unknowns rendered as unavailable. */
@@ -169,7 +171,7 @@ export interface SuggestReplyOutcome {
  * propagate unchanged (`ProviderError` keeps `retriable`) for the route to map.
  */
 export async function suggestReply(
-  input: { ticketId: string; accountId: string; userId: string },
+  input: { ticketId: string; accountId: string; userId: string; signal?: AbortSignal },
   deps: SuggestReplyDeps = {}
 ): Promise<SuggestReplyOutcome | null> {
   const db = deps.supabase ?? defaultSupabase;
@@ -190,9 +192,13 @@ export async function suggestReply(
           .from("messages")
           .select("direction, body_plain, received_at")
           .eq("conversation_id", t.conversation_id)
+          .eq("account_id", input.accountId)
           .order("received_at", { ascending: false })
           .limit(HISTORY_MESSAGES)
-          .then(({ data }) => ((data ?? []) as ReplyMessage[]).reverse())
+          .then(({ data, error }) => {
+            if (error) throw new ProviderError("Reply history unavailable", true);
+            return ((data ?? []) as ReplyMessage[]).reverse();
+          })
       : Promise.resolve([] as ReplyMessage[]),
     t.client_id
       ? db
@@ -211,6 +217,8 @@ export async function suggestReply(
     }),
   ]);
 
+  if (context.degraded.length) throw new ProviderError("Reply retrieval unavailable; human review is required", true);
+
   const result = await (deps.run ?? runLlmFeature)({
     feature: REPLY_SUGGESTION_FEATURE,
     promptId: PROMPT_ID,
@@ -218,13 +226,18 @@ export async function suggestReply(
     vars: buildReplySuggestionVars({ ticket: t, messages, client, context, lang }),
     schema: ReplySuggestionSchema,
     confidenceOf: (d) => d.confidence,
-    options: { maxTokens: 1500, temperature: 0.4 },
+    options: { maxTokens: 1500, temperature: 0.4, abortSignal: input.signal },
     context: { ticketId: t.id, accountId: input.accountId, userId: input.userId },
     logger: recordLlmCall,
   });
 
-  const referencedKbArticles = context.kbArticles.map((a) => a.id);
-  const { data: proposal } = await db
+  input.signal?.throwIfAborted();
+  const available = new Set(context.kbArticles.map((article) => article.id));
+  const referencedKbArticles = [...new Set(result.data.referenced_kb_articles ?? [])];
+  if (referencedKbArticles.some((id) => !available.has(id))) {
+    throw new ProviderError("Reply cites unavailable knowledge", false);
+  }
+  const { data: proposal, error: proposalError } = await db
     .from("ticket_proposals")
     .insert({
       ticket_id: t.id,
@@ -239,6 +252,8 @@ export async function suggestReply(
     })
     .select("id")
     .single();
+
+  if (proposalError || !proposal) throw new ProviderError("Reply proposal persistence failed", true);
 
   return {
     suggestion: result.data.suggestion,

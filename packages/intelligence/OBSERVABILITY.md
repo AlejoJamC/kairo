@@ -14,7 +14,7 @@ Every prompt that Kairo sends to an LLM should be recorded in `llm_calls`. This 
 | Cost tracking | `prompt_tokens + completion_tokens` per `feature` per day |
 | A/B prompt testing | Same `feature`, different `prompt_version` → compare `outcome` rates |
 
-The offline eval scripts in `scripts/eval/` currently use synthetic `.eml` files. Once `llm_calls` has production data, feed it there instead — real distribution beats synthetic data every time.
+Evaluation inputs and outputs remain private under `scripts/eval/data/`. Private evaluation requires explicit authorization; synthetic compatibility checks use invented inputs.
 
 ---
 
@@ -29,9 +29,8 @@ the provider reported), and returns the row id for outcome writeback. See
 `apps/api/src/lib/reply-suggestion.ts` for a complete consumer and
 `skills/kairo-llm-feature/SKILL.md` for the procedure.
 
-A `DecisionProvider` call (JEV — see ADR-029) uses `runDecisionFeature`
-instead, the same file: same `withGeneration`/`llm_calls` contract, no prompt
-template or Zod schema (a decision call has neither). `recordLlmCall` reads
+A native `DecisionProvider` call through AI Gateway uses `runDecisionFeature`
+instead, the same file: same `withGeneration`/`llm_calls` contract, versioned questions and a runtime-validated answer contract. `recordLlmCall` reads
 `record.provider` when the call sets it (JEV always does, and text features
 set it from `TEXT_PROVIDER`) instead of defaulting to `INTELLIGENCE_PROVIDER`,
 which can be `jev` and so names neither a text provider nor, for a decision
@@ -217,8 +216,9 @@ GROUP BY model;
 | `reply_suggestion` (`lib/reply-suggestion.ts`, route `POST /:id/suggest-reply`) | ✅ done — through `runLlmFeature` + `recordLlmCall`; `llm_call_id` returned to client; outcome writeback via `PATCH /:id/suggest-reply/:llmCallId/outcome` |
 | `kb_search` | ⏳ not built yet (ADR-012 pending) |
 | `resolution_summary` | ⏳ pending |
+| `ticket_assistant` (`lib/ticket-assistant.ts`) | AI SDK tool loop through `runAgentFeature` + `recordLlmCall`; default off, validation pending |
 | JEV ticket verdict (`classifyEmailWithJev`) | ✅ Langfuse generation via `withGeneration`. With `INTELLIGENCE_PROVIDER=jev` it is the classification on every path above; with the shadow flag on (`apps/api/src/lib/jev-shadow-classification.ts`) it also runs beside another provider, logged to `llm_calls` with `feature: email_classification_jev_shadow` |
-| `knowledge_decision` (`lib/knowledge-candidate.ts`) | ✅ JEV decision through `runDecisionFeature` + `recordLlmCall`; gated by `enable_knowledge_candidates` |
+| `knowledge_decision` (`lib/knowledge-candidate.ts`) | Native Gateway decision through `runDecisionFeature` + `recordLlmCall`; gated by `enable_knowledge_candidates` |
 | `knowledge_draft` (`lib/knowledge-candidate.ts`) | ✅ text model through `runLlmFeature` + `recordLlmCall`, only for a confident candidate; prompt `knowledge-draft` |
 
 Table exists and is now actively populated by the call sites above.

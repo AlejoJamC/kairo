@@ -1,3 +1,4 @@
+import { localOllamaEndpoint } from './local-endpoint';
 import { z } from 'zod';
 import { fetchOrThrow, ProviderError, type CompletionProvider, type CompletionOptions, type CompletionMeta } from '../base';
 
@@ -29,7 +30,7 @@ export class OllamaCompletionProvider implements CompletionProvider {
   private baseUrl: string;
 
   constructor(baseUrl: string = 'http://localhost:11434', model: string = 'llama3.2') {
-    this.baseUrl = baseUrl;
+    this.baseUrl = localOllamaEndpoint(baseUrl);
     this.model = model;
   }
 
@@ -55,6 +56,8 @@ export class OllamaCompletionProvider implements CompletionProvider {
   ): Promise<{ text: string } & CompletionMeta> {
     const response = await fetchOrThrow(`${this.baseUrl}/api/generate`, {
       method: 'POST',
+      redirect: 'error',
+      signal: options.abortSignal ? AbortSignal.any([options.abortSignal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: this.model,
@@ -128,14 +131,15 @@ export class OllamaCompletionProvider implements CompletionProvider {
       // A sampling fluke, not a permanent condition — retriable (a second
       // attempt at the same schema-constrained request can simply succeed).
       throw new ProviderError(
-        `Ollama returned output that is not valid JSON despite a schema-constrained ` +
-          `request (model ${meta.model}): ${meta.text.slice(0, 200)}`,
+        'Ollama output did not match the requested JSON contract',
         true,
       );
     }
 
+    const validated = schema.safeParse(parsed);
+    if (!validated.success) throw new ProviderError('Ollama output did not match the requested schema', false);
     return {
-      data: schema.parse(parsed),
+      data: validated.data,
       rawText: meta.rawText,
       model: meta.model,
       usage: meta.usage,

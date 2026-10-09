@@ -3,8 +3,7 @@ import { readdir, readFile, writeFile, mkdir } from 'fs/promises';
 // Relative import: scripts/eval is not a workspace package, so the
 // `@kairo/intelligence` specifier does not resolve at runtime (the tsconfig
 // `paths` alias only covers type-checking)
-import { classifyEmailWithMeta, stripQuotedThread } from '../../packages/intelligence/src/index';
-import { supportsTemperature } from '../../packages/intelligence/src/providers/anthropic/completion';
+import { classifyEmailWithMeta, stripQuotedThread, type EmailMessage } from '../../packages/intelligence/src/index';
 import { parseEml } from './lib/parse-eml';
 import { writeCsv } from './lib/write-csv';
 import { resolveRunLabel, STAGE_BODY_RULES, LOCAL_OLLAMA } from './lib/run-label';
@@ -166,7 +165,7 @@ async function main(): Promise<void> {
   // outright — the completion provider omits it for them, so run-to-run
   // reproducibility for those runs relies on the model's own default
   // sampling, not on the enforced temperature=0 used for every other model.
-  const temperatureEnforced = RUN.provider !== 'anthropic' || supportsTemperature(RUN.model);
+  const temperatureEnforced = RUN.provider === 'ollama';
   const temperatureLabel = temperatureEnforced
     ? `${TEMPERATURE} (enforced)`
     : `n/a — not sent (removed param on ${RUN.model}); reproducibility not guaranteed`;
@@ -226,7 +225,7 @@ async function main(): Promise<void> {
         BODY_RULE.stripQuotes ? stripQuotedThread(parsed.body) : parsed.body
       ).slice(0, BODY_RULE.maxChars);
 
-      const message = RUN.withoutContext
+      const message: EmailMessage = RUN.withoutContext
         ? { subject: parsed.subject, from: parsed.from, body: classifierBody }
         : {
             subject: parsed.subject,
@@ -240,6 +239,9 @@ async function main(): Promise<void> {
             ...(BUSINESS_CONTEXT ? { businessContext: BUSINESS_CONTEXT } : {}),
           };
 
+      message.stage = RUN.stage;
+      message.evidence = { bodySource: 'full', truncated: classifierBody.length >= BODY_RULE.maxChars,
+        missing: RUN.withoutContext ? ['envelope_context'] : [] };
       const { result, meta } = await classifyEmailWithMeta(message, {
         temperature: TEMPERATURE,
       });

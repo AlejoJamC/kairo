@@ -1,10 +1,13 @@
+import { usesDecisionClassification } from '../config/model-roles';
 import { createCompletionProvider, createDecisionProvider } from '../config/providers';
 import { resolveEnsembleTarget } from '../config/ensemble';
 import { ModelVerdictSchema, type ClassificationResult, type ModelVerdictResult } from './schema';
 import { deriveClassification, provenanceOf, EXTERNAL_FALLBACK_FACTS } from './derive';
 import { buildPrompt, getPromptVersion, type PromptLang, DEFAULT_LANG } from './prompt';
 import { generationResultMetadata, generationStartMetadata } from './telemetry';
-import { classifyEmailWithJev } from './classify-with-jev';
+import { TICKET_QUESTIONS_VERSION, buildTicketVerdictQuestions } from './decision-questions';
+import { classifyEmailWithDecision, stateFromMessage } from './classify-with-decision';
+import { z } from 'zod';
 import type { EmailMessage } from './types';
 import type { TicketType } from '@kairo/types';
 import type { CompletionMeta, CompletionOptions } from '../providers/base';
@@ -12,7 +15,7 @@ import { usageDetails, withGeneration, type LangfuseContext } from '../harness/g
 
 export type { LangfuseContext };
 
-export interface ClassifyOptions extends Pick<CompletionOptions, 'temperature'> {
+export interface ClassifyOptions extends Pick<CompletionOptions, 'temperature' | 'abortSignal'> {
   lang?: PromptLang;
   /** KAI-189: when set, groups this generation into a per-ticket Langfuse trace. */
   context?: LangfuseContext;
@@ -58,35 +61,32 @@ interface ClassifyEmailWithMetaResult {
   promptVersion: string | null;
 }
 
-/**
- * `INTELLIGENCE_PROVIDER=jev` — the same slot `ollama`/`anthropic` already
- * occupy, so every existing call site (tier1/tier2/tier3, incremental-sync,
- * batch-classify, the manual /classify routes) gets JEV as the classifier
- * that writes the ticket with no change of its own. JEV has no rendered
- * prompt or ensemble concept, so those fields are filled with what actually
- * describes a DecisionProvider call instead of borrowed CompletionProvider
- * ones.
- */
-async function classifyEmailWithJevAsMeta(
+/** Adapt the native decision contract to the shared classification response. */
+async function classifyEmailWithDecisionAsMeta(
   message: EmailMessage,
   options?: ClassifyOptions,
 ): Promise<ClassifyEmailWithMetaResult> {
-  const provider = createDecisionProvider('jev');
-  const { result, verdict, decision } = await classifyEmailWithJev(message, provider, options?.context);
+  const provider = createDecisionProvider('gateway');
+  const { result, verdict, decision } = await classifyEmailWithDecision(message, provider, options?.context, options?.abortSignal);
+  const usage = z.object({ input_tokens: z.number().nonnegative(), output_tokens: z.number().nonnegative() })
+    .safeParse(decision.rawMetadata?.['usage']);
 
   return {
     result,
     verdict,
-    abstain: false,
+    abstain: true,
     ensemble: null,
     meta: {
+      provider: 'gateway',
       rawText: JSON.stringify(decision.value),
       model: decision.modelVersion,
-      usage: { promptTokens: null, completionTokens: null },
+      usage: { promptTokens: usage.success ? usage.data.input_tokens : null,
+        completionTokens: usage.success ? usage.data.output_tokens : null },
+      costUsd: typeof decision.rawMetadata?.['costUsd'] === 'number' ? decision.rawMetadata['costUsd'] : null,
       tokensPerSecond: null,
     },
-    prompt: JSON.stringify({ state: message }),
-    promptVersion: null,
+    prompt: JSON.stringify({ state: stateFromMessage(message), questions: buildTicketVerdictQuestions() }),
+    promptVersion: TICKET_QUESTIONS_VERSION,
   };
 }
 
@@ -99,8 +99,8 @@ export async function classifyEmailWithMeta(
   message: EmailMessage,
   options?: ClassifyOptions,
 ): Promise<ClassifyEmailWithMetaResult> {
-  if (process.env['INTELLIGENCE_PROVIDER'] === 'jev') {
-    return classifyEmailWithJevAsMeta(message, options);
+  if (usesDecisionClassification()) {
+    return classifyEmailWithDecisionAsMeta(message, options);
   }
 
   const provider = createCompletionProvider();
@@ -132,6 +132,7 @@ export async function classifyEmailWithMeta(
     },
     async (generation) => {
       const completionOptions = {
+        abortSignal: options?.abortSignal,
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
       };
 
@@ -181,11 +182,7 @@ export async function classifyEmailWithMeta(
         verdict.confidence,
       );
 
-      // Disagreement is judged on the derived type, not the raw axes. Two axis
-      // pairs that land on the same `ticket_type` are not a disagreement anyone
-      // downstream could see, and sending them to a human would spend attention
-      // on a difference that changes nothing. It is also the signal E3 measured:
-      // agreement on the label, 78% right when it holds and 38% when it splits.
+      // Compare derived ticket types; axis disagreements can compose to the same result.
       const secondType = second
         ? deriveClassification(
             message.facts ?? EXTERNAL_FALLBACK_FACTS,
@@ -202,7 +199,8 @@ export async function classifyEmailWithMeta(
           ).type
         : null;
       const ensemble = second && secondType ? { model: second.model, type: secondType } : null;
-      const abstain = ensemble !== null && ensemble.type !== data.type;
+      const abstain = (ensemble !== null && ensemble.type !== data.type) || ensembleFailed || ensembleMisconfigured
+        || !message.facts || Boolean(message.evidence?.truncated) || Boolean(message.evidence?.missing.length);
 
       generation.update({
         output: meta.rawText,

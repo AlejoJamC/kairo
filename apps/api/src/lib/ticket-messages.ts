@@ -23,11 +23,7 @@ export async function linkMessageToTicket(
   );
 
   if (error) {
-    // Non-fatal: log but do not block the primary ingestion path
-    console.error(
-      `[ticket-messages] linkMessageToTicket failed ticket=${args.ticket_id} message=${args.message_id}:`,
-      error.message
-    );
+    throw new Error("Message link persistence failed");
   }
 }
 

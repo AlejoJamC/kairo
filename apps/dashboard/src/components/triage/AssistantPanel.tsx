@@ -1,30 +1,14 @@
+import { apiCall } from "@/lib/api-client";
+import { z } from "zod";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Sparkles, Check, ChevronRight, ChevronDown, Copy, Plus, BookOpen,
+  Sparkles, Check, ChevronRight, Copy, Plus, BookOpen,
   Ticket as TicketIcon, User, ArrowUp, Square, AtSign,
   Activity, PenLine, Layers, type LucideIcon,
 } from "lucide-react";
 import { useTriageStore } from "@/stores/triage-store";
-
-// ============================================================================
-// AssistantPanel — "Assistant" tab: agent chat copilot (KAI-249)
-//
-// Faithful port of the design reference (read-only):
-//   packages/claude_design/assistant v0.1/{assistant.jsx, assistant-panel.jsx}
-//
-// Conversational copilot living in the Triage right panel: reasoning stepper,
-// answer streamed char-by-char with a blinking caret, draft card, source
-// citations and follow-up chips. The "Insert in reply" action pushes the draft
-// into the composer via the existing `setSuggestedReply` store plumbing
-// (consumed by reply-bar.tsx) — no new wiring.
-//
-// STUB: the scripted answers below stand in for real model output. Backend
-// issue KAI-250 replaces `resolveAnswer` with a call to
-// POST /api/v1/tickets/:id/assistant/draft (streamed) — the rendering layer
-// (stepper / streaming / draft card / citations) stays as-is.
-// ============================================================================
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface Step { label: string; detail: string }
@@ -56,126 +40,16 @@ const STARTERS: { id: string; icon: LucideIcon; labelKey: StarterKey }[] = [
   { id: "similar", icon: Layers,   labelKey: "ai.assistantStarterSimilar" },
 ];
 
-// ── STUB scripted answers (replaced by KAI-250) ──────────────────────────────
-// Demo content that mimics what the model returns. Spanish placeholder copy —
-// not localized because it is throwaway seed data, not UI chrome.
-const ANSWERS: Record<string, Answer> = {
-  resume: {
-    steps: [
-      { label: "Leyendo hilo del ticket",            detail: "3 mensajes" },
-      { label: "Analizando sentimiento",             detail: "tono + urgencia" },
-      { label: "Cruzando con historial de cliente",  detail: "34 tickets" },
-    ],
-    prose: [
-      { type: "p", text: "El cliente reporta un **cobro duplicado de $199** en la orden `#4729`: el primer cargo ya fue acreditado, pero el segundo nunca se reversó." },
-      { type: "bullets", items: [
-        "**Sentimiento:** urgente pero cordial — tiene cierre contable mañana.",
-        "**Riesgo:** medio-alto. Cliente Pro con CSAT 4.8; un mal manejo afecta renovación.",
-        "**Acción sugerida:** confirmar el duplicado y ofrecer reembolso al método original o crédito al próximo ciclo.",
-      ] },
-    ],
-    citations: [
-      { kind: "ticket", id: "KAI-T-1247", title: "Cobro duplicado en factura de noviembre", meta: "hilo actual" },
-      { kind: "ticket", id: "Acme · CRM", title: "Cuenta Pro · $199 MRR · cliente desde mar 2024", meta: "CSAT 4.8" },
-    ],
-    followups: ["Redacta una respuesta de reembolso", "¿Cuánto tarda el reverso en Stripe?"],
-  },
-  policy: {
-    steps: [
-      { label: "Buscando en base de conocimiento", detail: "47 artículos" },
-      { label: "Filtrando por relevancia",         detail: "umbral ≥ 0.80" },
-    ],
-    prose: [
-      { type: "p", text: "Según la política vigente, un **cobro duplicado** confirmado se resuelve así:" },
-      { type: "bullets", items: [
-        "Verificar el doble cargo en Stripe con el mismo `order_id` y monto.",
-        "Reembolsar al método original (3–5 días hábiles) **o** emitir crédito al siguiente ciclo, a elección del cliente.",
-        "Para clientes Pro/Scale, no se requiere aprobación de manager bajo $500.",
-      ] },
-    ],
-    quote: {
-      source: "KB · Política de doble cobro y reversos",
-      text: "Todo reverso por error de facturación debe procesarse el mismo día hábil. El cliente elige reembolso o crédito; ambos quedan registrados en la nota de la cuenta.",
-    },
-    citations: [
-      { kind: "kb", id: "KB-014", title: "Política de doble cobro y reversos", meta: "conf 0.96" },
-      { kind: "kb", id: "KB-007", title: "Cómo procesar un reembolso vía Stripe", meta: "conf 0.89" },
-    ],
-    followups: ["Redacta la respuesta aplicando esta política", "Muéstrame el paso a paso en Stripe"],
-  },
-  draft: {
-    steps: [
-      { label: "Recuperando 5 casos similares", detail: "pgvector ≥ 0.84" },
-      { label: "Aplicando política KB-014",     detail: "reembolso / crédito" },
-      { label: "Redactando en tono de marca",   detail: "cordial · resolutivo" },
-    ],
-    prose: [
-      { type: "p", text: "Listo. Redacté una respuesta basada en 5 casos resueltos y la política de reversos. Puedes insertarla directo en el editor:" },
-    ],
-    draft: {
-      subject: "Re: Cobro duplicado en factura de noviembre",
-      body: `Hola,
+const AssistantResponseSchema = z.object({
+  text: z.string(),
+  model: z.string(),
+  operations: z.array(z.object({
+    tool: z.string(), result: z.object({ status: z.enum(['completed', 'proposed', 'failed']),
+      data: z.record(z.string(), z.unknown()) }),
+  })),
+});
+const ProposalSchema = z.object({ suggestion: z.string(), proposalId: z.string(), referencedKbArticles: z.array(z.string()) });
 
-Confirmamos el cargo duplicado de $199 en la orden #4729 y ya iniciamos el reembolso al método original. Verás el reverso reflejado en 3–5 días hábiles según tu banco.
-
-Si prefieres aplicarlo como crédito a tu próximo ciclo en lugar del reembolso, respóndenos y lo ajustamos de inmediato — a tiempo para tu cierre contable.
-
-Lamentamos el inconveniente.
-
-Saludos,
-Soporte Kairo`,
-    },
-    citations: [
-      { kind: "ticket", id: "KAI-T-0892", title: "Cargo duplicado en factura mensual", meta: "0.94 sim" },
-      { kind: "kb",     id: "KB-014",      title: "Política de doble cobro y reversos", meta: "conf 0.96" },
-    ],
-    followups: ["Hazla más breve", "Ofrece solo crédito, no reembolso"],
-  },
-  similar: {
-    steps: [
-      { label: "Embebiendo el ticket actual",          detail: "kairo-embed-3" },
-      { label: "Buscando en 1,204 tickets resueltos",  detail: "pgvector" },
-    ],
-    prose: [
-      { type: "p", text: "Encontré **3 casos muy parecidos**, todos resueltos sin escalar:" },
-      { type: "bullets", items: [
-        "`KAI-T-0892` — reembolso al método original en 4 días. CSAT 5.0.",
-        "`KAI-T-0814` — crédito aplicado al siguiente ciclo + confirmación.",
-        "`KAI-T-0701` — nota de crédito + ajuste manual en Stripe.",
-      ] },
-    ],
-    citations: [
-      { kind: "ticket", id: "KAI-T-0892", title: "Cargo duplicado en factura mensual", meta: "0.94 sim" },
-      { kind: "ticket", id: "KAI-T-0814", title: "Doble cobro tras upgrade de plan",   meta: "0.91 sim" },
-      { kind: "ticket", id: "KAI-T-0701", title: "Factura con monto erróneo",          meta: "0.87 sim" },
-    ],
-    followups: ["¿Qué resolución funcionó mejor?", "Redacta la respuesta como el caso 0892"],
-  },
-};
-
-const FALLBACK: Answer = {
-  steps: [
-    { label: "Buscando contexto del ticket",    detail: "hilo activo" },
-    { label: "Consultando base de conocimiento", detail: "47 artículos" },
-  ],
-  prose: [
-    { type: "p", text: "Con el contexto de este ticket puedo **resumir el caso**, **redactar una respuesta**, **buscar casos similares** o **citar la política aplicable** — dime qué necesitas." },
-  ],
-  followups: ["Resume este ticket", "Redacta una respuesta de reembolso"],
-};
-
-// STUB: KAI-250 replaces this with the backend call.
-function resolveAnswer(text: string, starterId?: string): Answer {
-  if (starterId && ANSWERS[starterId]) return ANSWERS[starterId];
-  const t = text.toLowerCase();
-  if (/(resum|sentimiento|qué pasa|de qué)/.test(t)) return ANSWERS.resume;
-  if (/(pol[íi]tica|reembolso.*pol|doble cobro|duplicad.*pol)/.test(t)) return ANSWERS.policy;
-  if (/(redact|respond|respuesta|borrador|escrib|draft|breve|cr[ée]dito)/.test(t)) return ANSWERS.draft;
-  if (/(similar|parecid|otros casos|antes)/.test(t)) return ANSWERS.similar;
-  return FALLBACK;
-}
-
-// ── Inline markdown: **bold** and `code` ─────────────────────────────────────
 function renderInline(text: string): ReactNode[] {
   const out: ReactNode[] = [];
   const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
@@ -326,35 +200,12 @@ function AssistantTurn({ answer, onInsert, onFollowup }: {
   onFollowup: (f: string) => void;
 }) {
   const { t } = useTranslation("dashboard");
-  const [phase, setPhase]   = useState<Phase>("thinking");
-  const [proseN, setProseN] = useState(0);
-  const [charN, setCharN]   = useState(0);
+  const [phase] = useState<Phase>('done');
+  const proseN = answer.prose.length;
+  const charN = 0;
   const [inserted, setInserted] = useState(false);
 
-  // thinking → streaming
-  useEffect(() => {
-    let alive = true;
-    const thinkMs = 420 * answer.steps.length + 360;
-    const id = setTimeout(() => { if (alive) setPhase("streaming"); }, thinkMs);
-    return () => { alive = false; clearTimeout(id); };
-  }, [answer.steps.length]);
-
-  // stream prose block by block, char by char
-  useEffect(() => {
-    if (phase !== "streaming") return;
-    if (proseN >= answer.prose.length) { setPhase("done"); return; }
-    const block = answer.prose[proseN];
-    const full = block.type === "bullets" ? block.items.join("\n") : block.text;
-    if (charN < full.length) {
-      const step = block.type === "bullets" ? 9 : 7;
-      const id = setTimeout(() => setCharN((n) => Math.min(full.length, n + step)), 16);
-      return () => clearTimeout(id);
-    }
-    const id = setTimeout(() => { setProseN((n) => n + 1); setCharN(0); }, 90);
-    return () => clearTimeout(id);
-  }, [phase, proseN, charN, answer.prose]);
-
-  const visibleBlocks = answer.prose.slice(0, proseN + (phase === "streaming" ? 1 : 0));
+  const visibleBlocks = answer.prose;
   const done = phase === "done";
 
   return (
@@ -429,12 +280,13 @@ function AssistantTurn({ answer, onInsert, onFollowup }: {
 }
 
 // ── Composer ─────────────────────────────────────────────────────────────────
-function Composer({ onSend, busy, onStop, ticketLabel, senderName }: {
+function Composer({ onSend, busy, onStop, ticketLabel, senderName, modelName }: {
   onSend: (text: string) => void;
   busy: boolean;
   onStop: () => void;
   ticketLabel: string;
   senderName: string;
+  modelName: string;
 }) {
   const { t } = useTranslation("dashboard");
   const [val, setVal] = useState("");
@@ -483,8 +335,7 @@ function Composer({ onSend, busy, onStop, ticketLabel, senderName }: {
               when the panel is at its minimum width (it's a combobox: the full
               name reads again on resize / when more models are available). */}
           <span style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", fontSize: 11.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-secondary)", padding: "3px 7px", borderRadius: 6, border: "1px solid var(--k-border)" }}>
-            <span style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, background: "var(--k-gradient-ai)" }} />kairo-1
-            <ChevronDown style={{ width: 11, height: 11, flexShrink: 0, color: "var(--k-text-tertiary)" }} />
+            <span style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, background: "var(--k-gradient-ai)" }} />{modelName}
           </span>
           {/* Helper text yields first: truncates with ellipsis before anything wraps. */}
           <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>{t("ai.assistantModelContext")}</span>
@@ -513,9 +364,15 @@ export function AssistantPanel() {
   const [busy, setBusy]   = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
+  const controller = useRef<AbortController | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [modelName, setModelName] = useState<string>(t('ai.assistantName'));
 
   // Reset the conversation whenever the selected ticket changes.
-  useEffect(() => { setTurns([]); setBusy(false); }, [selectedTicketId]);
+  useEffect(() => {
+    controller.current?.abort(); setTurns([]); setBusy(false); setError(null);
+    return () => controller.current?.abort();
+  }, [selectedTicketId]);
 
   // Keep the thread scrolled to the latest turn.
   useEffect(() => {
@@ -523,16 +380,41 @@ export function AssistantPanel() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [turns, busy]);
 
-  function ask(text: string, starterId?: string) {
-    if (busy) return;
-    const answer = resolveAnswer(text, starterId);
-    setBusy(true);
+  async function ask(text: string) {
+    if (busy || !selectedTicketId) return;
+    const abort = new AbortController();
+    controller.current = abort;
+    setError(null); setBusy(true);
     const uid = ++seq.current;
     const aid = ++seq.current;
-    setTurns((prev) => [...prev, { id: uid, role: "u", text }, { id: aid, role: "a", answer }]);
-    const dur = 420 * answer.steps.length + 360
-      + answer.prose.reduce((s, b) => s + (b.type === "bullets" ? b.items.join("").length : b.text.length) * 2.6, 0) + 600;
-    setTimeout(() => setBusy(false), Math.min(dur, 7000));
+    const history = turns.map((turn) => turn.role === 'u'
+      ? { role: 'user' as const, content: turn.text }
+      : { role: 'assistant' as const, content: turn.answer.prose.map((block) => block.type === 'p' ? block.text : block.items.join('\n')).join('\n') });
+    setTurns((previous) => [...previous, { id: uid, role: 'u', text }]);
+    try {
+      const response = await apiCall(`/api/v1/tickets/${selectedTicketId}/assistant`, {
+        method: 'POST', body: JSON.stringify({ messages: [...history.slice(-18), { role: 'user', content: text }] }), signal: abort.signal,
+      });
+      if (!response.ok) throw new Error('Assistant request failed');
+      const result = AssistantResponseSchema.parse(await response.json());
+      if (abort.signal.aborted) return;
+      setModelName(result.model);
+      const draftOperation = [...result.operations].reverse().find((operation) => operation.tool === 'draft_reply' && operation.result.status === 'proposed');
+      const proposal = ProposalSchema.safeParse(draftOperation?.result.data['proposal']);
+      const answer: Answer = {
+        steps: result.operations.map((operation) => ({
+          label: t(operation.tool === 'inspect_ticket' ? 'ai.assistantToolInspect' : operation.tool === 'draft_reply' ? 'ai.assistantToolDraft' : 'ai.assistantToolDecide'),
+          detail: t(`ai.assistantOperation_${operation.result.status}`),
+        })),
+        prose: [{ type: 'p', text: result.text }],
+        ...(proposal.success ? { draft: { subject: selectedTicket?.subject ?? '', body: proposal.data.suggestion } } : {}),
+      };
+      setTurns((previous) => [...previous, { id: aid, role: 'a', answer }]);
+    } catch {
+      if (!abort.signal.aborted) setError(t('ai.assistantRequestFailed'));
+    } finally {
+      if (controller.current === abort) setBusy(false);
+    }
   }
 
   // No ticket selected — nothing to reason about yet.
@@ -573,7 +455,7 @@ export function AssistantPanel() {
                 <button
                   key={s.id}
                   type="button"
-                  onClick={() => ask(t(s.labelKey), s.id)}
+                  onClick={() => ask(t(s.labelKey))}
                   style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", textAlign: "left", border: "1px solid var(--k-border)", borderRadius: 9, background: "white", fontSize: 13, color: "var(--k-text-primary)", lineHeight: 1.4, cursor: "pointer" }}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--k-accent-border)"; e.currentTarget.style.background = "var(--k-accent-faint)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--k-border)"; e.currentTarget.style.background = "white"; }}
@@ -598,7 +480,9 @@ export function AssistantPanel() {
               />)
         )}
       </div>
-      <Composer onSend={(text) => ask(text)} busy={busy} onStop={() => setBusy(false)} ticketLabel={ticketLabel} senderName={senderName} />
+      {busy && <p role="status" style={{ padding: '0 14px' }}>{t('ai.assistantWaiting')}</p>}
+      {error && <p role="alert" style={{ padding: '0 14px' }}>{error}</p>}
+      <Composer modelName={modelName} onSend={(text) => ask(text)} busy={busy} onStop={() => { controller.current?.abort(); setBusy(false); }} ticketLabel={ticketLabel} senderName={senderName} />
     </div>
   );
 }

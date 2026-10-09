@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 
 import { createTextProvider, resolveTextProviderId } from './providers';
 
-const KEYS = ['TEXT_PROVIDER', 'INTELLIGENCE_PROVIDER', 'ANTHROPIC_API_KEY', 'OLLAMA_MODEL'] as const;
+const KEYS = ['TEXT_PROVIDER', 'INTELLIGENCE_PROVIDER', 'AI_GATEWAY_API_KEY', 'OLLAMA_MODEL', 'AI_GATEWAY_REPLY_MODEL', 'AI_GATEWAY_MODEL', 'AI_GATEWAY_TEXT_MODEL', 'AI_GATEWAY_KNOWLEDGE_DRAFT_MODEL', 'ANTHROPIC_MODEL'] as const;
 const saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
@@ -23,12 +23,12 @@ describe('resolveTextProviderId', () => {
   it('TEXT_PROVIDER wins over the classifier variable', () => {
     process.env['TEXT_PROVIDER'] = 'anthropic';
     process.env['INTELLIGENCE_PROVIDER'] = 'ollama';
-    expect(resolveTextProviderId()).toBe('anthropic');
+    expect(resolveTextProviderId()).toBe('gateway');
   });
 
   it('follows INTELLIGENCE_PROVIDER when TEXT_PROVIDER is unset', () => {
     process.env['INTELLIGENCE_PROVIDER'] = 'anthropic';
-    expect(resolveTextProviderId()).toBe('anthropic');
+    expect(resolveTextProviderId()).toBe('gateway');
   });
 
   it('falls back to ollama when the classifier is jev, which cannot generate text', () => {
@@ -50,6 +50,6 @@ describe('createTextProvider', () => {
 
   it('rejects TEXT_PROVIDER=jev instead of silently using another provider', () => {
     process.env['TEXT_PROVIDER'] = 'jev';
-    expect(() => createTextProvider()).toThrow(/no free-text completion/);
+    expect(() => createTextProvider()).toThrow(/Unknown configured model provider/);
   });
 });

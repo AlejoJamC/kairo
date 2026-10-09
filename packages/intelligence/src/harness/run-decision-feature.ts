@@ -23,6 +23,7 @@ export interface DecisionFeatureRequest {
   questions: unknown;
   context?: { ticketId?: string; accountId?: string; userId?: string };
   logger?: LlmCallLogger;
+  versions?: { state: string; questions: string };
 }
 
 export interface DecisionFeatureResult<TDecision> {
@@ -75,7 +76,7 @@ export async function runDecisionFeature<TDecision>(
       name: request.feature,
       model: request.provider.model,
       input: { state: request.state, questions: request.questions },
-      metadata: ids,
+      metadata: { ...ids, modelRole: request.feature, ...request.versions },
       context: { ...(ticketId ? { ticketId } : {}), ...(accountId ? { accountId } : {}) },
     },
     async (generation) => {
@@ -87,7 +88,7 @@ export async function runDecisionFeature<TDecision>(
           feature: request.feature,
           provider: request.provider.provider,
           model: request.provider.model,
-          promptVersion: null,
+          promptVersion: request.versions?.questions ?? null,
           promptText: requestPayload,
           responseText: null,
           promptTokens: null,
@@ -104,6 +105,7 @@ export async function runDecisionFeature<TDecision>(
       const usage = usageOf(result);
       generation.update({
         output: result.value,
+        metadata: { reportedModel: result.modelVersion, costUsd: result.rawMetadata?.['costUsd'] ?? null },
         ...usageDetails({
           promptTokens: usage.input_tokens ?? null,
           completionTokens: usage.output_tokens ?? null,
@@ -114,7 +116,7 @@ export async function runDecisionFeature<TDecision>(
         feature: request.feature,
         provider: result.provider,
         model: result.modelVersion,
-        promptVersion: null,
+        promptVersion: request.versions?.questions ?? null,
         promptText: requestPayload,
         responseText: JSON.stringify(result.value),
         promptTokens: usage.input_tokens ?? null,

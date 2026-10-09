@@ -543,7 +543,15 @@
     "assistantNoTicketTitle": "No ticket selected",
     "assistantNoTicketBody": "Pick a ticket from the queue to chat with the copilot about it.",
     "assistantUnknownSender": "the customer",
-    "resizeHint": "Drag to resize · double-click to reset"
+    "resizeHint": "Drag to resize · double-click to reset",
+    "assistantToolInspect": "Read ticket and knowledge",
+    "assistantToolDecide": "Propose classification",
+    "assistantToolDraft": "Prepare reply proposal",
+    "assistantOperation_completed": "Completed",
+    "assistantOperation_proposed": "Requires human review",
+    "assistantOperation_failed": "Failed",
+    "assistantRequestFailed": "Assistant unavailable. Try again.",
+    "assistantWaiting": "Consulting the ticket…"
   },
   "relatedHistory": {
     "title": "Related history",

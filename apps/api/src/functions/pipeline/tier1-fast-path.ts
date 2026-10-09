@@ -1,10 +1,10 @@
+import { extractBody } from "../../lib/email/body.js";
 import { classifyEmailWithMeta, detectEscalationTriggers, type EmailMessage, type PromptLang } from "@kairo/intelligence";
 import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
 import { isJevCanaryTenant, jevCanaryUpgradeTier1 } from "../../lib/jev-canary.js";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import {
-  buildClassifierBody,
-  classifierEnvelope,
+  buildEmailClassifierInput,
   resolveClassifierContext,
 } from "../../lib/classifier-input.js";
 import { tier1ProposalStatus } from "./tier1-proposal-status.js";
@@ -126,35 +126,6 @@ function parseFromHeader(from: string): { from_name: string | null; from_email: 
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Gmail returns part data base64url-encoded; Buffer's "base64" decoder
 // accepts URL-safe variants on both Node and Bun.
-function extractBody(payload: GmailMessage["payload"]): {
-  body_plain: string;
-  body_html: string;
-} {
-  let body_plain = "";
-  let body_html = "";
-
-  const walk = (parts: GmailMessagePart[]): void => {
-    for (const part of parts) {
-      if (part.mimeType === "text/plain" && part.body?.data) {
-        body_plain += Buffer.from(part.body.data, "base64").toString("utf-8");
-      } else if (part.mimeType === "text/html" && part.body?.data) {
-        body_html += Buffer.from(part.body.data, "base64").toString("utf-8");
-      } else if (part.parts) {
-        walk(part.parts);
-      }
-    }
-  };
-
-  if (payload?.parts) {
-    walk(payload.parts);
-  } else if (payload?.body?.data) {
-    const decoded = Buffer.from(payload.body.data, "base64").toString("utf-8");
-    if (payload.mimeType === "text/html") body_html = decoded;
-    else body_plain = decoded;
-  }
-
-  return { body_plain, body_html };
-}
 
 // ---------------------------------------------------------------------------
 // Inngest function
@@ -361,19 +332,10 @@ export const tier1FastPath = inngest.createFunction(
         const messageId = message.id;
         // Prefer the decoded plain-text body for classifier input; fall back to
         // snippet when the email only carried HTML or no decodable text part.
-        const classifierBody = buildClassifierBody("onboarding", body_plain, snippet);
-
-        pipelineLog("tier1:llm", `calling classifyEmail id=${messageId} subject="${subject}" from="${from}"`);
-
-        const emailMessage: EmailMessage = {
-          subject,
-          body: classifierBody,
-          from,
-          tenantMailbox: userEmail,
-          // KAI-45 — recipients and thread position, read once by the
-          // pre-filter and previously discarded.
-          ...classifierEnvelope(filterResult.facts),
-        };
+        const emailMessage: EmailMessage = buildEmailClassifierInput({
+          stage: "onboarding", subject, from, bodyPlain: body_plain, snippet,
+          facts: filterResult.facts, context: { tenantMailbox: userEmail, tenantMailboxes },
+        });
 
         const llmStart = Date.now();
         const promise = withRetry(llmSemaphore, () =>

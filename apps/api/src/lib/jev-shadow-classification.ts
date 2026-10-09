@@ -1,3 +1,4 @@
+import { usesDecisionClassification } from "@kairo/intelligence";
 import {
   classifyEmailWithJev,
   createDecisionProvider,
@@ -16,7 +17,7 @@ import { pipelineLog } from "./pipeline-logger.js";
 // with the same tooling, not a new storage path.
 //
 // Fire-and-forget: callers never await runJevShadowClassification. Every
-// failure — including a missing TYPESAFE_API_KEY — is caught here, so shadow
+// failure — including a missing AI_GATEWAY_API_KEY — is caught here, so shadow
 // traffic can never slow down or break the real pipeline. Callers gate this
 // behind `enable_jev_shadow_classification` themselves, the same way
 // tier1-fast-path gates `enable_contact_extraction`.
@@ -36,7 +37,7 @@ interface JevShadowDeps {
 const FEATURE = "email_classification_jev_shadow";
 
 const defaultDeps: JevShadowDeps = {
-  createProvider: createDecisionProvider,
+  createProvider: () => createDecisionProvider('jev'),
   classify: classifyEmailWithJev,
   log: logLlmCall,
 };
@@ -47,6 +48,7 @@ export async function classifyJevShadow(
   context: JevShadowContext,
   deps: JevShadowDeps = defaultDeps,
 ): Promise<void> {
+  if (usesDecisionClassification()) return;
   const start = Date.now();
   try {
     const provider = deps.createProvider();

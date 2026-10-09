@@ -81,7 +81,7 @@ describe("draftKnowledgeFromTicket", () => {
       title: "Export button does nothing",
       is_published: false,
     });
-    expect(inserted[0]!["tags"]).toEqual(["ai-draft", "type:resolution", "ticket:t-1", "reusable"]);
+    expect(inserted[0]!["tags"]).toEqual(["ai-draft", "scope:account", "type:resolution", "ticket:t-1", "reusable"]);
   });
 
   it("does not call the text model when JEV says it is not a candidate", async () => {

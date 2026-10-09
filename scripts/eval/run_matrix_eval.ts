@@ -223,12 +223,17 @@ async function main(): Promise<void> {
   // always finished before the next begins.
   for (const m of BENCH) {
     if (stopping) break;
-    process.env['INTELLIGENCE_PROVIDER'] = m.provider;
-    if (m.provider === 'ollama') process.env['OLLAMA_MODEL'] = m.model;
-    else process.env['ANTHROPIC_MODEL'] = m.model;
+    process.env['CLASSIFICATION_MODE'] = m.mode ?? 'language';
+    process.env['INTELLIGENCE_PROVIDER'] = m.provider === 'ollama' ? 'ollama' : 'gateway';
+    if (m.provider === 'ollama') {
+      delete process.env['AI_GATEWAY_CLASSIFICATION_MODEL'];
+      process.env['OLLAMA_MODEL'] = m.model;
+    } else {
+      process.env['AI_GATEWAY_CLASSIFICATION_MODEL'] = m.model.includes('/') ? m.model : `anthropic/${m.model}`;
+    }
     const endpoint = m.provider === 'ollama'
       ? (process.env['OLLAMA_BASE_URL'] ?? LOCAL_OLLAMA)
-      : 'https://api.anthropic.com';
+      : m.mode === 'decision' ? 'https://ai-gateway.vercel.sh/typesafe' : 'https://ai-gateway.vercel.sh/v1';
 
     console.log(`\n■ ${m.label}  (${m.provider}/${m.model})`);
     log(`model ${m.provider}/${m.model}`);
@@ -287,6 +292,7 @@ async function main(): Promise<void> {
           } else {
             const { result, meta } = await classifyEmailWithMeta({
               subject: parsed.subject, from: parsed.from, to: parsed.to, cc: parsed.cc,
+              stage: v.stage, evidence: { bodySource: 'full', truncated: body.length >= bodyRule(v).maxChars, missing: [] },
               body, threadDepth: parsed.threadDepth, attachments: parsed.attachments,
               tenantMailbox: TENANT_MAILBOX,
               facts,

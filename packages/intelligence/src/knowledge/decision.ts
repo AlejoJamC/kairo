@@ -1,15 +1,14 @@
 // ---------------------------------------------------------------------------
 // KAI-55 — is a resolved ticket worth turning into knowledge?
 //
-// JEV answers four typed questions; it never writes the article. A person
+// A native decision model answers four typed questions; it never writes the article. A person
 // validates every draft before it is published, so `requiresHumanValidation`
 // is not a field: it is always true.
 // ---------------------------------------------------------------------------
 
 import { z } from 'zod';
+import { choiceAnswerSchema } from '../providers/choice-answer-schema';
 import { choice, type ChoiceCriteria, type Questions } from '@typesafe-ai/sdk';
-
-import { DEFAULT_CONFIDENCE_THRESHOLD } from '../autonomy';
 
 export const KNOWLEDGE_TYPES = [
   'resolution',
@@ -32,6 +31,11 @@ export const KnowledgeDecisionSchema = z.object({
   evidenceQuality: z.enum(EVIDENCE_QUALITIES),
   /** The least sure of the four answers: a decision is only as sure as its weakest axis. */
   confidence: z.number().min(0).max(1),
+  audit: z.object({
+    answers: z.record(z.string(), z.object({ type: z.literal('choice'), choice: z.string(), confidence: z.number(),
+      probabilities: z.record(z.string(), z.number()) })),
+    stateVersion: z.string(), questionsVersion: z.string(), reviewReasons: z.array(z.string()),
+  }).optional(),
 });
 export type KnowledgeDecision = z.infer<typeof KnowledgeDecisionSchema>;
 
@@ -72,10 +76,20 @@ export function buildKnowledgeQuestions(): Questions {
   };
 }
 
+export const KNOWLEDGE_QUESTIONS_VERSION = '1.0.0';
+export const KnowledgeAnswersSchema = z.object({
+  is_candidate: choiceAnswerSchema(CANDIDATE_CRITERIA),
+  knowledge_type: choiceAnswerSchema(TYPE_CRITERIA),
+  reusable: choiceAnswerSchema(REUSABLE_CRITERIA),
+  evidence: choiceAnswerSchema(EVIDENCE_CRITERIA),
+});
+export type KnowledgeAnswers = z.infer<typeof KnowledgeAnswersSchema>;
+
 interface ChoiceAnswer {
   type: 'choice';
   choice: string;
   confidence: number;
+  probabilities?: Record<string, number>;
 }
 
 export function parseKnowledgeAnswers(answers: Record<string, ChoiceAnswer>): KnowledgeDecision {
@@ -89,18 +103,16 @@ export function parseKnowledgeAnswers(answers: Record<string, ChoiceAnswer>): Kn
   });
 }
 
-/**
- * Whether a decision is worth spending a text-model call on. A candidate JEV
- * is unsure about, or whose type is `none`, is dropped rather than drafted.
- */
+/** Evidence gates drafting; a probability threshold requires explicit calibration. */
 export function shouldDraftKnowledge(
   decision: KnowledgeDecision,
-  threshold: number = DEFAULT_CONFIDENCE_THRESHOLD,
+  threshold?: number,
 ): boolean {
   return (
     decision.isKnowledgeCandidate &&
     decision.knowledgeType !== 'none' &&
-    decision.confidence >= threshold
+    decision.evidenceQuality !== 'low' &&
+    (threshold === undefined || decision.confidence >= threshold)
   );
 }
 

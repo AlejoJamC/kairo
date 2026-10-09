@@ -47,6 +47,9 @@ export interface CompletionUsage {
 export interface CompletionMeta {
   rawText: string;
   model: string;
+  provider?: string;
+  /** USD reported by the Gateway; null when no billing metadata is available. */
+  costUsd?: number | null;
   usage: CompletionUsage;
   /**
    * Generation throughput reported by the provider, when it reports one.
@@ -70,6 +73,7 @@ export interface EmbeddingProvider {
 }
 
 export interface CompletionOptions {
+  abortSignal?: AbortSignal;
   maxTokens?: number;
   temperature?: number;
   stopSequences?: string[];
