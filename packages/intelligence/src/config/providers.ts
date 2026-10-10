@@ -54,7 +54,7 @@ export type DecisionProviderId = 'gateway' | 'jev';
 
 export function createDecisionProvider(
   id: DecisionProviderId = 'gateway',
-  role: Extract<ModelRole, 'classification' | 'knowledge_decision'> = 'classification',
+  role: Extract<ModelRole, 'classification' | 'knowledge_decision' | 'validation'> = 'classification',
 ): DecisionProvider {
   if (id === 'jev') return new JevDecisionProvider(gatewayKey(), process.env['JEV_MODEL'] ?? 'typesafe-ai/jev');
   const route = resolveModelRoute(role);

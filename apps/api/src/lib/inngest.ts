@@ -1,6 +1,9 @@
 import { Inngest } from "inngest";
 
 export type KairoEvents = {
+  'messages/knowledge.requested': {
+    data: { accountId: string; ticketId: string; messageId: string };
+  };
   "pipeline/tier1.triggered": {
     data: {
       userId: string;

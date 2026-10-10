@@ -255,6 +255,7 @@ export async function ingestMessages(
         await deps.applyCustomerReplyTransition(deps.db, result.ticket_id, result.prior_status);
         ticketsReopened++;
       }
+      await deps.requestKnowledge?.({ accountId, ticketId: result.ticket_id, messageId: insertedMsg.id });
       const { error: completedError } = await deps.db
         .from("messages")
         .update({

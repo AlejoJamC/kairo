@@ -115,6 +115,7 @@ const FLAG_DEFAULTS = {
   enable_jev_shadow_classification: false,
   enable_jev_canary: false,
   enable_knowledge_candidates: false,
+  enable_email_knowledge: false,
   enable_ticket_assistant: false,
 } as const;
 

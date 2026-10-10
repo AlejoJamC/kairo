@@ -231,6 +231,30 @@ describe("pollGmailAccount — cursor seeding", () => {
 });
 
 describe("pollGmailAccount — history.list parsing + ingestion", () => {
+  it('requests knowledge only after linking the classified message and before advancing its cursor', async () => {
+    const { db, updates } = createFakeDb({ integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: '1000' } });
+    let linked = false;
+    const requestKnowledge = mock(async (input: { accountId: string; ticketId: string; messageId: string }) => {
+      expect(linked).toBe(true);
+      expect(input).toMatchObject({ accountId: ACCOUNT_ID, messageId: 'msg-1' });
+      expect(updates.some(row => row.table === 'channel_integrations')).toBe(false);
+    });
+    await pollGmailAccount(baseDeps({ db, requestKnowledge,
+      linkMessageToTicket: async () => { linked = true; },
+      historyList: async () => ({ history: [{ id: 'h1', messagesAdded: [{ message: { id: 'synthetic-message', threadId: 'synthetic-thread' } }] }], historyId: '1001' }),
+    }), ACCOUNT_ID);
+    expect(requestKnowledge).toHaveBeenCalledTimes(1);
+    expect(updates.some(row => row.table === 'channel_integrations')).toBe(true);
+  });
+  it('keeps the cursor in place when the knowledge event could not be accepted', async () => {
+    const { db, updates } = createFakeDb({ integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: '1000' } });
+    await expect(pollGmailAccount(baseDeps({ db,
+      requestKnowledge: async () => { throw new Error('Synthetic event delivery failure'); },
+      historyList: async () => ({ history: [{ id: 'h1', messagesAdded: [{ message: { id: 'synthetic-message', threadId: 'synthetic-thread' } }] }], historyId: '1001' }),
+    }), ACCOUNT_ID)).rejects.toThrow('Synthetic event delivery failure');
+    expect(updates.some(row => row.table === 'channel_integrations')).toBe(false);
+    expect(updates.some(row => row.payload.classification_status === 'classified')).toBe(false);
+  });
   it("parses messagesAdded from history.list, ingests new messages, and advances the cursor", async () => {
     const { db, updates, inserts } = createFakeDb({
       integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },

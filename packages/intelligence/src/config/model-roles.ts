@@ -1,6 +1,6 @@
 import { ProviderConfigurationError } from '../providers/base';
 
-export const MODEL_ROLES = ['classification', 'reply', 'knowledge_decision', 'knowledge_draft', 'assistant', 'embedding'] as const;
+export const MODEL_ROLES = ['classification', 'reply', 'knowledge_decision', 'knowledge_draft', 'validation', 'assistant', 'embedding'] as const;
 export type ModelRole = (typeof MODEL_ROLES)[number];
 export type ModelCapability = 'language' | 'decision' | 'embedding';
 export interface ModelRoute {
@@ -15,6 +15,7 @@ const ROLE_VARIABLES: Record<ModelRole, string> = {
   reply: 'AI_GATEWAY_REPLY_MODEL',
   knowledge_decision: 'AI_GATEWAY_KNOWLEDGE_DECISION_MODEL',
   knowledge_draft: 'AI_GATEWAY_KNOWLEDGE_DRAFT_MODEL',
+  validation: 'AI_GATEWAY_VALIDATION_MODEL',
   assistant: 'AI_GATEWAY_ASSISTANT_MODEL',
   embedding: 'AI_GATEWAY_EMBEDDING_MODEL',
 };
@@ -27,7 +28,7 @@ export function usesDecisionClassification(env: Record<string, string | undefine
 
 export function resolveModelRoute(role: ModelRole, env: Record<string, string | undefined> = process.env): ModelRoute {
   const capability: ModelCapability = role === 'embedding' ? 'embedding'
-    : role === 'knowledge_decision' || (role === 'classification' && usesDecisionClassification(env)) ? 'decision' : 'language';
+    : role === 'knowledge_decision' || role === 'validation' || (role === 'classification' && usesDecisionClassification(env)) ? 'decision' : 'language';
   const explicit = env[ROLE_VARIABLES[role]];
   const configuredProvider = role === 'embedding' ? env['EMBEDDING_PROVIDER']
     : role === 'classification' ? env['INTELLIGENCE_PROVIDER']

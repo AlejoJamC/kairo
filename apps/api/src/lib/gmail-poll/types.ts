@@ -92,6 +92,7 @@ export class GmailMessageNotFoundError extends Error {
  * `mock.module()`, which leaks across test files.
  */
 export interface GmailPollDeps {
+  requestKnowledge?: (input: { accountId: string; ticketId: string; messageId: string }) => Promise<void>;
   runMessage?: <T>(key: string, handler: () => Promise<T>) => Promise<T>;
   db: DbClient;
   getFreshGmailToken: (accountId: string) => Promise<string>;

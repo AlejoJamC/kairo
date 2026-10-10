@@ -18,7 +18,7 @@ import {
   type LlmCallLogger,
 } from "@kairo/intelligence";
 
-import { CLASSIFIER_BODY_RULES, resolveTenantLanguage } from "./classifier-input.js";
+import { CLASSIFIER_BODY_RULES, resolveTenantSettings, type AccountSettings } from "./classifier-input.js";
 import { recordLlmCall } from "./llm-logging.js";
 import { supabase as defaultSupabase } from "./supabase.js";
 import {
@@ -129,10 +129,12 @@ export function buildReplySuggestionVars(input: {
   client: ReplyClient | null;
   context: TicketContext;
   lang: PromptLang;
+  businessContext?: string;
 }): Record<string, string> {
   const na = LABELS[input.lang].unavailable;
   return {
     subject: input.ticket.subject ?? na,
+    business_context: input.businessContext ?? na,
     ticket_type: input.ticket.ticket_type ?? na,
     priority: input.ticket.priority ?? na,
     category: input.ticket.category ?? na,
@@ -151,6 +153,7 @@ export interface SuggestReplyDeps {
   supabase?: Db;
   logger?: LlmCallLogger;
   resolveLanguage?: (accountId: string) => Promise<PromptLang>;
+  resolveSettings?: (accountId: string) => Promise<AccountSettings>;
   retrieve?: typeof retrieveTicketContext;
   run?: (request: LlmFeatureJsonRequest<ReplySuggestion>) => Promise<LlmFeatureResult<ReplySuggestion>>;
 }
@@ -187,8 +190,8 @@ export async function suggestReply(
   if (ticketErr || !ticket) return null;
   const t = ticket as ReplyTicket;
 
-  const [lang, messages, client, context] = await Promise.all([
-    (deps.resolveLanguage ?? resolveTenantLanguage)(input.accountId),
+  const [settings, messages, client, context] = await Promise.all([
+    (deps.resolveSettings ?? (accountId => resolveTenantSettings(accountId, db)))(input.accountId),
     t.conversation_id
       ? db
           .from("messages")
@@ -218,6 +221,7 @@ export async function suggestReply(
       casesLimit: RESOLVED_CASES_LIMIT,
     }),
   ]);
+  const lang = deps.resolveLanguage ? await deps.resolveLanguage(input.accountId) : settings.language;
 
   if (context.degraded.length) throw new ProviderError("Reply retrieval unavailable; human review is required", true);
 
@@ -225,7 +229,7 @@ export async function suggestReply(
     feature: REPLY_SUGGESTION_FEATURE,
     promptId: PROMPT_ID,
     lang,
-    vars: buildReplySuggestionVars({ ticket: t, messages, client, context, lang }),
+    vars: buildReplySuggestionVars({ ticket: t, messages, client, context, lang, businessContext: settings.businessContext }),
     schema: ReplySuggestionSchema,
     confidenceOf: (d) => d.confidence,
     options: { maxTokens: 1500, temperature: 0.4, abortSignal: input.signal },

@@ -63,6 +63,7 @@ function deps(over: Partial<KnowledgeCandidateDeps> & { db: KnowledgeCandidateDe
   return {
     supabase: over.db,
     resolveLanguage: async () => "en",
+    resolveSettings: over.resolveSettings ?? (async () => ({ language: 'en', businessContext: 'Acme provides account support.' })),
     decide: over.decide ?? (async () => CANDIDATE),
     draft: over.draft ?? (async () => ({ title: "Export button does nothing", content: "Clear the cache and retry." })),
     embed: over.embed ?? (async () => ({ status: "ok" as const })),

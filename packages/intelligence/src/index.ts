@@ -138,3 +138,9 @@ export { GatewayDecisionProvider } from './providers/gateway/decision';
 export { classifyEmailWithDecision } from './classification/classify-with-decision';
 
 export { gatewayProvenance } from './providers/gateway/client';
+export {
+  EMAIL_KNOWLEDGE_VERSION, buildEmailKnowledgeQuestions, EmailKnowledgeCandidateSchema,
+  EmailKnowledgeDraftSchema, buildEmailKnowledgeValidationQuestions,
+  EmailKnowledgeValidationSchema, knowledgeReviewReasons,
+  type EmailKnowledgeProposal, type EmailKnowledgeValidation,
+} from './knowledge/email-knowledge';

@@ -220,5 +220,8 @@ GROUP BY model;
 | JEV ticket verdict (`classifyEmailWithJev`) | ✅ Langfuse generation via `withGeneration`. With `INTELLIGENCE_PROVIDER=jev` it is the classification on every path above; with the shadow flag on (`apps/api/src/lib/jev-shadow-classification.ts`) it also runs beside another provider, logged to `llm_calls` with `feature: email_classification_jev_shadow` |
 | `knowledge_decision` (`lib/knowledge-candidate.ts`) | Native Gateway decision through `runDecisionFeature` + `recordLlmCall`; gated by `enable_knowledge_candidates` |
 | `knowledge_draft` (`lib/knowledge-candidate.ts`) | ✅ text model through `runLlmFeature` + `recordLlmCall`, only for a confident candidate; prompt `knowledge-draft` |
+| `email_knowledge_decision` | Incoming-mail candidate; role `knowledge_decision`; `enable_email_knowledge` |
+| `email_knowledge_extraction` | Evidence-backed proposals; role `knowledge_draft`; prompt `email-knowledge` |
+| `email_knowledge_validation` | Batched source and business checks; role `validation`; human approval required |
 
 Table exists and is now actively populated by the call sites above.

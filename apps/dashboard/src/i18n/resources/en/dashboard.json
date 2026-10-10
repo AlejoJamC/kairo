@@ -182,7 +182,22 @@
   },
   "knowledgeView": {
     "title": "Knowledge",
-    "subtitle": "Knowledge base articles. Drafts are written by the AI from resolved tickets and stay unpublished until a person approves them.",
+    "subtitle": "Business facts and articles proposed from emails and resolved tickets. Review them before publishing.",
+    "evidenceTitle": "Source and validation",
+    "validationScope": "These checks apply to the original AI proposal. Review any edits before publishing.",
+    "evidenceUnavailable": "Source evidence could not be loaded. Verify the original email before approving.",
+    "kinds": { "business_fact": "Business fact proposal", "policy": "Policy proposal", "exception": "Exception proposal", "article": "Article proposal" },
+    "reasons": {
+      "human_validation_required": "Requires your approval before becoming reusable knowledge.",
+      "invalid_source_quote": "The quotation does not match the source.",
+      "unsupported_claim": "The source does not support all claims. Correct or discard this proposal.",
+      "insufficient_evidence": "There is insufficient evidence to validate the claims.",
+      "business_context_conflict": "Conflicts with the approved business context. Resolve the conflict before publishing.",
+      "business_context_missing": "Business context is missing or insufficient for validation.",
+      "source_truncated": "Only part of the source email was processed.",
+      "approved_knowledge_unavailable": "Approved knowledge retrieval was unavailable. Compatibility has not been fully checked."
+    },
+    "steps": { "email_knowledge_decision": "Candidate selection", "email_knowledge_extraction": "Proposal extraction", "email_knowledge_validation": "Evidence and business context validation" },
     "tabDrafts": "Drafts",
     "tabPublished": "Published",
     "emptyDrafts": "No drafts to review.",

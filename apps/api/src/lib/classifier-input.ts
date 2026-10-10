@@ -15,6 +15,7 @@ import {
 import { type MailFacts } from "./email/mail-facts.js";
 import { getGmailEmailByAccount } from "./gmail-token.js";
 import { supabase } from "./supabase.js";
+import { findRelevantKb } from './ticket-context.js';
 
 export type ClassifierStage = "onboarding" | "backfill" | "new_email";
 
@@ -129,7 +130,7 @@ async function readTenantMailboxes(
 }
 
 
-interface AccountSettings {
+export interface AccountSettings {
   language: PromptLang;
   businessContext: string | undefined;
 }
@@ -137,11 +138,12 @@ interface AccountSettings {
 
 async function readAccountSettings(
   accountId: string,
-  degradations: ContextDegradation[]
+  degradations: ContextDegradation[],
+  db = supabase,
 ): Promise<AccountSettings> {
   const fallback: AccountSettings = { language: DEFAULT_LANG, businessContext: undefined };
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("accounts")
       .select("language, business_context")
       .eq("id", accountId)
@@ -167,6 +169,28 @@ async function readAccountSettings(
     degradations.push("accounts_unreadable");
     return fallback;
   }
+}
+
+export async function resolveTenantSettings(accountId: string, db = supabase): Promise<AccountSettings> {
+  return readAccountSettings(accountId, [], db);
+}
+
+export async function withApprovedKnowledge(
+  message: EmailMessage,
+  accountId: string,
+  retrieve: typeof findRelevantKb = findRelevantKb,
+): Promise<EmailMessage> {
+  const knowledge = await retrieve({ accountId, queryText: [message.subject, message.body.slice(0, 2000)].join('\n') });
+  const missing = [...(message.evidence?.missing ?? []), ...(knowledge.degraded.length ? ['approved_knowledge'] : [])];
+  return {
+    ...message,
+    ...(knowledge.articles.length ? { businessContext: JSON.stringify({
+      configuredBusinessContext: message.businessContext ?? null,
+      publishedKnowledge: knowledge.articles.map(article => ({ id: article.id, title: article.title, content: article.content.slice(0, 2000) })),
+      knowledgeContext: { role: 'published_reference_data', conflictsRequireHumanReview: true },
+    }) } : {}),
+    ...(message.evidence ? { evidence: { ...message.evidence, missing: [...new Set(missing)] } } : {}),
+  };
 }
 
 

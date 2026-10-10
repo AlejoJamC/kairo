@@ -13,6 +13,8 @@ describe('model role routing', () => {
     expect(resolveModelRoute('knowledge_draft', env).model).toBe('acme/language-b');
     expect(resolveModelRoute('assistant', env).model).toBe('acme/language-c');
     expect(resolveModelRoute('embedding', env).capability).toBe('embedding');
+    expect(resolveModelRoute('validation', { ...env, AI_GATEWAY_VALIDATION_MODEL: 'acme/verifier' }))
+      .toEqual({ role: 'validation', provider: 'gateway', capability: 'decision', model: 'acme/verifier' });
   });
 
   it('changes classification capability without changing generation roles', () => {

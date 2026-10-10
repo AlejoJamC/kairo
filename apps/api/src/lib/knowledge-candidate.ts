@@ -27,7 +27,7 @@ import {
   type LlmCallLogger,
 } from "@kairo/intelligence";
 
-import { CLASSIFIER_BODY_RULES, resolveTenantLanguage } from "./classifier-input.js";
+import { CLASSIFIER_BODY_RULES, resolveTenantSettings, type AccountSettings } from "./classifier-input.js";
 import { maybeGenerateKbEmbedding } from "./kb-embedding.js";
 import { recordLlmCall } from "./llm-logging.js";
 import { supabase as defaultSupabase } from "./supabase.js";
@@ -37,6 +37,7 @@ export const KNOWLEDGE_DRAFT_FEATURE = "knowledge_draft";
 const DRAFT_PROMPT_ID = "knowledge-draft";
 
 const THREAD_MESSAGES = 30;
+const KNOWLEDGE_STATE_VERSION = '1.0.1';
 const MESSAGE_BODY_RULE = CLASSIFIER_BODY_RULES.backfill;
 
 interface ThreadMessage {
@@ -61,6 +62,7 @@ export interface KnowledgeCandidateDeps {
   supabase?: SupabaseClient;
   logger?: LlmCallLogger;
   resolveLanguage?: (accountId: string) => Promise<PromptLang>;
+  resolveSettings?: (accountId: string) => Promise<AccountSettings>;
   decide?: (input: {
     ticketId: string;
     accountId: string;
@@ -97,14 +99,14 @@ async function decideWithNativeModel(input: { ticketId: string; accountId: strin
     questions: buildKnowledgeQuestions(),
     context: { ticketId: input.ticketId, accountId: input.accountId },
     logger,
-    versions: { state: "1.0.0", questions: KNOWLEDGE_QUESTIONS_VERSION },
+    versions: { state: KNOWLEDGE_STATE_VERSION, questions: KNOWLEDGE_QUESTIONS_VERSION },
   });
   const parsed = KnowledgeAnswersSchema.safeParse(data.value);
   if (!parsed.success) throw new ProviderError('Knowledge decision output does not match its question contract', false);
   const answers = parsed.data;
   return {
     ...parseKnowledgeAnswers(answers),
-    audit: { answers, stateVersion: "1.0.0", questionsVersion: KNOWLEDGE_QUESTIONS_VERSION,
+    audit: { answers, stateVersion: KNOWLEDGE_STATE_VERSION, questionsVersion: KNOWLEDGE_QUESTIONS_VERSION,
       reviewReasons: ["human_publication_required", "provider_not_calibrated"] },
   };
 }
@@ -171,20 +173,23 @@ export async function draftKnowledgeFromTicket(
   const thread = threadText(messages);
   if (!thread) return { status: "skipped", reason: "no_thread" };
 
+  const settings = await (deps.resolveSettings ?? (accountId => resolveTenantSettings(accountId, db)))(input.accountId);
+
   const decision = await (deps.decide ?? ((request) => decideWithNativeModel(request, deps.logger ?? recordLlmCall)))({
     ticketId: t.id,
     accountId: input.accountId,
-    state: { stateVersion: "1.0.0", scope: "account", truncated: messages.length === THREAD_MESSAGES, subject: t.subject, category: t.category, ticketType: t.ticket_type, thread },
+    state: { stateVersion: KNOWLEDGE_STATE_VERSION, scope: "account", businessContext: settings.businessContext ?? null, truncated: messages.length === THREAD_MESSAGES, subject: t.subject, category: t.category, ticketType: t.ticket_type, thread },
   });
   if (!shouldDraftKnowledge(decision)) return { status: "skipped", reason: "not_candidate" };
 
-  const lang = await (deps.resolveLanguage ?? resolveTenantLanguage)(input.accountId);
+  const lang = deps.resolveLanguage ? await deps.resolveLanguage(input.accountId) : settings.language;
   const draft = await (deps.draft ?? ((request) => draftWithTextModel(request, deps.logger ?? recordLlmCall)))({
     ticketId: t.id,
     accountId: input.accountId,
     lang,
     vars: {
       knowledge_type: decision.knowledgeType,
+      business_context: settings.businessContext ?? (lang === 'es' ? '(no disponible)' : '(not available)'),
       evidence_quality: decision.evidenceQuality,
       subject: t.subject ?? "",
       category: t.category ?? "",
