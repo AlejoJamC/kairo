@@ -1,5 +1,6 @@
 import {
   GmailHistoryExpiredError,
+  GmailMessageNotFoundError,
   type GmailHistoryListResponse,
   type GmailMessage,
   type GmailMessageListResponse,
@@ -13,6 +14,7 @@ async function gmailGet<T>(token: string, path: string, params: Record<string, s
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 404 && path === 'users/me/history') throw new GmailHistoryExpiredError();
+  if (response.status === 404 && path.startsWith('users/me/messages/')) throw new GmailMessageNotFoundError();
   if (!response.ok) throw new Error(`Gmail request failed (HTTP ${response.status})`);
   return response.json() as Promise<T>;
 }

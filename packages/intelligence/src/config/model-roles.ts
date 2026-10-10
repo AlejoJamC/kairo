@@ -1,4 +1,4 @@
-import { ProviderError } from '../providers/base';
+import { ProviderConfigurationError } from '../providers/base';
 
 export const MODEL_ROLES = ['classification', 'reply', 'knowledge_decision', 'knowledge_draft', 'assistant', 'embedding'] as const;
 export type ModelRole = (typeof MODEL_ROLES)[number];
@@ -21,7 +21,7 @@ const ROLE_VARIABLES: Record<ModelRole, string> = {
 
 export function usesDecisionClassification(env: Record<string, string | undefined> = process.env): boolean {
   const mode = env['CLASSIFICATION_MODE'];
-  if (mode && !['language', 'decision'].includes(mode)) throw new ProviderError('Invalid CLASSIFICATION_MODE', false);
+  if (mode && !['language', 'decision'].includes(mode)) throw new ProviderConfigurationError('Invalid CLASSIFICATION_MODE');
   return mode === 'decision' || (!mode && env['INTELLIGENCE_PROVIDER'] === 'jev');
 }
 
@@ -35,7 +35,7 @@ export function resolveModelRoute(role: ModelRole, env: Record<string, string | 
   const allowedProviders = role === 'embedding' ? ['gateway', 'ollama', 'voyage']
     : role === 'classification' ? ['gateway', 'ollama', 'anthropic', 'jev'] : ['gateway', 'ollama', 'anthropic'];
   if (configuredProvider && !allowedProviders.includes(configuredProvider)) {
-    throw new ProviderError('Unknown configured model provider', false);
+    throw new ProviderConfigurationError('Unknown configured model provider');
   }
   const provider = explicit || capability === 'decision' || role === 'assistant' || (configuredProvider && configuredProvider !== 'ollama')
     ? 'gateway' : 'ollama';
@@ -55,9 +55,9 @@ export function resolveModelRoute(role: ModelRole, env: Record<string, string | 
       model = legacy.includes('/') ? legacy : `anthropic/${legacy}`;
     }
   }
-  if (!model) throw new ProviderError(`A model must be configured for the ${role} role`, false);
+  if (!model) throw new ProviderConfigurationError(`A model must be configured for the ${role} role`);
   if (provider === 'gateway' && !/^[a-z0-9-]+\/[a-z0-9._:-]+$/i.test(model)) {
-    throw new ProviderError(`The ${role} role requires a Gateway provider/model identifier`, false);
+    throw new ProviderConfigurationError(`The ${role} role requires a Gateway provider/model identifier`);
   }
   return { role, provider, capability, model };
 }

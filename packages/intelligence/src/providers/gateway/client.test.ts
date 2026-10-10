@@ -1,20 +1,41 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { gatewayFetch, gatewayProvenance, gatewayProviderOptions } from './client';
-import { GatewayCompletionProvider } from './completion';
-import { GatewayEmbeddingProvider } from './embedding';
-import { GatewayDecisionProvider } from './decision';
+import { ProviderConfigurationError } from '../base';
+import { gatewayFetch, gatewayKey, gatewayProvenance, gatewayProviderOptions, warnIfSystemCredential } from './client';
 
-it('blocks every remote inference before network access when BYOK-only enforcement is unavailable', async () => {
+it('sends inference through the shared transport and never follows a redirect', async () => {
   const original = globalThis.fetch;
-  const network = mock(async () => Response.json({}));
+  const network = mock(async (_input: unknown, _init?: RequestInit) => Response.json({}));
   globalThis.fetch = network as unknown as typeof fetch;
   try {
-    await expect(new GatewayCompletionProvider('synthetic-key', 'moonshotai/kimi-k2.5').complete('Synthetic input')).rejects.toThrow(/BYOK-only/);
-    await expect(new GatewayEmbeddingProvider('synthetic-key', 'voyage/acme-model').embed('Synthetic input')).rejects.toThrow(/BYOK-only/);
-    await expect(new GatewayDecisionProvider('synthetic-key').decide({ state: 'Synthetic input', questions: {} })).rejects.toThrow(/BYOK-only/);
-    await expect(gatewayFetch('https://ai-gateway.vercel.sh/v4/ai/language-model', { method: 'POST', body: '{}' })).rejects.toThrow(/BYOK-only/);
-    expect(network).not.toHaveBeenCalled();
+    await gatewayFetch('https://ai-gateway.vercel.sh/v4/ai/language-model', { method: 'POST', body: '{}' });
+    expect(network).toHaveBeenCalledTimes(1);
+    const init = network.mock.calls[0]![1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect(init.redirect).toBe('error');
+    expect(init.signal).toBeDefined();
   } finally { globalThis.fetch = original; }
+});
+
+describe('Gateway configuration failures', () => {
+  it('reports a missing key as a retriable configuration fault, not a permanent one', () => {
+    let failure: unknown;
+    try { gatewayKey({}); } catch (error) { failure = error; }
+    expect(failure).toBeInstanceOf(ProviderConfigurationError);
+    expect((failure as ProviderConfigurationError).retriable).toBe(true);
+  });
+
+  it('warns only when a request was served with system credentials', () => {
+    const warn = mock(() => {});
+    const original = console.warn;
+    console.warn = warn as unknown as typeof console.warn;
+    try {
+      warnIfSystemCredential({ credentialType: 'byok', model: 'moonshotai/kimi-k2.6' });
+      warnIfSystemCredential({ credentialType: null, model: 'moonshotai/kimi-k2.6' });
+      expect(warn).not.toHaveBeenCalled();
+      warnIfSystemCredential({ credentialType: 'system', model: 'moonshotai/kimi-k2.6' });
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally { console.warn = original; }
+  });
 });
 
 describe('Gateway serving provider restrictions', () => {

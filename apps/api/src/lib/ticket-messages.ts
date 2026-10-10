@@ -23,7 +23,12 @@ export async function linkMessageToTicket(
   );
 
   if (error) {
-    throw new Error("Message link persistence failed");
+    // Non-fatal: callers sit inside a catch that inserts a fallback ticket, so
+    // throwing here would create a second ticket for a message already linked
+    // to the first. Log and let the primary ingestion path finish.
+    console.error(
+      `[ticket-messages] linkMessageToTicket failed ticket=${args.ticket_id} message=${args.message_id}: ${error.message}`
+    );
   }
 }
 

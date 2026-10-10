@@ -2,7 +2,7 @@ import { resolveModelRoute } from '../config/model-roles';
 import { generateText, isStepCount, tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 import type { PromptLang } from '../classification/prompt';
-import { GatewayClient, gatewayError, gatewayKey, gatewayProvenance, gatewayProviderOptions } from '../providers/gateway/client';
+import { GatewayClient, gatewayError, gatewayKey, gatewayProvenance, gatewayProviderOptions, warnIfSystemCredential } from '../providers/gateway/client';
 import { ProviderError } from '../providers/base';
 import { withGeneration, usageDetails } from './generation';
 import { extractPromptVersion, loadPromptTemplate } from './template';
@@ -77,8 +77,12 @@ export async function runAgentFeature(request: AgentFeatureRequest, deps: { tran
         system: prompt,
         messages: request.messages,
         tools,
+        // Reasoning models reject a named tool_choice (HTTP 400), and limiting
+        // activeTools on the first step leaves later steps without the other
+        // tools. The first step therefore only requires a tool call; the prompt
+        // asks for inspect_ticket first.
         prepareStep: ({ stepNumber }) => stepNumber === 0
-          ? { toolChoice: { type: 'tool', toolName: 'inspect_ticket' } }
+          ? { toolChoice: 'required' }
           : stepNumber === 4 ? { toolChoice: 'none' } : {},
         stopWhen: isStepCount(5),
         maxOutputTokens: 1500,
@@ -90,6 +94,7 @@ export async function runAgentFeature(request: AgentFeatureRequest, deps: { tran
         : `Gateway assistant returned no final answer (finish=${result.finishReason}, steps=${result.steps.length})`, false);
       const usage = { promptTokens: result.totalUsage.inputTokens ?? null, completionTokens: result.totalUsage.outputTokens ?? null };
       const provenance = gatewayProvenance(result.providerMetadata, result.response.modelId);
+      warnIfSystemCredential(provenance);
       const stepCosts = result.steps.map((step) => gatewayProvenance(step.providerMetadata, step.response.modelId).costUsd);
       provenance.costUsd = stepCosts.every((cost) => cost !== null)
         ? stepCosts.reduce<number>((total, cost) => total + (cost ?? 0), 0) : null;

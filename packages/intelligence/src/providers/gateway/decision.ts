@@ -9,7 +9,7 @@ import {
   type Questions,
 } from '@typesafe-ai/sdk';
 
-import { GatewayClient, TYPESAFE_GATEWAY_BASE_URL, gatewayFetch, gatewayProvenance, gatewayProviderOptions } from './client';
+import { GatewayClient, TYPESAFE_GATEWAY_BASE_URL, gatewayFetch, gatewayProvenance, gatewayProviderOptions, warnIfSystemCredential } from './client';
 import { ProviderError } from '../base';
 import type { DecisionProvider, DecisionResult, TypedDecisionInput } from '../decision';
 
@@ -64,6 +64,7 @@ export class GatewayDecisionProvider implements DecisionProvider {
       const provenance = gatewayProvenance(
         (response as unknown as { provider_metadata?: unknown }).provider_metadata, response.model,
       );
+      warnIfSystemCredential(provenance);
       return {
         value: response.answers as TDecision,
         confidence: singleConfidence(response.answers as Record<string, DecisionAnswer>),

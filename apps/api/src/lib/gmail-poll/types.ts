@@ -73,6 +73,19 @@ export class GmailHistoryExpiredError extends Error {
 }
 
 /**
+ * Thrown by `getMessage` when Gmail answers 404 for one message. History can
+ * list a message that was deleted afterwards; the poll skips it instead of
+ * failing the whole run, which would leave the cursor in place and retry the
+ * same missing message forever.
+ */
+export class GmailMessageNotFoundError extends Error {
+  constructor(message = "Gmail message not found (404)") {
+    super(message);
+    this.name = "GmailMessageNotFoundError";
+  }
+}
+
+/**
  * Collaborators injected into `pollGmailAccount`. Keeping these as plain
  * functions (rather than importing modules directly inside the poll logic)
  * lets unit tests substitute fakes without relying on Bun's global

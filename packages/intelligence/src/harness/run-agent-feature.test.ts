@@ -74,15 +74,3 @@ it('rejects an empty final model answer instead of reporting a successful conver
       execute: async () => ({ status: 'completed', authorization: 'read', data: {}, missing: [], needsReview: false }) }] }, { transport: globalThis.fetch }))
     .rejects.toThrow(/no final answer/);
 });
-
-it('blocks the production tool loop before model requests or tool effects when BYOK-only cannot be enforced', async () => {
-  transport([]);
-  let executions = 0;
-  await expect(runAgentFeature({ lang: 'en', context, messages: [{ role: 'user', content: 'Read this ticket.' }],
-    tools: [{ name: 'inspect_ticket', description: 'Read context', inputSchema: z.object({}).strict(),
-      execute: async () => {
-        executions++;
-        return { status: 'completed', authorization: 'read', data: {}, missing: [], needsReview: false };
-      } }] })).rejects.toThrow(/BYOK-only/);
-  expect(executions).toBe(0);
-});

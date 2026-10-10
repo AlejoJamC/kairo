@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ProviderError } from "@kairo/intelligence";
+import { ProviderConfigurationError, ProviderError } from "@kairo/intelligence";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbClient = SupabaseClient<any>;
@@ -50,9 +50,14 @@ export async function recordClassificationFailure(args: RecordClassificationFail
     .maybeSingle();
   if (lookupError) throw new ProviderError('Classification retry state unavailable', true);
 
-  const attemptCount = (existing?.classification_attempt_count ?? 0) + 1;
+  // A deployment misconfiguration says nothing about the message: it stays
+  // retryable and does not spend attempts, so fixing the configuration
+  // recovers it instead of finding it permanently failed.
+  const deploymentFault = err instanceof ProviderConfigurationError;
+  const attemptCount = (existing?.classification_attempt_count ?? 0) + (deploymentFault ? 0 : 1);
   const retriable = err instanceof ProviderError ? err.retriable : true;
-  const classificationStatus = !retriable || attemptCount >= maxAttempts ? "failed_permanent" : "failed";
+  const classificationStatus =
+    !deploymentFault && (!retriable || attemptCount >= maxAttempts) ? "failed_permanent" : "failed";
 
   const { error: persistenceError } = await supabase.from("messages").upsert(
     {

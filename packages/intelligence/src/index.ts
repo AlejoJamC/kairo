@@ -65,7 +65,7 @@ export type {
   DecisionFeatureResult,
 } from './harness';
 
-export { ProviderError } from './providers/base';
+export { ProviderError, ProviderConfigurationError } from './providers/base';
 export type {
   CompletionProvider,
   EmbeddingProvider,

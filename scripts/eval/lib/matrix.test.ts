@@ -25,9 +25,9 @@ describe("BENCH", () => {
 describe("VARIANTS", () => {
   // tenantMailbox is not a variable: production sends it from every ingestion
   // path, so every variant sends it too. The only thing that varies is the
-  // stage, and — on backfill alone — the tenant's line of business.
+  // stage; backfill and new mail also carry the tenant's business context.
   it("measures each stage once", () => {
-    expect(VARIANTS.map((v) => v.id)).toEqual(["onboarding", "backfill"]);
+    expect(VARIANTS.map((v) => v.id).sort()).toEqual(["backfill", "new_email", "onboarding"]);
   });
 
   // The paired cell would measure a combination production cannot execute:
@@ -41,9 +41,10 @@ describe("VARIANTS", () => {
   // Both business-context questions are answered and enforced in
   // classifier-input.ts. A variant may only carry the context on the stage
   // production sends it on, or the bench measures something nobody can ship.
-  it("carries the business context on backfill and never on onboarding", () => {
+  it("carries business context on backfill and new mail, never on onboarding", () => {
+    const expected: Record<PipelineStage, boolean> = { onboarding: false, backfill: true, new_email: true };
     for (const v of VARIANTS) {
-      expect(v.businessContext).toBe(v.stage === "backfill");
+      expect(v.businessContext).toBe(expected[v.stage]);
     }
   });
 
@@ -52,8 +53,12 @@ describe("VARIANTS", () => {
   });
 
   it("mirrors the production body rule for each stage", () => {
-    expect(bodyRule(VARIANTS[0]!)).toEqual({ maxChars: 20_000, stripQuotes: false });
-    expect(bodyRule(VARIANTS[1]!)).toEqual({ maxChars: 2_000, stripQuotes: true });
+    const expected: Record<PipelineStage, { maxChars: number; stripQuotes: boolean }> = {
+      onboarding: { maxChars: 20_000, stripQuotes: false },
+      backfill: { maxChars: 2_000, stripQuotes: true },
+      new_email: { maxChars: 2_000, stripQuotes: true },
+    };
+    for (const v of VARIANTS) expect(bodyRule(v)).toEqual(expected[v.stage]);
   });
 });
 
@@ -128,15 +133,16 @@ describe("cellSlug", () => {
     provider: "ollama" as const,
     model: "granite4.2:30b",
     label: "g",
-    stages: ["onboarding", "backfill"] as PipelineStage[],
+    stages: ["onboarding", "backfill", "new_email"] as PipelineStage[],
   };
 
   it("gives every variant of a model its own directory", () => {
-    const slugs = VARIANTS.map((v) => cellSlug(granite, v));
+    const slugs = VARIANTS.map((v) => cellSlug(granite, v)).sort();
 
     expect(slugs).toEqual([
-      "ollama-granite4.2-30b-onboarding",
       "ollama-granite4.2-30b",
+      "ollama-granite4.2-30b-new_email",
+      "ollama-granite4.2-30b-onboarding",
     ]);
     expect(new Set(slugs).size).toBe(VARIANTS.length);
   });
@@ -151,12 +157,16 @@ describe("cellSlug", () => {
 describe("cellKey", () => {
   it("identifies one classification uniquely", () => {
     const m = BENCH[0]!;
-    const keys = VARIANTS.map((v) => cellKey(m, v, "007"));
+    const keys = VARIANTS.map((v) => cellKey(m, v, "synthetic-email")).sort();
 
     // Uniqueness is the property, not the count: pinning the number here made
     // the test fail when a variant was retired, which is not a defect.
     expect(new Set(keys).size).toBe(VARIANTS.length);
-    expect(keys[0]).toBe("anthropic/claude-sonnet-4-6|onboarding|007");
+    expect(keys).toEqual([
+      "anthropic/claude-sonnet-4-6|backfill|synthetic-email",
+      "anthropic/claude-sonnet-4-6|new_email|synthetic-email",
+      "anthropic/claude-sonnet-4-6|onboarding|synthetic-email",
+    ]);
   });
 
   it("separates the same variant on different emails", () => {

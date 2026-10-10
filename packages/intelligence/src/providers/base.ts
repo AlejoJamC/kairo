@@ -25,6 +25,20 @@ export class ProviderError extends Error {
   }
 }
 
+/**
+ * A request that cannot be sent because of how the deployment is configured
+ * (missing key, unknown model, unsupported capability). It is not the
+ * message's fault: retrying works as soon as the configuration is fixed, and
+ * it must neither consume the message's attempts nor mark it permanently
+ * failed.
+ */
+export class ProviderConfigurationError extends ProviderError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, true, undefined, options);
+    this.name = 'ProviderConfigurationError';
+  }
+}
+
 export interface CompletionProvider {
   complete(prompt: string, options?: CompletionOptions): Promise<string>;
   completeJSON<T>(prompt: string, schema: z.ZodSchema<T>, options?: CompletionOptions): Promise<T>;

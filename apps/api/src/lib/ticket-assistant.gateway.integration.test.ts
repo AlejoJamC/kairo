@@ -92,6 +92,7 @@ test.skipIf(process.env['RUN_GATEWAY_INTEGRATION'] !== '1')(
       content: 'Inspect this ticket, request a fresh classification with decide_classification, then draft a reply with draft_reply. Use all three tools and summarize their actual results. Leave every proposal for human review.' }] }, deps);
     expect(result).not.toBeNull();
     expect(result!.text.trim().length).toBeGreaterThan(0);
+    console.log(JSON.stringify({ finish: result!.finishReason, text: result!.text.slice(0, 400), operations: result!.operations.map(({ tool, result }) => ({ tool, status: result.status, missing: result.missing })) }));
     for (const [name, status] of [['inspect_ticket', 'completed'], ['decide_classification', 'proposed'], ['draft_reply', 'proposed']]) {
       expect(result!.operations.some((operation) => operation.tool === name && operation.result.status === status)).toBe(true);
     }

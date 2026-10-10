@@ -4,7 +4,7 @@ All remote evaluations use Vercel AI Gateway. Local Ollama is the only exception
 
 ## Synthetic Gateway validation
 
-Remote checks are currently blocked before inference: Vercel's documented BYOK-to-system fallback violates the mandatory BYOK-only policy. The commands remain available for a future Gateway contract that can enforce that policy. They do not enable the assistant UI or access private data.
+Remote checks call the configured Gateway models with the team's BYOK key. Gateway can fall back to system credentials when that key fails, and cannot be told not to; the credential type served each request appears in the Gateway request log and as a warning in the process output. They do not enable the assistant UI or access private data.
 
 ```sh
 bun run test:gateway:contracts

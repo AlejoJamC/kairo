@@ -1,5 +1,11 @@
 import { extractBody } from "../email/body.js";
-import { GmailHistoryExpiredError, type GmailMessage, type GmailPollDeps, type PollAccountResult } from "./types.js";
+import {
+  GmailHistoryExpiredError,
+  GmailMessageNotFoundError,
+  type GmailMessage,
+  type GmailPollDeps,
+  type PollAccountResult,
+} from "./types.js";
 import { recordClassificationFailure } from "../classification-outcome.js";
 import { env } from "../../env.js";
 import { classificationAudit, routingAudit } from "../classification-audit.js";
@@ -74,7 +80,18 @@ export async function ingestMessages(
   for (const messageId of [...new Set(messageIds)]) {
     const prior = existing.get(messageId);
     if (prior && ['classified', 'skipped', 'failed_permanent'].includes(prior.classification_status)) continue;
-    const message: GmailMessage = await deps.getMessage(token, messageId);
+    let message: GmailMessage;
+    try {
+      message = await deps.getMessage(token, messageId);
+    } catch (err) {
+      // Deleted after history listed it: nothing to ingest, and failing the run
+      // would keep the cursor in place and hit the same 404 on every poll.
+      if (err instanceof GmailMessageNotFoundError) {
+        skipped++;
+        continue;
+      }
+      throw err;
+    }
     const { body_plain, body_html } = extractBody(message.payload);
 
     const msgHeaders = message.payload?.headers ?? [];

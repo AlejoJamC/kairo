@@ -1,19 +1,24 @@
 import { createGateway, GatewayError, type GatewayProvider } from '@ai-sdk/gateway';
 import { APICallError, NoObjectGeneratedError } from 'ai';
 import { z, ZodError } from 'zod';
-import { ProviderError } from '../base';
+import { ProviderConfigurationError, ProviderError } from '../base';
 
 export const TYPESAFE_GATEWAY_BASE_URL = 'https://ai-gateway.vercel.sh/typesafe';
 
 /** Credentials and request bodies must never follow an HTTP redirect. */
 export const gatewayFetch = Object.assign(function gatewayFetch(input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]): Promise<Response> {
-  const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
-  if (!['GET', 'HEAD'].includes(method.toUpperCase())) return Promise.reject(byokEnforcementError());
   return fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(30_000), redirect: 'error' });
 }, fetch);
 
-function byokEnforcementError(): ProviderError {
-  return new ProviderError('Remote inference blocked: Gateway cannot enforce BYOK-only credentials without system fallback', false);
+/**
+ * Gateway documents that a request whose own credential fails is retried with
+ * its system credentials, billed to Gateway credits, and offers no switch to
+ * disable it. The only control is to read which credential served each call.
+ */
+export function warnIfSystemCredential(provenance: { credentialType: 'byok' | 'system' | null; model: string }): void {
+  if (provenance.credentialType === 'system') {
+    console.warn(`[gateway] ${provenance.model} was served with system credentials, not the configured BYOK key`);
+  }
 }
 
 const RoutingMetadataSchema = z.object({
@@ -36,12 +41,12 @@ const ProviderRoutesSchema = z.record(z.string(), z.array(z.string().regex(/^[a-
 export function gatewayProviderOptions(model: string, env: Record<string, string | undefined> = process.env) {
   const owner = model.split('/')[0];
   if (!owner || !model.includes('/') || !/^[a-z0-9-]+$/.test(owner)) {
-    throw new ProviderError('Gateway model requires a provider/model identifier', false);
+    throw new ProviderConfigurationError('Gateway model requires a provider/model identifier');
   }
   let routes: z.infer<typeof ProviderRoutesSchema> = {};
   if (env['AI_GATEWAY_PROVIDER_ROUTES']) {
     try { routes = ProviderRoutesSchema.parse(JSON.parse(env['AI_GATEWAY_PROVIDER_ROUTES'])); }
-    catch { throw new ProviderError('Invalid AI_GATEWAY_PROVIDER_ROUTES configuration', false); }
+    catch { throw new ProviderConfigurationError('Invalid AI_GATEWAY_PROVIDER_ROUTES configuration'); }
   }
   return { gateway: { only: routes[model] ?? routes[owner] ?? [owner] } };
 }
@@ -62,7 +67,7 @@ export function gatewayProvenance(metadata: unknown, reportedModel: string) {
 
 export function gatewayKey(env: Record<string, string | undefined> = process.env): string {
   const key = env['AI_GATEWAY_API_KEY'];
-  if (!key) throw new ProviderError('AI_GATEWAY_API_KEY is required for remote models', false);
+  if (!key) throw new ProviderConfigurationError('AI_GATEWAY_API_KEY is required for remote models');
   return key;
 }
 
@@ -98,10 +103,8 @@ const catalogs = new WeakMap<typeof fetch, Map<string, CatalogState>>();
 export class GatewayClient {
   readonly sdk: GatewayProvider;
   private readonly state: CatalogState;
-  private readonly transport: typeof fetch;
 
   constructor(apiKey: string, transport: typeof fetch = gatewayFetch) {
-    this.transport = transport;
     this.sdk = createGateway({ apiKey, fetch: transport });
     let entries = catalogs.get(transport);
     if (!entries) { entries = new Map(); catalogs.set(transport, entries); }
@@ -111,7 +114,6 @@ export class GatewayClient {
   }
 
   async requireModel(model: string, capability: 'language' | 'embedding' | 'decision'): Promise<void> {
-    if (this.transport === gatewayFetch) throw byokEnforcementError();
     try {
       if (!this.state.catalog || this.state.catalog.expires <= Date.now()) {
         this.state.loading ??= this.sdk.getAvailableModels();
@@ -128,7 +130,7 @@ export class GatewayClient {
         ? modelType === 'decision' || modelType === 'evaluation'
         : modelType === capability;
       if (!entry || !compatible) {
-        throw new ProviderError('Configured model is unavailable for the requested Gateway capability', false);
+        throw new ProviderConfigurationError('Configured model is unavailable for the requested Gateway capability');
       }
     } catch (error) {
       throw gatewayError(error);

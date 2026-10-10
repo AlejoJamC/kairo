@@ -1,6 +1,6 @@
 import { describe, it, expect, mock } from "bun:test";
 import { pollGmailAccount } from "./poll-account.js";
-import { GmailHistoryExpiredError, type DbClient, type GmailPollDeps } from "./types.js";
+import { GmailHistoryExpiredError, GmailMessageNotFoundError, type DbClient, type GmailPollDeps } from "./types.js";
 import { extractMailFacts } from "../email/mail-facts.js";
 import type { EmailMetadata, PreFilterResult } from "../email/pre-filter.js";
 
@@ -730,6 +730,42 @@ describe("pollGmailAccount — idempotency", () => {
     expect(inserts.filter((i) => i.table === "messages")).toHaveLength(0);
   });
 
+  it("skips a message Gmail no longer has and still advances the cursor", async () => {
+    const { db, inserts } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+    const deps = baseDeps({
+      db,
+      historyList: async () => ({
+        history: [{ id: "h1", messagesAdded: [{ message: { id: "synthetic-deleted", threadId: "synthetic-thread" } }] }],
+        historyId: "1040",
+      }),
+      getMessage: async () => { throw new GmailMessageNotFoundError(); },
+    });
+
+    const result = await pollGmailAccount(deps, ACCOUNT_ID);
+
+    expect(result.outcome).not.toBe("failed");
+    expect(inserts.filter((i) => i.table === "messages")).toHaveLength(0);
+    expect(result.ticketsCreated).toBe(0);
+  });
+
+  it("fails the run on any other message fetch error so the cursor is not advanced", async () => {
+    const { db } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+    const deps = baseDeps({
+      db,
+      historyList: async () => ({
+        history: [{ id: "h1", messagesAdded: [{ message: { id: "synthetic-message", threadId: "synthetic-thread" } }] }],
+        historyId: "1040",
+      }),
+      getMessage: async () => { throw new Error("Gmail request failed (HTTP 503)"); },
+    });
+
+    await expect(pollGmailAccount(deps, ACCOUNT_ID)).rejects.toThrow(/503/);
+  });
+
   it("retries a conflicting insertion without treating it as completed", async () => {
     const { db } = createFakeDb({
       integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
@@ -856,5 +892,64 @@ describe("pollGmailAccount — durable cursor and paging", () => {
       history: [{ id: "synthetic-history", messagesAdded: [{ message: { id: "synthetic-message", threadId: "synthetic-thread" } }] }] }) }), ACCOUNT_ID);
     expect(result.ticketsCreated).toBe(1);
     expect(inserts.length).toBe(0);
+  });
+
+  it("classifies and stores the full body, not the snippet", async () => {
+    const { db, inserts } = createFakeDb({ integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" } });
+    const defaults = baseDeps({ db });
+    const fullBody = "Synthetic full body that is longer than the snippet Gmail returns.";
+    let classified = "";
+    const deps = baseDeps({
+      db,
+      historyList: async () => ({ historyId: "1002",
+        history: [{ id: "h", messagesAdded: [{ message: { id: "synthetic-message", threadId: "synthetic-thread" } }] }] }),
+      getMessage: async (_token, id) => ({
+        id, threadId: "synthetic-thread", labelIds: ["INBOX"], snippet: "Synthetic snippet",
+        payload: {
+          mimeType: "text/plain",
+          headers: [
+            { name: "From", value: "client@outside.com" },
+            { name: "Subject", value: "Synthetic subject" },
+            { name: "Date", value: new Date().toUTCString() },
+          ],
+          body: { data: Buffer.from(fullBody).toString("base64") },
+        },
+      }),
+      classifyEmail: async (message, ...rest) => {
+        classified = message.body;
+        return defaults.classifyEmail(message, ...rest);
+      },
+    });
+
+    await pollGmailAccount(deps, ACCOUNT_ID);
+
+    expect(classified).toBe(fullBody);
+    const stored = inserts.find((i) => i.table === "messages");
+    expect(stored?.payload["body_plain"]).toBe(fullBody);
+  });
+
+  it("runs overlapping polls of one account once and gives both the same result", async () => {
+    const { db } = createFakeDb({ integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" } });
+    let listings = 0;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const deps = baseDeps({
+      db,
+      historyList: async () => {
+        listings++;
+        await gate;
+        return { historyId: "1002",
+          history: [{ id: "h", messagesAdded: [{ message: { id: "synthetic-message", threadId: "synthetic-thread" } }] }] };
+      },
+    });
+
+    const first = pollGmailAccount(deps, ACCOUNT_ID);
+    const second = pollGmailAccount(deps, ACCOUNT_ID);
+    release();
+    const [a, b] = await Promise.all([first, second]);
+
+    expect(listings).toBe(1);
+    expect(a).toEqual(b);
+    expect(a.ticketsCreated).toBe(1);
   });
 });

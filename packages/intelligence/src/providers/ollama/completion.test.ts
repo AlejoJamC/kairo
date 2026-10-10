@@ -1,5 +1,6 @@
 import { describe, it, expect, mock, afterEach } from "bun:test";
 import { z } from "zod";
+import { ProviderError } from "../base";
 import { OllamaCompletionProvider } from "./completion";
 
 // ---------------------------------------------------------------------------
@@ -102,15 +103,19 @@ describe("OllamaCompletionProvider", () => {
     expect("format" in body).toBe(false);
   });
 
-  it("reports what came back when the output is not valid JSON", async () => {
+  it("reports a contract failure without echoing the model output", async () => {
     mockFetchOnce({ response: "", model: "gpt-oss:latest" });
 
     const schema = z.object({ foo: z.string() });
     const provider = new OllamaCompletionProvider("http://localhost:11434", "gpt-oss:latest");
 
-    // gpt-oss returns an empty body under a constrained request; the error has
-    // to name the model and show the output instead of saying "no JSON found"
-    await expect(provider.completeJSONWithMeta("hi", schema)).rejects.toThrow(/gpt-oss:latest/);
+    // gpt-oss returns an empty body under a constrained request. The error says
+    // the JSON contract was not met and stays retriable; the output itself is
+    // not copied into the message because it can carry email content.
+    const failure = await provider.completeJSONWithMeta("hi", schema).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ProviderError);
+    expect((failure as ProviderError).message).toMatch(/JSON contract/);
+    expect((failure as ProviderError).retriable).toBe(true);
   });
 
   it("completeJSON() delegates to completeJSONWithMeta and returns parsed data only", async () => {

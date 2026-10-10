@@ -199,8 +199,12 @@ export async function classifyEmailWithMeta(
           ).type
         : null;
       const ensemble = second && secondType ? { model: second.model, type: secondType } : null;
-      const abstain = (ensemble !== null && ensemble.type !== data.type) || ensembleFailed || ensembleMisconfigured
-        || !message.facts || Boolean(message.evidence?.truncated) || Boolean(message.evidence?.missing.length);
+      // A second model that never answered is not a disagreement, and a caller
+      // with no headers falls back to `external` by design. Only a real split
+      // on the derived type, or evidence the classifier did not get in full,
+      // holds the proposal for a person.
+      const abstain = (ensemble !== null && ensemble.type !== data.type)
+        || Boolean(message.evidence?.truncated) || Boolean(message.evidence?.missing.length);
 
       generation.update({
         output: meta.rawText,

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { GatewayCompletionProvider } from './completion';
 import { GatewayEmbeddingProvider } from './embedding';
-import { ProviderError } from '../base';
+import { ProviderConfigurationError, ProviderError } from '../base';
 
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
@@ -38,14 +38,37 @@ describe('Gateway providers', () => {
     expect(calls).toEqual(['https://ai-gateway.vercel.sh/v4/ai/config', 'https://ai-gateway.vercel.sh/v4/ai/language-model']);
   });
 
+  it('recovers a JSON object the model wrapped in a code fence, and still validates it', async () => {
+    let answer = '';
+    const respond = (text: string) => {
+      answer = text;
+      globalThis.fetch = (async (input: RequestInfo | URL) => String(input).endsWith('/config')
+        ? Response.json(catalog('openai/test-model'))
+        : Response.json(generation(answer))) as typeof fetch;
+    };
+    const schema = z.object({ label: z.literal('support') });
+
+    respond('```json\n{"label":"support"}\n```');
+    const provider = new GatewayCompletionProvider('fenced-json-key', 'openai/test-model', globalThis.fetch);
+    const result = await provider.completeJSONWithMeta('Synthetic input', schema);
+    expect(result.data).toEqual({ label: 'support' });
+    expect(result.rawText).toContain('```json');
+
+    respond('```json\n{"label":"other"}\n```');
+    const invalid = await provider.completeJSONWithMeta('Synthetic input', schema).catch((error: unknown) => error);
+    expect(invalid).toBeInstanceOf(ProviderError);
+    expect((invalid as ProviderError).message).toMatch(/requested schema/);
+  });
+
   it('rejects an unavailable capability before sending a prompt', async () => {
     const calls: string[] = [];
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       calls.push(String(input)); return Response.json(catalog('typesafe-ai/jev', 'decision'));
     }) as typeof fetch;
     const error = await new GatewayCompletionProvider('test-key', 'typesafe-ai/jev', globalThis.fetch).complete('Synthetic input').catch((error: unknown) => error);
-    expect(error).toBeInstanceOf(ProviderError);
-    expect((error as ProviderError).retriable).toBe(false);
+    // A deployment fault: fixing the configured model recovers the message.
+    expect(error).toBeInstanceOf(ProviderConfigurationError);
+    expect((error as ProviderError).retriable).toBe(true);
     expect(calls).toHaveLength(1);
   });
 
