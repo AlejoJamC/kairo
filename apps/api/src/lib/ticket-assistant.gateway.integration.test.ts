@@ -1,8 +1,11 @@
-import { expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
+import { observeGatewayCredentials } from './gateway-validation.test-helper';
 import type { TicketAssistantDeps } from './ticket-assistant';
 import type { LlmCallRecord } from '@kairo/intelligence';
 
 type Row = Record<string, unknown>;
+let credentials: ReturnType<typeof observeGatewayCredentials> | undefined;
+afterEach(() => { credentials?.restore(); });
 const identity = { accountId: 'acme-account', ticketId: 'acme-ticket', userId: 'acme-agent' };
 const context = { language: 'en' as const, tenantMailbox: 'support@acme.com',
   tenantMailboxes: ['support@acme.com'], businessContext: 'Acme provides customer support software.' };
@@ -10,12 +13,7 @@ const context = { language: 'en' as const, tenantMailbox: 'support@acme.com',
 /** Only storage and retrieval dependencies are isolated; model responses are real. */
 function storageFixture() {
   const tables = new Map<string, Row[]>([
-    ['tickets', [{ id: identity.ticketId, account_id: identity.accountId, subject: 'Cannot export',
-      body_plain: 'The export button does nothing. Please help.', from_email: 'client@outside.com',
-      to_email: 'support@acme.com', conversation_id: 'acme-conversation', client_id: null,
-      ticket_type: 'support', priority: 'P2', category: 'technical', emotion: 'neutral', status: 'open', abstain: true }]],
-    ['messages', [{ id: 'acme-message', account_id: identity.accountId, conversation_id: 'acme-conversation',
-      direction: 'inbound', body_plain: 'The export button does nothing. Please help.', received_at: '2026-01-01' }]],
+    ['tickets', []], ['messages', []], ['conversations', []], ['account_members', []], ['ticket_messages', []],
     ['kb_articles', [{ id: 'acme-article', account_id: identity.accountId, is_published: true,
       title: 'Repair export configuration', content: 'Open Settings, enable exports, then retry the export button.', tags: [] }]],
     ['ticket_proposals', []],
@@ -28,8 +26,15 @@ function storageFixture() {
       let rows = tables.get(table)!;
       let error: { message: string } | null = null;
       let descending = false;
+      let update: Row | undefined;
+      const result = () => {
+        if (update) for (const row of rows) Object.assign(row, update);
+        return { data: rows, error };
+      };
       const query = {
         select() { return query; },
+        is(key: string, value: unknown) { rows = rows.filter((row) => (row[key] ?? null) === value); return query; },
+        update(input: Row) { update = input; return query; },
         eq(key: string, value: unknown) { rows = rows.filter((row) => row[key] === value); return query; },
         in(key: string, values: unknown[]) { rows = rows.filter((row) => values.includes(row[key])); return query; },
         contains(key: string, values: unknown[]) {
@@ -41,20 +46,30 @@ function storageFixture() {
         insert(input: Row) {
           if (table === 'ticket_proposals' && rejectProposal) { rows = []; error = { message: 'Synthetic storage failure' }; }
           else {
-            const row = { id: `acme-${table}-${tables.get(table)!.length}`, ...input };
+            const id = table === 'tickets' ? identity.ticketId : table === 'conversations' ? 'acme-conversation' : `acme-${table}-${tables.get(table)!.length}`;
+            const row = { id, ticket_number: 1, ...input };
             tables.get(table)!.push(row); rows = [row];
           }
           return query;
         },
-        async single() { return { data: rows[0] ?? null, error }; },
-        async maybeSingle() { return { data: rows[0] ?? null, error }; },
+        upsert(input: Row) {
+          const existing = tables.get(table)!.find((row) => table === 'messages'
+            ? row['external_id'] === input['external_id'] : row['ticket_id'] === input['ticket_id'] && row['message_id'] === input['message_id']);
+          if (existing) { Object.assign(existing, input); rows = [existing]; }
+          else query.insert(input);
+          return query;
+        },
+        async single() { result(); return { data: rows[0] ?? null, error }; },
+        async maybeSingle() { result(); return { data: rows[0] ?? null, error }; },
         then<T>(resolve: (result: { data: Row[]; error: typeof error }) => T | PromiseLike<T>) {
-          return Promise.resolve({ data: rows, error }).then(resolve);
+          return Promise.resolve(result()).then(resolve);
         },
       };
       return query;
     },
     async rpc(name: string, args: Row) {
+      if (name === 'apply_ticket_transition') return { data: [{ outcome: 'applied', from_state: null,
+        to_state: 'open', history_id: 'acme-transition' }], error: null };
       expect(args['p_account_id']).toBe(identity.accountId);
       if (rejectRetrieval) return { data: null, error: { message: 'Synthetic retrieval failure' } };
       if (name === 'find_relevant_kb') return { data: [{ article_id: 'acme-article', similarity: 0.95 }], error: null };
@@ -69,11 +84,14 @@ function storageFixture() {
 test.skipIf(process.env['RUN_GATEWAY_INTEGRATION'] !== '1')(
   'Gateway integration: real decisions, generation, all ticket tools and honest failure results',
   async () => {
+    credentials = observeGatewayCredentials();
     const { consultTicketAssistant } = await import('./ticket-assistant');
     const { suggestReply } = await import('./reply-suggestion');
     const { draftKnowledgeFromTicket } = await import('./knowledge-candidate');
     const { retrieveTicketContext } = await import('./ticket-context');
     const { ProviderError, resolveModelRoute } = await import('@kairo/intelligence');
+    const { createGmailPollDeps } = await import('./gmail-poll/deps');
+    const { ingestMessages } = await import('./gmail-poll/poll-account');
     const fixture = storageFixture();
     const calls: LlmCallRecord[] = [];
     const logger = async (record: LlmCallRecord) => { calls.push(record); return null; };
@@ -87,6 +105,20 @@ test.skipIf(process.env['RUN_GATEWAY_INTEGRATION'] !== '1')(
     };
     console.log(JSON.stringify({ integration: 'gateway', models: ['classification', 'reply', 'knowledge_decision', 'knowledge_draft', 'assistant']
       .map((role) => resolveModelRoute(role as Parameters<typeof resolveModelRoute>[0])) }));
+
+    const ingestion = await ingestMessages({ ...createGmailPollDeps(), db: fixture.db, logLlmCall: () => {},
+      getMessage: async () => ({ id: 'acme-message', threadId: 'acme-thread', labelIds: ['INBOX'],
+        payload: { mimeType: 'text/plain', body: { data: Buffer.from('The export button does nothing. Please help.').toString('base64url') },
+          headers: [{ name: 'From', value: 'client@outside.com' }, { name: 'To', value: 'support@acme.com' },
+            { name: 'Subject', value: 'Cannot export' }, { name: 'Date', value: 'Thu, 1 Jan 2026 00:00:00 GMT' }] } }),
+    }, { accountId: identity.accountId, channelIntegrationId: 'acme-integration', token: 'synthetic-token',
+      messageIds: ['acme-message'], classifierContext: context });
+    expect(ingestion.ticketsCreated).toBe(1);
+    expect(fixture.tables.get('tickets')).toHaveLength(1);
+    expect(fixture.tables.get('messages')![0]!['classification_status']).toBe('classified');
+    expect(fixture.tables.get('messages')![0]!['body_plain']).toBe('The export button does nothing. Please help.');
+    expect(fixture.tables.get('ticket_messages')).toHaveLength(1);
+    console.log(JSON.stringify({ check: 'email_ingestion_and_decision', passed: true }));
 
     const result = await consultTicketAssistant({ ...identity, messages: [{ role: 'user',
       content: 'Inspect this ticket, request a fresh classification with decide_classification, then draft a reply with draft_reply. Use all three tools and summarize their actual results. Leave every proposal for human review.' }] }, deps);
@@ -138,6 +170,8 @@ test.skipIf(process.env['RUN_GATEWAY_INTEGRATION'] !== '1')(
     expect(calls).toHaveLength(callCount);
     expect(fixture.tables.get('ticket_proposals')).toHaveLength(1);
     console.log(JSON.stringify({ check: 'degraded_retrieval_blocks_generation', passed: true }));
+    credentials.assertVerified();
+    console.log(JSON.stringify({ check: 'byok_each_request', passed: true, requests: credentials.requests }));
   },
   240_000,
 );

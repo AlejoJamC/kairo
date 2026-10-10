@@ -1,5 +1,5 @@
 import { createGateway, GatewayError, type GatewayProvider } from '@ai-sdk/gateway';
-import { APICallError, NoObjectGeneratedError } from 'ai';
+import { APICallError, NoObjectGeneratedError, NoOutputGeneratedError } from 'ai';
 import { z, ZodError } from 'zod';
 import { ProviderConfigurationError, ProviderError } from '../base';
 
@@ -73,6 +73,9 @@ export function gatewayKey(env: Record<string, string | undefined> = process.env
 
 export function gatewayError(error: unknown): ProviderError {
   if (error instanceof ProviderError) return error;
+  if (NoOutputGeneratedError.isInstance(error)) {
+    return new ProviderError('Gateway returned no structured output', false);
+  }
   if (NoObjectGeneratedError.isInstance(error) && error.finishReason === 'length') {
     return new ProviderError('Gateway structured output exceeded its token budget', false);
   }

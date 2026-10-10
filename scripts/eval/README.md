@@ -11,9 +11,9 @@ bun run test:gateway:contracts
 bun run test:gateway
 ```
 
-The smoke runner uses invented inputs. It checks native decisions and generative classification separately for onboarding, history and new mail. It prints model identity, dimensions, review coverage, latency and provider-reported cost. Missing cost remains unknown. It does not access private data or mutate product records.
+The smoke runner evaluates the configured classifier on five invented inputs per stage: onboarding, history and new mail. It uses the production input contract and reports each dimension, consequential errors, abstention/coverage, latency and Gateway-reported cost. Missing cost remains unknown; BYOK provider billing is not measured by Gateway's charge. This measures synthetic cases, not production calibration; no automation threshold is fitted. It does not access private data or mutate product records.
 
-`test:gateway` runs the real exported backend services and AI SDK tool loop, with real model responses and isolated synthetic storage/retrieval dependencies. It checks all three tools, knowledge decisions and drafts, pending proposal persistence, rejected writes and degraded retrieval. This is not a Supabase or Gmail network integration test. Bun loads the runtime environment; agents must not inspect or edit `.env.local`.
+`test:gateway` starts from a synthetic email and runs ingestion, ticket persistence, decisions, retrieval and the AI SDK tool loop with real model responses and isolated storage/Gmail dependencies. It checks all three tools, knowledge drafts, pending proposals, rejected writes and degraded retrieval. Both commands verify BYOK on every inference, including intermediate tool steps, and stop if it cannot be verified. This is not a Supabase or Gmail network integration test. Bun loads the runtime environment; agents must not inspect or edit `.env.local`.
 
 ## Private evaluation
 

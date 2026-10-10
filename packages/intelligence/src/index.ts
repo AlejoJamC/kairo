@@ -136,3 +136,5 @@ export { GatewayEmbeddingProvider } from './providers/gateway/embedding';
 export { resolveModelRoute, usesDecisionClassification, MODEL_ROLES, type ModelRoute, type ModelRole } from './config/model-roles';
 export { GatewayDecisionProvider } from './providers/gateway/decision';
 export { classifyEmailWithDecision } from './classification/classify-with-decision';
+
+export { gatewayProvenance } from './providers/gateway/client';

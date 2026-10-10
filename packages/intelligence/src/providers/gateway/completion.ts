@@ -1,6 +1,7 @@
 import { generateText, NoObjectGeneratedError, Output } from 'ai';
 import type { z } from 'zod';
 import type { CompletionMeta, CompletionOptions, CompletionProvider } from '../base';
+import { ProviderError } from '../base';
 import { GatewayClient, gatewayError, gatewayProvenance, gatewayProviderOptions, gatewayFetch, warnIfSystemCredential } from './client';
 
 export class GatewayCompletionProvider implements CompletionProvider {
@@ -53,6 +54,7 @@ export class GatewayCompletionProvider implements CompletionProvider {
         maxRetries: 0,
         abortSignal: options.abortSignal ? AbortSignal.any([options.abortSignal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
       });
+      if (result.finishReason === 'length') throw new ProviderError('Gateway structured output exceeded its token budget', false);
       const data = schema.parse(result.output);
       return { data, ...completionMeta(result, result.text) };
     } catch (error) {

@@ -19,6 +19,17 @@ export function generation(text: string) {
 }
 
 describe('Gateway providers', () => {
+  it('reports a reasoning-only token limit as non-retriable instead of a network failure', async () => {
+    const output = { ...generation(''), content: [{ type: 'reasoning', text: 'Synthetic reasoning' }],
+      finishReason: { unified: 'length', raw: 'length' } };
+    globalThis.fetch = (async (input: RequestInfo | URL) => Response.json(String(input).endsWith('/config')
+      ? catalog('acme/test-model') : output)) as typeof fetch;
+    const error = await new GatewayCompletionProvider('test-key', 'acme/test-model', globalThis.fetch)
+      .completeJSON('Synthetic input', z.object({ label: z.string() })).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(ProviderError);
+    expect((error as ProviderError).message).toContain('token budget');
+    expect((error as ProviderError).retriable).toBe(false);
+  });
   it('uses the Gateway catalogue and AI SDK structured generation with one credential', async () => {
     const calls: string[] = [];
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -1,94 +1,70 @@
-import {
-  classifyEmailWithDecision, classifyEmailWithMeta, GatewayDecisionProvider,
-  resolveModelRoute, ProviderError, type EmailMessage, type ModelVerdictResult, type TypedDecisionInput,
-} from '../../packages/intelligence/src/index';
-import { gatewayKey } from '../../packages/intelligence/src/providers/gateway/client';
+import { classifyEmailWithMeta, resolveModelRoute, usesDecisionClassification, ProviderError,
+  type EmailMessage, type ModelVerdictResult } from '../../packages/intelligence/src/index';
+import { summarizeSmoke, type SmokeMeasurement } from './lib/gateway-smoke-metrics';
+import { observeGatewayCredentials } from '../../apps/api/src/lib/gateway-validation.test-helper';
+import { buildEmailClassifierInput } from '../../apps/api/src/lib/classifier-input';
 import { extractMailFacts } from '../../apps/api/src/lib/email/mail-facts';
-import { TicketAnswersSchema } from '../../packages/intelligence/src/classification/decision-questions';
 
 // Invented compatibility examples. No corpus files or product database access.
 const examples = [
   { subject: 'Cannot sign in', body: 'My Acme account rejects my password. Please help restore access.',
-    expected: { type: 'support', actionability: 'needs_action', subject_matter: 'service', category: 'account' } },
+    expected: { type: 'support', actionability: 'needs_action', subject_matter: 'service', category: 'account', priority: 'P2', tone: 'neutral', urgency: 'medium' } },
   { subject: 'Request for a quote', body: 'We want to buy Acme support software. Please send a quote.',
-    expected: { type: 'prospect', actionability: 'needs_action', subject_matter: 'commercial_demand', category: 'general' } },
+    expected: { type: 'prospect', actionability: 'needs_action', subject_matter: 'commercial_demand', category: 'general', priority: 'P3', tone: 'neutral', urgency: 'low' } },
   { subject: 'Payment received', body: 'This confirms payment for the Acme subscription. No action or reply is needed.',
-    expected: { type: 'support', actionability: 'fyi', subject_matter: 'service', category: 'billing' } },
+    expected: { type: 'support', actionability: 'fyi', subject_matter: 'service', category: 'billing', priority: 'P3', tone: 'neutral', urgency: 'low' } },
+  { subject: 'Service stopped', body: 'Acme is unavailable. Our entire team is blocked right now. Restore service immediately.',
+    consequential: true, expected: { type: 'support', actionability: 'needs_action', subject_matter: 'service',
+      category: 'technical', priority: 'P1', tone: 'neutral', urgency: 'high' } },
+  { subject: 'Cannot sign in', body: 'My Acme account rejects my password. Please help restore access.',
+    incompleteEvidence: true, expected: { type: 'support', actionability: 'needs_action', subject_matter: 'service',
+      category: 'account', priority: 'P2', tone: 'neutral', urgency: 'medium' } },
 ] as const;
 
 const stages = ['onboarding', 'backfill', 'new_email'] as const;
-const key = gatewayKey();
-const languageModel = process.env['AI_GATEWAY_REPLY_MODEL'] ?? process.env['AI_GATEWAY_TEXT_MODEL'] ?? process.env['AI_GATEWAY_MODEL'];
-if (!languageModel) throw new ProviderError('Configure AI_GATEWAY_MODEL for the generative smoke check', false);
-const nativeModels = new Set(['typesafe-ai/jev', resolveModelRoute('knowledge_decision').model]);
-if (process.env['CLASSIFICATION_MODE'] === 'decision') nativeModels.add(resolveModelRoute('classification').model);
-
-interface Measurement {
-  stage: string; capability: string; model: string; latencyMs: number; costUsd: number | null;
-  typeCorrect: boolean; dimensions: Record<string, boolean>; needsReview: boolean;
-}
-const measurements: Measurement[] = [];
+const route = resolveModelRoute('classification');
+if (route.provider !== 'gateway') throw new ProviderError('Configure a Gateway classifier for the remote stage evaluation', false);
+const measurements: SmokeMeasurement[] = [];
+const credentials = observeGatewayCredentials();
 
 function messageFor(stage: typeof stages[number], example: typeof examples[number]): EmailMessage {
   const facts = extractMailFacts({ from: 'client@outside.com', subject: example.subject,
     headers: { To: 'support@acme.com' }, tenantMailbox: ['support@acme.com'] });
-  return { stage, subject: example.subject, body: example.body, from: 'client@outside.com',
-    to: 'support@acme.com', tenantMailbox: 'support@acme.com', facts,
-    businessContext: stage === 'onboarding' ? undefined : 'Acme provides customer support software.',
-    evidence: { bodySource: 'full', truncated: false, missing: [] } };
+  return buildEmailClassifierInput({ stage, subject: example.subject, from: 'client@outside.com',
+    bodyPlain: 'incompleteEvidence' in example ? null : example.body, snippet: example.body, facts,
+    context: { tenantMailbox: 'support@acme.com', tenantMailboxes: ['support@acme.com'],
+      businessContext: stage === 'onboarding' ? undefined : 'Acme provides customer support software.' } });
 }
 
-function dimensions(verdict: ModelVerdictResult, example: typeof examples[number]) {
-  return { actionability: verdict.actionability === example.expected.actionability,
-    subjectMatter: verdict.subject_matter === example.expected.subject_matter,
-    category: verdict.category === example.expected.category };
+function record(stage: typeof stages[number], capability: string, model: string, started: number,
+  costUsd: number | null, verdict: ModelVerdictResult, type: string, abstain: boolean, example: typeof examples[number]) {
+  const { reasoning: _reasoning, confidence: _confidence, decision: _decision, ...prediction } = verdict;
+  measurements.push({ stage, capability, model, latencyMs: Math.round(performance.now() - started), costUsd,
+    truth: { ...example.expected }, prediction: { ...prediction, type }, abstain,
+    consequential: 'consequential' in example, incompleteEvidence: 'incompleteEvidence' in example });
 }
 
-const variables = ['CLASSIFICATION_MODE', 'INTELLIGENCE_PROVIDER', 'AI_GATEWAY_CLASSIFICATION_MODEL', 'INTELLIGENCE_ENSEMBLE'] as const;
-const original = new Map(variables.map((name) => [name, process.env[name]]));
+
 try {
-  delete process.env['INTELLIGENCE_ENSEMBLE'];
   for (const stage of stages) {
     for (const example of examples) {
       const message = messageFor(stage, example);
-      for (const model of nativeModels) {
-        const started = performance.now();
-        const provider = new GatewayDecisionProvider(key, model);
-        const output = await classifyEmailWithDecision(message, {
-          provider: provider.provider, model: provider.model,
-          async decide<T>(input: TypedDecisionInput) {
-            const result = await provider.decide<T>(input);
-            const validated = TicketAnswersSchema.safeParse(result.value);
-            if (!validated.success) console.error(JSON.stringify({ stage, model,
-              validation: validated.error.issues.map(({ code, path, message }) => ({ code, path, message })) }));
-            return result;
-          },
-        });
-        measurements.push({ stage, capability: 'decision', model: output.decision.modelVersion,
-          latencyMs: Math.round(performance.now() - started),
-          costUsd: typeof output.decision.rawMetadata?.['costUsd'] === 'number' ? output.decision.rawMetadata['costUsd'] : null,
-          typeCorrect: output.result.type === example.expected.type,
-          dimensions: dimensions(output.verdict, example), needsReview: true });
-      }
-      process.env['CLASSIFICATION_MODE'] = 'language';
-      process.env['INTELLIGENCE_PROVIDER'] = 'gateway';
-      process.env['AI_GATEWAY_CLASSIFICATION_MODEL'] = languageModel;
       const started = performance.now();
       const output = await classifyEmailWithMeta(message, { lang: 'en' });
-      measurements.push({ stage, capability: 'language', model: output.meta.model,
-        latencyMs: Math.round(performance.now() - started), costUsd: output.meta.costUsd ?? null,
-        typeCorrect: output.result.type === example.expected.type,
-        dimensions: dimensions(output.verdict, example), needsReview: output.abstain });
+      record(stage, usesDecisionClassification() ? 'decision' : 'language', output.meta.model, started,
+        output.meta.costUsd ?? null, output.verdict, output.result.type, output.abstain, example);
     }
     console.log(JSON.stringify({ stage, completed: measurements.filter((item) => item.stage === stage).length }));
   }
-  console.log(JSON.stringify({ purpose: 'synthetic_compatibility', measurements,
-    productionCalibration: 'not_measured', automaticCoverage: 'not_authorized_by_this_check' }, null, 2));
+  credentials.assertVerified();
+  console.log(JSON.stringify({ purpose: 'synthetic_stage_evaluation', cells: summarizeSmoke(measurements),
+    requests: credentials.requests, productionCalibration: 'not_measured', automaticActions: 'not_authorized' }, null, 2));
 } catch (error) {
   console.error(error instanceof ProviderError ? error.message : 'Gateway smoke check failed');
+  console.error(JSON.stringify({ completed: measurements.length, transport: credentials.diagnostic,
+    verifiedRequests: credentials.requests }));
   process.exitCode = 1;
 } finally {
-  for (const [name, value] of original) {
-    if (value === undefined) delete process.env[name]; else process.env[name] = value;
-  }
+  credentials.restore();
+
 }
