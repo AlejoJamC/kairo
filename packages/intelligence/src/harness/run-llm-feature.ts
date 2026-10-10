@@ -1,8 +1,9 @@
+import { resolveModelRoute } from '../config/model-roles';
 import type { z } from 'zod';
 
-import { createTextProvider, resolveTextProviderId } from '../config/providers';
+import { createTextProvider } from '../config/providers';
 import type { PromptLang } from '../classification/prompt';
-import type { CompletionOptions, CompletionProvider, CompletionUsage } from '../providers/base';
+import type { CompletionOptions, CompletionProvider, CompletionUsage, CompletionMeta } from '../providers/base';
 import { usageDetails, withGeneration } from './generation';
 import { extractPromptVersion, fillTemplate, loadPromptTemplate } from './template';
 
@@ -41,6 +42,7 @@ export type LlmCallLogger = (record: LlmCallRecord) => Promise<string | null>;
 interface LlmFeatureRequestBase {
   /** snake_case, the `llm_calls.feature` value and the Langfuse generation name. */
   feature: string;
+  modelRole?: 'reply' | 'knowledge_draft';
   /** Directory under `packages/intelligence/prompts/`. */
   promptId: string;
   /** The tenant's language, resolved by the caller — never guessed from the text. */
@@ -67,6 +69,7 @@ export interface LlmFeatureResult<D> {
   promptVersion: string | null;
   /** The model the provider reports having answered with. */
   model: string;
+  costUsd?: number | null;
   usage: CompletionUsage;
   latencyMs: number;
   /** The `llm_calls` row id, or null when no logger was given or logging failed. */
@@ -104,7 +107,7 @@ type Call<D> = (
   options: CompletionOptions | undefined,
 ) => Promise<{
   data: D;
-  meta: { rawText: string; model: string; usage: CompletionUsage };
+  meta: CompletionMeta;
   confidence: number | null;
 }>;
 
@@ -112,8 +115,8 @@ async function run<D>(request: LlmFeatureRequestBase, call: Call<D>): Promise<Ll
   const template = await loadPromptTemplate(request.promptId, request.lang);
   const promptVersion = extractPromptVersion(template);
   const prompt = fillTemplate(template, request.vars);
-  const provider = request.provider ?? createTextProvider();
-  const providerFamily = request.provider ? {} : { provider: resolveTextProviderId() };
+  const provider = request.provider ?? createTextProvider(request.modelRole);
+  const providerFamily = request.provider ? {} : { provider: resolveModelRoute(request.modelRole ?? 'reply').provider };
   const { ticketId, accountId, userId } = request.context ?? {};
   const ids = {
     ...(ticketId ? { ticketId } : {}),
@@ -165,11 +168,13 @@ async function run<D>(request: LlmFeatureRequestBase, call: Call<D>): Promise<Ll
 
       const { data, meta, confidence } = outcome;
       const latencyMs = Date.now() - start;
-      generation.update({ output: meta.rawText, ...usageDetails(meta.usage) });
+      generation.update({ output: meta.rawText, ...usageDetails(meta.usage),
+        metadata: { modelRole: request.modelRole ?? 'reply', reportedModel: meta.model, costUsd: meta.costUsd ?? null } });
 
       const llmCallId = await log({
         feature: request.feature,
         ...providerFamily,
+        ...(meta.provider ? { provider: meta.provider } : {}),
         model: meta.model,
         promptVersion,
         promptText: prompt,
@@ -183,7 +188,7 @@ async function run<D>(request: LlmFeatureRequestBase, call: Call<D>): Promise<Ll
         ...ids,
       });
 
-      return { data, prompt, promptVersion, model: meta.model, usage: meta.usage, latencyMs, llmCallId };
+      return { data, prompt, promptVersion, model: meta.model, costUsd: meta.costUsd ?? null, usage: meta.usage, latencyMs, llmCallId };
     },
   );
 }

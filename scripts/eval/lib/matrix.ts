@@ -13,9 +13,10 @@ import { slugify, STAGE_BODY_RULES, type PipelineStage } from './run-label';
  * candidate, whatever its latency.
  */
 export interface BenchModel {
-  provider: 'anthropic' | 'ollama';
+  provider: 'gateway' | 'anthropic' | 'ollama';
   model: string;
   label: string;
+  mode?: 'language' | 'decision';
   /**
    * The stages this model is measured on. Not every model is a candidate for
    * every stage, and a cell for a stage a model will never serve costs minutes
@@ -67,7 +68,16 @@ const ALL_MODELS: BenchModel[] = [
   { provider: 'ollama', model: 'gemma4:31b', label: 'gemma4 31b', stages: ['backfill'] },
 ];
 
-export const BENCH: BenchModel[] = selectedModels(ALL_MODELS);
+const remoteModels: BenchModel[] = [
+  ...gatewayModels(process.env['EVAL_GATEWAY_MODELS'], 'language'),
+  ...gatewayModels(process.env['EVAL_DECISION_MODELS'], 'decision'),
+];
+function gatewayModels(value: string | undefined, mode: 'language' | 'decision'): BenchModel[] {
+  return (value ?? '').split(',').map((id) => id.trim()).filter(Boolean).map((model) => ({
+    provider: 'gateway', model, label: model, mode, stages: ['onboarding', 'backfill', 'new_email'],
+  }));
+}
+export const BENCH: BenchModel[] = selectedModels(remoteModels.length ? remoteModels : ALL_MODELS);
 
 /**
  * One cell of the matrix: a way of feeding the classifier that some part of
@@ -96,6 +106,7 @@ export interface Variant {
 // informing one, and an empty column is a task in another domain, not a
 // condition this bench exists to observe.
 export const VARIANTS: Variant[] = [
+  { id: 'new_email', stage: 'new_email', businessContext: true, question: 'New inbound mail with current account context.' },
   {
     id: 'onboarding',
     stage: 'onboarding',
@@ -137,7 +148,7 @@ export function totalCells(emails: number): number {
 export function cellSlug(m: BenchModel, v: Variant): string {
   const base = slugify(`${m.provider}-${m.model}`);
   // One cell per stage, so the stage alone names the directory.
-  return base + (v.stage === 'onboarding' ? '-onboarding' : '');
+  return base + (v.stage === 'backfill' ? '' : `-${v.stage}`);
 }
 
 /** Body rule for a variant, mirroring the production call sites. */

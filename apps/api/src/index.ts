@@ -9,6 +9,7 @@ import { tier3Deferred } from "./functions/pipeline/tier3-deferred.js";
 import { batchClassify } from "./functions/batch-classify.js";
 import { incrementalSync } from "./functions/pipeline/incremental-sync.js";
 import { knowledgeCandidate } from "./functions/pipeline/knowledge-candidate.js";
+import { emailKnowledge } from './functions/pipeline/email-knowledge.js';
 import { contactExtraction } from "./functions/contact-extraction/extract.js";
 import { threadDedupeBackfill } from "./functions/backfill/thread-dedupe.js";
 import { outboundMessageSend } from "./functions/outbound-send/send.js";
@@ -69,7 +70,7 @@ app.use(
   "/api/inngest",
   serve({
     client: inngest,
-    functions: [tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill, outboundMessageSend, gmailPoll, gmailPollCron, operationalSlaEscalationCron, classificationRetrySweep, autoApprovalRecomputeCron, knowledgeCandidate],
+    functions: [tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill, outboundMessageSend, gmailPoll, gmailPollCron, operationalSlaEscalationCron, classificationRetrySweep, autoApprovalRecomputeCron, knowledgeCandidate, emailKnowledge],
   })
 );
 

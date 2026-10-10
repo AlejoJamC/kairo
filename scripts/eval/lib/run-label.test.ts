@@ -18,7 +18,7 @@ describe("resolveRunLabel", () => {
       ANTHROPIC_MODEL: "claude-haiku-4-5-20251001",
     }));
 
-    expect(r.slug).toBe("anthropic-claude-haiku-4-5-20251001");
+    expect(r.slug).toBe("gateway-anthropic-claude-haiku-4-5-20251001");
   });
 
   // The ablation run must never land on top of the run it is compared against
@@ -60,10 +60,11 @@ describe("resolveRunLabel", () => {
     expect(b.slug).toBe(`${a.slug}-onboarding`);
   });
 
-  it("treats an unrecognised stage as backfill rather than inventing one", () => {
-    for (const v of ["tier1", "TIER1", "", "onboarding "]) {
-      expect(resolveRunLabel(env({ EVAL_STAGE: v })).stage).toBe("backfill");
+  it("rejects unknown stages and separates new mail from historical processing", () => {
+    for (const value of ["tier1", "TIER1", "onboarding "]) {
+      expect(() => resolveRunLabel(env({ EVAL_STAGE: value }))).toThrow(/EVAL_STAGE/);
     }
+    expect(resolveRunLabel(env({ EVAL_STAGE: "new_email" })).slug).toBe("ollama-granite4.1-3b-new_email");
   });
 
   it("keeps stage and ablation independent in the slug", () => {
@@ -117,8 +118,8 @@ describe("endpoint", () => {
       OLLAMA_BASE_URL: "https://gpu.example.com",
     }));
 
-    expect(r.endpoint).toBe("https://api.anthropic.com");
-    expect(r.slug).toBe("anthropic-claude-haiku-4-5-20251001");
+    expect(r.endpoint).toBe("https://ai-gateway.vercel.sh/v1");
+    expect(r.slug).toBe("gateway-anthropic-claude-haiku-4-5-20251001");
   });
 });
 

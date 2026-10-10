@@ -1,18 +1,12 @@
-// ---------------------------------------------------------------------------
-// KAI-61 — where any provider Kairo executes gets resolved from configuration.
-//
-// Completion and embedding used to each carry a Zod schema enumerating every
-// provider inline, so adding one meant editing a schema that already knew
-// about the others. Completion now resolves from completion-registry.ts, the
-// single list ensemble.ts validates against too. Embedding has only ever had
-// two providers and nothing outside this file needs its id, so its registry
-// stays here — the fix was removing the shared schema, not the file.
-// ---------------------------------------------------------------------------
-
 import type { CompletionProvider, EmbeddingProvider } from '../providers/base';
+import { ProviderError } from '../providers/base';
 import type { DecisionProvider } from '../providers/decision';
+import { resolveModelRoute, type ModelRole } from './model-roles';
+import { GatewayCompletionProvider } from '../providers/gateway/completion';
+import { GatewayDecisionProvider } from '../providers/gateway/decision';
+import { GatewayEmbeddingProvider } from '../providers/gateway/embedding';
+import { gatewayKey } from '../providers/gateway/client';
 import { OllamaEmbeddingProvider } from '../providers/ollama/embedding';
-import { VoyageEmbeddingProvider } from '../providers/voyage/embedding';
 import { JevDecisionProvider } from '../providers/jev/decision';
 import { OLLAMA_DEFAULT_BASE_URL } from './constants';
 import { findCompletionProvider } from './completion-registry';
@@ -31,93 +25,41 @@ export { COMPLETION_PROVIDER_IDS, type CompletionProviderId } from './completion
  * API key from the environment.
  */
 export function createCompletionProvider(target?: CompletionTarget): CompletionProvider {
-  const id = target?.provider ?? process.env['INTELLIGENCE_PROVIDER'] ?? 'ollama';
-  return findCompletionProvider(id).create(process.env, target?.model);
+  if (target) return findCompletionProvider(target.provider).create(process.env, target.model);
+  const route = resolveModelRoute('classification');
+  if (route.capability !== 'language') throw new ProviderError('Classification uses a decision model; request the decision service', false);
+  return findCompletionProvider(route.provider).create(process.env, route.model);
 }
 
-/**
- * The provider id for any feature that generates text (reply suggestions,
- * knowledge drafts). `TEXT_PROVIDER` wins; otherwise `INTELLIGENCE_PROVIDER`,
- * unless that is `jev`, which cannot generate text.
- */
+/** Transport used by the configured reply model. */
 export function resolveTextProviderId(): string {
-  const explicit = process.env['TEXT_PROVIDER'];
-  if (explicit) return explicit;
-  const classifier = process.env['INTELLIGENCE_PROVIDER'];
-  return classifier && classifier !== 'jev' ? classifier : 'ollama';
+  return resolveModelRoute('reply').provider;
 }
 
-export function createTextProvider(): CompletionProvider {
-  return findCompletionProvider(resolveTextProviderId()).create(process.env);
+export function createTextProvider(role: 'reply' | 'knowledge_draft' = 'reply'): CompletionProvider {
+  const route = resolveModelRoute(role);
+  if (route.provider === 'gateway') return new GatewayCompletionProvider(gatewayKey(), route.model);
+  return findCompletionProvider('ollama').create(process.env, route.model);
 }
-
-type Env = Record<string, string | undefined>;
-
-interface EmbeddingProviderEntry {
-  id: string;
-  create(env: Env): EmbeddingProvider;
-}
-
-const EMBEDDING_PROVIDERS = [
-  {
-    id: 'ollama',
-    create: (env) =>
-      new OllamaEmbeddingProvider(
-        env['OLLAMA_BASE_URL'] ?? OLLAMA_DEFAULT_BASE_URL,
-        env['OLLAMA_EMBEDDING_MODEL'] ?? 'nomic-embed-text',
-        env['OLLAMA_EMBEDDING_DIMENSIONS'] ? Number(env['OLLAMA_EMBEDDING_DIMENSIONS']) : 384,
-      ),
-  },
-  {
-    id: 'voyage',
-    create: (env) => {
-      const apiKey = env['VOYAGE_API_KEY'];
-      if (!apiKey) throw new Error('VOYAGE_API_KEY required when EMBEDDING_PROVIDER=voyage');
-      return new VoyageEmbeddingProvider(apiKey);
-    },
-  },
-] as const satisfies readonly EmbeddingProviderEntry[];
 
 export function createEmbeddingProvider(): EmbeddingProvider {
-  const id = process.env['EMBEDDING_PROVIDER'] ?? 'ollama';
-  const entry = EMBEDDING_PROVIDERS.find((p) => p.id === id);
-  if (!entry) {
-    throw new Error(
-      `Unknown embedding provider "${id}". Known providers: ${EMBEDDING_PROVIDERS.map((p) => p.id).join(', ')}`,
-    );
-  }
-  return entry.create(process.env);
+  const route = resolveModelRoute('embedding');
+  return route.provider === 'gateway'
+    ? new GatewayEmbeddingProvider(gatewayKey(), route.model, 512)
+    : new OllamaEmbeddingProvider(process.env['OLLAMA_BASE_URL'] ?? OLLAMA_DEFAULT_BASE_URL, route.model,
+      Number(process.env['OLLAMA_EMBEDDING_DIMENSIONS'] ?? 512));
 }
 
-interface DecisionProviderEntry {
-  id: string;
-  create(env: Env): DecisionProvider;
-}
+export type DecisionProviderId = 'gateway' | 'jev';
 
-// One entry today. The point of this registry is not the count — it is that
-// JEV, the technology that proved CompletionProvider cannot host every
-// provider shape (KAI-55), plugs in the same way a second decision provider
-// would, with no switch to extend.
-const DECISION_PROVIDERS = [
-  {
-    id: 'jev',
-    create: (env) => {
-      const apiKey = env['TYPESAFE_API_KEY'];
-      if (!apiKey) throw new Error('TYPESAFE_API_KEY required to use the jev decision provider');
-      return new JevDecisionProvider(apiKey, env['JEV_MODEL']);
-    },
-  },
-] as const satisfies readonly DecisionProviderEntry[];
-
-export type DecisionProviderId = (typeof DECISION_PROVIDERS)[number]['id'];
-
-/** The decision provider named by `id` — "jev" is the only one today. */
-export function createDecisionProvider(id: DecisionProviderId = 'jev'): DecisionProvider {
-  const entry = DECISION_PROVIDERS.find((p) => p.id === id);
-  if (!entry) {
-    throw new Error(
-      `Unknown decision provider "${id}". Known providers: ${DECISION_PROVIDERS.map((p) => p.id).join(', ')}`,
-    );
-  }
-  return entry.create(process.env);
+export function createDecisionProvider(
+  id: DecisionProviderId = 'gateway',
+  role: Extract<ModelRole, 'classification' | 'knowledge_decision' | 'validation'> = 'classification',
+): DecisionProvider {
+  if (id === 'jev') return new JevDecisionProvider(gatewayKey(), process.env['JEV_MODEL'] ?? 'typesafe-ai/jev');
+  const route = resolveModelRoute(role);
+  const model = role === 'classification' && route.capability !== 'decision'
+    ? process.env['AI_GATEWAY_DECISION_MODEL'] ?? process.env['JEV_MODEL'] ?? 'typesafe-ai/jev'
+    : route.model;
+  return new GatewayDecisionProvider(gatewayKey(), model);
 }

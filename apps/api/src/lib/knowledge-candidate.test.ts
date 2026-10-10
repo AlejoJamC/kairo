@@ -63,6 +63,7 @@ function deps(over: Partial<KnowledgeCandidateDeps> & { db: KnowledgeCandidateDe
   return {
     supabase: over.db,
     resolveLanguage: async () => "en",
+    resolveSettings: over.resolveSettings ?? (async () => ({ language: 'en', businessContext: 'Acme provides account support.' })),
     decide: over.decide ?? (async () => CANDIDATE),
     draft: over.draft ?? (async () => ({ title: "Export button does nothing", content: "Clear the cache and retry." })),
     embed: over.embed ?? (async () => ({ status: "ok" as const })),
@@ -81,7 +82,7 @@ describe("draftKnowledgeFromTicket", () => {
       title: "Export button does nothing",
       is_published: false,
     });
-    expect(inserted[0]!["tags"]).toEqual(["ai-draft", "type:resolution", "ticket:t-1", "reusable"]);
+    expect(inserted[0]!["tags"]).toEqual(["ai-draft", "scope:account", "type:resolution", "ticket:t-1", "reusable"]);
   });
 
   it("does not call the text model when JEV says it is not a candidate", async () => {

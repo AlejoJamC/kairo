@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ProviderError } from "@kairo/intelligence";
+import { ProviderConfigurationError, ProviderError } from "@kairo/intelligence";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbClient = SupabaseClient<any>;
@@ -42,18 +42,24 @@ export interface RecordClassificationFailureArgs {
 export async function recordClassificationFailure(args: RecordClassificationFailureArgs): Promise<void> {
   const { supabase, accountId, channelIntegrationId, externalId, maxAttempts, err } = args;
 
-  const { data: existing } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from("messages")
     .select("classification_attempt_count")
     .eq("channel_integration_id", channelIntegrationId)
     .eq("external_id", externalId)
     .maybeSingle();
+  if (lookupError) throw new ProviderError('Classification retry state unavailable', true);
 
-  const attemptCount = (existing?.classification_attempt_count ?? 0) + 1;
+  // A deployment misconfiguration says nothing about the message: it stays
+  // retryable and does not spend attempts, so fixing the configuration
+  // recovers it instead of finding it permanently failed.
+  const deploymentFault = err instanceof ProviderConfigurationError;
+  const attemptCount = (existing?.classification_attempt_count ?? 0) + (deploymentFault ? 0 : 1);
   const retriable = err instanceof ProviderError ? err.retriable : true;
-  const classificationStatus = !retriable || attemptCount >= maxAttempts ? "failed_permanent" : "failed";
+  const classificationStatus =
+    !deploymentFault && (!retriable || attemptCount >= maxAttempts) ? "failed_permanent" : "failed";
 
-  await supabase.from("messages").upsert(
+  const { error: persistenceError } = await supabase.from("messages").upsert(
     {
       account_id: accountId,
       channel_integration_id: channelIntegrationId,
@@ -75,4 +81,5 @@ export async function recordClassificationFailure(args: RecordClassificationFail
     },
     { onConflict: "channel_integration_id,external_id" }
   );
+  if (persistenceError) throw new ProviderError('Classification failure persistence unavailable', true);
 }

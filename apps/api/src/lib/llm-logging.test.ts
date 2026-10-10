@@ -93,7 +93,7 @@ describe("logLlmCall", () => {
     }
   });
 
-  it("defaults provider from INTELLIGENCE_PROVIDER env var", () => {
+  it("defaults provider to the transport INTELLIGENCE_PROVIDER resolves to (the anthropic alias is Gateway)", () => {
     const originalEnv = process.env["NODE_ENV"];
     const originalProvider = process.env["INTELLIGENCE_PROVIDER"];
     process.env["NODE_ENV"] = "production";
@@ -107,7 +107,7 @@ describe("logLlmCall", () => {
       });
 
       const row = insertMock.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect(row["provider"]).toBe("anthropic");
+      expect(row["provider"]).toBe("gateway");
     } finally {
       process.env["NODE_ENV"] = originalEnv;
       if (originalProvider === undefined) delete process.env["INTELLIGENCE_PROVIDER"];
@@ -176,7 +176,7 @@ describe("recordLlmCall", () => {
     }
   });
 
-  it("falls back to INTELLIGENCE_PROVIDER for a caller that predates the field", async () => {
+  it("falls back to the resolved transport for a caller that predates the field", async () => {
     const originalEnv = process.env["NODE_ENV"];
     const originalProvider = process.env["INTELLIGENCE_PROVIDER"];
     process.env["NODE_ENV"] = "production";
@@ -198,7 +198,7 @@ describe("recordLlmCall", () => {
       });
 
       const row = insertMock.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect(row["provider"]).toBe("anthropic");
+      expect(row["provider"]).toBe("gateway");
     } finally {
       process.env["NODE_ENV"] = originalEnv;
       if (originalProvider === undefined) delete process.env["INTELLIGENCE_PROVIDER"];

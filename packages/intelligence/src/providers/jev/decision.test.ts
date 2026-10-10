@@ -21,6 +21,9 @@ function mockSystemOne(body: unknown, status = 200): void {
   lastUrl = '';
   lastInit = {};
   globalThis.fetch = (async (url: string, init: RequestInit) => {
+    if (String(url).endsWith('/config')) return new Response(JSON.stringify({ models: [{
+      id: 'typesafe-ai/jev', name: 'JEV', modelType: 'evaluation', specification: { specificationVersion: 'v4', provider: 'gateway', modelId: 'typesafe-ai/jev' },
+    }] }), { headers: { 'content-type': 'application/json' } });
     lastUrl = url;
     lastInit = init;
     return new Response(JSON.stringify(body), {
@@ -30,7 +33,7 @@ function mockSystemOne(body: unknown, status = 200): void {
   }) as unknown as typeof fetch;
 }
 
-const provider = () => new JevDecisionProvider('test-key', 'jev-latest');
+const provider = () => new JevDecisionProvider('test-key', 'jev-latest', globalThis.fetch);
 
 describe('JevDecisionProvider', () => {
   it('forwards state and questions to POST /v1/systemone, unchanged', async () => {
@@ -45,11 +48,12 @@ describe('JevDecisionProvider', () => {
       questions: { category: { type: 'choice', criteria: { billing: null } } },
     });
 
-    expect(lastUrl).toBe('https://api.typesafe.ai/v1/systemone');
+    expect(lastUrl).toBe('https://ai-gateway.vercel.sh/typesafe/v1/systemone');
     const sent = JSON.parse(lastInit.body as string);
     expect(sent.state).toEqual({ document: 'I was charged twice' });
     expect(sent.questions).toEqual({ category: { type: 'choice', criteria: { billing: null } } });
-    expect(sent.model).toBe('jev-latest');
+    expect(sent.model).toBe('typesafe-ai/jev');
+    expect(sent.providerOptions.gateway.only).toEqual(['typesafe-ai']);
   });
 
   it('authenticates with a bearer token built from the api key', async () => {
@@ -65,7 +69,7 @@ describe('JevDecisionProvider', () => {
     expect(headers['Authorization']).toBe('Bearer test-key');
   });
 
-  it('extracts confidence from a single noul answer', async () => {
+  it('does not confuse a noul probability with confidence', async () => {
     mockSystemOne({
       model: 'jev-latest',
       answers: { billing: { type: 'noul', noul: 0.87 } },
@@ -73,7 +77,7 @@ describe('JevDecisionProvider', () => {
     });
 
     const result = await provider().decide({ state: 'x', questions: { billing: { type: 'noul' } } });
-    expect(result.confidence).toBe(0.87);
+    expect(result.confidence).toBeNull();
     expect(result.provider).toBe('jev');
     expect(result.modelVersion).toBe('jev-latest');
     expect(result.value).toEqual({ billing: { type: 'noul', noul: 0.87 } });

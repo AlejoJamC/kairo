@@ -182,7 +182,22 @@
   },
   "knowledgeView": {
     "title": "Conocimiento",
-    "subtitle": "Artículos de la base de conocimiento. Los borradores los redacta la IA a partir de tickets resueltos y no se publican hasta que una persona los apruebe.",
+    "subtitle": "Hechos del negocio y artículos propuestos desde correos y tickets resueltos. Revísalos antes de publicar.",
+    "evidenceTitle": "Fuente y validación",
+    "validationScope": "Estas comprobaciones corresponden a la propuesta original de la IA. Revisa cualquier edición antes de publicar.",
+    "evidenceUnavailable": "No se pudo cargar la evidencia. Verifica el correo original antes de aprobar.",
+    "kinds": { "business_fact": "Propuesta de hecho del negocio", "policy": "Propuesta de política", "exception": "Propuesta de excepción", "article": "Propuesta de artículo" },
+    "reasons": {
+      "human_validation_required": "Requiere tu aprobación antes de convertirse en conocimiento reutilizable.",
+      "invalid_source_quote": "La cita no coincide con la fuente.",
+      "unsupported_claim": "La fuente no respalda todas las afirmaciones. Corrige o descarta esta propuesta.",
+      "insufficient_evidence": "La evidencia no permite validar las afirmaciones.",
+      "business_context_conflict": "Contradice el contexto aprobado del negocio. Resuelve el conflicto antes de publicar.",
+      "business_context_missing": "Falta contexto del negocio o es insuficiente para validar.",
+      "source_truncated": "Solo se procesó una parte del correo fuente.",
+      "approved_knowledge_unavailable": "No se pudo recuperar el conocimiento aprobado. No se ha comprobado toda la compatibilidad."
+    },
+    "steps": { "email_knowledge_decision": "Selección de candidato", "email_knowledge_extraction": "Extracción de propuestas", "email_knowledge_validation": "Validación de evidencia y contexto del negocio" },
     "tabDrafts": "Borradores",
     "tabPublished": "Publicados",
     "emptyDrafts": "No hay borradores por revisar.",
@@ -543,7 +558,15 @@
     "assistantNoTicketTitle": "Sin ticket seleccionado",
     "assistantNoTicketBody": "Elige un ticket de la bandeja para conversar sobre él con el copiloto.",
     "assistantUnknownSender": "el cliente",
-    "resizeHint": "Arrastra para redimensionar · doble clic para restablecer"
+    "resizeHint": "Arrastra para redimensionar · doble clic para restablecer",
+    "assistantToolInspect": "Consultar ticket y conocimiento",
+    "assistantToolDecide": "Proponer clasificación",
+    "assistantToolDraft": "Preparar propuesta de respuesta",
+    "assistantOperation_completed": "Completado",
+    "assistantOperation_proposed": "Requiere revisión humana",
+    "assistantOperation_failed": "Fallido",
+    "assistantRequestFailed": "Asistente no disponible. Inténtalo de nuevo.",
+    "assistantWaiting": "Consultando el ticket…"
   },
   "relatedHistory": {
     "title": "Historial relacionado",

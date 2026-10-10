@@ -4,7 +4,12 @@ import type { DecisionProvider } from '../providers/decision';
 import { classifyEmailWithJev } from './classify-with-jev';
 
 function answer(choiceValue: string, confidence: number) {
-  return { type: 'choice' as const, choice: choiceValue, confidence };
+  const sets = [['needs_action', 'fyi'], ['service', 'commercial_demand', 'commercial_offer', 'admin'],
+    ['P1', 'P2', 'P3'], ['technical', 'billing', 'account', 'general', 'not_applicable'],
+    ['aggressive', 'frustrated', 'neutral', 'positive'], ['high', 'medium', 'low']];
+  const values = sets.find((set) => set.includes(choiceValue)) ?? [choiceValue];
+  const probabilities = Object.fromEntries(values.map((value) => [value, value === choiceValue ? confidence : (1 - confidence) / (values.length - 1)]));
+  return { type: 'choice' as const, choice: choiceValue, confidence, probabilities };
 }
 
 function fakeJev(answers: Record<string, ReturnType<typeof answer>>): DecisionProvider {
@@ -61,7 +66,7 @@ describe('classifyEmailWithJev', () => {
     });
 
     const { result } = await classifyEmailWithJev(
-      { subject: 'FYI', body: 'housekeeping note', from: 'someone@acme.com' },
+      { subject: 'FYI', body: 'housekeeping note', from: 'client@outside.com' },
       provider,
     );
 
@@ -80,7 +85,7 @@ describe('classifyEmailWithJev', () => {
     });
 
     await classifyEmailWithJev(
-      { subject: 'Down', body: 'production is down', from: 'cto@acme.com', tenantMailbox: 'support@kairo.dev' },
+      { subject: 'Down', body: 'production is down', from: 'client@outside.com', tenantMailbox: 'support@acme.com' },
       provider,
     );
 
@@ -88,8 +93,8 @@ describe('classifyEmailWithJev', () => {
     expect(call.state).toMatchObject({
       subject: 'Down',
       body: 'production is down',
-      from: 'cto@acme.com',
-      tenantMailbox: 'support@kairo.dev',
+      from: 'client@outside.com',
+      tenantMailbox: 'support@acme.com',
     });
   });
 });

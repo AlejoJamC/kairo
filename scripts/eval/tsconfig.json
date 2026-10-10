@@ -3,7 +3,8 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "typeRoots": ["../../packages/intelligence/node_modules/@types"],
+    "types": ["node", "bun"],
+    "typeRoots": ["../../packages/intelligence/node_modules/@types", "../../apps/api/node_modules/@types"],
     "paths": {
       "@kairo/intelligence": ["../../packages/intelligence/src/index.ts"]
     }

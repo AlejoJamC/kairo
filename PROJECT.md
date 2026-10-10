@@ -30,7 +30,7 @@ there, not here.
 │   ├── feature-flags/  # static + runtime feature flags
 │   ├── identity/       # email/phone normalization, contact dedup
 │   ├── claude_design/  # Pencil design token package
-│   └── intelligence/   # decision provider (JEV) and text providers (Ollama / Anthropic)
+│   └── intelligence/   # Vercel AI SDK, Gateway model roles, and local Ollama
 │       └── prompts/    # versioned LLM prompts (YAML frontmatter + markdown)
 ├── supabase/
 │   └── migrations/     # shared DB migrations (Postgres via Supabase)
@@ -57,9 +57,9 @@ there, not here.
 ├── docs/
 │   └── README.es.md    # Spanish documentation
 ├── PROJECT.md          # ← you are here (read this first, always)
+├── AGENTS.md           # only canonical project agent instructions
 └── .claude/
-    ├── CLAUDE.md       # single source of project instructions
-    └── rules/          # workflow.md, integrations.md
+    └── CLAUDE.md       # symlink to ../AGENTS.md
 ```
 
 ## Tech Stack
@@ -69,7 +69,7 @@ there, not here.
 | API         | Bun + Hono + Inngest              |
 | Mobile      | Expo (React Native)               |
 | Database    | Supabase (Postgres + Auth)        |
-| AI          | JEV (classification) + Claude API / Ollama (text) |
+| AI          | Vercel AI SDK + AI Gateway / local Ollama |
 | Email       | Gmail API (OAuth, sync active)    |
 | Observability | Langfuse (LLM tracing) + ClickStack/HyperDX (OTel app tracing) — self-hosted local, see `docs/observability.md` |
 | Deploy      | Vercel                            |
@@ -94,9 +94,9 @@ there, not here.
 - Shared component library (`packages/ui`) with ShadCN
 - Shared types (`packages/types`) with core schema
 - Centralized env validation (`packages/env`) via `@t3-oss/env-core` + Zod
-- Intelligence layer (`packages/intelligence`) — modular provider abstraction: `CompletionProvider` (Ollama / Anthropic) and `DecisionProvider` (JEV, TypeSafe AI — see ADR-029). `INTELLIGENCE_PROVIDER` selects the classifier; with `jev`, every classification path (tier1/tier2/tier3, incremental sync, batch and manual classify) is answered by JEV. `TEXT_PROVIDER` (`ollama` | `anthropic`) selects the model for features that generate text, since JEV cannot. Optional flags: `enable_jev_shadow_classification` logs JEV's opinion next to another provider's classification, and `enable_jev_canary` lets JEV upgrade a pending proposal for listed mailboxes.
+- Intelligence layer (`packages/intelligence`) — all remote language, native decision and embedding models use Vercel AI Gateway. Local Ollama remains available for classification, text and embeddings. `CLASSIFICATION_MODE` selects native typed decisions or structured language generation; per-role environment variables select models independently. Native decision probabilities are retained, and uncalibrated results require review. Optional legacy JEV shadow/canary paths also use Gateway and cannot approve a native principal model by agreement with itself.
 - AI classification review — the "Clasificación IA" view (`ai-review-view.tsx`) lists each ticket's AI proposal, split into to-review and approved-by-AI; confirming or rejecting calls `POST /v1/tickets/:id/classify-approve` and feeds the trust history that unlocks auto-approval.
-- Knowledge drafts — when a ticket is resolved, JEV decides whether its thread is worth keeping and a text model drafts the article into `kb_articles` as unpublished; the "Conocimiento" view (`knowledge-view.tsx`) edits, publishes or discards drafts. Gated by `enable_knowledge_candidates`.
+- Knowledge drafts — when a ticket is resolved, the configured native decision model decides whether its thread is worth keeping and a text model drafts the article into `kb_articles` as unpublished; the "Conocimiento" view (`knowledge-view.tsx`) edits, publishes or discards drafts. Gated by `enable_knowledge_candidates`.
 - Ticket auto-assignment — round-robin among an account's active members on ticket creation (`tickets-by-thread.ts`); with exactly one active member it always goes to them
 - Email classification prompt versioned as markdown artifact (`packages/intelligence/prompts/email-classification.md`)
   - Frontmatter is single source of truth for allowed enum values (tipo, prioridad, categoria, tono, urgencia)
@@ -153,9 +153,8 @@ Webapp translation files: `apps/dashboard/src/i18n/resources/{en,es}/*.json`
 | `supabase gen types typescript --schema public > packages/types/src/database.ts 2>/dev/null` | Regenerate TS types from DB |
 
 ## How Agents Should Work on This Repo
-1. Read this file (`PROJECT.md`) completely before doing anything
-2. Check `specs/pending/` for the assigned spec file
-3. Implement on a new branch `feature/[spec-name]`
-4. Run `bun test` before considering done
-5. Move spec file from `specs/pending/` to `specs/done/`
-6. Write a brief summary of what changed at the top of the spec file
+
+The root `AGENTS.md` is the only canonical source of project agent instructions.
+`.claude/CLAUDE.md` is a symlink to it. Edit `AGENTS.md` directly; never create
+an independent copy or separate project agent rules. Read this architecture
+document in full as required by `AGENTS.md`.

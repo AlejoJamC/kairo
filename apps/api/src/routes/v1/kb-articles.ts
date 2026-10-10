@@ -34,6 +34,34 @@ const UpdateArticleSchema = z.object({
 
 const SAFE_COLUMNS = "id, title, content, tags, is_published, created_at, updated_at";
 
+kbArticles.get('/:id/evidence', async c => {
+  const ctx = await resolveUserAndAccount(c.req.header('Authorization') ?? '');
+  if (!ctx) return c.json({ error: 'Unauthorized' }, 401);
+  const { data: article, error } = await supabase.from('kb_articles').select('tags')
+    .eq('id', c.req.param('id')).eq('account_id', ctx.accountId).maybeSingle();
+  if (error) return c.json({ error: 'Knowledge evidence unavailable' }, 503);
+  if (!article) return c.json({ error: 'Not found' }, 404);
+  const ids = (article.tags ?? []).filter((tag: string) => tag.startsWith('llm-call:')).map((tag: string) => tag.slice(9));
+  if (!ids.length) return c.json({ steps: [], evidence: [] });
+  const { data: calls, error: callsError } = await supabase.from('llm_calls')
+    .select('feature, model, prompt_version, prompt_text, created_at')
+    .eq('account_id', ctx.accountId).in('id', ids).order('created_at', { ascending: true });
+  if (callsError) return c.json({ error: 'Knowledge evidence unavailable' }, 503);
+  const EvidenceState = z.object({ state: z.object({ proposals: z.array(z.object({ evidence: z.array(z.string()) })) }) });
+  const proposalIndex = Number((article.tags ?? []).find((tag: string) => tag.startsWith('proposal-index:'))?.slice(15));
+  const evidence: string[] = [];
+  for (const call of calls ?? []) {
+    if (call.feature !== 'email_knowledge_validation') continue;
+    try {
+      const parsed = EvidenceState.safeParse(JSON.parse(call.prompt_text));
+      if (parsed.success && Number.isInteger(proposalIndex) && proposalIndex >= 0) {
+        evidence.push(...(parsed.data.state.proposals[proposalIndex]?.evidence ?? []));
+      }
+    } catch { /* An unavailable audit record does not fabricate evidence. */ }
+  }
+  return c.json({ steps: (calls ?? []).map(call => ({ feature: call.feature, model: call.model, version: call.prompt_version })), evidence });
+});
+
 // ---------------------------------------------------------------------------
 // GET /v1/kb-articles
 // ---------------------------------------------------------------------------

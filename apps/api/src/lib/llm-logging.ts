@@ -1,6 +1,11 @@
 import type { LlmCallLogger, LlmCallRecord } from "@kairo/intelligence";
+import { resolveModelRoute } from "@kairo/intelligence";
 
 import { supabase } from "./supabase.js";
+
+function configuredTransport(): string {
+  try { return resolveModelRoute('classification').provider; } catch { return 'unconfigured'; }
+}
 
 // ---------------------------------------------------------------------------
 // KAI-110: LLM observability — fire-and-forget writer for `llm_calls`.
@@ -42,7 +47,7 @@ export function logLlmCall(entry: LlmCallLogEntry): void {
       account_id: entry.accountId ?? null,
       ticket_id: entry.ticketId ?? null,
       feature: entry.feature,
-      provider: entry.provider ?? process.env["INTELLIGENCE_PROVIDER"] ?? "ollama",
+      provider: entry.provider ?? configuredTransport(),
       model: entry.model,
       prompt_version: entry.promptVersion ?? null,
       prompt_text: entry.promptText,
@@ -76,7 +81,7 @@ export const recordLlmCall: LlmCallLogger = async (record: LlmCallRecord) => {
       account_id: record.accountId ?? null,
       ticket_id: record.ticketId ?? null,
       feature: record.feature,
-      provider: record.provider ?? process.env["INTELLIGENCE_PROVIDER"] ?? "ollama",
+      provider: record.provider ?? configuredTransport(),
       model: record.model,
       prompt_version: record.promptVersion,
       prompt_text: record.promptText,

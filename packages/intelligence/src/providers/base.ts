@@ -25,6 +25,20 @@ export class ProviderError extends Error {
   }
 }
 
+/**
+ * A request that cannot be sent because of how the deployment is configured
+ * (missing key, unknown model, unsupported capability). It is not the
+ * message's fault: retrying works as soon as the configuration is fixed, and
+ * it must neither consume the message's attempts nor mark it permanently
+ * failed.
+ */
+export class ProviderConfigurationError extends ProviderError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, true, undefined, options);
+    this.name = 'ProviderConfigurationError';
+  }
+}
+
 export interface CompletionProvider {
   complete(prompt: string, options?: CompletionOptions): Promise<string>;
   completeJSON<T>(prompt: string, schema: z.ZodSchema<T>, options?: CompletionOptions): Promise<T>;
@@ -47,6 +61,11 @@ export interface CompletionUsage {
 export interface CompletionMeta {
   rawText: string;
   model: string;
+  provider?: string;
+  /** USD reported by the Gateway; null when no billing metadata is available. */
+  costUsd?: number | null;
+  inferenceProvider?: string | null;
+  credentialType?: 'byok' | 'system' | null;
   usage: CompletionUsage;
   /**
    * Generation throughput reported by the provider, when it reports one.
@@ -70,6 +89,7 @@ export interface EmbeddingProvider {
 }
 
 export interface CompletionOptions {
+  abortSignal?: AbortSignal;
   maxTokens?: number;
   temperature?: number;
   stopSequences?: string[];

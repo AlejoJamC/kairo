@@ -1,6 +1,6 @@
 import { describe, it, expect, mock } from "bun:test";
 import { pollGmailAccount } from "./poll-account.js";
-import { GmailHistoryExpiredError, type DbClient, type GmailPollDeps } from "./types.js";
+import { GmailHistoryExpiredError, GmailMessageNotFoundError, type DbClient, type GmailPollDeps } from "./types.js";
 import { extractMailFacts } from "../email/mail-facts.js";
 import type { EmailMetadata, PreFilterResult } from "../email/pre-filter.js";
 
@@ -31,6 +31,8 @@ interface FakeDbOptions {
   integration: { id: string; account_id: string; gmail_history_id: string | null } | null;
   existingExternalIds?: string[];
   insertShouldConflict?: boolean;
+  existingRows?: { id: string; external_id: string; classification_status: string }[];
+  cursorWriteFails?: boolean;
 }
 
 /**
@@ -42,7 +44,9 @@ function createFakeDb(opts: FakeDbOptions) {
   const updates: { table: string; payload: Record<string, unknown> }[] = [];
   const inserts: { table: string; payload: Record<string, unknown> }[] = [];
   const upserts: { table: string; payload: Record<string, unknown> }[] = [];
-  const existing = new Set(opts.existingExternalIds ?? []);
+  const existing = new Map<string, Record<string, unknown>>((opts.existingExternalIds ?? []).map((id) =>
+    [id, { id: `stored-${id}`, external_id: id, classification_status: 'classified' }]));
+  for (const row of opts.existingRows ?? []) existing.set(row.external_id, { ...row });
 
   const db = {
     from(table: string) {
@@ -61,7 +65,10 @@ function createFakeDb(opts: FakeDbOptions) {
           update(payload: Record<string, unknown>) {
             updates.push({ table, payload });
             return {
-              eq: () => Promise.resolve({ data: null, error: null }),
+              eq() { return this; },
+              is() { return this; },
+              select: () => Promise.resolve({ data: opts.cursorWriteFails ? [] : [{ id: INTEGRATION_ID }],
+                error: opts.cursorWriteFails ? { message: 'Synthetic cursor failure' } : null }),
             };
           },
         };
@@ -76,7 +83,7 @@ function createFakeDb(opts: FakeDbOptions) {
               },
               in: (_col: string, ids: string[]) =>
                 Promise.resolve({
-                  data: ids.filter((id) => existing.has(id)).map((id) => ({ external_id: id })),
+                  data: ids.filter((id) => existing.has(id)).map((id) => existing.get(id)),
                   error: null,
                 }),
               // recordClassificationFailure reads the prior attempt count.
@@ -86,6 +93,8 @@ function createFakeDb(opts: FakeDbOptions) {
           // recordClassificationFailure persists the failed message.
           upsert(payload: Record<string, unknown>) {
             upserts.push({ table, payload });
+            const key = String(payload.external_id);
+            existing.set(key, { ...existing.get(key), ...payload });
             return Promise.resolve({ data: null, error: null });
           },
           insert(payload: Record<string, unknown>) {
@@ -99,7 +108,11 @@ function createFakeDb(opts: FakeDbOptions) {
                           data: null,
                           error: { code: "23505", message: "duplicate" },
                         })
-                      : Promise.resolve({ data: { id: `msg-${inserts.length}` }, error: null }),
+                      : Promise.resolve((() => {
+                          const id = `msg-${inserts.length}`;
+                          existing.set(String(payload.external_id), { ...payload, id });
+                          return { data: { id }, error: null };
+                        })()),
                 };
               },
             };
@@ -107,7 +120,10 @@ function createFakeDb(opts: FakeDbOptions) {
           update(payload: Record<string, unknown>) {
             updates.push({ table, payload });
             return {
-              eq: () => Promise.resolve({ data: null, error: null }),
+              eq: (_column: string, id: string) => {
+                for (const [key, row] of existing) if (row.id === id) existing.set(key, { ...row, ...payload });
+                return Promise.resolve({ data: null, error: null });
+              },
             };
           },
         };
@@ -125,11 +141,11 @@ function baseDeps(overrides: Partial<GmailPollDeps>): GmailPollDeps {
     db: undefined as unknown as DbClient, // overridden per-test
     getFreshGmailToken: async () => "fresh-token",
     resolveClassifierContext: async () => ({
-      tenantMailbox: "support@mycompany.com",
-      tenantMailboxes: ["support@mycompany.com"],
+      tenantMailbox: "support@acme.com",
+      tenantMailboxes: ["support@acme.com"],
       language: "es" as const,
     }),
-    getProfile: async () => ({ emailAddress: "support@mycompany.com", historyId: "1000" }),
+    getProfile: async () => ({ emailAddress: "support@acme.com", historyId: "1000" }),
     historyList: async () => ({ history: [], historyId: "1001" }),
     messagesList: async () => ({ messages: [] }),
     getMessage: async (_token, id) => ({
@@ -139,7 +155,7 @@ function baseDeps(overrides: Partial<GmailPollDeps>): GmailPollDeps {
       snippet: "hello",
       payload: {
         headers: [
-          { name: "From", value: "client@external.com" },
+          { name: "From", value: "client@outside.com" },
           { name: "Subject", value: "Need help" },
           { name: "Date", value: new Date().toUTCString() },
         ],
@@ -190,7 +206,7 @@ function baseDeps(overrides: Partial<GmailPollDeps>): GmailPollDeps {
     applyCustomerReplyTransition: async () => ({ newStatus: null }),
     extractLastKairoToken: () => null,
     findTicketByKairoToken: async () => null,
-    getConversationCustomer: async () => ({ customerExternalId: "client@external.com" }),
+    getConversationCustomer: async () => ({ customerExternalId: "client@outside.com" }),
     ...overrides,
   };
 }
@@ -215,6 +231,30 @@ describe("pollGmailAccount — cursor seeding", () => {
 });
 
 describe("pollGmailAccount — history.list parsing + ingestion", () => {
+  it('requests knowledge only after linking the classified message and before advancing its cursor', async () => {
+    const { db, updates } = createFakeDb({ integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: '1000' } });
+    let linked = false;
+    const requestKnowledge = mock(async (input: { accountId: string; ticketId: string; messageId: string }) => {
+      expect(linked).toBe(true);
+      expect(input).toMatchObject({ accountId: ACCOUNT_ID, messageId: 'msg-1' });
+      expect(updates.some(row => row.table === 'channel_integrations')).toBe(false);
+    });
+    await pollGmailAccount(baseDeps({ db, requestKnowledge,
+      linkMessageToTicket: async () => { linked = true; },
+      historyList: async () => ({ history: [{ id: 'h1', messagesAdded: [{ message: { id: 'synthetic-message', threadId: 'synthetic-thread' } }] }], historyId: '1001' }),
+    }), ACCOUNT_ID);
+    expect(requestKnowledge).toHaveBeenCalledTimes(1);
+    expect(updates.some(row => row.table === 'channel_integrations')).toBe(true);
+  });
+  it('keeps the cursor in place when the knowledge event could not be accepted', async () => {
+    const { db, updates } = createFakeDb({ integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: '1000' } });
+    await expect(pollGmailAccount(baseDeps({ db,
+      requestKnowledge: async () => { throw new Error('Synthetic event delivery failure'); },
+      historyList: async () => ({ history: [{ id: 'h1', messagesAdded: [{ message: { id: 'synthetic-message', threadId: 'synthetic-thread' } }] }], historyId: '1001' }),
+    }), ACCOUNT_ID)).rejects.toThrow('Synthetic event delivery failure');
+    expect(updates.some(row => row.table === 'channel_integrations')).toBe(false);
+    expect(updates.some(row => row.payload.classification_status === 'classified')).toBe(false);
+  });
   it("parses messagesAdded from history.list, ingests new messages, and advances the cursor", async () => {
     const { db, updates, inserts } = createFakeDb({
       integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
@@ -294,10 +334,10 @@ describe("pollGmailAccount — message_id_header persistence", () => {
         snippet: "hello",
         payload: {
           headers: [
-            { name: "From", value: "client@external.com" },
+            { name: "From", value: "client@outside.com" },
             { name: "Subject", value: "Need help" },
             { name: "Date", value: new Date().toUTCString() },
-            { name: "Message-ID", value: "<abc123@mail.gmail.com>" },
+            { name: "Message-ID", value: "<synthetic-message@acme.com>" },
           ],
         },
       }),
@@ -306,7 +346,7 @@ describe("pollGmailAccount — message_id_header persistence", () => {
     await pollGmailAccount(deps, ACCOUNT_ID);
 
     const messageInsert = inserts.find((i) => i.table === "messages");
-    expect(messageInsert?.payload.message_id_header).toBe("<abc123@mail.gmail.com>");
+    expect(messageInsert?.payload.message_id_header).toBe("<synthetic-message@acme.com>");
   });
 
   it("stores null when the incoming message has no Message-ID header", async () => {
@@ -366,7 +406,7 @@ describe("pollGmailAccount — KAI-248 Grupo 1 §2: [KAIRO-n] broken-thread re-a
         snippet: "hello again",
         payload: {
           headers: [
-            { name: "From", value: "client@external.com" },
+            { name: "From", value: "client@outside.com" },
             { name: "Subject", value: "Re: Need help [KAIRO-42]" },
             { name: "Date", value: new Date().toUTCString() },
           ],
@@ -459,7 +499,7 @@ describe("pollGmailAccount — KAI-248 Grupo 4: sender validation on token re-as
     const transitionSpy = mock(async () => ({ newStatus: "reopened" }));
     const getConversationCustomerSpy = mock(async (_client: unknown, conversationId: string) => {
       expect(conversationId).toBe("conv-EXISTING");
-      return { customerExternalId: "client@external.com" };
+      return { customerExternalId: "client@outside.com" };
     });
 
     const deps = baseDeps({
@@ -475,7 +515,7 @@ describe("pollGmailAccount — KAI-248 Grupo 4: sender validation on token re-as
         snippet: "hello again",
         payload: {
           headers: [
-            { name: "From", value: "client@external.com" },
+            { name: "From", value: "client@outside.com" },
             { name: "Subject", value: "Re: Need help [KAIRO-42]" },
             { name: "Date", value: new Date().toUTCString() },
           ],
@@ -510,7 +550,7 @@ describe("pollGmailAccount — KAI-248 Grupo 4: sender validation on token re-as
       prior_status: null,
     }));
     const findByTokenSpy = mock(async () => ({ ticketId: "ticket-victim", conversationId: "conv-VICTIM" }));
-    const getConversationCustomerSpy = mock(async () => ({ customerExternalId: "victim@external.com" }));
+    const getConversationCustomerSpy = mock(async () => ({ customerExternalId: "client@outside.com" }));
 
     const deps = baseDeps({
       db,
@@ -525,7 +565,7 @@ describe("pollGmailAccount — KAI-248 Grupo 4: sender validation on token re-as
         snippet: "trying to inject",
         payload: {
           headers: [
-            { name: "From", value: "attacker@evil.com" },
+            { name: "From", value: "support@acme.com" },
             { name: "Subject", value: "Re: [KAIRO-7]" },
             { name: "Date", value: new Date().toUTCString() },
           ],
@@ -579,8 +619,8 @@ describe("pollGmailAccount — KAI-248 Grupo 4: sender validation on token re-as
         snippet: "hi",
         payload: {
           headers: [
-            // Padded + mixed-case — must still match "cliente@mail.com" below.
-            { name: "From", value: " Cliente@Mail.com " },
+            // Padded + mixed-case — must still match "client@outside.com" below.
+            { name: "From", value: " Client@Outside.COM " },
             { name: "Subject", value: "Re: [KAIRO-10]" },
             { name: "Date", value: new Date().toUTCString() },
           ],
@@ -588,7 +628,7 @@ describe("pollGmailAccount — KAI-248 Grupo 4: sender validation on token re-as
       }),
       extractLastKairoToken: (subject: string) => (subject.includes("[KAIRO-10]") ? 10 : null),
       findTicketByKairoToken: async () => ({ ticketId: "ticket-existing", conversationId: "conv-EXISTING" }),
-      getConversationCustomer: async () => ({ customerExternalId: "cliente@mail.com" }),
+      getConversationCustomer: async () => ({ customerExternalId: "client@outside.com" }),
       upsertConversationByThread: upsertConversationSpy,
       findOrCreateTicketForThread: findOrCreateSpy,
       applyCustomerReplyTransition: transitionSpy,
@@ -607,7 +647,7 @@ describe("pollGmailAccount — KAI-248 Grupo 4: sender validation on token re-as
     });
 
     const upsertConversationSpy = mock(async () => ({ conversation_id: "conv-no-token", was_created: true }));
-    const getConversationCustomerSpy = mock(async () => ({ customerExternalId: "client@external.com" }));
+    const getConversationCustomerSpy = mock(async () => ({ customerExternalId: "client@outside.com" }));
 
     const deps = baseDeps({
       db,
@@ -670,7 +710,7 @@ describe("pollGmailAccount — 404 fallback", () => {
     });
 
     const messagesListSpy = mock(async () => ({ messages: [{ id: "msg-resync", threadId: "thread-resync" }] }));
-    const getProfileSpy = mock(async () => ({ emailAddress: "support@mycompany.com", historyId: "2000" }));
+    const getProfileSpy = mock(async () => ({ emailAddress: "support@acme.com", historyId: "2000" }));
 
     const deps = baseDeps({
       db,
@@ -714,7 +754,43 @@ describe("pollGmailAccount — idempotency", () => {
     expect(inserts.filter((i) => i.table === "messages")).toHaveLength(0);
   });
 
-  it("treats a 23505 unique-violation on insert as already-ingested and continues without creating a ticket", async () => {
+  it("skips a message Gmail no longer has and still advances the cursor", async () => {
+    const { db, inserts } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+    const deps = baseDeps({
+      db,
+      historyList: async () => ({
+        history: [{ id: "h1", messagesAdded: [{ message: { id: "synthetic-deleted", threadId: "synthetic-thread" } }] }],
+        historyId: "1040",
+      }),
+      getMessage: async () => { throw new GmailMessageNotFoundError(); },
+    });
+
+    const result = await pollGmailAccount(deps, ACCOUNT_ID);
+
+    expect(result.outcome).not.toBe("failed");
+    expect(inserts.filter((i) => i.table === "messages")).toHaveLength(0);
+    expect(result.ticketsCreated).toBe(0);
+  });
+
+  it("fails the run on any other message fetch error so the cursor is not advanced", async () => {
+    const { db } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+    const deps = baseDeps({
+      db,
+      historyList: async () => ({
+        history: [{ id: "h1", messagesAdded: [{ message: { id: "synthetic-message", threadId: "synthetic-thread" } }] }],
+        historyId: "1040",
+      }),
+      getMessage: async () => { throw new Error("Gmail request failed (HTTP 503)"); },
+    });
+
+    await expect(pollGmailAccount(deps, ACCOUNT_ID)).rejects.toThrow(/503/);
+  });
+
+  it("retries a conflicting insertion without treating it as completed", async () => {
     const { db } = createFakeDb({
       integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
       insertShouldConflict: true,
@@ -736,9 +812,8 @@ describe("pollGmailAccount — idempotency", () => {
       findOrCreateTicketForThread: findOrCreateSpy,
     });
 
-    const result = await pollGmailAccount(deps, ACCOUNT_ID);
+    await expect(pollGmailAccount(deps, ACCOUNT_ID)).rejects.toThrow('poll will retry');
 
-    expect(result.newMessages).toBe(0);
     expect(findOrCreateSpy).not.toHaveBeenCalled();
   });
 });
@@ -790,7 +865,7 @@ describe("pollGmailAccount — llm_calls logging", () => {
     });
     const logLlmCall = mock((_entry: Parameters<GmailPollDeps["logLlmCall"]>[0]) => undefined);
 
-    const result = await pollGmailAccount(
+    const failure = await pollGmailAccount(
       baseDeps({
         db,
         ...oneMessage,
@@ -800,9 +875,9 @@ describe("pollGmailAccount — llm_calls logging", () => {
         },
       }),
       ACCOUNT_ID
-    );
+    ).catch((error: unknown) => error);
 
-    expect(result.ticketsCreated).toBe(0);
+    expect(failure).toBeInstanceOf(Error);
     expect(upserts.some((u) => u.payload.classification_status === "failed")).toBe(true);
     expect(logLlmCall).toHaveBeenCalledTimes(1);
     expect(logLlmCall.mock.calls[0]![0]).toMatchObject({
@@ -811,5 +886,94 @@ describe("pollGmailAccount — llm_calls logging", () => {
       errorCode: "LLM_ERROR",
       errorDetail: "model unavailable",
     });
+  });
+});
+
+
+describe("pollGmailAccount — durable cursor and paging", () => {
+  it("fails a rejected cursor write instead of reporting a completed poll", async () => {
+    const { db } = createFakeDb({ integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" }, cursorWriteFails: true });
+    await expect(pollGmailAccount(baseDeps({ db }), ACCOUNT_ID)).rejects.toThrow(/cursor persistence/);
+  });
+
+  it("reads all history pages and deduplicates messages across pages", async () => {
+    const { db, inserts } = createFakeDb({ integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" } });
+    const pageTokens: (string | undefined)[] = [];
+    const result = await pollGmailAccount(baseDeps({ db, historyList: async (_token, _cursor, pageToken) => {
+      pageTokens.push(pageToken);
+      return { historyId: "1002", nextPageToken: pageToken ? undefined : "synthetic-page",
+        history: [{ id: "synthetic-history", messagesAdded: [{ message: { id: "synthetic-message", threadId: "synthetic-thread" } }] }] };
+    } }), ACCOUNT_ID);
+    expect(pageTokens).toEqual([undefined, "synthetic-page"]);
+    expect(inserts.length).toBe(1);
+    expect(result.newMessages).toBe(1);
+  });
+
+  it("recovers an unfinished stored row without creating a duplicate", async () => {
+    const { db, inserts } = createFakeDb({ integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+      existingRows: [{ id: "stored-message", external_id: "synthetic-message", classification_status: "failed" }] });
+    const result = await pollGmailAccount(baseDeps({ db, historyList: async () => ({ historyId: "1002",
+      history: [{ id: "synthetic-history", messagesAdded: [{ message: { id: "synthetic-message", threadId: "synthetic-thread" } }] }] }) }), ACCOUNT_ID);
+    expect(result.ticketsCreated).toBe(1);
+    expect(inserts.length).toBe(0);
+  });
+
+  it("classifies and stores the full body, not the snippet", async () => {
+    const { db, inserts } = createFakeDb({ integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" } });
+    const defaults = baseDeps({ db });
+    const fullBody = "Synthetic full body that is longer than the snippet Gmail returns.";
+    let classified = "";
+    const deps = baseDeps({
+      db,
+      historyList: async () => ({ historyId: "1002",
+        history: [{ id: "h", messagesAdded: [{ message: { id: "synthetic-message", threadId: "synthetic-thread" } }] }] }),
+      getMessage: async (_token, id) => ({
+        id, threadId: "synthetic-thread", labelIds: ["INBOX"], snippet: "Synthetic snippet",
+        payload: {
+          mimeType: "text/plain",
+          headers: [
+            { name: "From", value: "client@outside.com" },
+            { name: "Subject", value: "Synthetic subject" },
+            { name: "Date", value: new Date().toUTCString() },
+          ],
+          body: { data: Buffer.from(fullBody).toString("base64") },
+        },
+      }),
+      classifyEmail: async (message, ...rest) => {
+        classified = message.body;
+        return defaults.classifyEmail(message, ...rest);
+      },
+    });
+
+    await pollGmailAccount(deps, ACCOUNT_ID);
+
+    expect(classified).toBe(fullBody);
+    const stored = inserts.find((i) => i.table === "messages");
+    expect(stored?.payload["body_plain"]).toBe(fullBody);
+  });
+
+  it("runs overlapping polls of one account once and gives both the same result", async () => {
+    const { db } = createFakeDb({ integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" } });
+    let listings = 0;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const deps = baseDeps({
+      db,
+      historyList: async () => {
+        listings++;
+        await gate;
+        return { historyId: "1002",
+          history: [{ id: "h", messagesAdded: [{ message: { id: "synthetic-message", threadId: "synthetic-thread" } }] }] };
+      },
+    });
+
+    const first = pollGmailAccount(deps, ACCOUNT_ID);
+    const second = pollGmailAccount(deps, ACCOUNT_ID);
+    release();
+    const [a, b] = await Promise.all([first, second]);
+
+    expect(listings).toBe(1);
+    expect(a).toEqual(b);
+    expect(a.ticketsCreated).toBe(1);
   });
 });

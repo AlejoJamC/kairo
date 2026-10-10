@@ -1,3 +1,5 @@
+import { getFlag } from "@kairo/feature-flags";
+import { AssistantRequestSchema, consultTicketAssistant } from "../../lib/ticket-assistant.js";
 import { Hono } from "hono";
 import { z } from "zod";
 import { classificationAudit, feedbackAudit } from "../../lib/classification-audit.js";
@@ -2376,4 +2378,22 @@ tickets.get("/:id/knowledge-context", async (c) => {
     similarResolvedCases,
     ...(context.degraded.length > 0 ? { degraded: true } : {}),
   });
+});
+
+
+tickets.post('/:id/assistant', async (c) => {
+  const ctx = await resolveUserAndAccount(c.req.header('Authorization') ?? '');
+  if (!ctx) return c.json({ error: 'Unauthorized' }, 401);
+  if (!getFlag('enable_ticket_assistant')) return c.json({ error: 'Assistant is disabled' }, 404);
+  const parsed = AssistantRequestSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: 'Invalid assistant request' }, 400);
+  try {
+    const result = await consultTicketAssistant({ ...ctx, ticketId: c.req.param('id'), messages: parsed.data.messages,
+      signal: c.req.raw.signal });
+    if (!result) return c.json({ error: 'Ticket not found' }, 404);
+    return c.json(result);
+  } catch (error) {
+    const retryable = !(error instanceof ProviderError) || error.retriable;
+    return c.json({ error: 'Assistant unavailable', retryable }, retryable ? 503 : 500);
+  }
 });

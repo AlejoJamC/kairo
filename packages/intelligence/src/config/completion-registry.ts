@@ -1,15 +1,6 @@
-// ---------------------------------------------------------------------------
-// KAI-61 — every completion provider Kairo can execute, in one place.
-//
-// This used to be a Zod schema in providers.ts that grew a field per
-// provider, plus a duplicate of the provider enum in ensemble.ts. Adding a
-// provider was editing an object that already knew about every other one, in
-// two files. This registry is the single source of truth for "which
-// providers exist"; providers.ts resolves one, ensemble.ts validates a name
-// against the same list, and neither hardcodes the other one's enum.
-// ---------------------------------------------------------------------------
-
 import type { CompletionProvider } from '../providers/base';
+import { GatewayCompletionProvider } from '../providers/gateway/completion';
+import { gatewayKey } from '../providers/gateway/client';
 import { OllamaCompletionProvider } from '../providers/ollama/completion';
 import { AnthropicCompletionProvider } from '../providers/anthropic/completion';
 import { OLLAMA_DEFAULT_BASE_URL } from './constants';
@@ -23,6 +14,14 @@ interface CompletionProviderEntry {
 
 export const COMPLETION_PROVIDERS = [
   {
+    id: 'gateway',
+    create: (env, modelOverride) => {
+      const model = modelOverride ?? env['AI_GATEWAY_MODEL'];
+      if (!model) throw new Error('AI_GATEWAY_MODEL is required for gateway completion');
+      return new GatewayCompletionProvider(gatewayKey(env), model);
+    },
+  },
+  {
     id: 'ollama',
     create: (env, modelOverride) =>
       new OllamaCompletionProvider(
@@ -33,8 +32,7 @@ export const COMPLETION_PROVIDERS = [
   {
     id: 'anthropic',
     create: (env, modelOverride) => {
-      const apiKey = env['ANTHROPIC_API_KEY'];
-      if (!apiKey) throw new Error('ANTHROPIC_API_KEY required when INTELLIGENCE_PROVIDER=anthropic');
+      const apiKey = gatewayKey(env);
       return new AnthropicCompletionProvider(apiKey, modelOverride ?? env['ANTHROPIC_MODEL']);
     },
   },

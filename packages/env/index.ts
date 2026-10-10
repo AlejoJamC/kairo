@@ -5,16 +5,23 @@ export const env = createEnv({
     server: {
         SUPABASE_URL: z.string().url(),
         SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-        INTELLIGENCE_PROVIDER: z.enum(["ollama", "anthropic", "jev"]).default("ollama"),
+        INTELLIGENCE_PROVIDER: z.enum(["ollama", "gateway", "anthropic", "jev"]).default("ollama"),
         // Provider for features that generate text (reply suggestions, knowledge drafts). Defaults to INTELLIGENCE_PROVIDER, or ollama when that is jev.
-        TEXT_PROVIDER: z.enum(["ollama", "anthropic"]).optional(),
-        ANTHROPIC_API_KEY: z.string().min(1).optional(),
-        // Overrides the hardcoded default in AnthropicCompletionProvider (claude-sonnet-4-20250514).
+        TEXT_PROVIDER: z.enum(["ollama", "gateway", "anthropic"]).optional(),
+        AI_GATEWAY_API_KEY: z.string().min(1).optional(),
+        AI_GATEWAY_PROVIDER_ROUTES: z.string().min(1).optional(),
+        CLASSIFICATION_MODE: z.enum(['language', 'decision']).optional(),
+        AI_GATEWAY_CLASSIFICATION_MODEL: z.string().min(1).optional(),
+        AI_GATEWAY_DECISION_MODEL: z.string().min(1).optional(),
+        AI_GATEWAY_REPLY_MODEL: z.string().min(1).optional(),
+        AI_GATEWAY_KNOWLEDGE_DECISION_MODEL: z.string().min(1).optional(),
+        AI_GATEWAY_KNOWLEDGE_DRAFT_MODEL: z.string().min(1).optional(),
+        AI_GATEWAY_MODEL: z.string().min(1).optional(),
+        AI_GATEWAY_ASSISTANT_MODEL: z.string().min(1).optional(),
+        AI_GATEWAY_TEXT_MODEL: z.string().min(1).optional(),
+        AI_GATEWAY_EMBEDDING_MODEL: z.string().min(1).optional(),
+        EMBEDDING_PROVIDER: z.enum(["ollama", "gateway", "voyage"]).default("ollama"),
         ANTHROPIC_MODEL: z.string().min(1).optional(),
-        // KAI-55/KAI-61: JEV (TypeSafe AI) decision provider. Only required to
-        // call createDecisionProvider('jev') (packages/intelligence/src/config/providers.ts).
-        TYPESAFE_API_KEY: z.string().min(1).optional(),
-        // Overrides the hardcoded default in JevDecisionProvider (jev-latest).
         JEV_MODEL: z.string().min(1).optional(),
         OLLAMA_BASE_URL: z.string().url().optional(),
         OLLAMA_MODEL: z.string().optional().default("granite4.1:3b"),

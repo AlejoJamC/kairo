@@ -1,6 +1,7 @@
-/** Returns the model identifier used for classification, for audit storage in ticket_proposals. */
+import { resolveModelRoute } from '@kairo/intelligence';
+
+/** Configured classification model for failure records without a provider response. */
 export function resolveModelVersion(): string {
-  const provider = process.env['INTELLIGENCE_PROVIDER'] ?? 'ollama';
-  if (provider === 'jev') return process.env['JEV_MODEL'] ?? 'jev-latest';
-  return provider === 'anthropic' ? 'claude-sonnet-4-20250514' : 'ollama';
+  try { return resolveModelRoute('classification').model; }
+  catch { return 'unconfigured'; }
 }

@@ -57,7 +57,7 @@ describe("prompt inputs", () => {
   it("fills every placeholder the prompt declares", () => {
     const vars = buildReplySuggestionVars({ ticket: TICKET, messages: [], client: null, context: EMPTY_CONTEXT, lang: "en" });
     expect(Object.keys(vars).sort()).toEqual(
-      ["category", "client_profile", "emotion", "kb_articles", "message_history", "priority", "similar_case", "subject", "ticket_type"],
+      ["business_context", "category", "client_profile", "emotion", "kb_articles", "message_history", "priority", "similar_case", "subject", "ticket_type"],
     );
   });
 
@@ -87,7 +87,7 @@ describe("prompt inputs", () => {
     expect(cases).toBe("Subject: Login loop\nResolution: Cleared the session");
 
     const kb = formatKbArticles([{ id: "kb-1", title: "Reset access", content: "x".repeat(5000), tags: [], similarity: 0.8 }], "en");
-    expect(kb.startsWith("### Reset access\n")).toBe(true);
+    expect(kb.startsWith("### [kb-1] Reset access\n")).toBe(true);
     expect(kb.length).toBeLessThan(5000);
   });
 });
@@ -106,6 +106,7 @@ function fakeDb(opts: { ticket: typeof TICKET | null }) {
   const db = {
     from(table: string) {
       if (table === "tickets") return chain({ data: opts.ticket, error: opts.ticket ? null : { message: "not found" } });
+      if (table === 'accounts') return chain({ data: { language: 'en', business_context: 'Acme provides account support.' }, error: null });
       if (table === "messages") return chain({ data: [{ direction: "inbound", body_plain: "Help please", received_at: "2026-01-01" }], error: null });
       if (table === "clients") return chain({ data: { name: "Acme", plan_type: "pro", sla_level: null }, error: null });
       if (table === "ticket_proposals") {
@@ -152,7 +153,7 @@ describe("suggestReply", () => {
         run: async (r) => {
           request = r;
           return {
-            data: { suggestion: "Hello from Acme", confidence: 0.7, detected_language: "en" },
+            data: { suggestion: "Hello from Acme", confidence: 0.7, detected_language: "en", referenced_kb_articles: ["kb-1"] },
             prompt: "p",
             promptVersion: "1.0.1",
             model: "reported-model",
@@ -168,6 +169,7 @@ describe("suggestReply", () => {
     expect(request?.feature).toBe("reply_suggestion");
     expect(request?.vars.kb_articles).toContain("Reset access");
     expect(request?.vars.client_profile).toBe("Name: Acme | Plan: pro");
+    expect(request?.vars.business_context).toBe('Acme provides account support.');
     expect(out).toMatchObject({ suggestion: "Hello from Acme", referencedKbArticles: ["kb-1"], llmCallId: "call-1", proposalId: "proposal-1" });
     expect(proposals[0]).toMatchObject({ model_version: "reported-model", referenced_kb_articles: ["kb-1"], status: "pending" });
   });

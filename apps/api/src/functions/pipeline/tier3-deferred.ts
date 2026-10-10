@@ -1,7 +1,8 @@
+import { extractBody } from "../../lib/email/body.js";
 import { classifyEmailWithMeta, DEFAULT_LANG, type EmailMessage, type PromptLang } from "@kairo/intelligence";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import type { TicketType } from "@kairo/intelligence";
-import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
+import { buildEmailClassifierInput, resolveClassifierContext } from "../../lib/classifier-input.js";
 import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { getFlag } from "@kairo/feature-flags";
@@ -188,35 +189,6 @@ async function fetchGmailRange(
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Same decoder as Tier 1 (KAI-93): Gmail returns part data base64url-encoded,
 // and Buffer's "base64" decoder accepts URL-safe variants on both Node and Bun.
-function extractBody(payload: GmailMessage["payload"]): {
-  body_plain: string;
-  body_html: string;
-} {
-  let body_plain = "";
-  let body_html = "";
-
-  const walk = (parts: GmailMessagePart[]): void => {
-    for (const part of parts) {
-      if (part.mimeType === "text/plain" && part.body?.data) {
-        body_plain += Buffer.from(part.body.data, "base64").toString("utf-8");
-      } else if (part.mimeType === "text/html" && part.body?.data) {
-        body_html += Buffer.from(part.body.data, "base64").toString("utf-8");
-      } else if (part.parts) {
-        walk(part.parts);
-      }
-    }
-  };
-
-  if (payload?.parts) {
-    walk(payload.parts);
-  } else if (payload?.body?.data) {
-    const decoded = Buffer.from(payload.body.data, "base64").toString("utf-8");
-    if (payload.mimeType === "text/html") body_html = decoded;
-    else body_plain = decoded;
-  }
-
-  return { body_plain, body_html };
-}
 
 // ---------------------------------------------------------------------------
 // Shared classifyWindow helper
@@ -335,16 +307,10 @@ async function classifyWindow(
     const threadId = message.threadId;
     const snippet = message.snippet ?? "";
     const { body_plain, body_html } = extractBody(message.payload);
-    const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
-
-    const emailMessage: EmailMessage = {
-      subject,
-      body: classifierBody,
-      from,
-      tenantMailbox: classifierContext.tenantMailbox,
-      ...(classifierContext.businessContext ? { businessContext: classifierContext.businessContext } : {}),
-      ...classifierEnvelope(filterResult.facts),
-    };
+    const emailMessage: EmailMessage = buildEmailClassifierInput({
+      stage: "backfill", subject, from, bodyPlain: body_plain, snippet,
+      facts: filterResult.facts, context: classifierContext,
+    });
 
     const llmStart = Date.now();
     const promise = withRetry(llmSemaphore, () =>

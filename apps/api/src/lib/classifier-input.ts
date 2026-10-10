@@ -1,17 +1,3 @@
-// ---------------------------------------------------------------------------
-// KAI-93 — one definition of what reaches the classifier.
-//
-// The body rule used to be a magic number copied into every call site, and the
-// copies drifted. Four production paths ended up sending a body that no eval
-// stage had ever measured, and none of them sent `tenantMailbox` — the input
-// that moved macro F1 between +0.035 and +0.129 on every model in the matrix,
-// and that separates `support` from `internal` in the rubric.
-//
-// This module is the single place that decides, so a new call site cannot
-// invent a fifth regime by accident. The two stage names are the ones the eval
-// uses (scripts/eval/lib/run-label.ts), so a measured cell and a production
-// path can be named the same thing.
-// ---------------------------------------------------------------------------
 
 import {
   stripQuotedThread,
@@ -29,8 +15,9 @@ import {
 import { type MailFacts } from "./email/mail-facts.js";
 import { getGmailEmailByAccount } from "./gmail-token.js";
 import { supabase } from "./supabase.js";
+import { findRelevantKb } from './ticket-context.js';
 
-export type ClassifierStage = "onboarding" | "backfill";
+export type ClassifierStage = "onboarding" | "backfill" | "new_email";
 
 export interface ClassifierBodyRule {
   maxChars: number;
@@ -38,39 +25,12 @@ export interface ClassifierBodyRule {
 }
 
 export const CLASSIFIER_BODY_RULES: Record<ClassifierStage, ClassifierBodyRule> = {
-  // Tier 1 only: the onboarding fast-path — FAST_PATH_SCAN_SIZE (default 30)
-  // messages, once per account, fired from the connect-Gmail wizard. Nothing
-  // else triggers pipeline/tier1.triggered, so this is a low-volume, one-time
-  // cost per signup, and getting the very first ticket right matters more here
-  // than trimming it. The body arrives raw, quoted thread intact.
-  //
-  // The cap is a safety valve against a pathological input, not a trim of
-  // normal correspondence (KAI-181): extractBody() only walks text/plain and
-  // text/html MIME parts, so an email's attachments never reach this string
-  // regardless of the raw .eml size on disk — measured on the KAI-93 corpus,
-  // an 8.8MB email (mostly embedded images) extracted to 12,090 characters of
-  // text. The largest real body across that corpus was 18,380 characters. This
-  // cap sits just above that (real content never gets cut) and exists only to
-  // stop something like a pasted log file or a MIME-parsing bug from reaching
-  // the model — every local model handles 20k+ token prompts without
-  // truncating, so this is not a context-window limit either.
   onboarding: { maxChars: 20_000, stripQuotes: false },
-
-  // Every other path: tier 2, tier 3, incremental-sync, the reclassify
-  // endpoints and the Gmail poll. The accumulated quote is stripped first, so
-  // these 2,000 characters are the new text of the message rather than the
-  // tail of the thread — the cap only fires when stripQuotedThread (KAI-181)
-  // leaves something abnormally long, since new text on this corpus has a
-  // measured p90 of ~1,900 characters. No user is waiting on any of these.
   backfill: { maxChars: 2_000, stripQuotes: true },
+  new_email: { maxChars: 2_000, stripQuotes: true },
 };
 
-/**
- * The body to hand the classifier for a given stage.
- *
- * `snippet` is the fallback for mail that carried only HTML or no decodable
- * text part — the same precedence every tier already used.
- */
+
 export function buildClassifierBody(
   stage: ClassifierStage,
   bodyPlain: string | null | undefined,
@@ -81,103 +41,68 @@ export function buildClassifierBody(
   return (rule.stripQuotes ? stripQuotedThread(raw) : raw).slice(0, rule.maxChars);
 }
 
-// ---------------------------------------------------------------------------
-// The tenant context that travels with the body.
-//
-// `tenantMailbox` and `businessContext` are the two fields the rubric points at
-// when it separates `support` from `internal`, and they are resolved together
-// because a call site that forgets one of them is exactly the drift this module
-// exists to stop.
-//
-// The stage decides whether the business context is sent at all — it is not an
-// argument the caller gets to pass. That is the whole point of routing this
-// through here.
-// ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// The envelope fields, from the facts the pre-filter already read.
-//
-// `EmailMessage` has carried `to`, `cc` and `threadDepth` since the rubric
-// started saying `internal` is not decidable without them — and not one of the
-// seven call sites ever populated a single one. Every production classification
-// so far has rendered `Para: (no disponible)`, `Copia: (no disponible)`,
-// `Mensajes previos en el hilo: (no disponible)`, while the headers that answer
-// all three sat in the same function that decided whether to classify at all.
-//
-// Lives here rather than at each call site for the reason in this module's
-// header: five paths that each assemble classifier input by hand is how the
-// four regimes this file exists to collapse came about in the first place.
-// ---------------------------------------------------------------------------
-
-/**
- * The recipient and thread fields to hand the classifier, from a
- * {@link MailFacts} produced by `preFilterEmail`.
- *
- * A header that did not arrive is omitted rather than sent as an empty string:
- * the prompt renders an omitted field as `(no disponible)` and tells the model
- * not to invent it, which is true, whereas an empty `Para:` reads as a message
- * with no recipients.
- */
 export function classifierEnvelope(
   facts: MailFacts
 ): Pick<EmailMessage, "to" | "cc" | "threadDepth"> {
   return {
     ...(facts.toHeader ? { to: facts.toHeader } : {}),
     ...(facts.ccHeader ? { cc: facts.ccHeader } : {}),
-    // `References` lists every ancestor, so its length is how many messages
-    // precede this one. Absent header means this message opens the thread —
-    // which is a known 0, not an unknown, so it is always sent.
     threadDepth: facts.referencesCount,
   };
 }
 
-/** The connected mailboxes plus the resolved one, deduplicated and non-empty. */
+/** Build the same evidence contract for jobs and interactive tools. */
+export function buildEmailClassifierInput(input: {
+  stage: NonNullable<EmailMessage['stage']>;
+  subject: string;
+  from: string;
+  bodyPlain: string | null | undefined;
+  snippet?: string;
+  facts: MailFacts;
+  context: Pick<ClassifierContext, 'tenantMailbox' | 'tenantMailboxes' | 'businessContext'>;
+  bodySource?: 'full' | 'stored';
+  missing?: string[];
+}): EmailMessage {
+  const ruleStage = input.stage === 'manual' ? 'backfill' : input.stage;
+  const raw = input.bodyPlain || input.snippet || '';
+  const prepared = CLASSIFIER_BODY_RULES[ruleStage].stripQuotes ? stripQuotedThread(raw) : raw;
+  return {
+    subject: input.subject, from: input.from,
+    body: prepared.slice(0, CLASSIFIER_BODY_RULES[ruleStage].maxChars),
+    tenantMailbox: input.context.tenantMailbox,
+    ...(input.context.businessContext ? { businessContext: input.context.businessContext } : {}),
+    ...classifierEnvelope(input.facts),
+    facts: input.facts,
+    stage: input.stage,
+    evidence: {
+      bodySource: input.bodyPlain ? input.bodySource ?? 'full' : 'snippet',
+      truncated: prepared.length > CLASSIFIER_BODY_RULES[ruleStage].maxChars,
+      missing: [...new Set([...(input.missing ?? []), ...(input.bodyPlain ? [] : ['full_body']),
+        ...(input.context.tenantMailbox ? [] : ['tenant_mailbox']),
+        ...(input.stage === 'onboarding' || input.context.businessContext ? [] : ['business_context'])])],
+    },
+  };
+}
+
+
 function unionMailboxes(primary: string, channels: string[]): string[] {
   return [...new Set([primary, ...channels].map((m) => m.trim().toLowerCase()).filter(Boolean))];
 }
 
 export interface ClassifierContext {
-  /** The mailbox Kairo is reading. Sent by every stage, rendered in the prompt. */
+
+  stage?: ClassifierStage;
   tenantMailbox: string;
-  /**
-   * Which rubric this tenant is classified against.
-   *
-   * `DEFAULT_LANG` was a module constant and no call site ever passed `lang`,
-   * so every tenant got the Spanish rubric whatever language their mail is in.
-   * Resolved here rather than at the call sites for the same reason the body
-   * rule is: seven paths each deciding for themselves is how four regimes came
-   * about in the first place.
-   */
+
   language: PromptLang;
-  /**
-   * Every mailbox this account has connected, for `extractMailFacts`.
-   *
-   * An account is not one inbox. A tenant can have several connected addresses
-   * across more than one domain, and provenance compared against a single one
-   * read six of the ninety corpus messages as external when they came from the
-   * company itself.
-   * Provenance is a coordinate of the derivation key, so a wrong one puts the
-   * message in the wrong row of the table.
-   *
-   * Always contains {@link tenantMailbox}; falls back to just that one when the
-   * channels table cannot be read.
-   */
+
   tenantMailboxes: string[];
-  /**
-   * What the tenant's company does. Absent on `onboarding`, and absent on
-   * `backfill` until the account has one — the rubric then renders
-   * `(no disponible)` and classifies without it.
-   */
+
   businessContext?: string;
 }
 
-/**
- * Every active mailbox the account has connected.
- *
- * `support_channels` holds one row per connected inbox, unique per account.
- * Never throws: a classification with one mailbox is worth more than none, and
- * the caller always unions in the address it already resolved.
- */
+
 async function readTenantMailboxes(
   accountId: string,
   degradations: ContextDegradation[]
@@ -190,103 +115,91 @@ async function readTenantMailboxes(
       .eq("is_active", true);
 
     if (error) {
-      console.warn(`[classifier-input] support_channels unreadable for account ${accountId}: ${error.message}`);
+      console.warn('[classifier-input] Support channel context unavailable');
       degradations.push("support_channels_unreadable");
       return [];
     }
     return (data ?? [])
       .map((r) => (r.email_address as string | null | undefined)?.trim() ?? "")
       .filter((a) => a !== "");
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[classifier-input] support_channels unreadable for account ${accountId}: ${message}`);
+  } catch {
+    console.warn('[classifier-input] Support channel context unavailable');
     degradations.push("support_channels_unreadable");
     return [];
   }
 }
 
-/** What the `accounts` row contributes to a classification. */
-interface AccountSettings {
+
+export interface AccountSettings {
   language: PromptLang;
   businessContext: string | undefined;
 }
 
-/**
- * Reads `accounts.language` and `accounts.business_context` in one query.
- *
- * Never throws, and falls back to {@link DEFAULT_LANG} with no context: a
- * classification is worth more than none, and the most likely failure is the
- * most benign one — an environment where the migration adding a column has not
- * been applied yet. A tenant reverting to the default rubric is the same
- * behaviour every tenant had before this column existed.
- *
- * One query for both because both are per-account settings read at the same
- * moment; splitting them would double a round trip to say the same thing twice.
- */
+
 async function readAccountSettings(
   accountId: string,
-  degradations: ContextDegradation[]
+  degradations: ContextDegradation[],
+  db = supabase,
 ): Promise<AccountSettings> {
   const fallback: AccountSettings = { language: DEFAULT_LANG, businessContext: undefined };
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("accounts")
       .select("language, business_context")
       .eq("id", accountId)
       .maybeSingle();
 
     if (error) {
-      console.warn(`[classifier-input] accounts row unreadable for account ${accountId}: ${error.message}`);
+      console.warn('[classifier-input] Account context unavailable');
       degradations.push("accounts_unreadable");
       return fallback;
     }
 
     const raw = (data?.language as string | null | undefined)?.trim().toLowerCase();
-    // A value outside SUPPORTED_LANGS has no rubric file, and honouring it
-    // would fail at template load, far from the write that caused it. The CHECK
-    // constraint makes this unreachable through the API; this covers the row
-    // written before the constraint, or by hand.
     const language = SUPPORTED_LANGS.includes(raw as PromptLang) ? (raw as PromptLang) : DEFAULT_LANG;
     if (raw && language !== raw) {
-      console.warn(`[classifier-input] account ${accountId} has unsupported language "${raw}"; using ${DEFAULT_LANG}`);
+      console.warn('[classifier-input] Unsupported language; using configured fallback');
       degradations.push("unsupported_language");
     }
 
     const text = (data?.business_context as string | null | undefined)?.trim();
     return { language, businessContext: text ? text : undefined };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[classifier-input] accounts row unreadable for account ${accountId}: ${message}`);
+  } catch {
+    console.warn('[classifier-input] Account context unavailable');
     degradations.push("accounts_unreadable");
     return fallback;
   }
 }
 
-/**
- * The tenant's language, the one every LLM feature answers and reads in.
- *
- * The same resolution the classifier uses, so a tenant is never classified in
- * one language and answered in another. Falls back to {@link DEFAULT_LANG}.
- */
+export async function resolveTenantSettings(accountId: string, db = supabase): Promise<AccountSettings> {
+  return readAccountSettings(accountId, [], db);
+}
+
+export async function withApprovedKnowledge(
+  message: EmailMessage,
+  accountId: string,
+  retrieve: typeof findRelevantKb = findRelevantKb,
+): Promise<EmailMessage> {
+  const knowledge = await retrieve({ accountId, queryText: [message.subject, message.body.slice(0, 2000)].join('\n') });
+  const missing = [...(message.evidence?.missing ?? []), ...(knowledge.degraded.length ? ['approved_knowledge'] : [])];
+  return {
+    ...message,
+    ...(knowledge.articles.length ? { businessContext: JSON.stringify({
+      configuredBusinessContext: message.businessContext ?? null,
+      publishedKnowledge: knowledge.articles.map(article => ({ id: article.id, title: article.title, content: article.content.slice(0, 2000) })),
+      knowledgeContext: { role: 'published_reference_data', conflictsRequireHumanReview: true },
+    }) } : {}),
+    ...(message.evidence ? { evidence: { ...message.evidence, missing: [...new Set(missing)] } } : {}),
+  };
+}
+
+
 export async function resolveTenantLanguage(accountId: string): Promise<PromptLang> {
   const { language } = await readAccountSettings(accountId, []);
   return language;
 }
 
-/**
- * The tenant fields to hand the classifier for a given stage.
- *
- * Resolve this once per batch — per Inngest step, per poll, per request — and
- * reuse it for every email in that batch, the way the tenant mailbox already
- * was. It is per-account state, not per-email state.
- *
- * On `onboarding` the business context is not even read. Tier 1 runs before any
- * value could exist, and the KAI-93 bench measured the field as actively
- * harmful in that column: the best onboarding model lost 0.073 macro F1 with it
- * and none of the five gained. `backfill` is the opposite case — a median gain
- * of +0.082 across the same five models — so once a value exists, every
- * non-Tier-1 call from that moment on carries it.
- */
+
 export async function resolveClassifierContext(
   stage: ClassifierStage,
   accountId: string
@@ -303,11 +216,6 @@ export async function resolveClassifierContext(
     tenantMailboxes: unionMailboxes(tenantMailbox, channels),
     language: settings.language,
   };
-
-  // Tier 1 reads the language but never the business context — see this
-  // function's contract above for why that field is stage-dependent and this
-  // one is not: the rubric's language is not an experiment, it is who the
-  // tenant is.
   const context: ClassifierContext =
     stage === "onboarding"
       ? base

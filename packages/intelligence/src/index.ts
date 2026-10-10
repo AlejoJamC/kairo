@@ -65,7 +65,7 @@ export type {
   DecisionFeatureResult,
 } from './harness';
 
-export { ProviderError } from './providers/base';
+export { ProviderError, ProviderConfigurationError } from './providers/base';
 export type {
   CompletionProvider,
   EmbeddingProvider,
@@ -116,6 +116,9 @@ export {
   KNOWLEDGE_TYPES,
   EVIDENCE_QUALITIES,
   KnowledgeDecisionSchema,
+  KnowledgeAnswersSchema,
+  KNOWLEDGE_QUESTIONS_VERSION,
+  type KnowledgeAnswers,
   KnowledgeDraftSchema,
   buildKnowledgeQuestions,
   parseKnowledgeAnswers,
@@ -125,3 +128,19 @@ export {
   type KnowledgeDecision,
   type KnowledgeDraft,
 } from './knowledge';
+
+export { runAgentFeature, OperationResultSchema, type OperationResult, type AgentTool } from './harness/run-agent-feature';
+export { GatewayCompletionProvider } from './providers/gateway/completion';
+export { GatewayEmbeddingProvider } from './providers/gateway/embedding';
+
+export { resolveModelRoute, usesDecisionClassification, MODEL_ROLES, type ModelRoute, type ModelRole } from './config/model-roles';
+export { GatewayDecisionProvider } from './providers/gateway/decision';
+export { classifyEmailWithDecision } from './classification/classify-with-decision';
+
+export { gatewayProvenance } from './providers/gateway/client';
+export {
+  EMAIL_KNOWLEDGE_VERSION, buildEmailKnowledgeQuestions, EmailKnowledgeCandidateSchema,
+  EmailKnowledgeDraftSchema, buildEmailKnowledgeValidationQuestions,
+  EmailKnowledgeValidationSchema, knowledgeReviewReasons,
+  type EmailKnowledgeProposal, type EmailKnowledgeValidation,
+} from './knowledge/email-knowledge';

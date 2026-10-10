@@ -21,6 +21,21 @@ interface KnowledgeViewProps {
 }
 
 const AI_DRAFT_TAG = "ai-draft";
+const KIND_KEYS = { business_fact: 'knowledgeView.kinds.business_fact', policy: 'knowledgeView.kinds.policy', exception: 'knowledgeView.kinds.exception', article: 'knowledgeView.kinds.article' } as const;
+const REASON_KEYS = {
+  human_validation_required: 'knowledgeView.reasons.human_validation_required',
+  invalid_source_quote: 'knowledgeView.reasons.invalid_source_quote',
+  unsupported_claim: 'knowledgeView.reasons.unsupported_claim',
+  insufficient_evidence: 'knowledgeView.reasons.insufficient_evidence',
+  business_context_conflict: 'knowledgeView.reasons.business_context_conflict',
+  business_context_missing: 'knowledgeView.reasons.business_context_missing',
+  source_truncated: 'knowledgeView.reasons.source_truncated',
+  approved_knowledge_unavailable: 'knowledgeView.reasons.approved_knowledge_unavailable',
+} as const;
+const STEP_KEYS = { email_knowledge_decision: 'knowledgeView.steps.email_knowledge_decision', email_knowledge_extraction: 'knowledgeView.steps.email_knowledge_extraction', email_knowledge_validation: 'knowledgeView.steps.email_knowledge_validation' } as const;
+function labelKey<T extends Record<string, string>>(keys: T, value: string): T[keyof T] | undefined {
+  return Object.hasOwn(keys, value) ? keys[value as keyof T] : undefined;
+}
 
 export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProps) {
   const { t } = useTranslation("dashboard");
@@ -34,6 +49,8 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
   const [content, setContent] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  const [evidence, setEvidence] = useState<{ steps: { feature: string; model: string; version: string | null }[]; evidence: string[] } | null>(null);
+  const [evidenceError, setEvidenceError] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,6 +72,18 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
 
   const visible = articles.filter((a) => (filter === "draft" ? !a.is_published : Boolean(a.is_published)));
   const selected = visible.find((a) => a.id === selectedId) ?? null;
+  useEffect(() => {
+    setEvidence(null);
+    setEvidenceError(false);
+    if (!selected?.tags?.some(tag => tag.startsWith('source-message:'))) return;
+    let active = true;
+    void apiCall(`/api/v1/kb-articles/${selected.id}/evidence`).then(async res => {
+      if (!res.ok) throw new Error('Evidence unavailable');
+      const data = await res.json();
+      if (active) setEvidence(data);
+    }).catch(() => { if (active) setEvidenceError(true); });
+    return () => { active = false; };
+  }, [selected?.id]);
 
   const open = (article: Article) => {
     setError(false);
@@ -205,6 +234,24 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
 
       {selected && (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflowY: "auto", background: "var(--k-surface)", padding: 24, gap: 12 }}>
+          {selected.tags?.some(tag => tag.startsWith('source-message:')) && (
+            <section aria-label={t('knowledgeView.evidenceTitle')}>
+              <strong>{t('knowledgeView.evidenceTitle')}</strong>
+              <p>{t('knowledgeView.validationScope')}</p>
+              <p>{t(labelKey(KIND_KEYS, selected.tags.find(tag => tag.startsWith('type:'))?.slice(5) ?? 'article') ?? KIND_KEYS.article)}</p>
+              <ul>
+                {selected.tags.filter(tag => tag.startsWith('review:') && tag !== 'review:provider_not_calibrated').map(tag => (
+                  <li key={tag}>{t(labelKey(REASON_KEYS, tag.slice(7)) ?? 'knowledgeView.evidenceUnavailable')}</li>
+                ))}
+              </ul>
+              {evidenceError && <p role="alert">{t('knowledgeView.evidenceUnavailable')}</p>}
+              {evidence?.evidence.map((quote, index) => <blockquote key={index} style={{ whiteSpace: 'pre-wrap' }}>{quote}</blockquote>)}
+              {evidence && !evidence.evidence.length && <p>{t('knowledgeView.evidenceUnavailable')}</p>}
+              <ol>
+                {evidence?.steps.map(step => <li key={step.feature}>{t(labelKey(STEP_KEYS, step.feature) ?? 'knowledgeView.evidenceTitle')} — {step.model} ({step.version})</li>)}
+              </ol>
+            </section>
+          )}
           <label style={{ fontSize: 12, color: "var(--k-text-tertiary)" }}>
             {t("knowledgeView.fieldTitle")}
             <input value={title} onChange={(e) => setTitle(e.target.value)} style={{ ...fieldStyle, marginTop: 4 }} />

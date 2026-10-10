@@ -1,3 +1,4 @@
+import { usesDecisionClassification } from "@kairo/intelligence";
 import {
   classifyEmailWithJev,
   createDecisionProvider,
@@ -53,7 +54,7 @@ function canaryMailboxes(): Set<string> {
 
 /** `tenantMailbox` is the address Kairo is reading for this account — the same value every classifyEmailWithMeta call already sends. */
 export function isJevCanaryTenant(tenantMailbox: string): boolean {
-  return getFlag("enable_jev_canary") && canaryMailboxes().has(tenantMailbox.trim().toLowerCase());
+  return !usesDecisionClassification() && getFlag("enable_jev_canary") && canaryMailboxes().has(tenantMailbox.trim().toLowerCase());
 }
 
 interface JevCanaryDeps {
@@ -62,7 +63,7 @@ interface JevCanaryDeps {
 }
 
 const defaultDeps: JevCanaryDeps = {
-  createProvider: createDecisionProvider,
+  createProvider: () => createDecisionProvider('jev'),
   classify: classifyEmailWithJev,
 };
 
@@ -84,6 +85,7 @@ interface AskJevInput {
 
 /** Asks JEV and returns its ticket_type confidence only when it agrees with the primary classification; null on disagreement or any failure. */
 async function askJevForAgreement(input: AskJevInput, deps: JevCanaryDeps): Promise<number | null> {
+  if (usesDecisionClassification()) return null;
   try {
     const provider = deps.createProvider();
     const { result, decision } = await deps.classify(input.message, provider, { accountId: input.accountId });

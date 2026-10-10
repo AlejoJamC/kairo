@@ -1,6 +1,7 @@
+import { extractBody } from "../../lib/email/body.js";
 import { classifyEmailWithMeta, type EmailMessage } from "@kairo/intelligence";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
-import { buildClassifierBody, resolveClassifierContext, classifierEnvelope } from "../../lib/classifier-input.js";
+import { buildEmailClassifierInput, resolveClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { getFlag } from "@kairo/feature-flags";
 import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
@@ -175,35 +176,6 @@ async function fetchGmailSince(
 // Walks the MIME tree extracting decoded text/plain and text/html parts.
 // Gmail returns part data base64url-encoded; Buffer's "base64" decoder
 // accepts URL-safe variants on both Node and Bun.
-function extractBody(payload: GmailMessage["payload"]): {
-  body_plain: string;
-  body_html: string;
-} {
-  let body_plain = "";
-  let body_html = "";
-
-  const walk = (parts: GmailMessagePart[]): void => {
-    for (const part of parts) {
-      if (part.mimeType === "text/plain" && part.body?.data) {
-        body_plain += Buffer.from(part.body.data, "base64").toString("utf-8");
-      } else if (part.mimeType === "text/html" && part.body?.data) {
-        body_html += Buffer.from(part.body.data, "base64").toString("utf-8");
-      } else if (part.parts) {
-        walk(part.parts);
-      }
-    }
-  };
-
-  if (payload?.parts) {
-    walk(payload.parts);
-  } else if (payload?.body?.data) {
-    const decoded = Buffer.from(payload.body.data, "base64").toString("utf-8");
-    if (payload.mimeType === "text/html") body_html = decoded;
-    else body_plain = decoded;
-  }
-
-  return { body_plain, body_html };
-}
 
 // ---------------------------------------------------------------------------
 // Inngest function
@@ -241,7 +213,7 @@ export const incrementalSync = inngest.createFunction(
         .from("messages")
         .select("received_at")
         .eq("account_id", accountId)
-        .not("classification_status", "is", null)
+        .in("classification_status", ["classified", "skipped", "failed_permanent"])
         .order("received_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -270,7 +242,7 @@ export const incrementalSync = inngest.createFunction(
       // whole sync rather than once per email (KAI-93).
       const [gmailAccessToken, classifierContext, channelRow] = await Promise.all([
         getFreshGmailToken(accountId),
-        resolveClassifierContext("backfill", accountId),
+        resolveClassifierContext("new_email", accountId),
         supabase
           .from("channel_integrations")
           .select("id")
@@ -281,16 +253,19 @@ export const incrementalSync = inngest.createFunction(
       ]);
 
       const channelIntegrationId: string | null = channelRow.data?.id ?? null;
-      const { tenantMailbox: userEmail, businessContext } = classifierContext;
+      const { tenantMailbox: userEmail, tenantMailboxes, businessContext } = classifierContext;
 
       // Collect existing gmail_message_ids for this user to skip duplicates
       const incomingIds = headers.map((m) => m.id);
       const { data: existing } = await supabase
         .from("messages")
-        .select("external_id")
+        .select("external_id, classification_status")
+        .eq("account_id", accountId)
         .in("external_id", incomingIds);
 
-      const existingIds = new Set((existing ?? []).map((r) => r.external_id));
+      const rows = new Map((existing ?? []).map((row) => [row.external_id, row]));
+      const existingIds = new Set((existing ?? []).filter((row) =>
+        ['classified', 'skipped', 'failed_permanent'].includes(row.classification_status ?? '')).map((row) => row.external_id));
 
       const classificationPromises: Promise<void>[] = [];
 
@@ -303,16 +278,17 @@ export const incrementalSync = inngest.createFunction(
         const subject = headerValue(msgHeaders, "Subject");
         const messageIdHeader = headerValue(msgHeaders, "Message-ID") || null;
         const dateStr = headerValue(msgHeaders, "Date");
-        const receivedAt = dateStr
-          ? new Date(dateStr).toISOString()
-          : new Date().toISOString();
+        const parsedDate = new Date(dateStr);
+        const receivedAt = Number.isFinite(parsedDate.getTime()) ? parsedDate.toISOString() : new Date().toISOString();
         const gmailCategories = (message.labelIds ?? []).filter((l) =>
           l.startsWith("CATEGORY_")
         );
 
+        const { body_plain, body_html } = extractBody(message.payload);
+
         // Insert stub with 'pending' status immediately
-        if (channelIntegrationId) {
-          await supabase.from("messages").insert({
+        if (channelIntegrationId && !rows.has(message.id)) {
+          const { error: insertError } = await supabase.from("messages").insert({
             account_id:             accountId,
             channel_integration_id: channelIntegrationId,
             external_id: message.id,
@@ -320,9 +296,11 @@ export const incrementalSync = inngest.createFunction(
             received_at: receivedAt,
             sender_external_id: from,
             snippet: message.snippet ?? null,
+            subject, body_plain: body_plain || null, body_html: body_html || null,
             classification_status: "pending",
             processing_batch: "incremental",
           });
+          if (insertError) throw new Error("Inbound message persistence failed");
         }
 
         const filterResult = preFilterEmail({
@@ -352,22 +330,11 @@ export const incrementalSync = inngest.createFunction(
         // Relevant — classify asynchronously, capture loop-local vars
         const messageId = message.id;
         const snippet = message.snippet ?? "";
-        // Unlike Tier 1/2/3, this path never persisted body_plain/body_html to
-        // the DB even before KAI-181 — out of scope here; only what reaches
-        // the classifier changes.
-        const { body_plain } = extractBody(message.payload);
-        const classifierBody = buildClassifierBody("backfill", body_plain, snippet);
-
         const threadId = message.threadId;
-
-        const emailMessage: EmailMessage = {
-          subject,
-          body: classifierBody,
-          from,
-          tenantMailbox: userEmail,
-          ...(businessContext ? { businessContext } : {}),
-          ...classifierEnvelope(filterResult.facts),
-        };
+        const emailMessage: EmailMessage = buildEmailClassifierInput({
+          stage: "new_email", subject, from, bodyPlain: body_plain, snippet,
+          facts: filterResult.facts, context: { tenantMailbox: userEmail, tenantMailboxes, businessContext },
+        });
 
         const llmStart = Date.now();
         const promise = classifyEmailWithMeta(emailMessage, { lang: classifierContext.language, context: { accountId } })
@@ -420,9 +387,9 @@ export const incrementalSync = inngest.createFunction(
                     subject,
                     from_email: from,
                     from_name: null,
-                    to_email: null,
-                    body_plain: null,
-                    body_html: null,
+                    to_email: filterResult.facts.toHeader || null,
+                    body_plain: body_plain || null,
+                    body_html: body_html || null,
                     snippet,
                     gmail_message_id: messageId,
                     gmail_thread_id: threadId,
@@ -438,28 +405,16 @@ export const incrementalSync = inngest.createFunction(
                 prior_status = result.prior_status;
                 conversationIdForMessages = conversation_id;
 
-                // Update message row with conversation + classified status
-                await supabase
-                  .from("messages")
-                  .update({
-                    conversation_id,
-                    classification_status: "classified",
-                    ...routingAudit(filterResult.facts),
-                    processing_tier: 0,
-                    classified_at,
-                  })
-                  .eq("external_id", messageId)
-                  .eq("channel_integration_id", channelIntegrationId);
-
                 // Fetch the message id to link it
-                const { data: msgRow } = await supabase
+                const { data: msgRow, error: messageLookupError } = await supabase
                   .from("messages")
                   .select("id")
                   .eq("external_id", messageId)
                   .eq("channel_integration_id", channelIntegrationId)
                   .maybeSingle();
 
-                if (msgRow?.id) {
+                if (messageLookupError || !msgRow?.id) throw new Error('Inbound message linkage unavailable');
+                if (msgRow.id) {
                   await linkMessageToTicket(supabase, {
                     ticket_id: ticketId,
                     message_id: msgRow.id,
@@ -474,51 +429,14 @@ export const incrementalSync = inngest.createFunction(
                 if (!was_created) {
                   await applyCustomerReplyTransition(supabase, ticketId, prior_status);
                 }
+                const { error: completionError } = await supabase.from("messages").update({
+                  conversation_id, classification_status: "classified",
+                  body_plain: body_plain || null, body_html: body_html || null,
+                  ...routingAudit(filterResult.facts), processing_tier: 0, classified_at,
+                }).eq("external_id", messageId).eq("channel_integration_id", channelIntegrationId);
+                if (completionError) throw new Error("Inbound completion persistence failed");
               } catch (helperErr: unknown) {
-                console.error(
-                  `[incremental-sync] thread helpers failed for ${messageId}:`,
-                  helperErr instanceof Error ? helperErr.message : String(helperErr)
-                );
-                // Fallback: insert ticket without conversation linkage
-                const { data: fallbackTicket } = await supabase
-                  .from("tickets")
-                  .insert({
-                    account_id: accountId,
-                    originating_user_id: userId,
-                    subject,
-                    from_email: from,
-                    gmail_message_id: messageId,
-                    gmail_thread_id: threadId,
-                    received_at: receivedAt,
-                    ticket_type: classification.type,
-                    ...classificationAudit({ verdict, ensemble, abstain, promptVersion }),
-                    priority: classification.priority,
-                    category: classification.category,
-                    sentiment: classification.tone,
-                    ai_reasoning: classification.reasoning,
-                    classification_confidence: classification.confidence,
-                    classified_at,
-                    classification_tier: 0,
-                  })
-                  .select("id, ticket_number")
-                  .single();
-                ticketId = fallbackTicket?.id ?? null;
-                ticketNumber = fallbackTicket?.ticket_number ?? null;
-
-                if (ticketId) {
-                  await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
-                }
-
-                await supabase
-                  .from("messages")
-                  .update({
-                    classification_status: "classified",
-                    processing_tier: 0,
-                    classified_at,
-                    ...routingAudit(filterResult.facts),
-                  })
-                  .eq("external_id", messageId)
-                  .eq("channel_integration_id", channelIntegrationId);
+                throw helperErr;
               }
             } else {
               // No channelIntegrationId — insert ticket directly
@@ -647,7 +565,7 @@ export const incrementalSync = inngest.createFunction(
                 subject,
                 snippet,
                 bodyPlain: body_plain || null,
-                bodyHtml: null,
+                bodyHtml: body_html || null,
                 messageIdHeader,
                 processingTier: 0,
                 err,

@@ -4,6 +4,9 @@ export interface EmailAttachmentRef {
 }
 
 export interface EmailMessage {
+  stage?: 'onboarding' | 'backfill' | 'new_email' | 'manual';
+  evidence?: { bodySource: 'full' | 'snippet' | 'stored'; truncated: boolean; missing: string[] };
+
   subject: string;
   body: string;
   from: string;

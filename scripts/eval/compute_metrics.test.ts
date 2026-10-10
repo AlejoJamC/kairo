@@ -133,10 +133,10 @@ describe("coupling with packages/intelligence", () => {
   it("still covers the values the ground truth sheet uses", () => {
     // Guards against a value being renamed or dropped from the schema without
     // the eval being updated
-    for (const v of ["support", "internal"]) expect(TICKET_TYPE).toContain(v);
-    for (const v of ["P1", "P2", "P3"]) expect(PRIORITY).toContain(v);
-    for (const v of ["technical", "general"]) expect(CATEGORY).toContain(v);
-    for (const v of ["neutral", "frustrated"]) expect(TONE).toContain(v);
-    for (const v of ["high", "medium", "low"]) expect(URGENCY).toContain(v);
+    for (const v of ["support", "internal"] as const) expect(TICKET_TYPE).toContain(v);
+    for (const v of ["P1", "P2", "P3"] as const) expect(PRIORITY).toContain(v);
+    for (const v of ["technical", "general"] as const) expect(CATEGORY).toContain(v);
+    for (const v of ["neutral", "frustrated"] as const) expect(TONE).toContain(v);
+    for (const v of ["high", "medium", "low"] as const) expect(URGENCY).toContain(v);
   });
 });

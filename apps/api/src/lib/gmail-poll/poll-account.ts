@@ -1,35 +1,16 @@
-// ---------------------------------------------------------------------------
-// KAI-248 — Gmail near-real-time poll worker: per-account core logic
-//
-// Pure(ish) orchestration function — all I/O collaborators are injected via
-// `GmailPollDeps` so this can be unit-tested without Bun's global
-// `mock.module()` (which leaks across test files when mocking shared modules
-// like ../gmail-token.ts or ../supabase.ts).
-//
-// This module does NOT import or modify apps/api/src/functions/pipeline/*.
-// It is a deliberately independent orchestrator (see KAI-248 description).
-// ---------------------------------------------------------------------------
-
+import { extractBody } from "../email/body.js";
 import {
   GmailHistoryExpiredError,
+  GmailMessageNotFoundError,
   type GmailMessage,
   type GmailPollDeps,
   type PollAccountResult,
 } from "./types.js";
 import { recordClassificationFailure } from "../classification-outcome.js";
 import { env } from "../../env.js";
-// Pure function, no I/O — safe to import directly rather than inject.
 import { classificationAudit, routingAudit } from "../classification-audit.js";
-import { buildClassifierBody, classifierEnvelope } from "../classifier-input.js";
-import type { ClassifierContext } from "../classifier-input.js";
+import { buildEmailClassifierInput, type ClassifierContext } from "../classifier-input.js";
 import { headerValue, headersToRecord } from "../email/headers.js";
-
-/**
- * Extract the bare email address from a raw `From:` header value
- * (e.g. "Cliente Name <cliente@mail.com>" -> "cliente@mail.com").
- * Falls back to the raw input lowercased/trimmed if no address is found.
- * Mirrors the local extractors in ticket-acknowledgement.ts / out-of-hours-reply.ts.
- */
 function extractEmailAddress(raw: string): string {
   const angleMatch = raw.match(/<([^>]+)>/);
   if (angleMatch?.[1]) return angleMatch[1].trim().toLowerCase();
@@ -37,7 +18,7 @@ function extractEmailAddress(raw: string): string {
   return (bareMatch ? bareMatch[0] : raw).trim().toLowerCase();
 }
 
-/** Normalize an email-ish string for case/whitespace-insensitive comparison. */
+
 function normalizeEmail(raw: string): string {
   return extractEmailAddress(raw);
 }
@@ -48,13 +29,17 @@ interface ChannelIntegrationRow {
   gmail_history_id: string | null;
 }
 
-/**
- * Process every new Gmail message for a single channel_integration row:
- * pre-filter gate → threading → Flow 1 (reopen) or Flow 2 (create + classify)
- * → link message. Idempotent via the messages unique constraint
- * (channel_integration_id, external_id).
- */
-async function ingestMessages(
+async function persistCursor(deps: GmailPollDeps, row: ChannelIntegrationRow, historyId: string, synced = true): Promise<void> {
+  const update = deps.db.from('channel_integrations').update({ gmail_history_id: historyId,
+    ...(synced ? { last_synced_at: new Date().toISOString() } : {}) }).eq('id', row.id);
+  const guarded = row.gmail_history_id === null
+    ? update.is('gmail_history_id', null) : update.eq('gmail_history_id', row.gmail_history_id);
+  const { data, error } = await guarded.select('id');
+  if (error || data?.length !== 1) throw new Error('Gmail cursor persistence failed or cursor changed concurrently');
+}
+
+
+export async function ingestMessages(
   deps: GmailPollDeps,
   args: {
     accountId: string;
@@ -66,45 +51,58 @@ async function ingestMessages(
 ): Promise<{ ticketsCreated: number; ticketsReopened: number; skipped: number; processed: number }> {
   const { accountId, channelIntegrationId, token, messageIds, classifierContext } = args;
 
+  if (deps.runMessage) {
+    const total = { ticketsCreated: 0, ticketsReopened: 0, skipped: 0, processed: 0 };
+    for (const id of [...new Set(messageIds)]) {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${channelIntegrationId}:${id}`));
+      const key = [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
+      const result = await deps.runMessage(`message-${key}`, () => ingestMessages(
+        { ...deps, runMessage: undefined }, { ...args, messageIds: [id] },
+      ));
+      for (const field of ['ticketsCreated', 'ticketsReopened', 'skipped', 'processed'] as const) total[field] += result[field];
+    }
+    return total;
+  }
+
   let ticketsCreated = 0;
   let ticketsReopened = 0;
   let skipped = 0;
   let processed = 0;
-
-  // De-dup against already-ingested messages for this integration — defends
-  // against history.list returning overlapping pages and re-processing on
-  // cron overlap. The unique constraint is the final backstop.
-  const { data: existingRows } = await deps.db
+  const { data: existingRows, error: existingError } = await deps.db
     .from("messages")
-    .select("external_id")
+    .select("id, external_id, classification_status")
     .eq("channel_integration_id", channelIntegrationId)
     .in("external_id", messageIds);
-  const existingIds = new Set((existingRows ?? []).map((r: { external_id: string }) => r.external_id));
+  if (existingError) throw new Error('Message state lookup failed');
+  type ExistingMessage = { id: string; external_id: string; classification_status: string };
+  const existing = new Map<string, ExistingMessage>((existingRows ?? []).map((row: ExistingMessage) => [row.external_id, row]));
 
-  for (const messageId of messageIds) {
-    if (existingIds.has(messageId)) continue;
-
+  for (const messageId of [...new Set(messageIds)]) {
+    const prior = existing.get(messageId);
+    if (prior && ['classified', 'skipped', 'failed_permanent'].includes(prior.classification_status)) continue;
     let message: GmailMessage;
     try {
       message = await deps.getMessage(token, messageId);
     } catch (err) {
-      console.error(
-        `[gmail-poll] getMessage failed for ${messageId}:`,
-        err instanceof Error ? err.message : String(err)
-      );
-      continue;
+      // Deleted after history listed it: nothing to ingest, and failing the run
+      // would keep the cursor in place and hit the same 404 on every poll.
+      if (err instanceof GmailMessageNotFoundError) {
+        skipped++;
+        continue;
+      }
+      throw err;
     }
+    const { body_plain, body_html } = extractBody(message.payload);
 
     const msgHeaders = message.payload?.headers ?? [];
     const from = headerValue(msgHeaders, "From");
     const subject = headerValue(msgHeaders, "Subject");
     const dateStr = headerValue(msgHeaders, "Date");
-    const receivedAt = dateStr ? new Date(dateStr).toISOString() : new Date().toISOString();
+    const parsedDate = new Date(dateStr);
+    const receivedAt = Number.isNaN(parsedDate.valueOf()) ? new Date().toISOString() : parsedDate.toISOString();
     const gmailCategories = (message.labelIds ?? []).filter((l) => l.startsWith("CATEGORY_"));
     const snippet = message.snippet ?? "";
     const threadId = message.threadId;
-    // KAI-248 Grupo 1 §1: RFC 2822 Message-ID header — stored for In-Reply-To /
-    // References in outbound replies (mirrors tier1-fast-path KAI-115 §A).
     const messageIdHeader = headerValue(msgHeaders, "Message-ID") || null;
 
     const filterResult = deps.preFilterEmail({
@@ -115,10 +113,7 @@ async function ingestMessages(
       mimeType: message.payload?.mimeType,
       userEmail: classifierContext.tenantMailboxes,
     });
-
-    // Insert the message row regardless of outcome — preserves a record of
-    // every message seen, mirroring incremental-sync's pending→skipped/classified flow.
-    const { data: insertedMsg, error: insertErr } = await deps.db
+    const { data: insertedMsg, error: insertErr } = prior ? { data: prior, error: null } : await deps.db
       .from("messages")
       .insert({
         account_id: accountId,
@@ -129,6 +124,9 @@ async function ingestMessages(
         received_at: receivedAt,
         sender_external_id: from,
         snippet,
+        subject,
+        body_plain,
+        body_html,
         message_id_header: messageIdHeader,
         classification_status: filterResult.status === "skip" ? "skipped" : "pending",
         ...routingAudit(filterResult.facts),
@@ -138,13 +136,7 @@ async function ingestMessages(
       .select("id")
       .single();
 
-    if (insertErr) {
-      // 23505 = unique_violation — another concurrent poll already ingested
-      // this message. Idempotency guard; skip and move on.
-      if (insertErr.code === "23505") continue;
-      console.error(`[gmail-poll] message insert failed for ${messageId}:`, insertErr.message);
-      continue;
-    }
+    if (insertErr || !insertedMsg) throw new Error('Message insertion failed; poll will retry');
 
     processed++;
 
@@ -152,23 +144,7 @@ async function ingestMessages(
       skipped++;
       continue;
     }
-
-    // Gate passed — threading + Flow 1 / Flow 2.
     try {
-      // KAI-248 Grupo 1 §2 + Grupo 4: broken-thread re-association — if the
-      // subject carries a [KAIRO-<ticket_number>] token, prefer re-attaching
-      // to that ticket's existing conversation over the Gmail threadId. Use
-      // the LAST token in the subject (the current ticket), not the first.
-      // Mirrors tier1-fast-path's KAI-115 §B re-association.
-      //
-      // Grupo 4 — security: re-association is only honored after confirming
-      // the inbound sender matches the conversation's recorded customer
-      // (`conversations.customer_external_id`). Without this check, any
-      // sender who guesses or copies a [KAIRO-<n>] token from a quoted reply
-      // could inject their message into another customer's ticket within the
-      // same account. On mismatch we discard the token match entirely and
-      // fall through to the normal threadId-based flow below, so the message
-      // lands in its own conversation/ticket instead of someone else's.
       let resolvedConversationId: string | undefined;
       const kairoTicketNumber = deps.extractLastKairoToken(subject);
       if (kairoTicketNumber !== null) {
@@ -185,9 +161,7 @@ async function ingestMessages(
           if (senderMatches) {
             resolvedConversationId = existingTicket.conversationId;
           } else {
-            console.warn(
-              `[gmail-poll] rejected [KAIRO-${kairoTicketNumber}] re-association: sender does not match conversation owner (account ${accountId})`
-            );
+            console.warn('[gmail-poll] rejected ticket re-association: sender mismatch');
           }
         }
       }
@@ -204,24 +178,13 @@ async function ingestMessages(
       }
 
       const conversation_id = resolvedConversationId;
-
-      // This path only ever has the Gmail snippet — it does not decode the
-      // MIME body — but it goes through the same rule as every other queued
-      // path, and it sends the tenant fields the rubric needs.
-      //
-      // Every classification writes one `llm_calls` row, success or failure,
-      // like the other ingestion paths — otherwise this path's cost and errors
-      // are invisible to every query over that table.
       const llmStart = Date.now();
       let classified: Awaited<ReturnType<GmailPollDeps["classifyEmail"]>>;
       try {
-        classified = await deps.classifyEmail({
-          subject,
-          body: buildClassifierBody("backfill", null, snippet),
-          from,
-          ...classifierContext,
-          ...classifierEnvelope(filterResult.facts),
-        }, { lang: classifierContext.language, context: { accountId } });
+        classified = await deps.classifyEmail(buildEmailClassifierInput({
+          stage: "new_email", subject, from, bodyPlain: body_plain, snippet,
+          facts: filterResult.facts, context: classifierContext,
+        }), { lang: classifierContext.language, context: { accountId } });
       } catch (err) {
         deps.logLlmCall({
           feature: "email_classification",
@@ -266,9 +229,9 @@ async function ingestMessages(
           subject,
           from_email: from,
           from_name: null,
-          to_email: null,
-          body_plain: null,
-          body_html: null,
+          to_email: headerValue(msgHeaders, "To") || null,
+          body_plain,
+          body_html,
           snippet,
           gmail_message_id: messageId,
           gmail_thread_id: threadId,
@@ -279,16 +242,6 @@ async function ingestMessages(
         priorityScore: null,
       });
 
-      await deps.db
-        .from("messages")
-        .update({
-          conversation_id,
-          classification_status: "classified",
-          ...routingAudit(filterResult.facts),
-          processing_tier: 0,
-          classified_at: classifiedAt,
-        })
-        .eq("id", insertedMsg.id);
 
       await deps.linkMessageToTicket(deps.db, {
         ticket_id: result.ticket_id,
@@ -299,15 +252,24 @@ async function ingestMessages(
       if (result.was_created) {
         ticketsCreated++;
       } else {
-        // Flow 1: existing ticket on this thread — reopen if applicable.
         await deps.applyCustomerReplyTransition(deps.db, result.ticket_id, result.prior_status);
         ticketsReopened++;
       }
+      await deps.requestKnowledge?.({ accountId, ticketId: result.ticket_id, messageId: insertedMsg.id });
+      const { error: completedError } = await deps.db
+        .from("messages")
+        .update({
+          conversation_id,
+          classification_status: "classified",
+          ...routingAudit(filterResult.facts),
+          processing_tier: 0,
+          classified_at: classifiedAt,
+        })
+        .eq("id", insertedMsg.id);
+
+      if (completedError) throw new Error("Message completion failed");
+
     } catch (err) {
-      console.error(
-        `[gmail-poll] ingestion failed for message ${messageId}:`,
-        err instanceof Error ? err.message : String(err)
-      );
       await recordClassificationFailure({
         supabase: deps.db,
         accountId,
@@ -319,20 +281,21 @@ async function ingestMessages(
         senderDisplayName: null,
         subject,
         snippet,
-        bodyPlain: null,
-        bodyHtml: null,
+        bodyPlain: body_plain,
+        bodyHtml: body_html,
         messageIdHeader,
         processingTier: 0,
         err,
         maxAttempts: env.CLASSIFICATION_MAX_ATTEMPTS,
       });
+      throw err;
     }
   }
 
   return { ticketsCreated, ticketsReopened, skipped, processed };
 }
 
-/** Paginate history.list, collecting all messageAdded ids + the final historyId. */
+
 async function collectHistory(
   deps: GmailPollDeps,
   token: string,
@@ -341,6 +304,7 @@ async function collectHistory(
   const messageIds = new Set<string>();
   let newHistoryId = startHistoryId;
   let page = await deps.historyList(token, startHistoryId);
+  const pageTokens = new Set<string>();
 
   for (;;) {
     for (const record of page.history ?? []) {
@@ -351,25 +315,16 @@ async function collectHistory(
     if (page.historyId) newHistoryId = page.historyId;
 
     if (!page.nextPageToken) break;
-    // historyList signature only takes (token, startHistoryId) per the
-    // injected contract — pagination via nextPageToken is handled by the
-    // collaborator implementation itself when present. We re-call with the
-    // same startHistoryId; the real Gmail client implementation threads the
-    // page token internally. For the purposes of this worker we stop here
-    // if the dependency does not natively paginate, since the contract is
-    // single-call. (No production caller relies on multi-page in v1.)
-    break;
+    if (pageTokens.has(page.nextPageToken)) throw new Error('Gmail history pagination did not progress');
+    pageTokens.add(page.nextPageToken);
+    page = await deps.historyList(token, startHistoryId, page.nextPageToken);
   }
 
   return { messageIds: [...messageIds], newHistoryId };
 }
 
-/**
- * Poll a single Gmail-connected account for new inbox messages since its
- * stored `gmail_history_id` cursor, ingest the relevant ones, and advance
- * the cursor. Seeds the cursor on first run instead of backfilling.
- */
-export async function pollGmailAccount(
+
+async function pollAccount(
   deps: GmailPollDeps,
   accountId: string
 ): Promise<PollAccountResult> {
@@ -382,7 +337,8 @@ export async function pollGmailAccount(
     .limit(1)
     .maybeSingle();
 
-  if (integrationErr || !integration) {
+  if (integrationErr) throw new Error('Gmail integration lookup failed');
+  if (!integration) {
     return {
       outcome: "no_integration",
       newMessages: 0,
@@ -395,17 +351,9 @@ export async function pollGmailAccount(
 
   const row = integration as ChannelIntegrationRow;
   const token = await deps.getFreshGmailToken(accountId);
-
-  // -------------------------------------------------------------------------
-  // Seed path: no cursor yet — onboarding owns the first backfill, this
-  // worker only records the current historyId so future polls are incremental.
-  // -------------------------------------------------------------------------
   if (!row.gmail_history_id) {
     const profile = await deps.getProfile(token);
-    await deps.db
-      .from("channel_integrations")
-      .update({ gmail_history_id: profile.historyId })
-      .eq("id", row.id);
+    await persistCursor(deps, row, profile.historyId, false);
 
     return {
       outcome: "seeded",
@@ -416,15 +364,7 @@ export async function pollGmailAccount(
       newHistoryId: profile.historyId,
     };
   }
-
-  // Resolved once per poll, not once per message: this is per-account state
-  // (KAI-93). `backfill` — every path that is not the Tier 1 onboarding scan
-  // carries the tenant's line of business once the account has one.
-  const classifierContext = await deps.resolveClassifierContext("backfill", accountId);
-
-  // -------------------------------------------------------------------------
-  // Incremental path: history.list from the stored cursor.
-  // -------------------------------------------------------------------------
+  const classifierContext = await deps.resolveClassifierContext("new_email", accountId);
   try {
     const { messageIds, newHistoryId } = await collectHistory(deps, token, row.gmail_history_id);
 
@@ -438,10 +378,7 @@ export async function pollGmailAccount(
         })
       : { ticketsCreated: 0, ticketsReopened: 0, skipped: 0, processed: 0 };
 
-    await deps.db
-      .from("channel_integrations")
-      .update({ gmail_history_id: newHistoryId, last_synced_at: new Date().toISOString() })
-      .eq("id", row.id);
+    await persistCursor(deps, row, newHistoryId);
 
     return {
       outcome: "polled",
@@ -455,14 +392,18 @@ export async function pollGmailAccount(
     if (!(err instanceof GmailHistoryExpiredError)) {
       throw err;
     }
-
-    // ---------------------------------------------------------------------
-    // Fallback: cursor expired (Gmail 404s startHistoryId after ~7 days).
-    // Bounded re-sync via messages.list, then re-seed the cursor from a
-    // fresh getProfile call so future polls resume incrementally.
-    // ---------------------------------------------------------------------
-    const listResponse = await deps.messagesList(token);
-    const messageIds = (listResponse.messages ?? []).map((m) => m.id);
+    const profile = await deps.getProfile(token);
+    const ids = new Set<string>();
+    let pageToken: string | undefined;
+    const pageTokens = new Set<string>();
+    do {
+      const page = await deps.messagesList(token, pageToken);
+      for (const message of page.messages ?? []) ids.add(message.id);
+      pageToken = page.nextPageToken;
+      if (pageToken && pageTokens.has(pageToken)) throw new Error('Gmail inbox pagination did not progress');
+      if (pageToken) pageTokens.add(pageToken);
+    } while (pageToken);
+    const messageIds = [...ids];
 
     const ingestStats = messageIds.length
       ? await ingestMessages(deps, {
@@ -474,12 +415,7 @@ export async function pollGmailAccount(
         })
       : { ticketsCreated: 0, ticketsReopened: 0, skipped: 0, processed: 0 };
 
-    const profile = await deps.getProfile(token);
-
-    await deps.db
-      .from("channel_integrations")
-      .update({ gmail_history_id: profile.historyId, last_synced_at: new Date().toISOString() })
-      .eq("id", row.id);
+    await persistCursor(deps, row, profile.historyId);
 
     return {
       outcome: "resynced",
@@ -490,4 +426,15 @@ export async function pollGmailAccount(
       newHistoryId: profile.historyId,
     };
   }
+}
+
+const activePolls = new Map<string, Promise<PollAccountResult>>();
+
+/** Coalesce overlapping callers; Inngest also serializes runs across workers. */
+export function pollGmailAccount(deps: GmailPollDeps, accountId: string): Promise<PollAccountResult> {
+  const active = activePolls.get(accountId);
+  if (active) return active;
+  const run = pollAccount(deps, accountId).finally(() => activePolls.delete(accountId));
+  activePolls.set(accountId, run);
+  return run;
 }

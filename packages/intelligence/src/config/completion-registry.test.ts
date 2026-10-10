@@ -10,7 +10,7 @@ import { AnthropicCompletionProvider } from '../providers/anthropic/completion';
 
 describe('completion-registry', () => {
   it('lists every known provider id, in registration order', () => {
-    expect(COMPLETION_PROVIDER_IDS).toEqual(['ollama', 'anthropic']);
+    expect(COMPLETION_PROVIDER_IDS).toEqual(['gateway', 'ollama', 'anthropic']);
   });
 
   it('accepts a known id and rejects anything else', () => {
@@ -32,16 +32,16 @@ describe('completion-registry', () => {
   });
 
   it('resolves anthropic when a key is present', () => {
-    const provider = findCompletionProvider('anthropic').create({ ANTHROPIC_API_KEY: 'test-key' });
+    const provider = findCompletionProvider('anthropic').create({ AI_GATEWAY_API_KEY: 'test-key' });
     expect(provider).toBeInstanceOf(AnthropicCompletionProvider);
   });
 
   it('anthropic without a key fails clearly instead of constructing a broken client', () => {
-    expect(() => findCompletionProvider('anthropic').create({})).toThrow(/ANTHROPIC_API_KEY/);
+    expect(() => findCompletionProvider('anthropic').create({})).toThrow(/AI_GATEWAY_API_KEY/);
   });
 
   it('an unknown id fails clearly and names what is known', () => {
     expect(() => findCompletionProvider('bedrock')).toThrow(/Unknown completion provider "bedrock"/);
-    expect(() => findCompletionProvider('bedrock')).toThrow(/ollama, anthropic/);
+    expect(() => findCompletionProvider('bedrock')).toThrow(/gateway, ollama, anthropic/);
   });
 });

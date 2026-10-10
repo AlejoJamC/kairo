@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // KAI-55 — turns a resolved ticket into a knowledge draft, when it deserves one.
 //
-// JEV decides (a typed decision, calibrated confidence); only when it says yes
+// A native decision model evaluates the evidence; only when it says yes
 // does a text model write the article. The draft is stored unpublished
 // (`is_published = false`) and never reaches retrieval until a person
 // publishes it.
@@ -12,6 +12,10 @@ import {
   buildKnowledgeQuestions,
   createDecisionProvider,
   KnowledgeDraftSchema,
+  KnowledgeAnswersSchema,
+  KNOWLEDGE_QUESTIONS_VERSION,
+  type KnowledgeAnswers,
+  ProviderError,
   parseKnowledgeAnswers,
   runDecisionFeature,
   runLlmFeature,
@@ -20,9 +24,10 @@ import {
   type KnowledgeDecision,
   type KnowledgeDraft,
   type PromptLang,
+  type LlmCallLogger,
 } from "@kairo/intelligence";
 
-import { CLASSIFIER_BODY_RULES, resolveTenantLanguage } from "./classifier-input.js";
+import { CLASSIFIER_BODY_RULES, resolveTenantSettings, type AccountSettings } from "./classifier-input.js";
 import { maybeGenerateKbEmbedding } from "./kb-embedding.js";
 import { recordLlmCall } from "./llm-logging.js";
 import { supabase as defaultSupabase } from "./supabase.js";
@@ -32,6 +37,7 @@ export const KNOWLEDGE_DRAFT_FEATURE = "knowledge_draft";
 const DRAFT_PROMPT_ID = "knowledge-draft";
 
 const THREAD_MESSAGES = 30;
+const KNOWLEDGE_STATE_VERSION = '1.0.1';
 const MESSAGE_BODY_RULE = CLASSIFIER_BODY_RULES.backfill;
 
 interface ThreadMessage {
@@ -54,7 +60,9 @@ export type KnowledgeCandidateOutcome =
 
 export interface KnowledgeCandidateDeps {
   supabase?: SupabaseClient;
+  logger?: LlmCallLogger;
   resolveLanguage?: (accountId: string) => Promise<PromptLang>;
+  resolveSettings?: (accountId: string) => Promise<AccountSettings>;
   decide?: (input: {
     ticketId: string;
     accountId: string;
@@ -83,16 +91,24 @@ function threadText(messages: ThreadMessage[]): string {
     .join("\n\n");
 }
 
-async function decideWithJev(input: { ticketId: string; accountId: string; state: unknown }): Promise<KnowledgeDecision> {
-  const { data } = await runDecisionFeature<never>({
+async function decideWithNativeModel(input: { ticketId: string; accountId: string; state: unknown }, logger: LlmCallLogger): Promise<KnowledgeDecision> {
+  const { data } = await runDecisionFeature<KnowledgeAnswers>({
     feature: KNOWLEDGE_DECISION_FEATURE,
-    provider: createDecisionProvider("jev"),
+    provider: createDecisionProvider("gateway", "knowledge_decision"),
     state: input.state,
     questions: buildKnowledgeQuestions(),
     context: { ticketId: input.ticketId, accountId: input.accountId },
-    logger: recordLlmCall,
+    logger,
+    versions: { state: KNOWLEDGE_STATE_VERSION, questions: KNOWLEDGE_QUESTIONS_VERSION },
   });
-  return parseKnowledgeAnswers(data.value as unknown as Parameters<typeof parseKnowledgeAnswers>[0]);
+  const parsed = KnowledgeAnswersSchema.safeParse(data.value);
+  if (!parsed.success) throw new ProviderError('Knowledge decision output does not match its question contract', false);
+  const answers = parsed.data;
+  return {
+    ...parseKnowledgeAnswers(answers),
+    audit: { answers, stateVersion: KNOWLEDGE_STATE_VERSION, questionsVersion: KNOWLEDGE_QUESTIONS_VERSION,
+      reviewReasons: ["human_publication_required", "provider_not_calibrated"] },
+  };
 }
 
 async function draftWithTextModel(input: {
@@ -100,16 +116,17 @@ async function draftWithTextModel(input: {
   accountId: string;
   lang: PromptLang;
   vars: Record<string, string>;
-}): Promise<KnowledgeDraft> {
+}, logger: LlmCallLogger): Promise<KnowledgeDraft> {
   const result = await runLlmFeature({
     feature: KNOWLEDGE_DRAFT_FEATURE,
     promptId: DRAFT_PROMPT_ID,
+    modelRole: "knowledge_draft",
     lang: input.lang,
     vars: input.vars,
     schema: KnowledgeDraftSchema,
     options: { maxTokens: 1500, temperature: 0.3 },
     context: { ticketId: input.ticketId, accountId: input.accountId },
-    logger: recordLlmCall,
+    logger,
   });
   return result.data;
 }
@@ -121,21 +138,23 @@ export async function draftKnowledgeFromTicket(
   const db = deps.supabase ?? defaultSupabase;
   const ticketTag = `ticket:${input.ticketId}`;
 
-  const { data: ticket } = await db
+  const { data: ticket, error: ticketError } = await db
     .from("tickets")
     .select("id, subject, category, ticket_type, conversation_id")
     .eq("id", input.ticketId)
     .eq("account_id", input.accountId)
     .single();
+  if (ticketError && ticketError.code !== "PGRST116") throw new Error("Knowledge ticket lookup failed");
   if (!ticket) return { status: "skipped", reason: "ticket_not_found" };
   const t = ticket as KnowledgeTicket;
 
-  const { data: existing } = await db
+  const { data: existing, error: existingError } = await db
     .from("kb_articles")
     .select("id")
     .eq("account_id", input.accountId)
     .contains("tags", [ticketTag])
     .limit(1);
+  if (existingError) throw new Error("Knowledge deduplication lookup failed");
   if ((existing ?? []).length > 0) return { status: "skipped", reason: "already_drafted" };
 
   const messages = t.conversation_id
@@ -143,27 +162,34 @@ export async function draftKnowledgeFromTicket(
         .from("messages")
         .select("direction, body_plain, received_at")
         .eq("conversation_id", t.conversation_id)
-        .order("received_at", { ascending: true })
+        .eq("account_id", input.accountId)
+        .order("received_at", { ascending: false })
         .limit(THREAD_MESSAGES)
-        .then(({ data }) => (data ?? []) as ThreadMessage[])
+        .then(({ data, error }) => {
+          if (error) throw new Error("Knowledge thread retrieval failed");
+          return ((data ?? []) as ThreadMessage[]).reverse();
+        })
     : [];
   const thread = threadText(messages);
   if (!thread) return { status: "skipped", reason: "no_thread" };
 
-  const decision = await (deps.decide ?? decideWithJev)({
+  const settings = await (deps.resolveSettings ?? (accountId => resolveTenantSettings(accountId, db)))(input.accountId);
+
+  const decision = await (deps.decide ?? ((request) => decideWithNativeModel(request, deps.logger ?? recordLlmCall)))({
     ticketId: t.id,
     accountId: input.accountId,
-    state: { subject: t.subject, category: t.category, ticketType: t.ticket_type, thread },
+    state: { stateVersion: KNOWLEDGE_STATE_VERSION, scope: "account", businessContext: settings.businessContext ?? null, truncated: messages.length === THREAD_MESSAGES, subject: t.subject, category: t.category, ticketType: t.ticket_type, thread },
   });
   if (!shouldDraftKnowledge(decision)) return { status: "skipped", reason: "not_candidate" };
 
-  const lang = await (deps.resolveLanguage ?? resolveTenantLanguage)(input.accountId);
-  const draft = await (deps.draft ?? draftWithTextModel)({
+  const lang = deps.resolveLanguage ? await deps.resolveLanguage(input.accountId) : settings.language;
+  const draft = await (deps.draft ?? ((request) => draftWithTextModel(request, deps.logger ?? recordLlmCall)))({
     ticketId: t.id,
     accountId: input.accountId,
     lang,
     vars: {
       knowledge_type: decision.knowledgeType,
+      business_context: settings.businessContext ?? (lang === 'es' ? '(no disponible)' : '(not available)'),
       evidence_quality: decision.evidenceQuality,
       subject: t.subject ?? "",
       category: t.category ?? "",
@@ -171,7 +197,7 @@ export async function draftKnowledgeFromTicket(
     },
   });
 
-  const tags = ["ai-draft", `type:${decision.knowledgeType}`, ticketTag, ...(decision.reusableAcrossCustomers ? ["reusable"] : [])];
+  const tags = ["ai-draft", "scope:account", `type:${decision.knowledgeType}`, ticketTag, ...(decision.reusableAcrossCustomers ? ["reusable"] : [])];
   const { data: article, error } = await db
     .from("kb_articles")
     .insert({
@@ -183,7 +209,7 @@ export async function draftKnowledgeFromTicket(
     })
     .select("id")
     .single();
-  if (error || !article) throw new Error(`kb_articles insert failed: ${error?.message ?? "no row returned"}`);
+  if (error || !article) throw new Error("Knowledge draft persistence failed");
 
   await (deps.embed ?? maybeGenerateKbEmbedding)({
     supabase: db,

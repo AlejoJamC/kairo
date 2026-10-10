@@ -26,7 +26,12 @@ describe('buildTicketVerdictQuestions', () => {
 });
 
 function answer(choiceValue: string, confidence: number) {
-  return { type: 'choice' as const, choice: choiceValue, confidence };
+  const sets = [['needs_action', 'fyi'], ['service', 'commercial_demand', 'commercial_offer', 'admin'],
+    ['P1', 'P2', 'P3'], ['technical', 'billing', 'account', 'general', 'not_applicable'],
+    ['aggressive', 'frustrated', 'neutral', 'positive'], ['high', 'medium', 'low']];
+  const values = sets.find((set) => set.includes(choiceValue)) ?? [choiceValue];
+  const probabilities = Object.fromEntries(values.map((value) => [value, value === choiceValue ? confidence : (1 - confidence) / (values.length - 1)]));
+  return { type: 'choice' as const, choice: choiceValue, confidence, probabilities };
 }
 
 describe('parseTicketVerdictAnswers', () => {

@@ -18,6 +18,7 @@ export interface DecisionProvider {
 }
 
 export interface TypedDecisionInput {
+  signal?: AbortSignal;
   /**
    * Whatever context the caller assembled for this decision — a ticket, an
    * email, anything. This contract does not interpret it; only the caller and
