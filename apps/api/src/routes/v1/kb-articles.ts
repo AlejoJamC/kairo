@@ -129,6 +129,7 @@ kbArticles.post("/", async (c) => {
     .from("kb_articles")
     .insert({
       account_id:   ctx.accountId,
+      reviewed_by: ctx.userId,
       title:        parsed.data.title,
       content:      parsed.data.content,
       tags:         parsed.data.tags ?? null,
@@ -176,7 +177,7 @@ kbArticles.put("/:id", async (c) => {
     return c.json({ error: "Invalid update", detail: parsed.error.flatten() }, 400);
   }
 
-  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const updates: Record<string, unknown> = { reviewed_by: ctx.userId, updated_at: new Date().toISOString() };
   if (parsed.data.title        !== undefined) updates.title = parsed.data.title;
   if (parsed.data.content      !== undefined) updates.content = parsed.data.content;
   if (parsed.data.tags         !== undefined) updates.tags = parsed.data.tags;

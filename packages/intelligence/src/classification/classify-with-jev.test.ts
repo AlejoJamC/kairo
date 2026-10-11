@@ -16,8 +16,18 @@ function fakeJev(answers: Record<string, ReturnType<typeof answer>>): DecisionPr
   return {
     provider: 'jev',
     model: 'jev-latest',
-    decide: mock(async () => ({
-      value: answers,
+    decide: mock(async (request: { questions: Record<string, unknown> }) => ({
+      value: { ...Object.fromEntries(Object.entries({
+        request: ['information', 'intervention', 'multiple', 'none', 'unknown'],
+        priority_evidence: ['supported', 'unknown', 'contradictory'],
+        urgency_evidence: ['supported', 'unknown', 'contradictory'],
+        alternative: ['available', 'unavailable', 'unknown'],
+        change: ['new_request', 'follow_up', 'new_evidence', 'confirmation', 'duplicate', 'unknown'],
+        next_action: ['request_information', 'respond', 'escalate', 'wait', 'resolve', 'none', 'unknown'],
+      }).filter(([key]) => key in request.questions).map(([key, values]) => [key, {
+        type: 'choice', choice: 'unknown', confidence: 1,
+        probabilities: Object.fromEntries(values.map(value => [value, Number(value === 'unknown')])),
+      }])), ...answers },
       confidence: null,
       provider: 'jev',
       modelVersion: 'jev-latest',
@@ -39,7 +49,8 @@ describe('classifyEmailWithJev', () => {
     });
 
     const { result, verdict } = await classifyEmailWithJev(
-      { subject: 'Cannot log in', body: 'I cannot access my account', from: 'client@outside.com' },
+      { subject: 'Cannot log in', body: 'I cannot access my account', from: 'client@outside.com',
+        stage: 'onboarding', evidence: { bodySource: 'snippet', truncated: false, missing: ['full_body'] } },
       provider,
     );
 
@@ -53,6 +64,9 @@ describe('classifyEmailWithJev', () => {
       'actionability=needs_action (0.95) · subject_matter=service (0.90) · priority=P2 (0.90) · category=technical (0.90) · tone=neutral (0.90) · urgency=medium (0.90)',
     );
     expect(verdict.subject_matter).toBe('service');
+    expect(verdict.evidence).toEqual({ bodySource: 'snippet', truncated: false, missing: ['full_body'] });
+    expect(verdict.workflow?.contract).toBe('onboarding_triage');
+    expect(Object.keys(verdict.workflow?.judgments ?? {})).toEqual(['request', 'priority_evidence', 'urgency_evidence']);
   });
 
   it('a message with no headers falls back to external provenance, same as every other classify path', async () => {

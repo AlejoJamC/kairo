@@ -178,13 +178,15 @@ export async function ingestMessages(
       }
 
       const conversation_id = resolvedConversationId;
+      const { data: priorTicket, error: priorTicketError } = await deps.db.from('tickets').select('id,status,model_verdict,assigned_to').eq('account_id', accountId).eq('conversation_id', conversation_id).is('merged_into_ticket_id', null).maybeSingle();
+      if (priorTicketError) throw new Error('Prior ticket context unavailable');
       const llmStart = Date.now();
       let classified: Awaited<ReturnType<GmailPollDeps["classifyEmail"]>>;
       try {
-        classified = await deps.classifyEmail(buildEmailClassifierInput({
+        classified = await deps.classifyEmail({ ...buildEmailClassifierInput({
           stage: "new_email", subject, from, bodyPlain: body_plain, snippet,
           facts: filterResult.facts, context: classifierContext,
-        }), { lang: classifierContext.language, context: { accountId } });
+        }), previousCase: priorTicket ?? { status: 'new_case' } }, { lang: classifierContext.language, context: { accountId } });
       } catch (err) {
         deps.logLlmCall({
           feature: "email_classification",

@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+import { approvedWorkflowKnowledge, knowledgeReferences } from './workflow-knowledge.js';
+import { sourceFingerprint } from './decision-workflow.js';
 // ---------------------------------------------------------------------------
 // Reply suggestion: a draft reply for the agent, grounded on the ticket, its
 // conversation, the client, similar resolved tickets and relevant KB articles.
@@ -61,6 +64,7 @@ const LABELS: Record<PromptLang, { unavailable: string; client: string; agent: s
 
 export interface ReplyTicket {
   id: string;
+  case_revision?: number;
   subject: string | null;
   body_plain: string | null;
   ticket_type: string | null;
@@ -183,7 +187,7 @@ export async function suggestReply(
 
   const { data: ticket, error: ticketErr } = await db
     .from("tickets")
-    .select("id, subject, body_plain, ticket_type, priority, category, emotion, conversation_id, client_id")
+    .select("id, subject, body_plain, ticket_type, priority, category, emotion, conversation_id, client_id, case_revision")
     .eq("id", input.ticketId)
     .eq("account_id", input.accountId)
     .single();
@@ -225,11 +229,14 @@ export async function suggestReply(
 
   if (context.degraded.length) throw new ProviderError("Reply retrieval unavailable; human review is required", true);
 
+  const approved = await approvedWorkflowKnowledge(input.accountId, ticketQueryText(t.subject, t.body_plain), input.ticketId, db);
+  const currentReferences = knowledgeReferences(approved);
+  const referenceContext = { ...context, kbArticles: approved.map(v => ({ id: v.source_id, title: String(v.snapshot['title'] ?? v.snapshot['learning_type'] ?? ''), content: String(v.snapshot['content'] ?? v.snapshot['summary'] ?? ''), tags: [], similarity: null })) };
   const result = await (deps.run ?? runLlmFeature)({
     feature: REPLY_SUGGESTION_FEATURE,
     promptId: PROMPT_ID,
     lang,
-    vars: buildReplySuggestionVars({ ticket: t, messages, client, context, lang, businessContext: settings.businessContext }),
+    vars: buildReplySuggestionVars({ ticket: t, messages, client, context: referenceContext, lang, businessContext: settings.businessContext }),
     schema: ReplySuggestionSchema,
     confidenceOf: (d) => d.confidence,
     options: { maxTokens: 1500, temperature: 0.4, abortSignal: input.signal },
@@ -238,28 +245,23 @@ export async function suggestReply(
   });
 
   input.signal?.throwIfAborted();
-  const available = new Set(context.kbArticles.map((article) => article.id));
+  const available = new Set(referenceContext.kbArticles.map((article) => article.id));
   const referencedKbArticles = [...new Set(result.data.referenced_kb_articles ?? [])];
   if (referencedKbArticles.some((id) => !available.has(id))) {
     throw new ProviderError("Reply cites unavailable knowledge", false);
   }
-  const { data: proposal, error: proposalError } = await db
-    .from("ticket_proposals")
-    .insert({
-      ticket_id: t.id,
-      conversation_id: t.conversation_id ?? null,
-      message_ids: [],
-      proposed_reply: result.data.suggestion,
-      referenced_kb_articles: referencedKbArticles,
-      confidence_score: result.data.confidence,
-      model_version: result.model,
-      raw_llm_output: { ...result.data, lang, prompt_version: result.promptVersion },
-      status: "pending",
-    })
-    .select("id")
-    .single();
-
-  if (proposalError || !proposal) throw new ProviderError("Reply proposal persistence failed", true);
+  const { data: proposalId, error: proposalError } = await db.rpc('save_reply_decision', {
+    p_account_id: input.accountId, p_ticket_id: t.id, p_user_id: input.userId, p_revision: t.case_revision ?? 0,
+    p_key: `reply:${result.llmCallId ?? randomUUID()}`,
+    p_proposal: { proposed_reply: result.data.suggestion,
+      referenced_kb_articles: referencedKbArticles.filter(id => approved.some(v => v.source_kind === 'article' && v.source_id === id)),
+      confidence_score: result.data.confidence, model_version: result.model,
+      raw_llm_output: { ...result.data, lang, prompt_version: result.promptVersion } },
+    p_result: { sources: currentReferences, suggestion: result.data.suggestion, model: result.model,
+      promptVersion: result.promptVersion, authorization: 'human_review',
+      contextFingerprint: sourceFingerprint({ messages, sources: currentReferences }) },
+  });
+  if (proposalError || !proposalId) throw new ProviderError('Reply proposal persistence failed', true);
 
   return {
     suggestion: result.data.suggestion,
@@ -269,6 +271,6 @@ export async function suggestReply(
     promptVersion: result.promptVersion,
     referencedKbArticles,
     llmCallId: result.llmCallId,
-    proposalId: (proposal?.id as string | undefined) ?? null,
+    proposalId: proposalId as string,
   };
 }

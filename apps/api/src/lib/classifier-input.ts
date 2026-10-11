@@ -1,3 +1,4 @@
+import { approvedWorkflowKnowledge, knowledgeReferences } from './workflow-knowledge.js';
 
 import {
   stripQuotedThread,
@@ -179,11 +180,14 @@ export async function withApprovedKnowledge(
   message: EmailMessage,
   accountId: string,
   retrieve: typeof findRelevantKb = findRelevantKb,
+  retrieveVersions: typeof approvedWorkflowKnowledge = approvedWorkflowKnowledge,
 ): Promise<EmailMessage> {
   const knowledge = await retrieve({ accountId, queryText: [message.subject, message.body.slice(0, 2000)].join('\n') });
+  const versions = await retrieveVersions(accountId, [message.subject, message.body.slice(0,2000)].join('\n'));
   const missing = [...(message.evidence?.missing ?? []), ...(knowledge.degraded.length ? ['approved_knowledge'] : [])];
   return {
     ...message,
+    approvedKnowledge: knowledgeReferences(versions),
     ...(knowledge.articles.length ? { businessContext: JSON.stringify({
       configuredBusinessContext: message.businessContext ?? null,
       publishedKnowledge: knowledge.articles.map(article => ({ id: article.id, title: article.title, content: article.content.slice(0, 2000) })),

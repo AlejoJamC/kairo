@@ -104,6 +104,11 @@ function fakeDb(opts: { ticket: typeof TICKET | null }) {
     return c;
   };
   const db = {
+    rpc: async (name: string, args: { p_proposal: Record<string, unknown> }) => {
+      if (name === 'find_workflow_knowledge') return { data: [{ id: 'version-1', account_id: 'acc', source_kind: 'article', source_id: 'kb-1', revision: 1, status: 'approved', snapshot: { title: 'Reset access', content: 'Steps' } }], error: null };
+      if (name === 'save_reply_decision') { proposals.push({ ...args.p_proposal, status: 'pending' }); return { data: 'proposal-1', error: null }; }
+      throw new Error(`Unexpected RPC ${name}`);
+    },
     from(table: string) {
       if (table === "tickets") return chain({ data: opts.ticket, error: opts.ticket ? null : { message: "not found" } });
       if (table === 'accounts') return chain({ data: { language: 'en', business_context: 'Acme provides account support.' }, error: null });

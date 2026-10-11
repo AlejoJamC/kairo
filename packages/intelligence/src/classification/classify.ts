@@ -1,3 +1,4 @@
+import { workflowContract, workflowLanguageSchema, WORKFLOW_VERSION } from './workflow-contract';
 import { usesDecisionClassification } from '../config/model-roles';
 import { createCompletionProvider, createDecisionProvider } from '../config/providers';
 import { resolveEnsembleTarget } from '../config/ensemble';
@@ -85,7 +86,7 @@ async function classifyEmailWithDecisionAsMeta(
       costUsd: typeof decision.rawMetadata?.['costUsd'] === 'number' ? decision.rawMetadata['costUsd'] : null,
       tokensPerSecond: null,
     },
-    prompt: JSON.stringify({ state: stateFromMessage(message), questions: buildTicketVerdictQuestions() }),
+    prompt: JSON.stringify({ state: stateFromMessage(message), questions: buildTicketVerdictQuestions(message.stage) }),
     promptVersion: TICKET_QUESTIONS_VERSION,
   };
 }
@@ -109,7 +110,7 @@ export async function classifyEmailWithMeta(
   const lang = options?.lang ?? DEFAULT_LANG;
 
   const prompt = await buildPrompt(message, lang);
-  const promptVersion = await getPromptVersion(lang);
+  const promptVersion = await getPromptVersion(lang, message.stage);
   const { ticketId, accountId } = options?.context ?? {};
 
   // KAI-126: Langfuse generation trace, grouped per ticket (KAI-189) so a
@@ -143,11 +144,11 @@ export async function classifyEmailWithMeta(
       // Its failure is caught here and only here: the primary's classification
       // stands on its own, and a second model that is down must not take the
       // first one with it.
-      const [{ data: verdict, ...meta }, second] = await Promise.all([
-        provider.completeJSONWithMeta(prompt, ModelVerdictSchema, completionOptions),
+      const [{ data: generated, ...meta }, second] = await Promise.all([
+        provider.completeJSONWithMeta(prompt, ModelVerdictSchema.extend({ workflow: workflowLanguageSchema(message.stage) }), completionOptions),
         ensembleTarget
           ? createCompletionProvider(ensembleTarget)
-              .completeJSONWithMeta(prompt, ModelVerdictSchema, completionOptions)
+              .completeJSONWithMeta(prompt, ModelVerdictSchema.extend({ workflow: workflowLanguageSchema(message.stage) }), completionOptions)
               .catch((err: unknown) => {
                 ensembleFailed = true;
                 console.warn(
@@ -158,6 +159,10 @@ export async function classifyEmailWithMeta(
               })
           : Promise.resolve(null),
       ]);
+
+      const verdict: ModelVerdictResult = { ...generated,
+        evidence: message.evidence ?? { bodySource: 'stored', truncated: false, missing: ['body_provenance'] },
+        workflow: { contract: workflowContract(message.stage), version: WORKFLOW_VERSION, judgments: generated.workflow } };
 
       // KAI-45 F2 — the model answered two orthogonal questions; the envelope
       // answered the third. `ticket_type` is the product of the three, looked
@@ -204,6 +209,7 @@ export async function classifyEmailWithMeta(
       // on the derived type, or evidence the classifier did not get in full,
       // holds the proposal for a person.
       const abstain = (ensemble !== null && ensemble.type !== data.type)
+        || [generated.workflow['priority_evidence'], generated.workflow['urgency_evidence']].some(value => value === 'unknown' || value === 'contradictory')
         || Boolean(message.evidence?.truncated) || Boolean(message.evidence?.missing.length);
 
       generation.update({

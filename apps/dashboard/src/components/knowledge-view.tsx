@@ -9,6 +9,9 @@ type ArticleFilter = "draft" | "published";
 
 interface Article {
   id: string;
+  kind: "article" | "learning";
+  versionId: string;
+  evidence?: string[];
   title: string;
   content: string;
   tags: string[] | null;
@@ -55,7 +58,7 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiCall("/api/v1/kb-articles");
+      const res = await apiCall("/api/v1/workflow/knowledge");
       if (res.ok) {
         const json: { articles: Article[] } = await res.json();
         setArticles(json.articles ?? []);
@@ -75,6 +78,7 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
   useEffect(() => {
     setEvidence(null);
     setEvidenceError(false);
+    if (selected?.kind === 'learning') { setEvidence({ steps: [], evidence: selected.evidence ?? [] }); return; }
     if (!selected?.tags?.some(tag => tag.startsWith('source-message:'))) return;
     let active = true;
     void apiCall(`/api/v1/kb-articles/${selected.id}/evidence`).then(async res => {
@@ -96,13 +100,12 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
     setBusy(true);
     setError(false);
     try {
-      const res = await apiCall(`/api/v1/kb-articles/${article.id}`, {
-        method: "PUT",
-        body: JSON.stringify({ title, content, ...(publish ? { is_published: true } : {}) }),
+      const res = await apiCall(`/api/v1/workflow/knowledge/${article.id}/review`, {
+        method: "POST",
+        body: JSON.stringify({ title, content, kind: article.kind, versionId: article.versionId, decision: publish || article.is_published ? "approved" : "pending_review" }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      const updated: Article = await res.json();
-      setArticles((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      await load();
       if (publish) setSelectedId(null);
     } catch {
       setError(true);
@@ -115,7 +118,7 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
     setBusy(true);
     setError(false);
     try {
-      const res = await apiCall(`/api/v1/kb-articles/${article.id}`, { method: "DELETE" });
+      const res = await apiCall(`/api/v1/workflow/knowledge/${article.id}/review`, { method: "POST", body: JSON.stringify({ kind: article.kind, versionId: article.versionId, decision: "rejected" }) });
       if (!res.ok) throw new Error(String(res.status));
       setArticles((prev) => prev.filter((a) => a.id !== article.id));
       setSelectedId(null);

@@ -1,3 +1,4 @@
+import { workflowContract, workflowAnswersSchema, WORKFLOW_VERSION } from './workflow-contract';
 
 import type { DecisionProvider, DecisionResult } from '../providers/decision';
 import { buildTicketVerdictQuestions, parseTicketVerdictAnswers, TicketAnswersSchema, TICKET_QUESTIONS_VERSION, DECISION_STATE_VERSION, type TicketAnswers } from './decision-questions';
@@ -14,6 +15,8 @@ export function stateFromMessage(message: EmailMessage): Record<string, unknown>
   return {
     stateVersion: DECISION_STATE_VERSION,
     stage: message.stage ?? 'manual',
+    contract: workflowContract(message.stage),
+    contractVersion: WORKFLOW_VERSION,
     evidence: message.evidence ?? { bodySource: 'stored', truncated: false, missing: ['body_provenance'] },
     from: message.from,
     to: message.to ?? null,
@@ -25,6 +28,8 @@ export function stateFromMessage(message: EmailMessage): Record<string, unknown>
     businessContext: message.businessContext ?? null,
     attachments: message.attachments ?? [],
     facts: message.facts ?? null,
+    previousCase: message.previousCase ?? null,
+    approvedKnowledge: message.approvedKnowledge ?? [],
   };
 }
 
@@ -53,13 +58,15 @@ export async function classifyEmailWithDecision(
     async (generation) => {
       const decision = await provider.decide<TicketAnswers>({
         state,
-        questions: buildTicketVerdictQuestions(),
+        questions: buildTicketVerdictQuestions(message.stage),
         signal,
       });
-      const validated = TicketAnswersSchema.safeParse(decision.value);
+      const validated = workflowAnswersSchema(message.stage).safeParse(decision.value);
       if (!validated.success) throw new ProviderError('Decision classification output does not match its question contract', false);
-      decision.value = validated.data;
+      decision.value = { ...TicketAnswersSchema.parse(decision.value), ...validated.data };
       const verdict = Object.assign(parseTicketVerdictAnswers(decision.value), {
+        evidence: message.evidence ?? { bodySource: 'stored' as const, truncated: false, missing: ['body_provenance'] },
+        workflow: { contract: workflowContract(message.stage), version: WORKFLOW_VERSION, judgments: Object.fromEntries(Object.entries(validated.data).filter(([key]) => key in workflowAnswersSchema(message.stage).shape).map(([key, answer]) => [key, answer.choice])) },
         decision: {
           answers: decision.value,
           stateVersion: DECISION_STATE_VERSION,

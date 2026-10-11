@@ -144,3 +144,9 @@ export {
   EmailKnowledgeValidationSchema, knowledgeReviewReasons,
   type EmailKnowledgeProposal, type EmailKnowledgeValidation,
 } from './knowledge/email-knowledge';
+
+export { knowledgeImpactQuestions, workflowContract, workflowQuestions, workflowLanguageSchema, workflowAnswersSchema, attentionRecommendation, WORKFLOW_VERSION } from './classification/workflow-contract';
+
+export { WorkflowAnalysisSchema, groundWorkflowAnalysis, supportedNextAction, type WorkflowAnalysis, type WorkflowSource } from './classification/workflow-analysis';
+
+export { buildTicketVerdictQuestions, TicketAnswersSchema } from './classification/decision-questions';

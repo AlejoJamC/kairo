@@ -45,7 +45,7 @@ const fakeProvider = (model: string, answer: () => ModelVerdictResult | Error) =
   completeJSONWithMeta: async () => {
     const a = answer();
     if (a instanceof Error) throw a;
-    return { data: a, rawText: '{}', model, usage: { promptTokens: null, completionTokens: null }, tokensPerSecond: null };
+    return { data: { ...a, workflow: { request:'intervention',priority_evidence:'supported',urgency_evidence:'supported',alternative:'unknown',change:'new_request',next_action:'respond' } }, rawText: '{}', model, usage: { promptTokens: null, completionTokens: null }, tokensPerSecond: null };
   },
 });
 

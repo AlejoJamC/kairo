@@ -1,3 +1,4 @@
+import { TicketDecisions } from './ticket-decisions';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Mail, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -527,6 +528,7 @@ export function TicketDetail() {
         </h1>
 
         <PrioritySlaBar ticket={ticket} />
+        <TicketDecisions ticketId={ticket.id} />
 
         {/* AI reasoning banner */}
         {ticket.ai_reasoning && (

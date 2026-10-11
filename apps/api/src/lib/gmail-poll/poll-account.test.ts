@@ -50,6 +50,7 @@ function createFakeDb(opts: FakeDbOptions) {
 
   const db = {
     from(table: string) {
+      if (table === 'tickets') return { select() { return this; }, eq() { return this; }, is() { return this; }, maybeSingle: async () => ({ data:null,error:null }) };
       if (table === "channel_integrations") {
         return {
           select() {

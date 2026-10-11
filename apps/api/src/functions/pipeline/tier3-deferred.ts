@@ -765,5 +765,9 @@ export const tier3Deferred = inngest.createFunction(
         env.MAX_EMAIL_AGE_DAYS
       );
     });
+    if (getFlag('enable_email_knowledge')) await step.run('check-pending-knowledge', async () => {
+      const { error } = await supabase.rpc('enqueue_pending_knowledge', { p_account_id: accountId });
+      if (error) throw new Error('Pending knowledge check failed');
+    });
   }
 );

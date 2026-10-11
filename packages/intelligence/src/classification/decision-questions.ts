@@ -1,3 +1,5 @@
+import { workflowQuestions } from './workflow-contract';
+import type { EmailMessage } from './types';
 import { z } from 'zod';
 import { choiceAnswerSchema } from '../providers/choice-answer-schema';
 
@@ -48,8 +50,9 @@ const URGENCY_CRITERIA = {
   low: 'No time pressure — planning, inquiry or future coordination.',
 } as const satisfies ChoiceCriteria;
 
-export function buildTicketVerdictQuestions(): Questions {
+export function buildTicketVerdictQuestions(stage?: EmailMessage['stage']): Questions {
   return {
+    ...workflowQuestions(stage),
     actionability: choice(
       'The company is the owner of `tenantMailbox`. If nobody at the company answers this email, is something left undone?',
       ACTIONABILITY_CRITERIA,

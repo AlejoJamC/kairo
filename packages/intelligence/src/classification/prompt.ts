@@ -1,3 +1,4 @@
+import { workflowContract, workflowLanguageInstructions, WORKFLOW_VERSION } from './workflow-contract';
 import { extractPromptVersion, loadPromptTemplate } from '../harness/template';
 import type { EmailMessage } from './types';
 
@@ -191,7 +192,11 @@ export async function buildPrompt(
   const template = await loadTemplate(lang);
   const na = UNAVAILABLE[lang];
 
-  return template
+  const contract = await loadPromptTemplate(workflowContract(message.stage), lang);
+  return (contract.trimEnd() + '\n\n' + template)
+    .replaceAll('{{workflow_questions}}', workflowLanguageInstructions(message.stage))
+    .replaceAll('{{previous_case}}', JSON.stringify(message.previousCase ?? null))
+    .replaceAll('{{approved_knowledge}}', JSON.stringify(message.approvedKnowledge ?? []))
     .replaceAll('{{from}}', message.from)
     .replaceAll('{{to}}', message.to ?? na)
     .replaceAll('{{tenant_mailbox}}', message.tenantMailbox ?? na)
@@ -216,7 +221,7 @@ export async function buildPrompt(
     .replaceAll('{{body}}', message.body);
 }
 
-export async function getPromptVersion(lang: PromptLang = DEFAULT_LANG): Promise<string | null> {
+export async function getPromptVersion(lang: PromptLang = DEFAULT_LANG, stage?: EmailMessage['stage']): Promise<string | null> {
   const template = await loadTemplate(lang);
-  return extractPromptVersion(template);
+  return `${extractPromptVersion(template)}:${workflowContract(stage)}:${WORKFLOW_VERSION}`;
 }
