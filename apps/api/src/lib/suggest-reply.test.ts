@@ -95,6 +95,7 @@ describe("prompt inputs", () => {
 // A chainable fake of the few Supabase query shapes suggestReply issues.
 function fakeDb(opts: { ticket: typeof TICKET | null }) {
   const proposals: Record<string, unknown>[] = [];
+  const decisions: Record<string, unknown>[] = [];
   const chain = (result: unknown) => {
     const c: Record<string, unknown> = {};
     for (const m of ["select", "eq", "order", "limit"]) c[m] = () => c;
@@ -104,9 +105,9 @@ function fakeDb(opts: { ticket: typeof TICKET | null }) {
     return c;
   };
   const db = {
-    rpc: async (name: string, args: { p_proposal: Record<string, unknown> }) => {
+    rpc: async (name: string, args: { p_proposal: Record<string, unknown>; p_result: Record<string,unknown> }) => {
       if (name === 'find_workflow_knowledge') return { data: [{ id: 'version-1', account_id: 'acc', source_kind: 'article', source_id: 'kb-1', revision: 1, status: 'approved', snapshot: { title: 'Reset access', content: 'Steps' } }], error: null };
-      if (name === 'save_reply_decision') { proposals.push({ ...args.p_proposal, status: 'pending' }); return { data: 'proposal-1', error: null }; }
+      if (name === 'save_reply_decision') { decisions.push(args.p_result); proposals.push({ ...args.p_proposal, status: 'pending' }); return { data: 'proposal-1', error: null }; }
       throw new Error(`Unexpected RPC ${name}`);
     },
     from(table: string) {
@@ -125,7 +126,7 @@ function fakeDb(opts: { ticket: typeof TICKET | null }) {
       throw new Error(`unexpected table ${table}`);
     },
   };
-  return { db: db as unknown as NonNullable<SuggestReplyDeps["supabase"]>, proposals };
+  return { db: db as unknown as NonNullable<SuggestReplyDeps["supabase"]>, proposals, decisions };
 }
 
 const CONTEXT_WITH_KB: TicketContext = {
@@ -146,13 +147,17 @@ describe("suggestReply", () => {
   });
 
   it("asks in the tenant's language, grounds on KB articles, and stores the model that answered", async () => {
-    const { db, proposals } = fakeDb({ ticket: TICKET });
+    const { db, proposals, decisions } = fakeDb({ ticket: TICKET });
     let request: LlmFeatureJsonRequest<ReplySuggestion> | undefined;
 
     const out = await suggestReply(
       { ticketId: TICKET.id, accountId: "acc", userId: "u" },
       {
         supabase: db,
+        retrieveApproved: async () => [
+          {id:"version-1",source_id:"kb-1",account_id:"acc",source_kind:"article",revision:1,status:"approved",snapshot:{title:"Reset access",content:"Steps"}},
+          {id:"version-2",source_id:"kb-2",account_id:"acc",source_kind:"article",revision:1,status:"approved",snapshot:{title:"Other reference",content:"Other steps"}},
+        ],
         resolveLanguage: async () => "en",
         retrieve: async () => CONTEXT_WITH_KB,
         run: async (r) => {
@@ -176,6 +181,8 @@ describe("suggestReply", () => {
     expect(request?.vars.client_profile).toBe("Name: Acme | Plan: pro");
     expect(request?.vars.business_context).toBe('Acme provides account support.');
     expect(out).toMatchObject({ suggestion: "Hello from Acme", referencedKbArticles: ["kb-1"], llmCallId: "call-1", proposalId: "proposal-1" });
+    expect(decisions[0]?.sources).toEqual([expect.objectContaining({id:'kb-1',version:'version-1'})]);
+    expect(decisions[0]?.retrievedSources).toHaveLength(2);
     expect(proposals[0]).toMatchObject({ model_version: "reported-model", referenced_kb_articles: ["kb-1"], status: "pending" });
   });
 
@@ -186,6 +193,10 @@ describe("suggestReply", () => {
       { ticketId: TICKET.id, accountId: "acc", userId: "u" },
       {
         supabase: db,
+        retrieveApproved: async () => [
+          {id:"version-1",source_id:"kb-1",account_id:"acc",source_kind:"article",revision:1,status:"approved",snapshot:{title:"Reset access",content:"Steps"}},
+          {id:"version-2",source_id:"kb-2",account_id:"acc",source_kind:"article",revision:1,status:"approved",snapshot:{title:"Other reference",content:"Other steps"}},
+        ],
         resolveLanguage: async () => "es",
         retrieve: async () => EMPTY_CONTEXT,
         run: async () => {

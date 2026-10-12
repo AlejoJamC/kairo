@@ -1,3 +1,5 @@
+import { loadPromptTemplate, extractPromptVersion } from '../harness/template';
+import { buildTicketVerdictQuestions } from './decision-questions';
 import { describe, expect, it } from 'bun:test';
 import { attentionRecommendation, workflowContract, workflowFields, workflowLanguageSchema } from './workflow-contract';
 import { buildPrompt, getPromptVersion } from './prompt';
@@ -17,7 +19,25 @@ describe('workflow boundaries', () => {
     expect(workflowFields('new_email')).toContain('change');
     expect(workflowFields('new_email')).not.toContain('learning');
     expect(workflowLanguageSchema('backfill').safeParse({ ...unknowns,alternative:'unknown',change:'new_request',next_action:'respond' }).success).toBe(false);
-    expect(workflowContract('manual')).toBe('incoming_email_decision');
+    expect(workflowContract('manual')).toBe('message_triage');
+  });
+  it('bounds every isolated-message classification, including missing and manual stages', () => {
+    for (const stage of [undefined, 'manual', 'backfill', 'new_email', 'onboarding'] as const) {
+      const questions = buildTicketVerdictQuestions(stage);
+      for (const field of ['outcome', 'learning', 'change', 'next_action']) expect(questions).not.toHaveProperty(field);
+      expect(workflowLanguageSchema(stage, 'message').safeParse(unknowns).success).toBe(true);
+    }
+    expect(workflowContract(undefined)).toBe('message_triage');
+  });
+  it('versions the actual contract and composes historical drafting from the shared template', async () => {
+    for (const lang of ['en', 'es'] as const) {
+      const contract = await loadPromptTemplate('historical_learning', lang);
+      expect(await getPromptVersion(lang, 'backfill')).toContain(`:historical_learning:${extractPromptVersion(contract)}:`);
+      const shared = await loadPromptTemplate('email-knowledge', lang);
+      const historical = await loadPromptTemplate('historical-knowledge', lang);
+      expect(historical.split(shared)).toHaveLength(2);
+      expect(extractPromptVersion(historical)).toContain(`+email-knowledge:${extractPromptVersion(shared)}`);
+    }
   });
   it('records distinct prompt versions for each route', async () => {
     const versions = await Promise.all(['onboarding','backfill','new_email'].map(stage => getPromptVersion('en',stage as 'onboarding'|'backfill'|'new_email')));

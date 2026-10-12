@@ -87,6 +87,26 @@ describe.skipIf(!enabled)('decision workflow database guarantees', () => {
     expect(await sql`SELECT id FROM ticket_decision_history WHERE ticket_id=${f.ticket} AND status='enriched'`).toHaveLength(1);
     expect(await sql`SELECT id FROM ticket_decision_history WHERE ticket_id=${f.ticket} AND result ? 'withdrawnVersion'`).toHaveLength(1);
   });
+  it('unpublishing an approved article withdraws retrieval and applied references', async () => {
+    const f = await fixture(), version = await f.approve(); await f.enrich(version);
+    await sql`UPDATE kb_articles SET is_published=false WHERE id=${f.article}`;
+    expect((await sql`SELECT status FROM latest_knowledge WHERE source_id=${f.article}`)[0].status).toBe('withdrawn');
+    expect(await sql`SELECT id FROM current_knowledge WHERE source_id=${f.article}`).toHaveLength(0);
+    await sql`SELECT enqueue_knowledge_candidates(${await f.version()})`;
+    expect((await sql`SELECT knowledge_context FROM tickets WHERE id=${f.ticket}`)[0].knowledge_context).toEqual({});
+    expect(await sql`SELECT id FROM ticket_decision_history WHERE ticket_id=${f.ticket} AND status='enriched'`).toHaveLength(1);
+  });
+  it('stores business facts with their own learning type', async () => {
+    const f = await fixture();
+    await sql`INSERT INTO operational_learning(account_id,origin,status,learning_type,summary) VALUES(${f.account},'system_derived','pending_review','business_fact','Acme provides account support.')`;
+    expect((await sql`SELECT learning_type FROM operational_learning WHERE account_id=${f.account}`)[0].learning_type).toBe('business_fact');
+  });
+  it('records classification gaps without requiring approved knowledge for every ticket', async () => {
+    const f = await fixture();
+    const history = await sql`SELECT status,result FROM ticket_decision_history WHERE ticket_id=${f.ticket} AND contract='onboarding_triage'`;
+    expect(history[0].status).toBe('proposed');
+    expect(history[0].result.missing).toEqual([]);
+  });
   it('rechecks a withdrawal after waiting for a concurrent replacement to commit', async () => {
     const f = await fixture(), approved = await f.approve();
     await sql`SELECT review_workflow_knowledge(${f.account},${f.user},'article',${f.article},${approved},'rejected')`;
@@ -154,6 +174,14 @@ describe.skipIf(!enabled)('decision workflow database guarantees', () => {
     expect(await sql`SELECT id FROM ticket_proposals WHERE ticket_id=${f.ticket}`).toHaveLength(1);
     await sql`SELECT review_workflow_knowledge(${f.account},${f.user},'article',${f.article},${version},'rejected')`;
     await expect(sql`SELECT save_reply_decision(${f.account},${f.ticket},${f.user},0,${proposal}::jsonb,${result}::jsonb,'new-reply')`.execute()).rejects.toThrow('Knowledge changed');
+    expect(await sql`SELECT id FROM ticket_proposals WHERE ticket_id=${f.ticket}`).toHaveLength(1);
+  });
+  it('allows a reply when only an uncited retrieved source changed', async () => {
+    const f = await fixture(), version = await f.approve();
+    await sql`UPDATE kb_articles SET is_published=false WHERE id=${f.article}`;
+    const proposal = {proposed_reply:'Please provide the account reference.',referenced_kb_articles:[],confidence_score:0.8,model_version:'test-model',raw_llm_output:{}};
+    const result = {sources:[],retrievedSources:[{id:f.article,version,kind:'article'}],authorization:'human_review'};
+    await sql`SELECT save_reply_decision(${f.account},${f.ticket},${f.user},0,${proposal}::jsonb,${result}::jsonb,'uncited-reply')`;
     expect(await sql`SELECT id FROM ticket_proposals WHERE ticket_id=${f.ticket}`).toHaveLength(1);
   });
   it('denies client writes to immutable history and access to the work queue', async () => {

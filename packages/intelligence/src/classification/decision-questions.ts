@@ -52,7 +52,7 @@ const URGENCY_CRITERIA = {
 
 export function buildTicketVerdictQuestions(stage?: EmailMessage['stage']): Questions {
   return {
-    ...workflowQuestions(stage),
+    ...workflowQuestions(stage, 'message'),
     actionability: choice(
       'The company is the owner of `tenantMailbox`. If nobody at the company answers this email, is something left undone?',
       ACTIONABILITY_CRITERIA,
@@ -74,8 +74,8 @@ export function buildTicketVerdictQuestions(stage?: EmailMessage['stage']): Ques
   };
 }
 
-export const TICKET_QUESTIONS_VERSION = '1.0.0';
-export const DECISION_STATE_VERSION = '1.0.0';
+export const TICKET_QUESTIONS_VERSION = '1.1.0';
+export const DECISION_STATE_VERSION = '1.1.0';
 
 export interface JevChoiceAnswer {
   type: 'choice';

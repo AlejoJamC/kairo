@@ -47,7 +47,7 @@ export async function main(args: string[]) {
 
   const runId = randomUUID();
   const dir = resolve(privateRoot, 'output/ac11', runId);
-  const roles = ['classification', 'knowledge_decision', 'validation', 'knowledge_draft', 'reply'] as const;
+  const roles = ['classification', 'knowledge_decision', 'validation', 'evidence_analysis', 'knowledge_draft', 'reply'] as const;
   const manifest = { ...await codeFingerprint(), runId, dataset, createdAt: new Date().toISOString(),
     routes: roles.map(role => resolveModelRoute(role)), requestLimit, scope: 'real model outputs; isolated storage and retrieval',
     productionCalibration: false, databaseSafety: 'separate technical database suite' };

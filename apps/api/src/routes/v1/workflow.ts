@@ -17,6 +17,7 @@ workflow.post('/tickets/:id/viewed', async c => {
 workflow.get('/tickets/:id', async c => {
   const ctx = await resolveUserAndAccount(c.req.header('Authorization') ?? '');
   if (!ctx) return c.json({ error: 'Unauthorized' }, 401);
+  if (!UUID.safeParse(c.req.param('id')).success) return c.json({ error: 'Invalid ticket' }, 400);
   const { data, error } = await supabase.from('ticket_decision_history').select('*').eq('account_id', ctx.accountId).eq('ticket_id', c.req.param('id')).order('created_at', { ascending: false }).limit(50);
   return error ? c.json({ error: 'Decision history unavailable' }, 503) : c.json({ decisions: data });
 });

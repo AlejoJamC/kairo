@@ -42,7 +42,7 @@ export type LlmCallLogger = (record: LlmCallRecord) => Promise<string | null>;
 interface LlmFeatureRequestBase {
   /** snake_case, the `llm_calls.feature` value and the Langfuse generation name. */
   feature: string;
-  modelRole?: 'reply' | 'knowledge_draft';
+  modelRole?: 'reply' | 'knowledge_draft' | 'evidence_analysis' | 'classification';
   /** Directory under `packages/intelligence/prompts/`. */
   promptId: string;
   /** The tenant's language, resolved by the caller — never guessed from the text. */

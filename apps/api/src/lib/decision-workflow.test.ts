@@ -8,7 +8,7 @@ const decide = mock(async (_request: Record<string, unknown>): Promise<{data:{va
 const analyze = mock(async (_request: Record<string, unknown>) => ({ data:{ observations:[{dimension:'solution',statement:'Use the recovery procedure.',status:'supported',citations:[{sourceId:'version',quote:'Use account recovery.'}]}],missing:[],waitingOn:null,resumeWhen:null },model:'draft-model',promptVersion:'1.0.0',llmCallId:'draft-call' }));
 const propose = mock(async (_input: Record<string, unknown>) => ({status:'skipped',reason:'source_unavailable'}));
 const embed = mock(async (_text: string) => [0.1, 0.2]);
-const { processDecisionWork } = await import('./decision-workflow');
+const { processDecisionWork, recordWorkflowFailure } = await import('./decision-workflow');
 type Deps = NonNullable<Parameters<typeof processDecisionWork>[2]>;
 // Collaborators are injected: a module mock would leak into every other suite of the run.
 const inject = (overrides: Partial<Deps> = {}): Deps => ({ decide: decide as unknown as Deps['decide'], analyze: analyze as unknown as Deps['analyze'],
@@ -16,10 +16,10 @@ const inject = (overrides: Partial<Deps> = {}): Deps => ({ decide: decide as unk
   embed, ...overrides });
 const version = { id:'version',source_id:'article',account_id:'account',source_kind:'article',revision:1,status:'approved',snapshot:{content:'Use account recovery.'} };
 const work = {id:'job',account_id:'account',ticket_id:'ticket',message_id:'message',knowledge_version_id:'version',contract:'knowledge_impact',dedupe_key:'job'};
-function database(options: { current?:boolean; existing?:boolean; persistStatus?:string; embedded?:boolean; clients?:Record<string,unknown>[]; contracts?:Record<string,unknown>[]; contacts?:Record<string,unknown>[] } = {}) {
+function database(options: { knowledge?:boolean; current?:boolean; existing?:boolean; persistStatus?:string; embedded?:boolean; clients?:Record<string,unknown>[]; contracts?:Record<string,unknown>[]; contacts?:Record<string,unknown>[] } = {}) {
   const saved: Record<string,unknown>[] = [];
   const rpc = mock(async (name:string,args:Record<string,unknown>) => {
-    if (name === 'find_workflow_knowledge') return {data:[version],error:null};
+    if (name === 'find_workflow_knowledge') return {data:options.knowledge === false ? [] : [version],error:null};
     saved.push(args); return {data:options.persistStatus ?? 'enriched',error:null};
   });
   const from = (table:string) => {
@@ -54,7 +54,7 @@ describe('durable workflow execution',()=>{
     const {db,saved}=database();await processDecisionWork(work,db,inject());
     expect(decide).toHaveBeenCalledTimes(1);expect(analyze).toHaveBeenCalledTimes(1);expect(propose).not.toHaveBeenCalled();
     expect(saved[0]).toMatchObject({p_revision:2,p_version_id:'version',p_useful:true,p_result:{contribution:'solution',authorization:'human_review',sources:[{id:'article',version:'version'}]}});
-    expect(analyze.mock.calls[0]?.[0]).toMatchObject({promptId:'knowledge-impact',modelRole:'knowledge_draft'});
+    expect(analyze.mock.calls[0]?.[0]).toMatchObject({promptId:'knowledge-impact',modelRole:'evidence_analysis'});
   });
   it('evaluates an initial ticket using its content even when enrichment has no incoming message',async()=>{
     const {db,saved}=database();
@@ -113,6 +113,37 @@ describe('durable workflow execution',()=>{
     decide.mockImplementationOnce(async()=>({data:{value:answers('incoming'),modelVersion:'decision-model'},llmCallId:'call'}));
     await processDecisionWork({...work,contract:'incoming_email_decision'},db,inject());
     expect(saved[0]).toMatchObject({result:{identity:{clientId:null,contact:{id:'contact-1',status:'confirmed'},sender:{email:'client@outside.com',organization:'Outside Logistics'}},contractualSla:null}});
+  });
+
+  it('uses the classification role for incoming decisions and does not invent a missing KB dependency', async () => {
+    const {db,saved} = database({knowledge:false});
+    const provider = mock((_role: 'classification' | 'knowledge_decision') => ({model:'classification-model'}) as ReturnType<NonNullable<Deps['decisionProvider']>>);
+    decide.mockImplementationOnce(async()=>({data:{value:answers('incoming'),modelVersion:'classification-model'},llmCallId:'call'}));
+    await processDecisionWork({...work,contract:'incoming_email_decision'},db,inject({decisionProvider:provider}));
+    expect(provider).toHaveBeenCalledWith('classification');
+    expect(saved[0]).toMatchObject({status:'pending_human_review',result:{sources:[]}});
+    expect((saved[0]?.result as {missing:string[]}).missing).not.toContain('approved_knowledge');
+  });
+  it('supports a language classification model for incoming case judgments', async () => {
+    const {db,saved} = database();
+    const before = process.env.CLASSIFICATION_MODE;
+    process.env.CLASSIFICATION_MODE = 'language';
+    try {
+      const run = mock(async (request:Record<string,unknown>) => request.modelRole === 'classification'
+        ? {data:Object.fromEntries(Object.entries(answers('incoming')).map(([key,value])=>[key,value.choice])),model:'language-classifier',llmCallId:'case-call',promptVersion:'1.0.0'}
+        : analyze(request));
+      await processDecisionWork({...work,contract:'incoming_email_decision'},db,inject({decisionProvider:undefined,analyze:run as unknown as Deps['analyze']}));
+      expect(decide).not.toHaveBeenCalled();
+      expect(run.mock.calls.map(([request])=>request.modelRole)).toEqual(['evidence_analysis','classification']);
+      expect(saved[0]).toMatchObject({result:{model:'language-classifier',callId:'case-call'}});
+    } finally { if(before === undefined) delete process.env.CLASSIFICATION_MODE; else process.env.CLASSIFICATION_MODE = before; }
+  });
+  it('records a failed attempt against its actual revision, or explicitly labels a later observation', async () => {
+    for (const revision of [7,undefined]) {
+      const {db,saved} = database();
+      await recordWorkflowFailure({...work,case_revision:revision,attempts:1},{retriable:true,error:'processing_failed'},db);
+      expect(saved[0]).toMatchObject({case_revision:revision ?? 2,status:'failed',result:{revisionSource:revision === undefined ? 'observed_after_failure' : 'attempted_case'}});
+    }
   });
 
   it('embeds an approved version before selecting tickets, with the configured threshold and limit',async()=>{

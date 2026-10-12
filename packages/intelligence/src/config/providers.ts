@@ -36,8 +36,9 @@ export function resolveTextProviderId(): string {
   return resolveModelRoute('reply').provider;
 }
 
-export function createTextProvider(role: 'reply' | 'knowledge_draft' = 'reply'): CompletionProvider {
+export function createTextProvider(role: 'reply' | 'knowledge_draft' | 'evidence_analysis' | 'classification' = 'reply'): CompletionProvider {
   const route = resolveModelRoute(role);
+  if (route.capability !== 'language') throw new ProviderConfigurationError('A language model is required for text generation');
   if (route.provider === 'gateway') return new GatewayCompletionProvider(gatewayKey(), route.model);
   return findCompletionProvider('ollama').create(process.env, route.model);
 }

@@ -7,6 +7,10 @@ ALTER TABLE public.kb_articles ADD COLUMN IF NOT EXISTS review_status text;
 ALTER TABLE public.kb_articles ADD COLUMN IF NOT EXISTS reviewed_by uuid REFERENCES auth.users(id);
 ALTER TABLE public.operational_learning ADD COLUMN IF NOT EXISTS evidence jsonb NOT NULL DEFAULT '{}';
 ALTER TABLE public.operational_learning ADD COLUMN IF NOT EXISTS source_key text;
+ALTER TABLE public.operational_learning DROP CONSTRAINT chk_operational_learning_type;
+ALTER TABLE public.operational_learning ADD CONSTRAINT "chk_operational_learning_type" CHECK (("learning_type" = ANY (ARRAY['business_fact'::"text", 'resolution'::"text", 'diagnostic_pattern'::"text", 'routing_rule'::"text", 'policy'::"text", 'exception'::"text", 'evaluation_example'::"text"])));
+UPDATE public.operational_learning SET learning_type='business_fact'
+WHERE learning_type='diagnostic_pattern' AND evidence->>'kind'='business_fact' AND source_key IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS operational_learning_source_key ON public.operational_learning(account_id, source_key);
 ALTER TABLE public.kb_articles ADD COLUMN IF NOT EXISTS source_key text;
 CREATE UNIQUE INDEX IF NOT EXISTS kb_articles_source_key ON public.kb_articles(account_id, source_key);
@@ -145,7 +149,11 @@ BEGIN
     RETURN NEW;
   END IF;
   kind := CASE WHEN TG_TABLE_NAME = 'kb_articles' THEN 'article' ELSE 'learning' END;
-  version_status := CASE WHEN TG_OP = 'DELETE' THEN 'withdrawn' WHEN kind = 'article' THEN CASE WHEN (row_data->>'is_published')::boolean THEN 'approved' ELSE COALESCE(row_data->>'review_status','pending_review') END ELSE row_data->>'status' END;
+  version_status := CASE WHEN TG_OP = 'DELETE' THEN 'withdrawn' WHEN kind = 'article' THEN
+    CASE WHEN (row_data->>'is_published')::boolean THEN 'approved'
+      WHEN row_data->>'review_status'='approved' THEN 'withdrawn'
+      ELSE COALESCE(row_data->>'review_status','pending_review') END
+    ELSE row_data->>'status' END;
   INSERT INTO knowledge_versions(account_id, source_kind, source_id, status, snapshot, actor_user_id)
   VALUES ((row_data->>'account_id')::uuid, kind, (row_data->>'id')::uuid, version_status, row_data - 'embedding', (row_data->>'reviewed_by')::uuid)
   RETURNING id INTO version_id;
@@ -186,7 +194,7 @@ BEGIN
   c := CASE WHEN NEW.classification_tier = 1 THEN 'onboarding_triage' WHEN NEW.classification_tier IN (2,3) THEN 'historical_learning' ELSE 'incoming_email_decision' END;
   INSERT INTO ticket_decision_history(account_id, ticket_id, contract, contract_version, case_revision, status, result, idempotency_key)
   VALUES (NEW.account_id, NEW.id, c, COALESCE(NEW.model_verdict->'workflow'->>'version','legacy'), NEW.case_revision,
-    'pending_knowledge', jsonb_build_object('verdict',NEW.model_verdict,'promptVersion',NEW.prompt_version,'derivationVersion',NEW.derivation_version,'missing',jsonb_build_array('approved_knowledge'),'authorization','human_review'),
+    'proposed', jsonb_build_object('verdict',NEW.model_verdict,'promptVersion',NEW.prompt_version,'derivationVersion',NEW.derivation_version,'missing',COALESCE(NEW.model_verdict->'evidence'->'missing','[]'::jsonb),'authorization','human_review'),
     'classification:' || NEW.id || ':' || NEW.case_revision) ON CONFLICT DO NOTHING;
   RETURN NEW;
 END;

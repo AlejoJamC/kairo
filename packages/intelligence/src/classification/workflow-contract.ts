@@ -3,10 +3,10 @@ import { choice, type Questions } from '@typesafe-ai/sdk';
 import { choiceAnswerSchema } from '../providers/choice-answer-schema';
 import type { EmailMessage } from './types';
 
-export const WORKFLOW_VERSION = '1.0.0';
-export type WorkflowContract = 'onboarding_triage' | 'historical_learning' | 'incoming_email_decision';
+export const WORKFLOW_VERSION = '1.1.0';
+export type WorkflowContract = 'onboarding_triage' | 'historical_learning' | 'incoming_email_decision' | 'message_triage';
 export function workflowContract(stage: EmailMessage['stage']): WorkflowContract {
-  return stage === 'onboarding' ? 'onboarding_triage' : stage === 'backfill' ? 'historical_learning' : 'incoming_email_decision';
+  return stage === 'onboarding' ? 'onboarding_triage' : stage === 'backfill' ? 'historical_learning' : stage === 'new_email' ? 'incoming_email_decision' : 'message_triage';
 }
 const SUPPORT = {
   supported: 'Sources support the judgment without inventing business context or trusting an unverified threat or amount.',
@@ -60,27 +60,27 @@ const DEFINITIONS = {
   change: ['Compare the incoming message with previousCase: what changed? Judge the delta, not the whole case again.', CHANGE],
   next_action: ['Given current evidence and approvedKnowledge, what action should be proposed now? This judgment cannot grant permission.', ACTION],
 } as const;
-export function workflowFields(stage: EmailMessage['stage']) {
+export function workflowFields(stage: EmailMessage['stage'], scope: 'message' | 'case' = 'case') {
   const common = ['request', 'priority_evidence', 'urgency_evidence'] as const;
-  if (stage === 'onboarding') return [...common];
+  if (stage === 'onboarding' || stage === 'manual' || !stage || scope === 'message') return [...common];
   if (stage === 'backfill') return [...common, 'alternative', 'outcome', 'learning'] as const;
   return [...common, 'alternative', 'change', 'next_action'] as const;
 }
-export function workflowQuestions(stage: EmailMessage['stage']): Questions {
-  return Object.fromEntries(workflowFields(stage).map(key => {
+export function workflowQuestions(stage: EmailMessage['stage'], scope: 'message' | 'case' = 'case'): Questions {
+  return Object.fromEntries(workflowFields(stage, scope).map(key => {
     const [instructions, criteria] = DEFINITIONS[key];
     return [key, choice(instructions, criteria)];
   }));
 }
-export function workflowAnswersSchema(stage: EmailMessage['stage']) {
-  return z.object(Object.fromEntries(workflowFields(stage).map(key => [key, choiceAnswerSchema(DEFINITIONS[key][1])])));
+export function workflowAnswersSchema(stage: EmailMessage['stage'], scope: 'message' | 'case' = 'case') {
+  return z.object(Object.fromEntries(workflowFields(stage, scope).map(key => [key, choiceAnswerSchema(DEFINITIONS[key][1])])));
 }
-export function workflowLanguageSchema(stage: EmailMessage['stage']) {
-  return z.object(Object.fromEntries(workflowFields(stage).map(key => [key,
+export function workflowLanguageSchema(stage: EmailMessage['stage'], scope: 'message' | 'case' = 'case') {
+  return z.object(Object.fromEntries(workflowFields(stage, scope).map(key => [key,
     z.enum(Object.keys(DEFINITIONS[key][1]) as [string, ...string[]])])));
 }
-export function workflowLanguageInstructions(stage: EmailMessage['stage']): string {
-  return JSON.stringify(Object.fromEntries(workflowFields(stage).map(key => [key, {
+export function workflowLanguageInstructions(stage: EmailMessage['stage'], scope: 'message' | 'case' = 'case'): string {
+  return JSON.stringify(Object.fromEntries(workflowFields(stage, scope).map(key => [key, {
     question: DEFINITIONS[key][0], criteria: DEFINITIONS[key][1],
   }])));
 }

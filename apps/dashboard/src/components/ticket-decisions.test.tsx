@@ -33,6 +33,13 @@ describe('ticket decision evidence', () => {
     fireEvent.click(screen.getByText('decisionWorkflow.accept'));
     await waitFor(() => expect(apiCall).toHaveBeenCalledWith('/api/v1/workflow/tickets/ticket/decisions/decision/review',{method:'POST',body:JSON.stringify({accept:true})}));
   });
+  it('refreshes on focus without recording another human view', async () => {
+    render(<TicketDecisions ticketId="ticket" />);
+    await screen.findByText('A recovery procedure is available.');
+    fireEvent.focus(window);
+    await waitFor(() => expect(vi.mocked(apiCall).mock.calls.filter(([url]) => url === '/api/v1/workflow/tickets/ticket')).toHaveLength(2));
+    expect(vi.mocked(apiCall).mock.calls.filter(([url]) => url.endsWith('/viewed'))).toHaveLength(1);
+  });
   it('surfaces failed view persistence instead of silently claiming protection', async () => {
     vi.mocked(apiCall).mockResolvedValue(new Response(null,{status:503}));
     render(<TicketDecisions ticketId="ticket" />);

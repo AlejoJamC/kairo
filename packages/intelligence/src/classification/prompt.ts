@@ -194,7 +194,7 @@ export async function buildPrompt(
 
   const contract = await loadPromptTemplate(workflowContract(message.stage), lang);
   return (contract.trimEnd() + '\n\n' + template)
-    .replaceAll('{{workflow_questions}}', workflowLanguageInstructions(message.stage))
+    .replaceAll('{{workflow_questions}}', workflowLanguageInstructions(message.stage, 'message'))
     .replaceAll('{{previous_case}}', JSON.stringify(message.previousCase ?? null))
     .replaceAll('{{approved_knowledge}}', JSON.stringify(message.approvedKnowledge ?? []))
     .replaceAll('{{from}}', message.from)
@@ -223,5 +223,6 @@ export async function buildPrompt(
 
 export async function getPromptVersion(lang: PromptLang = DEFAULT_LANG, stage?: EmailMessage['stage']): Promise<string | null> {
   const template = await loadTemplate(lang);
-  return `${extractPromptVersion(template)}:${workflowContract(stage)}:${WORKFLOW_VERSION}`;
+  const contract = await loadPromptTemplate(workflowContract(stage), lang);
+  return `${extractPromptVersion(template)}:${workflowContract(stage)}:${extractPromptVersion(contract)}:questions:${WORKFLOW_VERSION}`;
 }

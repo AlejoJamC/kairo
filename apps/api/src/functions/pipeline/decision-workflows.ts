@@ -1,7 +1,7 @@
 import { getFlag } from '@kairo/feature-flags';
 import { inngest } from '../../lib/inngest.js';
 import { supabase } from '../../lib/supabase.js';
-import { processDecisionWork, recordWorkflowResult } from '../../lib/decision-workflow.js';
+import { processDecisionWork, recordWorkflowFailure } from '../../lib/decision-workflow.js';
 import { MAX_DECISION_ATTEMPTS, processClaim, type BreakerState, type ClaimedDecisionWork } from '../../lib/decision-work-queue.js';
 
 export const decisionWorkflows = inngest.createFunction({
@@ -22,10 +22,7 @@ export const decisionWorkflows = inngest.createFunction({
       if (error) throw new Error('Decision completion persistence failed');
     },
     recordFailure: async (work, failure) => {
-      if (!work.ticket_id) return;
-      await recordWorkflowResult({ accountId: work.account_id, ticketId: work.ticket_id, messageId: work.message_id ?? undefined,
-        contract: work.contract, revision: 0, status: 'failed', key: `failure:${work.id}:${work.attempts}`,
-        result: { missing: ['processing_failed'], execution: 'not_executed', retryable: failure.retriable, error: failure.error, attempt: work.attempts } });
+      await recordWorkflowFailure(work, failure);
     },
     release: async (work, failure) => {
       const { data, error } = await supabase.rpc('release_decision_work', { p_id: work.id, p_error: failure.error,

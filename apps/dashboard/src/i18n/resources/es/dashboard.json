@@ -596,6 +596,7 @@
     "version": "Versión",
     "values": {
       "onboarding_triage": "Evaluación inicial",
+      "message_triage": "Clasificación del mensaje",
       "historical_learning": "Aprendizaje histórico",
       "incoming_email_decision": "Evaluación del correo nuevo",
       "knowledge_impact": "Aporte de conocimiento",

@@ -46,6 +46,7 @@ function setup(options: { existing?: boolean; linked?: boolean; direction?: stri
   const extract = mock(async () => ({ value: { proposals: [proposal] }, model: 'text-model', callId: 'call-extraction' }));
   const validate = mock(async (state: unknown) => ({ value: (state as { proposals: unknown[] }).proposals.map(() => ({ novelty: answer('new'), support: answer('supported'), policy: answer('consistent') })), model: 'validation-model', callId: 'call-validation' }));
   const deps: EmailKnowledgeDeps = { db: db as unknown as EmailKnowledgeDeps['db'],
+    retrieveApproved: async () => [],
     retrieve: async () => ({ kbArticles: [], resolvedCases: [], degraded: [] }),
     context: async () => ({ language: 'en', businessContext: 'Acme accepts returns within 14 days.' }), candidate, extract, validate };
   return { deps, inserted, candidate, extract, validate };
@@ -133,7 +134,7 @@ describe('incoming email knowledge workflow', () => {
     await proposeEmailKnowledge(input, deps);
     expect(validate).toHaveBeenCalledTimes(1);
     expect(inserted).toHaveLength(2);
-    expect(inserted[1]).toMatchObject({ origin: 'system_derived', status: 'pending_review', evidence: { kind: 'business_fact', sourceMessageId: input.messageId } });
+    expect(inserted[1]).toMatchObject({ learning_type: 'business_fact', origin: 'system_derived', status: 'pending_review', evidence: { kind: 'business_fact', sourceMessageId: input.messageId } });
   });
   it('does not duplicate knowledge already captured in approved sources', async () => {
     const { deps, inserted } = setup();

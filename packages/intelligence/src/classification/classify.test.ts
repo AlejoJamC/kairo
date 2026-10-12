@@ -19,11 +19,11 @@ describe('getPromptVersion', () => {
   // rubric change landing in one language only makes eval runs across the two
   // incomparable.
   it('reads a semver version from the ES classification prompt', async () => {
-    expect(await getPromptVersion('es')).toMatch(/^\d+\.\d+\.\d+:incoming_email_decision:\d+\.\d+\.\d+$/);
+    expect(await getPromptVersion('es')).toMatch(/^\d+\.\d+\.\d+:message_triage:\d+\.\d+\.\d+:questions:\d+\.\d+\.\d+$/);
   });
 
   it('reads a semver version from the EN classification prompt', async () => {
-    expect(await getPromptVersion('en')).toMatch(/^\d+\.\d+\.\d+:incoming_email_decision:\d+\.\d+\.\d+$/);
+    expect(await getPromptVersion('en')).toMatch(/^\d+\.\d+\.\d+:message_triage:\d+\.\d+\.\d+:questions:\d+\.\d+\.\d+$/);
   });
 
   it('keeps ES and EN on the same version', async () => {

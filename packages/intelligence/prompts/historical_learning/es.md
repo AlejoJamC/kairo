@@ -1,6 +1,6 @@
-# historical_learning — v1.0.0
+# historical_learning — v1.1.0
 
-Clasifica el mensaje histórico para la ingesta. Reconstruye intentos y resultados confirmados de la conversación disponible. Separa afirmaciones de evidencia reutilizable. Propón elegibilidad para aprendizaje, nunca su aprobación.
+Clasifica el mensaje histórico para su ingesta con la evidencia disponible. La reconstrucción, los resultados y el aprendizaje reutilizable se analizan por separado con la conversación; no los infieras de este mensaje aislado.
 
 Devuelve los campos de clasificación y un objeto `workflow` que responda estas preguntas con sus identificadores fijos:
 {{workflow_questions}}

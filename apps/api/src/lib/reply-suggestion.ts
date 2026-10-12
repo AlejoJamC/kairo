@@ -159,6 +159,7 @@ export interface SuggestReplyDeps {
   resolveLanguage?: (accountId: string) => Promise<PromptLang>;
   resolveSettings?: (accountId: string) => Promise<AccountSettings>;
   retrieve?: typeof retrieveTicketContext;
+  retrieveApproved?: typeof approvedWorkflowKnowledge;
   run?: (request: LlmFeatureJsonRequest<ReplySuggestion>) => Promise<LlmFeatureResult<ReplySuggestion>>;
 }
 
@@ -229,7 +230,7 @@ export async function suggestReply(
 
   if (context.degraded.length) throw new ProviderError("Reply retrieval unavailable; human review is required", true);
 
-  const approved = await approvedWorkflowKnowledge(input.accountId, ticketQueryText(t.subject, t.body_plain), input.ticketId, db);
+  const approved = await (deps.retrieveApproved ?? approvedWorkflowKnowledge)(input.accountId, ticketQueryText(t.subject, t.body_plain), input.ticketId, db);
   const currentReferences = knowledgeReferences(approved);
   const referenceContext = { ...context, kbArticles: approved.map(v => ({ id: v.source_id, title: String(v.snapshot['title'] ?? v.snapshot['learning_type'] ?? ''), content: String(v.snapshot['content'] ?? v.snapshot['summary'] ?? ''), tags: [], similarity: null })) };
   const result = await (deps.run ?? runLlmFeature)({
@@ -257,7 +258,8 @@ export async function suggestReply(
       referenced_kb_articles: referencedKbArticles.filter(id => approved.some(v => v.source_kind === 'article' && v.source_id === id)),
       confidence_score: result.data.confidence, model_version: result.model,
       raw_llm_output: { ...result.data, lang, prompt_version: result.promptVersion } },
-    p_result: { sources: currentReferences, suggestion: result.data.suggestion, model: result.model,
+    p_result: { sources: currentReferences.filter(source => referencedKbArticles.includes(source.id)),
+      retrievedSources: currentReferences, suggestion: result.data.suggestion, model: result.model,
       promptVersion: result.promptVersion, authorization: 'human_review',
       contextFingerprint: sourceFingerprint({ messages, sources: currentReferences }) },
   });

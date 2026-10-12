@@ -596,6 +596,7 @@
     "version": "Version",
     "values": {
       "onboarding_triage": "Initial assessment",
+      "message_triage": "Message classification",
       "historical_learning": "Historical learning",
       "incoming_email_decision": "New message assessment",
       "knowledge_impact": "Knowledge contribution",

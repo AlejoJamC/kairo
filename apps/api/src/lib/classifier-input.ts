@@ -176,6 +176,17 @@ export async function resolveTenantSettings(accountId: string, db = supabase): P
   return readAccountSettings(accountId, [], db);
 }
 
+export async function loadPreviousCase(accountId: string, channelIntegrationId: string, threadId: string, db = supabase): Promise<Record<string, unknown>> {
+  const conversation = await db.from('conversations').select('id').eq('account_id', accountId)
+    .eq('channel_integration_id', channelIntegrationId).eq('external_thread_id', threadId).maybeSingle();
+  if (conversation.error) throw new Error('Previous conversation unavailable');
+  if (!conversation.data) return { status: 'new_case' };
+  const ticket = await db.from('tickets').select('id,status,model_verdict,assigned_to').eq('account_id', accountId)
+    .eq('conversation_id', conversation.data.id).is('merged_into_ticket_id', null).maybeSingle();
+  if (ticket.error) throw new Error('Previous case unavailable');
+  return ticket.data ?? { status: 'new_case' };
+}
+
 export async function withApprovedKnowledge(
   message: EmailMessage,
   accountId: string,

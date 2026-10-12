@@ -1,7 +1,7 @@
 import { extractBody } from "../../lib/email/body.js";
 import { classifyEmailWithMeta, type EmailMessage } from "@kairo/intelligence";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
-import { buildEmailClassifierInput, resolveClassifierContext } from "../../lib/classifier-input.js";
+import { buildEmailClassifierInput, loadPreviousCase, resolveClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { getFlag } from "@kairo/feature-flags";
 import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
@@ -335,6 +335,9 @@ export const incrementalSync = inngest.createFunction(
           stage: "new_email", subject, from, bodyPlain: body_plain, snippet,
           facts: filterResult.facts, context: { tenantMailbox: userEmail, tenantMailboxes, businessContext },
         });
+        if (channelIntegrationId) {
+          emailMessage.previousCase = await loadPreviousCase(accountId, channelIntegrationId, threadId);
+        }
 
         const llmStart = Date.now();
         const promise = classifyEmailWithMeta(emailMessage, { lang: classifierContext.language, context: { accountId } })

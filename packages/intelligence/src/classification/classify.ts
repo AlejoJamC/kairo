@@ -145,10 +145,10 @@ export async function classifyEmailWithMeta(
       // stands on its own, and a second model that is down must not take the
       // first one with it.
       const [{ data: generated, ...meta }, second] = await Promise.all([
-        provider.completeJSONWithMeta(prompt, ModelVerdictSchema.extend({ workflow: workflowLanguageSchema(message.stage) }), completionOptions),
+        provider.completeJSONWithMeta(prompt, ModelVerdictSchema.extend({ workflow: workflowLanguageSchema(message.stage, 'message') }), completionOptions),
         ensembleTarget
           ? createCompletionProvider(ensembleTarget)
-              .completeJSONWithMeta(prompt, ModelVerdictSchema.extend({ workflow: workflowLanguageSchema(message.stage) }), completionOptions)
+              .completeJSONWithMeta(prompt, ModelVerdictSchema.extend({ workflow: workflowLanguageSchema(message.stage, 'message') }), completionOptions)
               .catch((err: unknown) => {
                 ensembleFailed = true;
                 console.warn(

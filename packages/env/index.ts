@@ -16,6 +16,7 @@ export const env = createEnv({
         AI_GATEWAY_REPLY_MODEL: z.string().min(1).optional(),
         AI_GATEWAY_KNOWLEDGE_DECISION_MODEL: z.string().min(1).optional(),
         AI_GATEWAY_KNOWLEDGE_DRAFT_MODEL: z.string().min(1).optional(),
+        AI_GATEWAY_EVIDENCE_ANALYSIS_MODEL: z.string().min(1).optional(),
         AI_GATEWAY_MODEL: z.string().min(1).optional(),
         AI_GATEWAY_ASSISTANT_MODEL: z.string().min(1).optional(),
         AI_GATEWAY_TEXT_MODEL: z.string().min(1).optional(),

@@ -17,6 +17,7 @@ export interface EmailKnowledgeDeps {
   logger?: LlmCallLogger;
   context?: (accountId: string) => Promise<AccountSettings>;
   retrieve?: typeof retrieveTicketContext;
+  retrieveApproved?: typeof approvedWorkflowKnowledge;
   candidate?: (state: unknown) => Promise<Judgment<ReturnType<typeof EmailKnowledgeCandidateSchema.parse>>>;
   extract?: (state: { source: string; businessContext?: string; approvedKnowledge: Pick<TicketContext['kbArticles'][number], 'id' | 'title' | 'content'>[]; lang: PromptLang }) => Promise<Judgment<{ proposals: EmailKnowledgeProposal[] }>>;
   validate?: (state: unknown) => Promise<Judgment<EmailKnowledgeValidation[]>>;
@@ -73,7 +74,7 @@ export async function proposeEmailKnowledge(
     return { kbArticles: kb.articles, resolvedCases: [], degraded: kb.degraded };
   }))({ ticketId: input.ticketId,
     accountId: input.accountId, queryText: source.text.slice(0, 2000), casesLimit: 0 });
-  const operational = await approvedWorkflowKnowledge(input.accountId, source.text.slice(0,2000), input.ticketId, db);
+  const operational = await (deps.retrieveApproved ?? approvedWorkflowKnowledge)(input.accountId, source.text.slice(0,2000), input.ticketId, db);
   const approvedKnowledge = [...knowledgeReferences(operational).map(ref => ({ id: ref.id, title: ref.kind, content: ref.content })), ...knowledge.kbArticles.map(article => ({ id: article.id, title: article.title, content: article.content.slice(0, 2000) }))];
 
   const extracted = await (deps.extract ?? (async value => {
@@ -113,7 +114,7 @@ export async function proposeEmailKnowledge(
     const sourceKey = `${input.messageId}:${index}`;
     if (proposal.kind === 'article') rows.push({ account_id: input.accountId, title: proposal.title, content: proposal.content, tags, is_published: false, source_key: sourceKey });
     else learningRows.push({ account_id: input.accountId, origin: 'system_derived', status: 'pending_review',
-      learning_type: proposal.kind === 'business_fact' ? 'diagnostic_pattern' : proposal.kind, summary: proposal.content, ticket_ids: [input.ticketId], source_count: 1, confidence: null, source_key: sourceKey,
+      learning_type: proposal.kind, summary: proposal.content, ticket_ids: [input.ticketId], source_count: 1, confidence: null, source_key: sourceKey,
       evidence: { kind: proposal.kind, title: proposal.title, quotes: proposal.evidence, sourceMessageId: input.messageId, sourceMessages: (history ?? []).map(row => row.id), reasons, callIds: [candidate.callId, extracted.callId, validation.callId], versions: knowledgeReferences(operational), contract: state.contract } });
     results.push({ kind: proposal.kind, proposalIndex: index, proposal, status: 'pending_review' as const, reasons,
       validation: { value: verdict, model: validation.model, callId: validation.callId } });

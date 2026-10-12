@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   buildTicketVerdictQuestions, TicketAnswersSchema, knowledgeImpactQuestions, attentionRecommendation, createDecisionProvider, ProviderError, runDecisionFeature,
   workflowAnswersSchema, workflowQuestions, WORKFLOW_VERSION, runLlmFeature, WorkflowAnalysisSchema, groundWorkflowAnalysis, supportedNextAction, type WorkflowSource,
-  generateEmbedding,
+  generateEmbedding, resolveModelRoute, workflowLanguageSchema,
 } from '@kairo/intelligence';
 import { computeTicketOperationalSla, buildConfigByPriority } from '@kairo/types';
 import { supabase } from './supabase.js';
@@ -17,12 +17,13 @@ import { proposeEmailKnowledge } from './email-knowledge.js';
 export interface DecisionWork {
   id: string; account_id: string; ticket_id: string | null; message_id: string | null;
   knowledge_version_id: string | null; contract: string; dedupe_key: string;
+  case_revision?: number;
 }
 export interface DecisionWorkDeps {
   embed?: (text: string) => Promise<number[]>;
   decide?: typeof runDecisionFeature;
   analyze?: typeof runLlmFeature;
-  decisionProvider?: () => ReturnType<typeof createDecisionProvider>;
+  decisionProvider?: (role: 'classification' | 'knowledge_decision') => ReturnType<typeof createDecisionProvider>;
   propose?: typeof proposeEmailKnowledge;
 }
 
@@ -41,9 +42,25 @@ export async function recordWorkflowResult(input: {
   if (error) throw new ProviderError('Decision history persistence failed', true);
 }
 
+export async function recordWorkflowFailure(work: DecisionWork & { attempts: number }, failure: { retriable: boolean; error: string }, db = supabase) {
+  if (!work.ticket_id) return;
+  let revision = work.case_revision;
+  const revisionSource = revision === undefined ? 'observed_after_failure' : 'attempted_case';
+  if (revision === undefined) {
+    const { data, error } = await db.from('tickets').select('case_revision').eq('account_id', work.account_id).eq('id', work.ticket_id).single();
+    if (error || !data) throw new ProviderError('Failure revision unavailable', true);
+    revision = data.case_revision;
+  }
+  await recordWorkflowResult({ accountId: work.account_id, ticketId: work.ticket_id, messageId: work.message_id ?? undefined,
+    contract: work.contract, revision: revision!, status: 'failed', key: `failure:${work.id}:${work.attempts}`,
+    result: { missing: ['processing_failed'], execution: 'not_executed', retryable: failure.retriable,
+      error: failure.error, attempt: work.attempts, revisionSource } }, db);
+}
+
 async function ticketContext(work: DecisionWork, db = supabase, deps: DecisionWorkDeps = {}) {
   const { data: ticket, error } = await db.from('tickets').select('*').eq('account_id', work.account_id).eq('id', work.ticket_id).maybeSingle();
   if (error || !ticket) throw new ProviderError('Decision ticket unavailable', true);
+  work.case_revision = ticket.case_revision;
   const [messages, directory, sla, settings, contracts, source, assignee] = await Promise.all([
     ticket.conversation_id ? db.from('messages').select('id,direction,body_plain,received_at').eq('account_id', work.account_id).eq('conversation_id', ticket.conversation_id).order('received_at', { ascending: false }).limit(30) : Promise.resolve({ data: [], error: null }),
     resolveSenderIdentity(db, work.account_id, ticket.from_email, { contacts: true, displayName: ticket.from_name ?? null }).then(data => ({ data, error: null }), () => ({ data: null, error: true })),
@@ -73,7 +90,7 @@ async function ticketContext(work: DecisionWork, db = supabase, deps: DecisionWo
 }
 
 async function analyzeContext(ctx: Awaited<ReturnType<typeof ticketContext>>, work: DecisionWork, promptId: string, deps: DecisionWorkDeps) {
-  const result = await (deps.analyze ?? runLlmFeature)({ feature: `${work.contract}_evidence`, promptId, modelRole: 'knowledge_draft',
+  const result = await (deps.analyze ?? runLlmFeature)({ feature: `${work.contract}_evidence`, promptId, modelRole: 'evidence_analysis',
     lang: ctx.language, schema: WorkflowAnalysisSchema,
     vars: { context: JSON.stringify(ctx.state), sources: JSON.stringify(ctx.sources) },
     options: { maxTokens: 2000, temperature: 0 }, context: { accountId: work.account_id, ticketId: ctx.ticket.id }, logger: recordLlmCall });
@@ -102,7 +119,7 @@ async function ensureKnowledgeEmbedding(work: DecisionWork, db: typeof supabase,
   if (insertError) throw new ProviderError('Knowledge embedding persistence failed', true);
 }
 
-const decisionProvider = (deps: DecisionWorkDeps) => deps.decisionProvider?.() ?? createDecisionProvider('gateway', 'knowledge_decision');
+const decisionProvider = (deps: DecisionWorkDeps, role: 'classification' | 'knowledge_decision' = 'knowledge_decision') => deps.decisionProvider?.(role) ?? createDecisionProvider('gateway', role);
 
 export async function processDecisionWork(work: DecisionWork, db = supabase, deps: DecisionWorkDeps = {}) {
   if (work.contract === 'knowledge_change') {
@@ -154,28 +171,48 @@ export async function processDecisionWork(work: DecisionWork, db = supabase, dep
     ...(affected.includes('impact') || affected.includes('alternative') ? { priority: classificationQuestions['priority'] } : {}),
     ...(affected.includes('deadline') ? { urgency: classificationQuestions['urgency'] } : {}),
   };
-  const decision = await (deps.decide ?? runDecisionFeature)({ feature: work.contract, provider: decisionProvider(deps),
-    state: { ...ctx.state, analysis, body: ctx.incoming?.body_plain ?? ctx.ticket.body_plain }, questions: { ...workflowQuestions(stage), ...affectedQuestions },
-    context: { accountId: work.account_id, ticketId: ctx.ticket.id }, logger: recordLlmCall,
-    versions: { state: WORKFLOW_VERSION, questions: WORKFLOW_VERSION } });
-  const answers = workflowAnswersSchema(stage).parse(decision.data.value);
-  const judgments = Object.fromEntries(Object.entries(answers).map(([key, answer]) => [key, answer.choice]));
+  const state = { ...ctx.state, analysis, body: ctx.incoming?.body_plain ?? ctx.ticket.body_plain };
+  const questions = { ...workflowQuestions(stage), ...affectedQuestions };
+  let judgments: Record<string, string>;
+  let model: string;
+  let callId: string | null;
+  let classificationProposal: { priority?: string; urgency?: string };
+  if (stage === 'new_email' && !deps.decisionProvider && resolveModelRoute('classification').capability === 'language') {
+    const schema = workflowLanguageSchema(stage).extend({
+      ...('priority' in affectedQuestions ? { priority: TicketAnswersSchema.shape.priority.shape.choice } : {}),
+      ...('urgency' in affectedQuestions ? { urgency: TicketAnswersSchema.shape.urgency.shape.choice } : {}),
+    });
+    const result = await (deps.analyze ?? runLlmFeature)({ feature: work.contract, promptId: 'incoming-decision', modelRole: 'classification',
+      lang: ctx.language, schema, vars: { context: JSON.stringify(state), questions: JSON.stringify(questions) },
+      options: { maxTokens: 1500, temperature: 0 }, context: { accountId: work.account_id, ticketId: ctx.ticket.id }, logger: recordLlmCall });
+    judgments = workflowLanguageSchema(stage).parse(result.data) as Record<string, string>;
+    const values = schema.parse(result.data);
+    classificationProposal = { ...('priority' in affectedQuestions ? { priority: values.priority } : {}), ...('urgency' in affectedQuestions ? { urgency: values.urgency } : {}) };
+    model = result.model; callId = result.llmCallId;
+  } else {
+    const decision = await (deps.decide ?? runDecisionFeature)({ feature: work.contract,
+      provider: decisionProvider(deps, stage === 'new_email' ? 'classification' : 'knowledge_decision'), state, questions,
+      context: { accountId: work.account_id, ticketId: ctx.ticket.id }, logger: recordLlmCall,
+      versions: { state: WORKFLOW_VERSION, questions: WORKFLOW_VERSION } });
+    const answers = workflowAnswersSchema(stage).parse(decision.data.value);
+    judgments = Object.fromEntries(Object.entries(answers).map(([key, answer]) => [key, answer.choice]));
+    const raw = decision.data.value as Record<string,unknown>;
+    classificationProposal = {
+      ...('priority' in affectedQuestions ? { priority: TicketAnswersSchema.shape.priority.parse(raw['priority']).choice } : {}),
+      ...('urgency' in affectedQuestions ? { urgency: TicketAnswersSchema.shape.urgency.parse(raw['urgency']).choice } : {}),
+    };
+    model = decision.data.modelVersion; callId = decision.llmCallId;
+  }
   const verdict = ctx.ticket.model_verdict ?? {};
-  const raw = decision.data.value as Record<string,unknown>;
-  const classificationProposal = {
-    ...('priority' in affectedQuestions ? { priority: TicketAnswersSchema.shape.priority.parse(raw['priority']).choice } : {}),
-    ...('urgency' in affectedQuestions ? { urgency: TicketAnswersSchema.shape.urgency.parse(raw['urgency']).choice } : {}),
-  };
   const knowledge = work.message_id ? await (deps.propose ?? proposeEmailKnowledge)({ accountId: work.account_id, ticketId: ctx.ticket.id, messageId: work.message_id, stage }, { db }) : { status: 'skipped', reason: 'source_unavailable' };
   await recordWorkflowResult({ accountId: work.account_id, ticketId: ctx.ticket.id, messageId: work.message_id ?? undefined,
     contract: work.contract, revision: ctx.ticket.case_revision, key,
-    status: ctx.versions.length ? 'pending_human_review' : 'pending_knowledge',
+    status: 'pending_human_review',
     result: { judgments, classificationProposal, analysis, identity: ctx.state.identity, assignedTo: ctx.ticket.assigned_to,
       attention: attentionRecommendation(classificationProposal.priority ?? ctx.ticket.priority, judgments['urgency_evidence'] === 'supported' ? classificationProposal.urgency ?? verdict.urgency : null),
       sla: ctx.state.operationalSla, contractualSla: ctx.state.contractualSla, sources: knowledgeReferences(ctx.versions), evidence: ctx.state.evidence,
       nextAction: supportedNextAction(judgments['next_action'], analysis, ctx.state.assignee?.status === 'active' ? ctx.ticket.assigned_to : null), authorization: 'human_review', execution: 'not_executed', knowledge,
-      model: decision.data.modelVersion, callId: decision.llmCallId,
-      missing: ctx.versions.length ? [] : ['approved_knowledge'] } }, db);
+      model, callId, missing: analysis.missing } }, db);
 }
 
 export function sourceFingerprint(value: unknown): string {

@@ -1,6 +1,6 @@
-# historical_learning — v1.0.0
+# historical_learning — v1.1.0
 
-Classify the historical message for ingestion. Reconstruct attempts and confirmed outcomes from the supplied conversation. Separate claims from reusable evidence. Propose learning eligibility, never approve it.
+Classify the historical message for ingestion using its available evidence. Historical reconstruction, outcomes and reusable learning are handled separately with the conversation; do not infer them from this isolated message.
 
 Return the classification fields below and a `workflow` object answering these questions with their fixed identifiers:
 {{workflow_questions}}

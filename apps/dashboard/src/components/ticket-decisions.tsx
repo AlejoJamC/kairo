@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiCall } from '@/lib/api-client';
 
@@ -24,6 +24,7 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
   const [failed, setFailed] = useState(false);
   const [reviewing, setReviewing] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const viewedTicket = useRef<string | null>(null);
   const reviewed = new Set(decisions.flatMap(row => row.result.reviewOf ? [row.result.reviewOf] : []));
   async function review(id: string, accept: boolean) {
     setReviewing(id);
@@ -35,20 +36,27 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
   }
   useEffect(() => {
     let active = true;
+    let loading = false;
     setDecisions([]);
     const load = async () => {
+      if (loading) return;
+      loading = true;
       try {
-        const viewed = await apiCall(`/api/v1/workflow/tickets/${ticketId}/viewed`, { method: 'POST' });
-        if (!viewed.ok) throw new Error('View persistence failed');
+        if (viewedTicket.current !== ticketId) {
+          const viewed = await apiCall(`/api/v1/workflow/tickets/${ticketId}/viewed`, { method: 'POST' });
+          if (!viewed.ok) throw new Error('View persistence failed');
+          if (!active) return;
+          viewedTicket.current = ticketId;
+        }
         const response = await apiCall(`/api/v1/workflow/tickets/${ticketId}`);
         if (!response.ok) throw new Error('Decision retrieval failed');
         const data = await response.json() as { decisions: Decision[] };
         if (active) { setDecisions(data.decisions); setFailed(false); }
-      } catch { if (active) setFailed(true); }
+      } catch { if (active) setFailed(true); } finally { loading = false; }
     };
     void load();
-    const timer = setInterval(() => { void load(); }, 10000);
-    return () => { active = false; clearInterval(timer); };
+    window.addEventListener('focus', load);
+    return () => { active = false; window.removeEventListener('focus', load); };
   }, [ticketId, refresh]);
   const label = (value: string) => t(`decisionWorkflow.values.${value}`, { defaultValue: t('decisionWorkflow.unavailable') });
   return <details style={{ border: '1px solid var(--k-border)', borderRadius: 6, padding: 10 }}>
