@@ -4,6 +4,8 @@ import { Hono } from "hono";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import { serve } from "inngest/hono";
 import { env } from "./env.js";
+import { supabase } from "./lib/supabase.js";
+import { checkEmbeddingDimensions, type ColumnDimensions } from "./lib/embedding-dimensions.js";
 import { inngest } from "./lib/inngest.js";
 import { tier1FastPath } from "./functions/pipeline/tier1-fast-path.js";
 import { tier2Background } from "./functions/pipeline/tier2-background.js";
@@ -76,6 +78,23 @@ app.use(
     functions: [decisionWorkflows, tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill, outboundMessageSend, gmailPoll, gmailPollCron, operationalSlaEscalationCron, classificationRetrySweep, autoApprovalRecomputeCron, knowledgeCandidate, emailKnowledge],
   })
 );
+
+// Vectors from a model whose dimensions differ from the stored columns cannot be
+// stored or compared: refuse to serve rather than fail on the first embedding.
+if (process.env["NODE_ENV"] !== "test") {
+  const check = await checkEmbeddingDimensions({
+    readColumns: async () => {
+      const { data, error } = await supabase.rpc("embedding_dimensions");
+      if (error) throw new Error("Embedding dimensions unavailable");
+      return (data ?? []) as ColumnDimensions[];
+    },
+  });
+  if (check.status === "mismatch") {
+    console.error(`[startup] Embedding model produces ${check.configured} dimensions but ${check.columns.map(c => `${c.table_name}.embedding has ${c.dimensions}`).join(", ")}; set EMBEDDING_DIMENSIONS to match or migrate the columns and re-embed`);
+    process.exit(1);
+  }
+  if (check.status === "unverified") console.warn(`[startup] Embedding dimensions not verified: ${check.reason}`);
+}
 
 export default {
   port: env.PORT,

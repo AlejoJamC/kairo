@@ -23,6 +23,35 @@ CREATE TABLE public.knowledge_versions (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX knowledge_versions_source ON public.knowledge_versions(account_id, source_kind, source_id, revision DESC);
+-- knowledge_versions is append-only, so the vector of each version lives beside it.
+-- Same dimensions as tickets.embedding and kb_articles.embedding: they are compared with each other.
+CREATE TABLE public.knowledge_embeddings (
+  version_id uuid PRIMARY KEY REFERENCES public.knowledge_versions(id),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  embedding extensions.vector(768) NOT NULL,
+  source text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX knowledge_embeddings_vector ON public.knowledge_embeddings USING hnsw (embedding extensions.vector_cosine_ops) WITH (m='16', ef_construction='64');
+-- One row per candidate selection: how many tickets qualified, how many were queued, and what was left out.
+CREATE TABLE public.knowledge_candidate_runs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  version_id uuid NOT NULL REFERENCES public.knowledge_versions(id),
+  similarity_threshold double precision NOT NULL,
+  candidate_limit integer NOT NULL,
+  eligible_tickets integer NOT NULL,
+  selected_tickets integer NOT NULL,
+  limit_reached boolean NOT NULL,
+  pending_without_embedding integer NOT NULL,
+  missing_knowledge_embedding boolean NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX knowledge_candidate_runs_account ON public.knowledge_candidate_runs(account_id, created_at DESC);
+ALTER TABLE public.knowledge_embeddings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.knowledge_candidate_runs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.knowledge_embeddings, public.knowledge_candidate_runs FROM anon, authenticated;
+GRANT ALL ON public.knowledge_embeddings, public.knowledge_candidate_runs TO service_role;
 CREATE TABLE public.ticket_decision_history (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   account_id uuid NOT NULL REFERENCES public.accounts(id),
@@ -103,12 +132,27 @@ CREATE FUNCTION public.record_knowledge_version() RETURNS trigger LANGUAGE plpgs
 DECLARE row_data jsonb; version_id uuid; version_status text; kind text;
 BEGIN
   row_data := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
-  IF TG_OP = 'UPDATE' AND (to_jsonb(OLD) - 'embedding' - 'updated_at') = (row_data - 'embedding' - 'updated_at') THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE' AND (to_jsonb(OLD) - 'embedding' - 'updated_at') = (row_data - 'embedding' - 'updated_at') THEN
+    -- Only the vector changed: attach it to the article's latest version instead of creating one.
+    IF TG_TABLE_NAME = 'kb_articles' AND row_data->>'embedding' IS NOT NULL THEN
+      SELECT id INTO version_id FROM knowledge_versions WHERE source_kind='article' AND source_id=(row_data->>'id')::uuid ORDER BY revision DESC LIMIT 1;
+      IF version_id IS NOT NULL THEN
+        INSERT INTO knowledge_embeddings(version_id, account_id, embedding, source)
+        VALUES (version_id, (row_data->>'account_id')::uuid, (row_data->>'embedding')::extensions.vector, 'kb_articles.embedding')
+        ON CONFLICT (version_id) DO UPDATE SET embedding=EXCLUDED.embedding, source=EXCLUDED.source;
+      END IF;
+    END IF;
+    RETURN NEW;
+  END IF;
   kind := CASE WHEN TG_TABLE_NAME = 'kb_articles' THEN 'article' ELSE 'learning' END;
   version_status := CASE WHEN TG_OP = 'DELETE' THEN 'withdrawn' WHEN kind = 'article' THEN CASE WHEN (row_data->>'is_published')::boolean THEN 'approved' ELSE COALESCE(row_data->>'review_status','pending_review') END ELSE row_data->>'status' END;
   INSERT INTO knowledge_versions(account_id, source_kind, source_id, status, snapshot, actor_user_id)
   VALUES ((row_data->>'account_id')::uuid, kind, (row_data->>'id')::uuid, version_status, row_data - 'embedding', (row_data->>'reviewed_by')::uuid)
   RETURNING id INTO version_id;
+  IF kind = 'article' AND TG_OP <> 'DELETE' AND row_data->>'embedding' IS NOT NULL THEN
+    INSERT INTO knowledge_embeddings(version_id, account_id, embedding, source)
+    VALUES (version_id, (row_data->>'account_id')::uuid, (row_data->>'embedding')::extensions.vector, 'kb_articles.embedding');
+  END IF;
   IF version_status = 'approved' OR TG_OP <> 'INSERT' THEN
     INSERT INTO decision_work_items(account_id, knowledge_version_id, contract, dedupe_key)
     VALUES ((row_data->>'account_id')::uuid, version_id, 'knowledge_change', 'knowledge:' || version_id::text) ON CONFLICT DO NOTHING;
@@ -124,6 +168,14 @@ INSERT INTO public.knowledge_versions(account_id, source_kind, source_id, status
 SELECT account_id, 'article', id, CASE WHEN is_published THEN 'approved' ELSE 'pending_review' END, to_jsonb(a) - 'embedding', reviewed_by FROM public.kb_articles a;
 INSERT INTO public.knowledge_versions(account_id, source_kind, source_id, status, snapshot, actor_user_id)
 SELECT account_id, 'learning', id, status, to_jsonb(l), reviewed_by FROM public.operational_learning l;
+INSERT INTO public.knowledge_embeddings(version_id, account_id, embedding, source)
+SELECT v.id, v.account_id, a.embedding, 'kb_articles.embedding' FROM public.knowledge_versions v
+JOIN public.kb_articles a ON v.source_kind='article' AND a.id=v.source_id WHERE a.embedding IS NOT NULL;
+-- The worker embeds what is left and selects its candidates.
+INSERT INTO public.decision_work_items(account_id, knowledge_version_id, contract, dedupe_key)
+SELECT v.account_id, v.id, 'knowledge_change', 'knowledge:'||v.id FROM public.knowledge_versions v
+WHERE v.status='approved' AND NOT EXISTS (SELECT 1 FROM public.knowledge_embeddings e WHERE e.version_id=v.id)
+ON CONFLICT DO NOTHING;
 
 CREATE FUNCTION public.capture_ticket_decision() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE c text;
@@ -309,18 +361,16 @@ CREATE VIEW public.current_knowledge WITH (security_invoker=true) AS SELECT * FR
 GRANT SELECT ON public.latest_knowledge TO authenticated, service_role;
 GRANT SELECT ON public.current_knowledge TO authenticated, service_role;
 
-CREATE FUNCTION public.knowledge_search_query(p_text text) RETURNS tsquery LANGUAGE sql IMMUTABLE AS $$
- SELECT CASE WHEN count(*)=0 THEN NULL ELSE to_tsquery('simple',string_agg(quote_literal(word),' | ')) END
- FROM (SELECT unnest(tsvector_to_array(to_tsvector('spanish',p_text))) AS word) words WHERE length(word)>3;
+-- Approved knowledge whose version vector is close enough to the query, plus knowledge tied to the ticket.
+CREATE FUNCTION public.find_workflow_knowledge(p_account_id uuid, p_query_embedding extensions.vector, p_ticket_id uuid DEFAULT NULL, p_threshold double precision DEFAULT 0.80, p_limit integer DEFAULT 12) RETURNS SETOF public.knowledge_versions LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public, extensions AS $$
+ SELECT v.* FROM current_knowledge v LEFT JOIN knowledge_embeddings e ON e.version_id=v.id
+ WHERE v.account_id=p_account_id AND (
+  (e.embedding IS NOT NULL AND p_query_embedding IS NOT NULL AND 1-(e.embedding <=> p_query_embedding) >= p_threshold)
+  OR (p_ticket_id IS NOT NULL AND v.snapshot->'ticket_ids' @> jsonb_build_array(p_ticket_id::text)))
+ ORDER BY (e.embedding <=> p_query_embedding) NULLS LAST, v.revision DESC LIMIT greatest(1,least(p_limit,50));
 $$;
-CREATE FUNCTION public.find_workflow_knowledge(p_account_id uuid,p_query text,p_ticket_id uuid DEFAULT NULL) RETURNS SETOF public.knowledge_versions LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
- SELECT v.* FROM current_knowledge v WHERE v.account_id=p_account_id AND (
-  to_tsvector('spanish',COALESCE(v.snapshot->>'content',v.snapshot->>'summary','')) @@ knowledge_search_query(p_query)
-  OR v.snapshot->'ticket_ids' @> jsonb_build_array(p_ticket_id::text))
- ORDER BY ts_rank(to_tsvector('spanish',COALESCE(v.snapshot->>'content',v.snapshot->>'summary','')),knowledge_search_query(p_query)) DESC, v.revision DESC LIMIT 12;
-$$;
-CREATE FUNCTION public.enqueue_knowledge_candidates(p_version_id uuid) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE v public.knowledge_versions; n integer;
+CREATE FUNCTION public.enqueue_knowledge_candidates(p_version_id uuid, p_threshold double precision DEFAULT 0.80, p_limit integer DEFAULT 25) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=public, extensions AS $$
+DECLARE v public.knowledge_versions; emb extensions.vector; n integer; eligible integer; unembedded integer; cap integer := greatest(1,p_limit);
 BEGIN
  SELECT * INTO v FROM knowledge_versions WHERE id=p_version_id;
  IF v.id IS NULL THEN RETURN 0; END IF;
@@ -334,27 +384,49 @@ BEGIN
    UPDATE tickets SET knowledge_context=knowledge_context-v.source_id::text WHERE account_id=v.account_id AND knowledge_context ? v.source_id::text;
    RETURN 0;
  END IF;
+ SELECT embedding INTO emb FROM knowledge_embeddings WHERE version_id=v.id;
+ -- Explicit ties always enter: the source ticket, listed tickets and tickets already using this knowledge.
+ -- Everything else must be pending, carry a vector and reach the threshold; the closest ones are queued up to the cap.
+ WITH explicit AS (
+   SELECT t.id, t.case_revision FROM tickets t WHERE t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL AND (
+     v.snapshot->'ticket_ids' @> jsonb_build_array(t.id::text) OR v.snapshot->'tags' @> jsonb_build_array('origin-ticket:'||t.id) OR t.knowledge_context ? v.source_id::text)),
+ similar AS (
+   SELECT t.id, t.case_revision FROM tickets t
+   WHERE emb IS NOT NULL AND t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
+     AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND t.embedding IS NOT NULL
+     AND 1-(t.embedding <=> emb) >= p_threshold AND t.id NOT IN (SELECT id FROM explicit)
+   ORDER BY t.embedding <=> emb LIMIT cap)
  INSERT INTO decision_work_items(account_id,ticket_id,knowledge_version_id,contract,dedupe_key)
- SELECT t.account_id,t.id,v.id,'knowledge_impact','impact:'||t.id||':'||t.case_revision||':'||v.id FROM tickets t
- WHERE t.account_id=v.account_id AND (
-  to_tsvector('spanish',COALESCE(t.subject,'')||' '||COALESCE(t.body_plain,'')) @@ knowledge_search_query(COALESCE(v.snapshot->>'title','')||' '||COALESCE(v.snapshot->>'content',v.snapshot->>'summary',''))
-  OR v.snapshot->'ticket_ids' @> jsonb_build_array(t.id::text)
-  OR v.snapshot->'tags' @> jsonb_build_array('origin-ticket:'||t.id)
-  OR t.knowledge_context ? v.source_id::text)
+ SELECT v.account_id, c.id, v.id, 'knowledge_impact', 'impact:'||c.id||':'||c.case_revision||':'||v.id
+ FROM (SELECT * FROM explicit UNION ALL SELECT * FROM similar) c
  ON CONFLICT DO NOTHING;
  GET DIAGNOSTICS n=ROW_COUNT;
+ SELECT count(*) INTO eligible FROM tickets t
+ WHERE emb IS NOT NULL AND t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
+   AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND t.embedding IS NOT NULL
+   AND 1-(t.embedding <=> emb) >= p_threshold;
+ SELECT count(*) INTO unembedded FROM tickets t
+ WHERE t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
+   AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND t.embedding IS NULL;
+ INSERT INTO knowledge_candidate_runs(account_id,version_id,similarity_threshold,candidate_limit,eligible_tickets,selected_tickets,limit_reached,pending_without_embedding,missing_knowledge_embedding)
+ VALUES (v.account_id, v.id, p_threshold, cap, eligible, n, eligible > cap, unembedded, emb IS NULL);
  RETURN n;
 END;
 $$;
-CREATE FUNCTION public.enqueue_pending_knowledge(p_account_id uuid) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+CREATE FUNCTION public.enqueue_pending_knowledge(p_account_id uuid, p_threshold double precision DEFAULT 0.80, p_limit integer DEFAULT 25) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE v record; n integer:=0;
 BEGIN
- FOR v IN SELECT id FROM current_knowledge WHERE account_id=p_account_id LOOP n:=n+enqueue_knowledge_candidates(v.id); END LOOP;
+ FOR v IN SELECT id FROM current_knowledge WHERE account_id=p_account_id LOOP n:=n+enqueue_knowledge_candidates(v.id, p_threshold, p_limit); END LOOP;
  RETURN n;
 END;
 $$;
-REVOKE ALL ON FUNCTION public.find_workflow_knowledge(uuid,text,uuid), public.enqueue_knowledge_candidates(uuid), public.enqueue_pending_knowledge(uuid) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.find_workflow_knowledge(uuid,text,uuid), public.enqueue_knowledge_candidates(uuid), public.enqueue_pending_knowledge(uuid) TO service_role;
+-- Dimensions of every column compared by vector; the API refuses to start if its embedding model disagrees.
+CREATE FUNCTION public.embedding_dimensions() RETURNS TABLE(table_name text, dimensions integer) LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ SELECT c.relname::text, a.atttypmod FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace ns ON ns.oid=c.relnamespace
+ WHERE ns.nspname='public' AND a.attname='embedding' AND NOT a.attisdropped AND c.relname IN ('tickets','kb_articles','knowledge_embeddings');
+$$;
+REVOKE ALL ON FUNCTION public.find_workflow_knowledge(uuid,extensions.vector,uuid,double precision,integer), public.enqueue_knowledge_candidates(uuid,double precision,integer), public.enqueue_pending_knowledge(uuid,double precision,integer), public.embedding_dimensions() FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.find_workflow_knowledge(uuid,extensions.vector,uuid,double precision,integer), public.enqueue_knowledge_candidates(uuid,double precision,integer), public.enqueue_pending_knowledge(uuid,double precision,integer), public.embedding_dimensions() TO service_role;
 
 CREATE FUNCTION public.review_workflow_knowledge(p_account_id uuid,p_user_id uuid,p_kind text,p_id uuid,p_version_id uuid,p_decision text,p_title text DEFAULT NULL,p_content text DEFAULT NULL) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE current_id uuid;
@@ -470,6 +542,8 @@ SELECT t.account_id,
  count(*) FILTER(WHERE EXISTS(SELECT 1 FROM ticket_decision_history h JOIN current_knowledge v ON v.id=h.knowledge_version_id WHERE h.ticket_id=t.id AND h.case_revision=t.case_revision AND h.contract='knowledge_impact')) AS evaluated_current_tickets,
  count(*) FILTER(WHERE EXISTS(SELECT 1 FROM jsonb_each(t.knowledge_context) ref JOIN current_knowledge v ON v.id::text=ref.value->>'versionId')) AS using_current_knowledge,
  count(*) FILTER(WHERE t.classification_tier=1 AND EXISTS(SELECT 1 FROM ticket_decision_history h WHERE h.ticket_id=t.id AND h.contract='knowledge_impact')) AS evaluated_initial_tickets,
- count(*) FILTER(WHERE EXISTS(SELECT 1 FROM ticket_decision_history h WHERE h.ticket_id=t.id AND h.status IN ('approved','enriched')) AND EXISTS(SELECT 1 FROM ticket_state_history h WHERE h.ticket_id=t.id AND h.to_state='resolved' AND h.actor_type='human')) AS resolved_with_contributions
+ count(*) FILTER(WHERE EXISTS(SELECT 1 FROM ticket_decision_history h WHERE h.ticket_id=t.id AND h.status IN ('approved','enriched')) AND EXISTS(SELECT 1 FROM ticket_state_history h WHERE h.ticket_id=t.id AND h.to_state='resolved' AND h.actor_type='human')) AS resolved_with_contributions,
+ count(*) FILTER(WHERE t.embedding IS NULL AND t.merged_into_ticket_id IS NULL AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed')) AS pending_without_embedding,
+ (SELECT count(*) FROM public.knowledge_candidate_runs r WHERE r.account_id=t.account_id AND r.limit_reached) AS selections_limit_reached
 FROM public.tickets t GROUP BY t.account_id;
 GRANT SELECT ON public.knowledge_enrichment_coverage TO service_role;

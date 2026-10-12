@@ -150,3 +150,5 @@ export { knowledgeImpactQuestions, workflowContract, workflowQuestions, workflow
 export { WorkflowAnalysisSchema, groundWorkflowAnalysis, supportedNextAction, type WorkflowAnalysis, type WorkflowSource } from './classification/workflow-analysis';
 
 export { buildTicketVerdictQuestions, TicketAnswersSchema } from './classification/decision-questions';
+
+export { configuredEmbeddingDimensions, STORED_EMBEDDING_DIMENSIONS } from './config/providers';

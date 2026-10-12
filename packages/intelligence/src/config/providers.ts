@@ -1,5 +1,5 @@
 import type { CompletionProvider, EmbeddingProvider } from '../providers/base';
-import { ProviderError } from '../providers/base';
+import { ProviderConfigurationError, ProviderError } from '../providers/base';
 import type { DecisionProvider } from '../providers/decision';
 import { resolveModelRoute, type ModelRole } from './model-roles';
 import { GatewayCompletionProvider } from '../providers/gateway/completion';
@@ -42,12 +42,27 @@ export function createTextProvider(role: 'reply' | 'knowledge_draft' = 'reply'):
   return findCompletionProvider('ollama').create(process.env, route.model);
 }
 
+/** The vector columns every embedding is stored in and compared against. */
+export const STORED_EMBEDDING_DIMENSIONS = 768;
+
+/**
+ * Dimensions of the configured embedding model, the same value for every
+ * provider. Vectors from different models are not comparable even at equal
+ * dimensions, so changing the model means re-embedding, not only this value.
+ */
+export function configuredEmbeddingDimensions(env: Record<string, string | undefined> = process.env): number {
+  const raw = env['EMBEDDING_DIMENSIONS'] ?? env['OLLAMA_EMBEDDING_DIMENSIONS'];
+  const value = raw === undefined ? STORED_EMBEDDING_DIMENSIONS : Number(raw);
+  if (!Number.isInteger(value) || value <= 0) throw new ProviderConfigurationError('EMBEDDING_DIMENSIONS must be a positive integer');
+  return value;
+}
+
 export function createEmbeddingProvider(): EmbeddingProvider {
   const route = resolveModelRoute('embedding');
+  const dimensions = configuredEmbeddingDimensions();
   return route.provider === 'gateway'
-    ? new GatewayEmbeddingProvider(gatewayKey(), route.model, 512)
-    : new OllamaEmbeddingProvider(process.env['OLLAMA_BASE_URL'] ?? OLLAMA_DEFAULT_BASE_URL, route.model,
-      Number(process.env['OLLAMA_EMBEDDING_DIMENSIONS'] ?? 512));
+    ? new GatewayEmbeddingProvider(gatewayKey(), route.model, dimensions)
+    : new OllamaEmbeddingProvider(process.env['OLLAMA_BASE_URL'] ?? OLLAMA_DEFAULT_BASE_URL, route.model, dimensions);
 }
 
 export type DecisionProviderId = 'gateway' | 'jev';

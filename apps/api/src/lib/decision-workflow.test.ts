@@ -1,15 +1,21 @@
 import { describe, expect, it, mock, beforeEach, afterAll, spyOn } from 'bun:test';
+// The workflow modules validate their environment on import; synthetic values keep this suite independent of file order.
+process.env['SUPABASE_URL'] ??= 'http://localhost:54321';
+process.env['SUPABASE_SERVICE_ROLE_KEY'] ??= 'synthetic-service-role-key';
+delete process.env['EMBEDDING_SIMILARITY_THRESHOLD'];
+delete process.env['KNOWLEDGE_CANDIDATE_LIMIT'];
 const original = { ...await import('@kairo/intelligence') };
 const decide = mock(async (_request: Record<string, unknown>): Promise<{data:{value:Record<string,unknown>;modelVersion:string};llmCallId:string}> => ({ data:{ value:{ contribution:{choice:'solution'} },modelVersion:'decision-model' },llmCallId:'decision-call' }));
 const analyze = mock(async (_request: Record<string, unknown>) => ({ data:{ observations:[{dimension:'solution',statement:'Use the recovery procedure.',status:'supported',citations:[{sourceId:'version',quote:'Use account recovery.'}]}],missing:[],waitingOn:null,resumeWhen:null },model:'draft-model',promptVersion:'1.0.0',llmCallId:'draft-call' }));
 const knowledgeModule = await import('./email-knowledge.js');
 const propose = spyOn(knowledgeModule, 'proposeEmailKnowledge').mockResolvedValue({status:'skipped',reason:'source_unavailable'});
-mock.module('@kairo/intelligence',()=>({...original,createDecisionProvider:()=>({model:'decision-model'}),runDecisionFeature:decide,runLlmFeature:analyze}));
+const embed = mock(async (_text: string) => [0.1, 0.2]);
+mock.module('@kairo/intelligence',()=>({...original,createDecisionProvider:()=>({model:'decision-model'}),runDecisionFeature:decide,runLlmFeature:analyze,generateEmbedding:embed}));
 afterAll(() => propose.mockRestore());
 const { processDecisionWork } = await import('./decision-workflow');
 const version = { id:'version',source_id:'article',account_id:'account',source_kind:'article',revision:1,status:'approved',snapshot:{content:'Use account recovery.'} };
 const work = {id:'job',account_id:'account',ticket_id:'ticket',message_id:'message',knowledge_version_id:'version',contract:'knowledge_impact',dedupe_key:'job'};
-function database(options: { current?:boolean; existing?:boolean; persistStatus?:string } = {}) {
+function database(options: { current?:boolean; existing?:boolean; persistStatus?:string; embedded?:boolean } = {}) {
   const saved: Record<string,unknown>[] = [];
   const rpc = mock(async (name:string,args:Record<string,unknown>) => {
     if (name === 'find_workflow_knowledge') return {data:[version],error:null};
@@ -19,7 +25,8 @@ function database(options: { current?:boolean; existing?:boolean; persistStatus?
     const result = { error:null, data: table === 'tickets' ? {id:'ticket',account_id:'account',subject:'Access',body_plain:'Need account recovery.',case_revision:2,priority:'P2',model_verdict:{urgency:'medium'},conversation_id:'conversation',client_id:null,assigned_to:null,status:'open',received_at:'2026-01-01T00:00:00Z'}
       : table === 'messages' ? [{id:'message',direction:'inbound',body_plain:'Need account recovery.',received_at:'2026-01-01T00:00:00Z'}]
       : table === 'accounts' ? {language:'en',business_context:'Acme provides account support.'}
-      : table === 'current_knowledge' ? options.current === false ? null : version
+      : table === 'current_knowledge' || table === 'knowledge_versions' ? options.current === false ? null : version
+      : table === 'knowledge_embeddings' ? options.embedded ? {version_id:'version'} : null
       : table === 'ticket_decision_history' ? options.existing ? {id:'existing'} : null : [] };
     const chain = {select:()=>chain,eq:()=>chain,order:()=>chain,limit:()=>chain,
       single:async()=> table === 'messages' ? {data:(result.data as unknown[])[0],error:null} : result,
@@ -81,6 +88,18 @@ describe('durable workflow execution',()=>{
     expect(saved[0]).toMatchObject({result:{classificationProposal:{},attention:'unknown',nextAction:'request_information'}});
   });
 
+  it('embeds an approved version before selecting tickets, with the configured threshold and limit',async()=>{
+    const {db,saved,rpc}=database(); const vector=mock(async (_text: string)=>[0.3,0.4]);
+    await processDecisionWork({...work,contract:'knowledge_change',ticket_id:null,message_id:null},db,{embed:vector});
+    expect(vector).toHaveBeenCalledWith('Use account recovery.');
+    expect(saved).toContainEqual(expect.objectContaining({version_id:'version',embedding:[0.3,0.4],source:'workflow'}));
+    expect(rpc).toHaveBeenCalledWith('enqueue_knowledge_candidates',{p_version_id:'version',p_threshold:0.8,p_limit:25});
+  });
+  it('does not embed a version that already has a vector',async()=>{
+    const {db}=database({embedded:true}); const vector=mock(async (_text: string)=>[0.3]);
+    await processDecisionWork({...work,contract:'knowledge_change',ticket_id:null,message_id:null},db,{embed:vector});
+    expect(vector).not.toHaveBeenCalled();
+  });
 });
 
 function answers(stage:'historical'|'incoming') {

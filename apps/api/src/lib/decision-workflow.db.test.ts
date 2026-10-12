@@ -7,13 +7,20 @@ const enabled = process.env['RUN_WORKFLOW_DB_TESTS'] === '1';
 const sql = new SQL('postgresql://postgres:test-only-password@127.0.0.1:55494/postgres?sslmode=disable');
 afterAll(async () => { await sql.close(); });
 
+/** A 768-dimension unit vector whose cosine similarity with the knowledge vector `vec(1)` is `similarity`. */
+function vec(similarity: number, axis = 1): string {
+  const values = Array<number>(768).fill(0);
+  values[0] = similarity; values[axis] = Math.sqrt(Math.max(0, 1 - similarity * similarity));
+  return `[${values.join(',')}]`;
+}
+
 async function fixture() {
   const account = randomUUID(), user = randomUUID(), ticket = randomUUID(), article = randomUUID();
   await sql`INSERT INTO auth.users(id,email) VALUES(${user},${`${user}@acme.com`})`;
   await sql`INSERT INTO accounts(id,name,slug,plan_id) SELECT ${account},'Acme',${account},id FROM plans LIMIT 1`;
   await sql`INSERT INTO account_members(account_id,user_id,role) VALUES(${account},${user},'agent')`;
-  await sql`INSERT INTO tickets(id,account_id,subject,body_plain,classification_tier,assigned_to,priority,model_verdict) VALUES(${ticket},${account},'Acme access recovery','Reset access to the Acme account.',1,${user},'P2','{"urgency":"medium"}')`;
-  await sql`INSERT INTO kb_articles(id,account_id,title,content,is_published) VALUES(${article},${account},'Access recovery','Reset access to the Acme account.',false)`;
+  await sql`INSERT INTO tickets(id,account_id,subject,body_plain,classification_tier,assigned_to,priority,model_verdict,embedding) VALUES(${ticket},${account},'Acme access recovery','Reset access to the Acme account.',1,${user},'P2','{"urgency":"medium"}',${vec(0.95)}::extensions.vector)`;
+  await sql`INSERT INTO kb_articles(id,account_id,title,content,is_published,embedding) VALUES(${article},${account},'Access recovery','Reset access to the Acme account.',false,${vec(1)}::extensions.vector)`;
   const version = async () => (await sql`SELECT id FROM latest_knowledge WHERE source_id=${article}`)[0].id as string;
   const approve = async () => { await sql`SELECT review_workflow_knowledge(${account},${user},'article',${article},${await version()},'approved')`; return version(); };
   const enrich = async (id: string, key: string = randomUUID(), revision = 0, useful = true) => (await sql`SELECT record_ticket_enrichment(${account},${ticket},${revision},${id},'{}',${useful},${key}) AS status`)[0].status as string;
@@ -23,9 +30,9 @@ async function fixture() {
 describe.skipIf(!enabled)('decision workflow database guarantees', () => {
   it('keeps inferred knowledge out of retrieval until an active agent approves it', async () => {
     const f = await fixture();
-    expect(await sql`SELECT id FROM find_workflow_knowledge(${f.account},'access recovery',${f.ticket})`).toHaveLength(0);
+    expect(await sql`SELECT id FROM find_workflow_knowledge(${f.account},${vec(0.95)}::extensions.vector,${f.ticket},0.8)`).toHaveLength(0);
     const approved = await f.approve();
-    expect((await sql`SELECT id FROM find_workflow_knowledge(${f.account},'access recovery',${f.ticket})`)[0].id).toBe(approved);
+    expect((await sql`SELECT id FROM find_workflow_knowledge(${f.account},${vec(0.95)}::extensions.vector,${f.ticket},0.8)`)[0].id).toBe(approved);
     expect((await sql`SELECT actor_user_id FROM knowledge_versions WHERE id=${approved}`)[0].actor_user_id).toBe(f.user);
   });
   it('rejects stale reviews and revoked membership', async () => {
@@ -37,7 +44,8 @@ describe.skipIf(!enabled)('decision workflow database guarantees', () => {
   });
   it('selects a relevant initial ticket without reingesting or touching an unrelated ticket', async () => {
     const f = await fixture(), version = await f.approve(), unrelated = randomUUID();
-    await sql`INSERT INTO tickets(id,account_id,subject,body_plain) VALUES(${unrelated},${f.account},'Bananas','Fruit delivery')`;
+    // Same words as the article, different meaning: the old lexical OR query selected it.
+    await sql`INSERT INTO tickets(id,account_id,subject,body_plain,embedding) VALUES(${unrelated},${f.account},'Acme account access','Reset access to the Acme account invoice export.',${vec(0.2)}::extensions.vector)`;
     await sql`SELECT enqueue_knowledge_candidates(${version})`;
     await sql`SELECT enqueue_knowledge_candidates(${version})`;
     const jobs = await sql`SELECT ticket_id FROM decision_work_items WHERE account_id=${f.account} AND contract='knowledge_impact'`;
@@ -170,6 +178,81 @@ describe.skipIf(!enabled)('decision workflow database guarantees', () => {
     const [metrics] = await sql`SELECT * FROM workflow_metrics WHERE account_id=${f.account} AND contract='knowledge_impact'`;
     expect(Number(metrics.without_contribution)).toBe(1);
     expect(metrics.no_contribution_tokens).toBeNull();
+  });
+
+  describe('semantic knowledge selection', () => {
+    async function pendingTicket(account: string, similarity: number, status = 'open', extra: { embedding?: boolean; tags?: string } = {}) {
+      const id = randomUUID();
+      await sql`INSERT INTO tickets(id,account_id,subject,body_plain,status,embedding) VALUES(${id},${account},'Synthetic','Synthetic body',${status},
+        ${extra.embedding === false ? null : vec(similarity, 2)}::extensions.vector)`;
+      return id;
+    }
+    const queued = async (account: string) => (await sql`SELECT ticket_id FROM decision_work_items WHERE account_id=${account} AND contract='knowledge_impact'`).map((row: { ticket_id: string }) => row.ticket_id);
+    const lastRun = async (account: string) => (await sql`SELECT * FROM knowledge_candidate_runs WHERE account_id=${account} ORDER BY created_at DESC LIMIT 1`)[0];
+
+    it('queues pending tickets at or above the threshold and nothing below it', async () => {
+      const f = await fixture(), version = await f.approve();
+      const above = await pendingTicket(f.account, 0.81), below = await pendingTicket(f.account, 0.79);
+      await sql`SELECT enqueue_knowledge_candidates(${version},0.8,25)`;
+      const jobs = await queued(f.account);
+      expect(jobs).toContain(above);
+      expect(jobs).not.toContain(below);
+    });
+
+    it('skips finished tickets unless they are explicitly tied to the knowledge', async () => {
+      const f = await fixture(), version = await f.approve();
+      const resolved = await pendingTicket(f.account, 0.95, 'resolved');
+      const origin = await pendingTicket(f.account, 0.1, 'closed');
+      await sql`UPDATE kb_articles SET tags=ARRAY['origin-ticket:'||${origin}] WHERE id=${f.article}`;
+      const tied = (await sql`SELECT id FROM latest_knowledge WHERE source_id=${f.article}`)[0].id as string;
+      await sql`SELECT review_workflow_knowledge(${f.account},${f.user},'article',${f.article},${tied},'approved')`;
+      await sql`SELECT enqueue_knowledge_candidates(${await f.version()},0.8,25)`;
+      const jobs = await queued(f.account);
+      expect(jobs).not.toContain(resolved);
+      expect(jobs).toContain(origin);
+      expect(version).not.toBe(await f.version());
+    });
+
+    it('queues at most the configured limit, closest first, and records that the limit was reached', async () => {
+      const f = await fixture(), version = await f.approve();
+      const similar = [];
+      for (let i = 0; i < 30; i++) similar.push(await pendingTicket(f.account, 0.81 + i * 0.005));
+      await sql`SELECT enqueue_knowledge_candidates(${version},0.8,25)`;
+      const jobs = await queued(f.account);
+      expect(jobs).toHaveLength(25);
+      expect(jobs).toContain(similar[29]);
+      expect(jobs).not.toContain(similar[0]);
+      expect(await lastRun(f.account)).toMatchObject({ eligible_tickets: 31, selected_tickets: 25, limit_reached: true, candidate_limit: 25 });
+    });
+
+    it('counts pending tickets without a vector instead of guessing a match for them', async () => {
+      const f = await fixture(), version = await f.approve();
+      const unembedded = await pendingTicket(f.account, 0, 'open', { embedding: false });
+      await sql`SELECT enqueue_knowledge_candidates(${version},0.8,25)`;
+      expect(await queued(f.account)).not.toContain(unembedded);
+      expect(await lastRun(f.account)).toMatchObject({ pending_without_embedding: 1, missing_knowledge_embedding: false });
+    });
+
+    it('copies the article vector into each version, including one that arrives after approval', async () => {
+      const f = await fixture(), approved = await f.approve();
+      expect(await sql`SELECT version_id FROM knowledge_embeddings WHERE version_id=${approved}`).toHaveLength(1);
+      await sql`UPDATE kb_articles SET embedding=${vec(0.9, 3)}::extensions.vector WHERE id=${f.article}`;
+      expect(await f.version()).toBe(approved);
+      const [row] = await sql`SELECT 1-(embedding <=> ${vec(1)}::extensions.vector) AS similarity FROM knowledge_embeddings WHERE version_id=${approved}`;
+      expect(Number(row.similarity)).toBeCloseTo(0.9, 5);
+    });
+
+    it('retrieves only approved knowledge at or above the threshold', async () => {
+      const f = await fixture();
+      await f.approve();
+      expect(await sql`SELECT id FROM find_workflow_knowledge(${f.account},${vec(0.81, 4)}::extensions.vector,NULL,0.8)`).toHaveLength(1);
+      expect(await sql`SELECT id FROM find_workflow_knowledge(${f.account},${vec(0.79, 4)}::extensions.vector,NULL,0.8)`).toHaveLength(0);
+    });
+
+    it('reports the dimensions of every compared vector column', async () => {
+      const rows = await sql`SELECT table_name, dimensions FROM embedding_dimensions() ORDER BY table_name`;
+      expect(rows.map((row: { table_name: string; dimensions: number }) => [row.table_name, row.dimensions])).toEqual([['kb_articles', 768], ['knowledge_embeddings', 768], ['tickets', 768]]);
+    });
   });
 
   describe('work queue reliability', () => {
