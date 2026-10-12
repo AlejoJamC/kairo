@@ -70,6 +70,27 @@ workflow.post('/tickets/:id/decisions/:decisionId/review', async c => {
   const { error } = await supabase.rpc('review_ticket_enrichment', { p_account_id:ctx.accountId,p_ticket_id:c.req.param('id'),p_user_id:ctx.userId,p_decision_id:c.req.param('decisionId'),p_accept:input.data.accept });
   return error ? c.json({ error:'Proposal changed or permission denied' },409) : c.body(null,204);
 });
+// Mass reactivation of failed decision work. No consumer is wired yet: who may
+// trigger it (the account owner from settings, Kairo administrators from Kelan,
+// or both), how, and under which rules is still undecided (KAI-94). Until then
+// it is restricted to the account owner, and the SQL function enforces it too.
+const Requeue = z.object({
+  ids: z.array(UUID).min(1).max(500).optional(),
+  contract: z.enum(['incoming_email_decision', 'historical_learning', 'knowledge_change', 'knowledge_impact']).optional(),
+}).strict();
+workflow.post('/work/requeue', async c => {
+  const ctx = await resolveUserAndAccount(c.req.header('Authorization') ?? '');
+  if (!ctx) return c.json({ error: 'Unauthorized' }, 401);
+  const role = await resolveMemberRole(ctx.userId, ctx.accountId);
+  if (!isRoleAllowed(role ? { role, status: 'active' } : null, ['owner'])) return c.json({ error: 'Forbidden' }, 403);
+  const parsed = Requeue.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: 'Invalid requeue request' }, 400);
+  const { data, error } = await supabase.rpc('requeue_failed_decision_work', { p_account_id: ctx.accountId, p_user_id: ctx.userId,
+    p_ids: parsed.data.ids ?? null, p_contract: parsed.data.contract ?? null });
+  if (error) return c.json({ error: 'Requeue failed or permission denied' }, 409);
+  return c.json({ requeued: data as number });
+});
+
 workflow.get('/metrics', async c => {
   const ctx = await resolveUserAndAccount(c.req.header('Authorization') ?? '');
   if (!ctx) return c.json({ error:'Unauthorized' },401);

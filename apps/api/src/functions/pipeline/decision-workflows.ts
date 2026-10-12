@@ -1,30 +1,47 @@
 import { getFlag } from '@kairo/feature-flags';
 import { inngest } from '../../lib/inngest.js';
 import { supabase } from '../../lib/supabase.js';
-import { processDecisionWork, recordWorkflowResult, type DecisionWork } from '../../lib/decision-workflow.js';
+import { processDecisionWork, recordWorkflowResult } from '../../lib/decision-workflow.js';
+import { MAX_DECISION_ATTEMPTS, processClaim, type BreakerState, type ClaimedDecisionWork } from '../../lib/decision-work-queue.js';
 
 export const decisionWorkflows = inngest.createFunction({
   id: 'decision-workflows', retries: 2, concurrency: { limit: 1 },
   triggers: [{ cron: '* * * * *' }, { event: 'decisions/work.requested' }],
-}, async ({ step, attempt }) => {
+}, async ({ step }) => {
   if (!getFlag('enable_email_knowledge')) return { status: 'disabled' };
   const jobs = await step.run('claim-work', async () => {
-    const { data, error } = await supabase.rpc('claim_decision_work', { p_limit: 10 });
+    const { data, error } = await supabase.rpc('claim_decision_work', { p_limit: 10, p_max_attempts: MAX_DECISION_ATTEMPTS });
     if (error) throw new Error('Decision work claim failed');
-    return data as DecisionWork[];
+    return data as ClaimedDecisionWork[];
   });
-  for (const job of jobs) {
-    await step.run(`process-${job.id}`, async () => {
-      try { await processDecisionWork(job); }
-      catch (error) {
-        if (job.ticket_id) await recordWorkflowResult({ accountId:job.account_id,ticketId:job.ticket_id,messageId:job.message_id ?? undefined,
-          contract:job.contract,revision:0,status:'failed',key:`failure:${job.id}:${attempt}`,
-          result:{ missing:['processing_failed'],execution:'not_executed',retryable:true } });
-        throw error;
-      }
-      const { error } = await supabase.from('decision_work_items').update({ status: 'done' }).eq('id', job.id);
+  const outcomes = await processClaim(jobs, {
+    run: (name, fn) => step.run(name, fn) as never,
+    process: (work) => processDecisionWork(work),
+    markDone: async (work) => {
+      const { error } = await supabase.from('decision_work_items').update({ status: 'done' }).eq('id', work.id);
       if (error) throw new Error('Decision completion persistence failed');
-    });
-  }
-  return { completed: jobs.length };
+    },
+    recordFailure: async (work, failure) => {
+      if (!work.ticket_id) return;
+      await recordWorkflowResult({ accountId: work.account_id, ticketId: work.ticket_id, messageId: work.message_id ?? undefined,
+        contract: work.contract, revision: 0, status: 'failed', key: `failure:${work.id}:${work.attempts}`,
+        result: { missing: ['processing_failed'], execution: 'not_executed', retryable: failure.retriable, error: failure.error, attempt: work.attempts } });
+    },
+    release: async (work, failure) => {
+      const { data, error } = await supabase.rpc('release_decision_work', { p_id: work.id, p_error: failure.error,
+        p_retriable: failure.retriable, p_consume_attempt: failure.consumeAttempt, p_max_attempts: MAX_DECISION_ATTEMPTS });
+      if (error) throw new Error('Decision work release failed');
+      return data as string;
+    },
+    recordOutcome: async (outcome) => {
+      const { data, error } = await supabase.rpc('record_decision_outcome', { p_ok: outcome.ok, p_outage_failure: outcome.outageFailure });
+      if (error) throw new Error('Decision outcome persistence failed');
+      return data as BreakerState;
+    },
+    returnUnprocessed: async (work) => {
+      const { error } = await supabase.rpc('return_decision_work', { p_id: work.id });
+      if (error) throw new Error('Decision work return failed');
+    },
+  });
+  return { claimed: jobs.length, outcomes };
 });

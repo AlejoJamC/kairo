@@ -48,12 +48,37 @@ CREATE TABLE public.decision_work_items (
   knowledge_version_id uuid REFERENCES public.knowledge_versions(id),
   contract text NOT NULL,
   dedupe_key text NOT NULL,
-  status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','done')),
+  status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','done','failed')),
+  attempts integer NOT NULL DEFAULT 0 CHECK(attempts >= 0),
+  last_error text,
+  first_failed_at timestamptz,
+  requeued_at timestamptz,
+  requeued_by uuid REFERENCES auth.users(id),
   available_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(account_id, dedupe_key)
 );
 CREATE INDEX decision_work_pending ON public.decision_work_items(status, available_at);
+-- Queue-wide outage breaker: one row. level 0 is closed; levels 1-3 hold the whole queue for 15 min, 3 h and 6 h.
+CREATE TABLE public.decision_work_breaker (
+  id boolean PRIMARY KEY DEFAULT true CHECK (id),
+  level integer NOT NULL DEFAULT 0 CHECK (level BETWEEN 0 AND 3),
+  open_until timestamptz,
+  half_open boolean NOT NULL DEFAULT false,
+  changed_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO public.decision_work_breaker DEFAULT VALUES;
+CREATE TABLE public.decision_work_outcomes (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  recorded_at timestamptz NOT NULL DEFAULT now(),
+  ok boolean NOT NULL,
+  outage_failure boolean NOT NULL
+);
+CREATE INDEX decision_work_outcomes_recent ON public.decision_work_outcomes(recorded_at);
+ALTER TABLE public.decision_work_breaker ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.decision_work_outcomes ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.decision_work_breaker, public.decision_work_outcomes FROM anon, authenticated;
+GRANT ALL ON public.decision_work_breaker, public.decision_work_outcomes TO service_role;
 
 CREATE FUNCTION public.reject_decision_history_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'Decision and knowledge history is append-only'; END;
@@ -141,9 +166,97 @@ END;
 $$;
 CREATE TRIGGER message_decision_enqueue AFTER INSERT ON public.ticket_messages FOR EACH ROW EXECUTE FUNCTION public.enqueue_message_decision();
 
-CREATE FUNCTION public.claim_decision_work(p_limit integer DEFAULT 10) RETURNS SETOF public.decision_work_items LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
-  UPDATE decision_work_items SET status='running', available_at=now()+interval '20 minutes'
-  WHERE id IN (SELECT id FROM decision_work_items WHERE status <> 'done' AND available_at <= now() ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT greatest(1,least(p_limit,50))) RETURNING *;
+-- Retry n of an item runs at a fixed offset from its first failure: 1 min, 5 min, 15 min, 3 h, 6 h.
+CREATE FUNCTION public.decision_retry_offset(p_retry integer) RETURNS interval LANGUAGE sql IMMUTABLE AS $$
+  SELECT (ARRAY[interval '1 minute', interval '5 minutes', interval '15 minutes', interval '3 hours', interval '6 hours'])[greatest(1,least(p_retry,5))];
+$$;
+CREATE FUNCTION public.decision_breaker_delay(p_level integer) RETURNS interval LANGUAGE sql IMMUTABLE AS $$
+  SELECT (ARRAY[interval '15 minutes', interval '3 hours', interval '6 hours'])[greatest(1,least(p_level,3))];
+$$;
+CREATE FUNCTION public.claim_decision_work(p_limit integer DEFAULT 10, p_max_attempts integer DEFAULT 6) RETURNS SETOF public.decision_work_items LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE b public.decision_work_breaker; batch integer := greatest(1,least(p_limit,50));
+BEGIN
+  SELECT * INTO b FROM decision_work_breaker FOR UPDATE;
+  -- During a mass outage nothing is claimed until the breaker's current step is due.
+  IF b.open_until IS NOT NULL AND b.open_until > now() THEN RETURN; END IF;
+  IF b.level > 0 THEN
+    -- Due step: probe with a small batch; the lease keeps further claims out until the probe reports.
+    batch := least(batch, 3);
+    UPDATE decision_work_breaker SET half_open=true, open_until=now()+interval '20 minutes', changed_at=now();
+  END IF;
+  -- A lease that expired after the last allowed attempt never completed: stop retrying it.
+  UPDATE decision_work_items SET status='failed', last_error=COALESCE(last_error,'attempts_exhausted')
+  WHERE status IN ('pending','running') AND available_at <= now() AND attempts >= greatest(1,p_max_attempts);
+  -- Mail arriving now is handled before knowledge fan-out and before history is incorporated.
+  RETURN QUERY
+  UPDATE decision_work_items SET status='running', attempts=attempts+1, available_at=now()+interval '20 minutes'
+  WHERE id IN (SELECT id FROM decision_work_items
+    WHERE status IN ('pending','running') AND available_at <= now() AND attempts < greatest(1,p_max_attempts)
+    ORDER BY CASE contract WHEN 'incoming_email_decision' THEN 0 WHEN 'knowledge_change' THEN 1 WHEN 'knowledge_impact' THEN 2 ELSE 3 END, available_at, created_at
+    FOR UPDATE SKIP LOCKED LIMIT batch)
+  RETURNING *;
+END;
+$$;
+CREATE FUNCTION public.release_decision_work(p_id uuid, p_error text, p_retriable boolean, p_consume_attempt boolean DEFAULT true, p_max_attempts integer DEFAULT 6) RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE w public.decision_work_items; first timestamptz;
+BEGIN
+  SELECT * INTO w FROM decision_work_items WHERE id=p_id FOR UPDATE;
+  IF w.id IS NULL OR w.status <> 'running' THEN RETURN COALESCE(w.status,'missing'); END IF;
+  IF NOT p_retriable THEN
+    UPDATE decision_work_items SET status='failed', last_error=left(p_error,500) WHERE id=p_id;
+    RETURN 'failed';
+  END IF;
+  IF NOT p_consume_attempt THEN
+    -- A deployment fault says nothing about the item: it keeps its place on the ladder.
+    UPDATE decision_work_items SET status='pending', attempts=greatest(0,w.attempts-1), last_error=left(p_error,500),
+      available_at=now()+interval '15 minutes' WHERE id=p_id;
+    RETURN 'pending';
+  END IF;
+  first := COALESCE(w.first_failed_at, now());
+  IF w.attempts >= greatest(1,p_max_attempts) THEN
+    UPDATE decision_work_items SET status='failed', first_failed_at=first, last_error=left(p_error,500) WHERE id=p_id;
+    RETURN 'failed';
+  END IF;
+  UPDATE decision_work_items SET status='pending', first_failed_at=first, last_error=left(p_error,500),
+    available_at=first+decision_retry_offset(w.attempts) WHERE id=p_id;
+  RETURN 'pending';
+END;
+$$;
+-- An item claimed but never executed because the breaker opened goes back untouched.
+CREATE FUNCTION public.return_decision_work(p_id uuid) RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  UPDATE decision_work_items SET status='pending', attempts=greatest(0,attempts-1), available_at=now() WHERE id=p_id AND status='running';
+$$;
+CREATE FUNCTION public.record_decision_outcome(p_ok boolean, p_outage_failure boolean) RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE b public.decision_work_breaker; total integer; failures integer; next_level integer;
+BEGIN
+  INSERT INTO decision_work_outcomes(ok, outage_failure) VALUES (p_ok, p_outage_failure);
+  DELETE FROM decision_work_outcomes WHERE recorded_at < now()-interval '1 day';
+  SELECT * INTO b FROM decision_work_breaker FOR UPDATE;
+  IF b.half_open THEN
+    IF p_ok THEN
+      UPDATE decision_work_breaker SET level=0, open_until=NULL, half_open=false, changed_at=now();
+      RETURN 'closed';
+    END IF;
+    IF NOT p_outage_failure THEN RETURN 'probing'; END IF;
+    IF b.level = 3 THEN
+      -- Six hours after their first failure, items that still fail stay failed.
+      UPDATE decision_work_items SET status='failed', last_error=COALESCE(last_error,'outage_exceeded_retry_window')
+      WHERE status IN ('pending','running') AND first_failed_at IS NOT NULL AND first_failed_at <= now()-interval '6 hours';
+    END IF;
+    next_level := least(b.level+1, 3);
+    UPDATE decision_work_breaker SET level=next_level, open_until=now()+decision_breaker_delay(next_level), half_open=false, changed_at=now();
+    RETURN 'open';
+  END IF;
+  IF b.level > 0 THEN RETURN 'open'; END IF;
+  -- Mass outage: at least 10 executions in 5 minutes, 80% of them provider or network failures.
+  SELECT count(*), count(*) FILTER (WHERE outage_failure) INTO total, failures FROM decision_work_outcomes
+  WHERE recorded_at > greatest(now()-interval '5 minutes', b.changed_at);
+  IF total >= 10 AND failures >= 0.8 * total THEN
+    UPDATE decision_work_breaker SET level=1, open_until=now()+decision_breaker_delay(1), half_open=false, changed_at=now();
+    RETURN 'open';
+  END IF;
+  RETURN 'closed';
+END;
 $$;
 CREATE FUNCTION public.mark_ticket_viewed(p_account_id uuid,p_ticket_id uuid,p_user_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
@@ -170,8 +283,25 @@ BEGIN
   RETURN outcome;
 END;
 $$;
-REVOKE ALL ON FUNCTION public.claim_decision_work(integer), public.mark_ticket_viewed(uuid,uuid,uuid), public.record_ticket_enrichment(uuid,uuid,bigint,uuid,jsonb,boolean,text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.claim_decision_work(integer), public.mark_ticket_viewed(uuid,uuid,uuid), public.record_ticket_enrichment(uuid,uuid,bigint,uuid,jsonb,boolean,text) TO service_role;
+-- Puts failed items of one account back in the queue with a fresh attempt budget; last_error is kept for audit.
+CREATE FUNCTION public.requeue_failed_decision_work(p_account_id uuid, p_user_id uuid, p_ids uuid[] DEFAULT NULL, p_contract text DEFAULT NULL, p_limit integer DEFAULT 500) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE n integer;
+BEGIN
+  PERFORM 1 FROM account_members WHERE account_id=p_account_id AND user_id=p_user_id AND status='active' AND role='owner' FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Permission denied'; END IF;
+  UPDATE decision_work_items SET status='pending', attempts=0, first_failed_at=NULL, available_at=now(), requeued_at=now(), requeued_by=p_user_id
+  WHERE id IN (SELECT id FROM decision_work_items
+    WHERE account_id=p_account_id AND status='failed'
+      AND (p_ids IS NULL OR id = ANY(p_ids)) AND (p_contract IS NULL OR contract=p_contract)
+    ORDER BY created_at LIMIT greatest(1,least(p_limit,500)) FOR UPDATE SKIP LOCKED);
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.requeue_failed_decision_work(uuid,uuid,uuid[],text,integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.requeue_failed_decision_work(uuid,uuid,uuid[],text,integer) TO service_role;
+REVOKE ALL ON FUNCTION public.claim_decision_work(integer,integer), public.release_decision_work(uuid,text,boolean,boolean,integer), public.return_decision_work(uuid), public.record_decision_outcome(boolean,boolean), public.mark_ticket_viewed(uuid,uuid,uuid), public.record_ticket_enrichment(uuid,uuid,bigint,uuid,jsonb,boolean,text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_decision_work(integer,integer), public.release_decision_work(uuid,text,boolean,boolean,integer), public.return_decision_work(uuid), public.record_decision_outcome(boolean,boolean), public.mark_ticket_viewed(uuid,uuid,uuid), public.record_ticket_enrichment(uuid,uuid,bigint,uuid,jsonb,boolean,text) TO service_role;
 
 CREATE VIEW public.latest_knowledge WITH (security_invoker=true) AS
 SELECT DISTINCT ON (account_id,source_kind,source_id) * FROM public.knowledge_versions ORDER BY account_id,source_kind,source_id,revision DESC;

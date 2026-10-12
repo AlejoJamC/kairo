@@ -172,4 +172,138 @@ describe.skipIf(!enabled)('decision workflow database guarantees', () => {
     expect(metrics.no_contribution_tokens).toBeNull();
   });
 
+  describe('work queue reliability', () => {
+    async function isolatedQueue() {
+      const f = await fixture();
+      // The queue and the breaker are global: park other accounts' items and reset the breaker.
+      await sql`UPDATE decision_work_items SET available_at=now()+interval '1 day' WHERE account_id<>${f.account} AND status IN ('pending','running')`;
+      await sql`DELETE FROM decision_work_items WHERE account_id=${f.account}`;
+      await sql`DELETE FROM decision_work_outcomes`;
+      await sql`UPDATE decision_work_breaker SET level=0, open_until=NULL, half_open=false, changed_at=now()`;
+      const add = async (contract: string, key: string, createdAgo = '0 minutes', attempts = 0) =>
+        (await sql`INSERT INTO decision_work_items(account_id,contract,dedupe_key,created_at,available_at,attempts)
+          VALUES(${f.account},${contract},${key},now()-${createdAgo}::interval,now()-${createdAgo}::interval,${attempts}) RETURNING id`)[0].id as string;
+      const claim = async (limit = 10) => sql`SELECT * FROM claim_decision_work(${limit},6) WHERE account_id=${f.account}`;
+      const release = async (id: string, retriable = true, consume = true) =>
+        (await sql`SELECT release_decision_work(${id},'ProviderError: outage',${retriable},${consume},6) AS s`)[0].s as string;
+      const item = async (id: string) => (await sql`SELECT status,attempts,available_at>now() AS deferred,last_error,
+        extract(epoch FROM available_at-first_failed_at)::integer AS offset_seconds FROM decision_work_items WHERE id=${id}`)[0];
+      const outcome = async (ok: boolean, outage: boolean) => (await sql`SELECT record_decision_outcome(${ok},${outage}) AS s`)[0].s as string;
+      const breaker = async () => (await sql`SELECT level,half_open,extract(epoch FROM open_until-now())::integer AS seconds_left FROM decision_work_breaker`)[0];
+      const due = async (id?: string) => {
+        if (id) await sql`UPDATE decision_work_items SET available_at=now() WHERE id=${id}`;
+        await sql`UPDATE decision_work_breaker SET open_until=now()-interval '1 second' WHERE open_until IS NOT NULL`;
+      };
+      return { f, add, claim, release, item, outcome, breaker, due };
+    }
+
+    it('claims incoming mail before an older historical backlog and counts the attempt', async () => {
+      const q = await isolatedQueue();
+      await q.add('historical_learning', 'history-1', '2 hours');
+      await q.add('historical_learning', 'history-2', '1 hour');
+      const incoming = await q.add('incoming_email_decision', 'incoming-1');
+      const [first] = await q.claim(1);
+      expect(first.id).toBe(incoming);
+      expect(first.attempts).toBe(1);
+    });
+
+    it('retries at 1 min, 5 min, 15 min, 3 h and 6 h after the first failure, then fails', async () => {
+      const q = await isolatedQueue();
+      const id = await q.add('incoming_email_decision', 'ladder');
+      const offsets = [];
+      for (let retry = 1; retry <= 5; retry++) {
+        await q.claim();
+        expect(await q.release(id)).toBe('pending');
+        offsets.push((await q.item(id)).offset_seconds);
+        await q.due(id);
+      }
+      expect(offsets).toEqual([60, 300, 900, 10800, 21600]);
+      await q.claim();
+      expect(await q.release(id)).toBe('failed');
+    });
+
+    it('moves an item whose last allowed attempt never completed to failed instead of retrying it forever', async () => {
+      const q = await isolatedQueue();
+      const poison = await q.add('incoming_email_decision', 'poison', '1 hour', 6);
+      expect(await q.claim()).toHaveLength(0);
+      expect(await q.item(poison)).toMatchObject({ status: 'failed', last_error: 'attempts_exhausted' });
+    });
+
+    it('fails a permanent error at once', async () => {
+      const q = await isolatedQueue();
+      const permanent = await q.add('incoming_email_decision', 'permanent');
+      await q.claim();
+      expect(await q.release(permanent, false)).toBe('failed');
+      expect(await q.claim()).toHaveLength(0);
+    });
+
+    it('does not spend an attempt on a deployment fault', async () => {
+      const q = await isolatedQueue();
+      const item = await q.add('incoming_email_decision', 'configuration', '0 minutes', 4);
+      await q.claim();
+      expect(await q.release(item, true, false)).toBe('pending');
+      expect(await q.item(item)).toMatchObject({ status: 'pending', attempts: 4, deferred: true });
+    });
+
+    it('requeues failed items only for an active owner and keeps the last error', async () => {
+      const q = await isolatedQueue();
+      const failed = await q.add('incoming_email_decision', 'requeue-me', '1 hour', 6);
+      await q.claim();
+      const [{ user_id: agent }] = await sql`SELECT user_id FROM account_members WHERE account_id=${q.f.account}`;
+      await expect(sql`SELECT requeue_failed_decision_work(${q.f.account},${agent})`.execute()).rejects.toThrow('Permission denied');
+      await sql`UPDATE account_members SET role='owner' WHERE account_id=${q.f.account} AND user_id=${agent}`;
+      expect((await sql`SELECT requeue_failed_decision_work(${q.f.account},${agent}) AS n`)[0].n).toBe(1);
+      expect(await q.item(failed)).toMatchObject({ status: 'pending', attempts: 0, last_error: 'attempts_exhausted' });
+    });
+
+    it('does not open the breaker below ten executions or below 80% outage failures', async () => {
+      const q = await isolatedQueue();
+      for (let i = 0; i < 9; i++) expect(await q.outcome(false, true)).toBe('closed');
+      expect(await q.outcome(true, false)).toBe('closed');
+      expect(await q.outcome(true, false)).toBe('closed');
+      expect(await q.outcome(false, true)).toBe('closed');
+    });
+
+    it('holds the whole queue 15 min after a mass outage, then 3 h and 6 h while probes keep failing', async () => {
+      const q = await isolatedQueue();
+      for (let i = 0; i < 4; i++) await q.add('incoming_email_decision', `outage-${i}`);
+      for (let i = 0; i < 9; i++) await q.outcome(false, true);
+      expect(await q.outcome(false, true)).toBe('open');
+      expect(await q.breaker()).toMatchObject({ level: 1, half_open: false });
+      expect((await q.breaker()).seconds_left).toBeGreaterThan(890);
+      expect(await q.claim()).toHaveLength(0);
+      await q.due();
+      expect(await q.claim()).toHaveLength(3);
+      expect(await q.claim()).toHaveLength(0);
+      expect(await q.outcome(false, true)).toBe('open');
+      expect(await q.breaker()).toMatchObject({ level: 2 });
+      expect((await q.breaker()).seconds_left).toBeGreaterThan(10790);
+      await q.due();
+      await q.claim();
+      expect(await q.outcome(false, true)).toBe('open');
+      expect(await q.breaker()).toMatchObject({ level: 3 });
+      expect((await q.breaker()).seconds_left).toBeGreaterThan(21590);
+    });
+
+    it('closes the breaker on the first successful probe', async () => {
+      const q = await isolatedQueue();
+      await q.add('incoming_email_decision', 'probe');
+      for (let i = 0; i < 10; i++) await q.outcome(false, true);
+      await q.due();
+      await q.claim();
+      expect(await q.outcome(true, false)).toBe('closed');
+      expect(await q.breaker()).toMatchObject({ level: 0, half_open: false, seconds_left: null });
+    });
+
+    it('fails items still failing six hours after their first failure when the last probe fails', async () => {
+      const q = await isolatedQueue();
+      const old = await q.add('incoming_email_decision', 'six-hours');
+      const fresh = await q.add('incoming_email_decision', 'never-failed');
+      await sql`UPDATE decision_work_items SET first_failed_at=now()-interval '7 hours', attempts=5 WHERE id=${old}`;
+      await sql`UPDATE decision_work_breaker SET level=3, half_open=true, open_until=now()+interval '20 minutes', changed_at=now()`;
+      expect(await q.outcome(false, true)).toBe('open');
+      expect(await q.item(old)).toMatchObject({ status: 'failed', last_error: 'outage_exceeded_retry_window' });
+      expect(await q.item(fresh)).toMatchObject({ status: 'pending' });
+    });
+  });
 });
