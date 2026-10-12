@@ -139,7 +139,7 @@ BEGIN
       IF version_id IS NOT NULL THEN
         INSERT INTO knowledge_embeddings(version_id, account_id, embedding, source)
         VALUES (version_id, (row_data->>'account_id')::uuid, (row_data->>'embedding')::extensions.vector, 'kb_articles.embedding')
-        ON CONFLICT (version_id) DO UPDATE SET embedding=EXCLUDED.embedding, source=EXCLUDED.source;
+        ON CONFLICT ON CONSTRAINT knowledge_embeddings_pkey DO UPDATE SET embedding=EXCLUDED.embedding, source=EXCLUDED.source;
       END IF;
     END IF;
     RETURN NEW;
@@ -390,7 +390,7 @@ BEGIN
  WITH explicit AS (
    SELECT t.id, t.case_revision FROM tickets t WHERE t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL AND (
      v.snapshot->'ticket_ids' @> jsonb_build_array(t.id::text) OR v.snapshot->'tags' @> jsonb_build_array('origin-ticket:'||t.id) OR t.knowledge_context ? v.source_id::text)),
- similar AS (
+ nearest AS (
    SELECT t.id, t.case_revision FROM tickets t
    WHERE emb IS NOT NULL AND t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
      AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND t.embedding IS NOT NULL
@@ -398,7 +398,7 @@ BEGIN
    ORDER BY t.embedding <=> emb LIMIT cap)
  INSERT INTO decision_work_items(account_id,ticket_id,knowledge_version_id,contract,dedupe_key)
  SELECT v.account_id, c.id, v.id, 'knowledge_impact', 'impact:'||c.id||':'||c.case_revision||':'||v.id
- FROM (SELECT * FROM explicit UNION ALL SELECT * FROM similar) c
+ FROM (SELECT * FROM explicit UNION ALL SELECT * FROM nearest) c
  ON CONFLICT DO NOTHING;
  GET DIAGNOSTICS n=ROW_COUNT;
  SELECT count(*) INTO eligible FROM tickets t
@@ -547,3 +547,15 @@ SELECT t.account_id,
  (SELECT count(*) FROM public.knowledge_candidate_runs r WHERE r.account_id=t.account_id AND r.limit_reached) AS selections_limit_reached
 FROM public.tickets t GROUP BY t.account_id;
 GRANT SELECT ON public.knowledge_enrichment_coverage TO service_role;
+
+-- Existing tickets are linked to the client that lists their sender among authorized_emails, only when exactly one client does.
+UPDATE public.tickets t SET client_id = m.client_id
+FROM (
+  SELECT t2.id AS ticket_id, (array_agg(c.id))[1] AS client_id
+  FROM public.tickets t2
+  JOIN public.clients c ON c.account_id = t2.account_id
+   AND lower(trim(t2.from_email)) IN (SELECT lower(trim(address)) FROM unnest(c.authorized_emails) AS address)
+  WHERE t2.client_id IS NULL AND t2.from_email IS NOT NULL
+  GROUP BY t2.id HAVING count(*) = 1
+) m
+WHERE t.id = m.ticket_id;

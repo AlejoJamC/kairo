@@ -15,20 +15,23 @@ afterAll(() => propose.mockRestore());
 const { processDecisionWork } = await import('./decision-workflow');
 const version = { id:'version',source_id:'article',account_id:'account',source_kind:'article',revision:1,status:'approved',snapshot:{content:'Use account recovery.'} };
 const work = {id:'job',account_id:'account',ticket_id:'ticket',message_id:'message',knowledge_version_id:'version',contract:'knowledge_impact',dedupe_key:'job'};
-function database(options: { current?:boolean; existing?:boolean; persistStatus?:string; embedded?:boolean } = {}) {
+function database(options: { current?:boolean; existing?:boolean; persistStatus?:string; embedded?:boolean; clients?:Record<string,unknown>[]; contracts?:Record<string,unknown>[]; contacts?:Record<string,unknown>[] } = {}) {
   const saved: Record<string,unknown>[] = [];
   const rpc = mock(async (name:string,args:Record<string,unknown>) => {
     if (name === 'find_workflow_knowledge') return {data:[version],error:null};
     saved.push(args); return {data:options.persistStatus ?? 'enriched',error:null};
   });
   const from = (table:string) => {
-    const result = { error:null, data: table === 'tickets' ? {id:'ticket',account_id:'account',subject:'Access',body_plain:'Need account recovery.',case_revision:2,priority:'P2',model_verdict:{urgency:'medium'},conversation_id:'conversation',client_id:null,assigned_to:null,status:'open',received_at:'2026-01-01T00:00:00Z'}
+    const result = { error:null, data: table === 'tickets' ? {id:'ticket',account_id:'account',subject:'Access',body_plain:'Need account recovery.',case_revision:2,priority:'P2',model_verdict:{urgency:'medium'},conversation_id:'conversation',client_id:null,from_email:'client@outside.com',ticket_type:'support',assigned_to:null,status:'open',received_at:'2026-01-01T00:00:00Z'}
       : table === 'messages' ? [{id:'message',direction:'inbound',body_plain:'Need account recovery.',received_at:'2026-01-01T00:00:00Z'}]
       : table === 'accounts' ? {language:'en',business_context:'Acme provides account support.'}
       : table === 'current_knowledge' || table === 'knowledge_versions' ? options.current === false ? null : version
       : table === 'knowledge_embeddings' ? options.embedded ? {version_id:'version'} : null
+      : table === 'clients' ? options.clients ?? []
+      : table === 'draft_contact' ? options.contacts ?? []
+      : table === 'tenant_sla_rules' ? options.contracts ?? []
       : table === 'ticket_decision_history' ? options.existing ? {id:'existing'} : null : [] };
-    const chain = {select:()=>chain,eq:()=>chain,order:()=>chain,limit:()=>chain,
+    const chain = {select:()=>chain,eq:()=>chain,is:()=>chain,neq:()=>chain,order:()=>chain,limit:()=>chain,
       single:async()=> table === 'messages' ? {data:(result.data as unknown[])[0],error:null} : result,
       maybeSingle:async()=>result,then:(resolve:(value:unknown)=>unknown)=>Promise.resolve(result).then(resolve),
       upsert:async(value:Record<string,unknown>)=>{saved.push(value);return {data:null,error:null};}};
@@ -86,6 +89,29 @@ describe('durable workflow execution',()=>{
     expect(Object.keys(questions)).not.toContain('urgency');
     expect(analyze.mock.calls[0]?.[0]).toMatchObject({promptId:'incoming-analysis'});
     expect(saved[0]).toMatchObject({result:{classificationProposal:{},attention:'unknown',nextAction:'request_information'}});
+  });
+
+  it('verifies an authorized sender and applies the contract of its capitalized plan',async()=>{
+    const {db,saved}=database({ clients:[{id:'client-outside',plan_type:'Enterprise',sla_level:'Critical',authorized_emails:['Client@Outside.com']}],
+      contracts:[{id:'enterprise-support',ticket_type:'support',plan_tier:'enterprise',response_hours:1,resolution_hours:8}] });
+    decide.mockImplementationOnce(async()=>({data:{value:answers('incoming'),modelVersion:'decision-model'},llmCallId:'call'}));
+    await processDecisionWork({...work,contract:'incoming_email_decision'},db);
+    expect(saved[0]).toMatchObject({result:{identity:{clientId:'client-outside',authority:'authorized'},contractualSla:{id:'enterprise-support'}}});
+    expect((saved[0] as {result:{evidence:{missing:string[]}}}).result.evidence.missing).not.toContain('verified_client');
+  });
+  it('keeps an unlisted sender unverified and reports the missing verification',async()=>{
+    const {db,saved}=database({ clients:[{id:'client-outside',plan_type:'Pro',sla_level:'Standard',authorized_emails:['ops@outside.com']}] });
+    decide.mockImplementationOnce(async()=>({data:{value:answers('incoming'),modelVersion:'decision-model'},llmCallId:'call'}));
+    await processDecisionWork({...work,contract:'incoming_email_decision'},db);
+    expect(saved[0]).toMatchObject({result:{identity:{clientId:null,authority:'same_domain',candidateClientId:'client-outside'},contractualSla:null}});
+    expect((saved[0] as {result:{evidence:{missing:string[]}}}).result.evidence.missing).toContain('verified_client');
+  });
+
+  it('identifies the sender from the contact pipeline when no client lists it',async()=>{
+    const {db,saved}=database({ contacts:[{id:'contact-1',email:'client@outside.com',display_name:'Synthetic Person',organization:'Outside Logistics',status:'confirmed'}] });
+    decide.mockImplementationOnce(async()=>({data:{value:answers('incoming'),modelVersion:'decision-model'},llmCallId:'call'}));
+    await processDecisionWork({...work,contract:'incoming_email_decision'},db);
+    expect(saved[0]).toMatchObject({result:{identity:{clientId:null,contact:{id:'contact-1',status:'confirmed'},sender:{email:'client@outside.com',organization:'Outside Logistics'}},contractualSla:null}});
   });
 
   it('embeds an approved version before selecting tickets, with the configured threshold and limit',async()=>{

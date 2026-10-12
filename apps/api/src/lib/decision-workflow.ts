@@ -9,6 +9,8 @@ import { computeTicketOperationalSla, buildConfigByPriority } from '@kairo/types
 import { supabase } from './supabase.js';
 import { recordLlmCall } from './llm-logging.js';
 import { approvedWorkflowKnowledge, knowledgeEmbeddingText, knowledgeReferences, KnowledgeVersionSchema } from './workflow-knowledge.js';
+import { resolveSenderIdentity } from './client-identity.js';
+import { contractualSlaFor } from './sla.js';
 import { env } from '@kairo/env';
 import { proposeEmailKnowledge } from './email-knowledge.js';
 
@@ -38,31 +40,32 @@ export async function recordWorkflowResult(input: {
 async function ticketContext(work: DecisionWork, db = supabase, deps: DecisionWorkDeps = {}) {
   const { data: ticket, error } = await db.from('tickets').select('*').eq('account_id', work.account_id).eq('id', work.ticket_id).maybeSingle();
   if (error || !ticket) throw new ProviderError('Decision ticket unavailable', true);
-  const [messages, client, sla, settings, contracts, source, assignee] = await Promise.all([
+  const [messages, directory, sla, settings, contracts, source, assignee] = await Promise.all([
     ticket.conversation_id ? db.from('messages').select('id,direction,body_plain,received_at').eq('account_id', work.account_id).eq('conversation_id', ticket.conversation_id).order('received_at', { ascending: false }).limit(30) : Promise.resolve({ data: [], error: null }),
-    ticket.client_id ? db.from('clients').select('id,plan_type,sla_level,authorized_emails,contact_persons').eq('account_id', work.account_id).eq('id', ticket.client_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    resolveSenderIdentity(db, work.account_id, ticket.from_email, { contacts: true, displayName: ticket.from_name ?? null }).then(data => ({ data, error: null }), () => ({ data: null, error: true })),
     db.from('ticket_priority_sla_config').select('*').eq('account_id', work.account_id),
     db.from('accounts').select('business_context,language').eq('id', work.account_id).single(),
     db.from('tenant_sla_rules').select('id,ticket_type,plan_tier,response_hours,resolution_hours').eq('account_id',work.account_id),
     work.message_id ? db.from('messages').select('id,direction,body_plain,received_at').eq('account_id',work.account_id).eq('id',work.message_id).single() : Promise.resolve({ data:null,error:null }),
     ticket.assigned_to ? db.from('account_members').select('user_id,role,status').eq('account_id',work.account_id).eq('user_id',ticket.assigned_to).maybeSingle() : Promise.resolve({ data:null,error:null }),
   ]);
-  if (messages.error || client.error || sla.error || settings.error || contracts.error || source.error || assignee.error) throw new ProviderError('Decision context lookup failed', true);
+  if (messages.error || directory.error || !directory.data || sla.error || settings.error || contracts.error || source.error || assignee.error) throw new ProviderError('Decision context lookup failed', true);
+  const { identity, client } = directory.data;
   const history = [...(messages.data ?? [])].reverse().map(row => ({ ...row, body_plain: String(row.body_plain ?? '').slice(0,2000) }));
   const incoming = source.data ? { ...source.data, body_plain: String(source.data.body_plain ?? '').slice(0,8000) } : null;
   const versions = await approvedWorkflowKnowledge(work.account_id, [ticket.subject, incoming?.body_plain ?? ticket.body_plain].join('\n'), ticket.id, db, { embed: deps.embed });
   const sources: WorkflowSource[] = history.filter(row => row.id !== incoming?.id).map(row => ({ id: row.id as string, text: String(row.body_plain ?? ''), authority: 'message' }));
   if (incoming) sources.push({ id: incoming.id, text: incoming.body_plain ?? '', authority: 'message' });
   sources.push(...versions.map(row => ({ id: row.id, text: String(row.snapshot['content'] ?? row.snapshot['summary'] ?? '').slice(0,2000), authority: 'approved_knowledge' as const })));
-  if (client.data) sources.push({ id: 'directory', text: JSON.stringify(client.data), authority: 'directory' });
-  const contractualSla = contracts.data?.find(row => row.ticket_type === ticket.ticket_type && row.plan_tier === (client.data?.plan_type ?? 'none')) ?? null;
+  if (client) sources.push({ id: 'directory', text: JSON.stringify({ ...client, authority: identity.authority }), authority: 'directory' });
+  const contractualSla = contractualSlaFor(contracts.data ?? [], ticket.ticket_type, client?.plan_type);
   sources.push({ id: 'configuration', text: JSON.stringify({ businessContext: settings.data?.business_context, contractualSla }), authority: 'configuration' });
   return { ticket, history, incoming, versions, sources, language: settings.data?.language === 'en' ? 'en' as const : 'es' as const,
     state: { source: incoming ?? null, previousCase: { status: ticket.status, verdict: ticket.model_verdict, messages: history.filter(row => row.id !== work.message_id && (!incoming || row.received_at <= incoming.received_at)).map(row => ({ id: row.id, direction: row.direction, receivedAt: row.received_at })) },
-      businessContext: settings.data?.business_context?.slice(0,2500) ?? null, client: client.data,
+      businessContext: settings.data?.business_context?.slice(0,2500) ?? null, client,
       approvedKnowledge: knowledgeReferences(versions).map(ref => ({ ...ref, content: ref.content.slice(0,2000) })), operationalSla: computeTicketOperationalSla(ticket, buildConfigByPriority(sla.data ?? [])),
-      identity: { clientId: ticket.client_id, authority: 'unknown' }, assignedTo: ticket.assigned_to, contractualSla, assignee: assignee.data,
-      evidence: { truncated: history.length === 30 || (messages.data ?? []).some(row => (row.body_plain?.length ?? 0)>2000) || (source.data?.body_plain?.length ?? 0)>8000, missing: [...(client.data ? [] : ['verified_client']), ...(settings.data?.business_context ? [] : ['business_context'])] } } };
+      identity, assignedTo: ticket.assigned_to, contractualSla, assignee: assignee.data,
+      evidence: { truncated: history.length === 30 || (messages.data ?? []).some(row => (row.body_plain?.length ?? 0)>2000) || (source.data?.body_plain?.length ?? 0)>8000, missing: [...(identity.authority === 'authorized' ? [] : ['verified_client']), ...(settings.data?.business_context ? [] : ['business_context'])] } } };
 }
 
 async function analyzeContext(ctx: Awaited<ReturnType<typeof ticketContext>>, work: DecisionWork, promptId: string) {

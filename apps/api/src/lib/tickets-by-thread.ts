@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveSenderIdentity } from "./client-identity.js";
 import { resolveRoundRobinAssignee, type AgentWorkload } from "@kairo/intelligence";
 import type { classificationAudit } from "./classification-audit.js";
 import { transitionTicketStatus, TICKET_CREATED_TRIGGER } from "./ticket-transition.js";
@@ -131,12 +132,24 @@ export async function findOrCreateTicketForThread(
   // batch sweep (there is no batch here, one ticket is being created).
   const assignedTo = await resolveAutoAssignee(client, accountId);
 
+  // KAI-94: link the ticket to a client only when the sender is a verified
+  // authorized address; contractual SLA and identity decisions read this.
+  // A directory that cannot be read leaves the ticket unlinked rather than
+  // blocking its creation.
+  let clientId: string | null = null;
+  try {
+    clientId = (await resolveSenderIdentity(client, accountId, originMessage.from_email)).identity.clientId;
+  } catch {
+    console.warn("[tickets-by-thread] Client directory unavailable; ticket created without client link");
+  }
+
   const { data: inserted, error: insertErr } = await client
     .from("tickets")
     .insert({
       account_id: accountId,
       conversation_id: conversationId,
       assigned_to: assignedTo,
+      client_id: clientId,
       originating_user_id: originatingUserId,
       subject: originMessage.subject,
       from_email: originMessage.from_email,
