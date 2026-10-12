@@ -1,10 +1,11 @@
-import { describe, expect, it, mock, beforeEach } from 'bun:test';
+import { describe, expect, it, mock, beforeEach, afterAll, spyOn } from 'bun:test';
 const original = { ...await import('@kairo/intelligence') };
 const decide = mock(async (_request: Record<string, unknown>): Promise<{data:{value:Record<string,unknown>;modelVersion:string};llmCallId:string}> => ({ data:{ value:{ contribution:{choice:'solution'} },modelVersion:'decision-model' },llmCallId:'decision-call' }));
 const analyze = mock(async (_request: Record<string, unknown>) => ({ data:{ observations:[{dimension:'solution',statement:'Use the recovery procedure.',status:'supported',citations:[{sourceId:'version',quote:'Use account recovery.'}]}],missing:[],waitingOn:null,resumeWhen:null },model:'draft-model',promptVersion:'1.0.0',llmCallId:'draft-call' }));
-const propose = mock(async (_input:unknown, _deps?:unknown) => ({status:'skipped',reason:'not_candidate'}));
+const knowledgeModule = await import('./email-knowledge.js');
+const propose = spyOn(knowledgeModule, 'proposeEmailKnowledge').mockResolvedValue({status:'skipped',reason:'source_unavailable'});
 mock.module('@kairo/intelligence',()=>({...original,createDecisionProvider:()=>({model:'decision-model'}),runDecisionFeature:decide,runLlmFeature:analyze}));
-mock.module('./email-knowledge.js',()=>({proposeEmailKnowledge:propose}));
+afterAll(() => propose.mockRestore());
 const { processDecisionWork } = await import('./decision-workflow');
 const version = { id:'version',source_id:'article',account_id:'account',source_kind:'article',revision:1,status:'approved',snapshot:{content:'Use account recovery.'} };
 const work = {id:'job',account_id:'account',ticket_id:'ticket',message_id:'message',knowledge_version_id:'version',contract:'knowledge_impact',dedupe_key:'job'};

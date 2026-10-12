@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "bun"],
+    "typeRoots": ["../packages/intelligence/node_modules/@types", "../apps/api/node_modules/@types"],
+    "paths": {
+      "@kairo/intelligence": ["../packages/intelligence/src/index.ts"]
+    }
+  },
+  "include": ["./**/*.ts"]
+}

@@ -257,11 +257,21 @@ describe.skipIf(!enabled)('decision workflow database guarantees', () => {
     });
 
     it('does not open the breaker below ten executions or below 80% outage failures', async () => {
-      const q = await isolatedQueue();
+      let q = await isolatedQueue();
       for (let i = 0; i < 9; i++) expect(await q.outcome(false, true)).toBe('closed');
+      q = await isolatedQueue();
+      for (let i = 0; i < 7; i++) expect(await q.outcome(false, true)).toBe('closed');
+      expect(await q.outcome(true, false)).toBe('closed');
       expect(await q.outcome(true, false)).toBe('closed');
       expect(await q.outcome(true, false)).toBe('closed');
       expect(await q.outcome(false, true)).toBe('closed');
+    });
+
+    it('opens the breaker at exactly ten executions with 80% outage failures', async () => {
+      const q = await isolatedQueue();
+      for (let i = 0; i < 8; i++) expect(await q.outcome(false, true)).toBe('closed');
+      expect(await q.outcome(true, false)).toBe('closed');
+      expect(await q.outcome(true, false)).toBe('open');
     });
 
     it('holds the whole queue 15 min after a mass outage, then 3 h and 6 h while probes keep failing', async () => {
