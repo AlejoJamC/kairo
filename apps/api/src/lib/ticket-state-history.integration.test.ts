@@ -1,9 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, mock } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import { localSupabaseTarget } from "../test-support/local-supabase.js";
 import { transitionTicketStatus, TICKET_CREATED_TRIGGER } from "./ticket-transition.js";
 
 // ---------------------------------------------------------------------------
@@ -25,12 +23,10 @@ import { transitionTicketStatus, TICKET_CREATED_TRIGGER } from "./ticket-transit
 //   4. status = 'ai_resolved' iff the last transition into the resolved
 //      family recorded actor_type = 'ai'.
 //
-// These hit the real linked Supabase project (see .env.local) — there is no
-// local stack for this. `bun test` runs with NODE_ENV=test and does NOT
-// auto-load .env.local (only `bun run --env-file ../../.env.local ...`
-// does, per apps/api/package.json's dev/start scripts), so this file reads
-// it by hand into local consts (never into process.env — no reason to
-// touch other files' environment) to build its own client.
+// These write real rows, so they run only against a local Supabase stack
+// and only on explicit opt-in: RUN_SUPABASE_INTEGRATION=1 with SUPABASE_URL
+// and SUPABASE_SERVICE_ROLE_KEY pointing at it. Otherwise every block is
+// skipped. `.env.local` (the linked project) is never read.
 //
 // emitTicketActivity (lib/ticket-events.ts) hardcodes a dependency on the
 // lib/supabase.ts singleton, which validates SUPABASE_URL /
@@ -60,39 +56,14 @@ import { transitionTicketStatus, TICKET_CREATED_TRIGGER } from "./ticket-transit
 // exists, and that failure is logged, not asserted on.
 // ---------------------------------------------------------------------------
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-// apps/api/src/lib -> repo root
-const REPO_ROOT = join(__dirname, "../../../../");
-
-function readSupabaseCredentialsFromEnvLocal(): { url: string; serviceRoleKey: string } {
-  if (process.env["SUPABASE_URL"] && process.env["SUPABASE_SERVICE_ROLE_KEY"]) {
-    return {
-      url: process.env["SUPABASE_URL"],
-      serviceRoleKey: process.env["SUPABASE_SERVICE_ROLE_KEY"],
-    };
-  }
-  const raw = readFileSync(join(REPO_ROOT, ".env.local"), "utf8");
-  const values: Record<string, string> = {};
-  for (const line of raw.split("\n")) {
-    const match = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
-    if (!match) continue;
-    const [, key, value] = match;
-    if (key) values[key] = value ?? "";
-  }
-  const url = values["SUPABASE_URL"];
-  const serviceRoleKey = values["SUPABASE_SERVICE_ROLE_KEY"];
-  if (!url || !serviceRoleKey) {
-    throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not found in .env.local");
-  }
-  return { url, serviceRoleKey };
-}
-
-const { url: supabaseUrl, serviceRoleKey } = readSupabaseCredentialsFromEnvLocal();
-const admin = createClient(supabaseUrl, serviceRoleKey);
+// Writes rows: runs only against a local stack, on explicit opt-in (see test-support/local-supabase).
+const target = localSupabaseTarget();
+const describeLocal = target ? describe : describe.skip;
+const admin = target ? createClient(target.url, target.serviceRoleKey) : (null as never);
 
 // Must run before importing ./ticket-events.js — see the top-of-file note.
-mock.module("./supabase.js", () => ({ supabase: admin }));
-const { emitTicketActivity } = await import("./ticket-events.js");
+if (target) mock.module("./supabase.js", () => ({ supabase: admin }));
+const { emitTicketActivity } = target ? await import("./ticket-events.js") : ({} as typeof import("./ticket-events.js"));
 
 // Deterministic fixture identifiers so repeat runs reuse the same plan and
 // account instead of accumulating a fresh one every time — only the ticket
@@ -103,6 +74,7 @@ const FIXTURE_ACCOUNT_SLUG = "kai191-integration-test-fixture";
 let accountId: string;
 
 beforeAll(async () => {
+  if (!target) return;
   const { data: existingPlan } = await admin
     .from("plans")
     .select("id")
@@ -169,12 +141,13 @@ async function bestEffortDeleteTicket(ticketId: string): Promise<void> {
 
 const createdTicketIds: string[] = [];
 afterAll(async () => {
+  if (!target) return;
   for (const id of createdTicketIds) {
     await bestEffortDeleteTicket(id);
   }
 });
 
-describe("ticket_state_history / ticket_activity_log — append-only (KAI-191)", () => {
+describeLocal("ticket_state_history / ticket_activity_log — append-only (KAI-191)", () => {
   it("rejects UPDATE and DELETE on a ticket_state_history row, and on a ticket_activity_log row", async () => {
     const ticketId = await createTestTicket("append-only");
     createdTicketIds.push(ticketId);
@@ -249,7 +222,7 @@ describe("ticket_state_history / ticket_activity_log — append-only (KAI-191)",
   });
 });
 
-describe("ticket_state_history — actor_ref survives actor_user_id deletion (KAI-191)", () => {
+describeLocal("ticket_state_history — actor_ref survives actor_user_id deletion (KAI-191)", () => {
   // SKIPPED — this reproduces a real, confirmed bug, not a flaw in the test.
   //
   // ticket_state_history_actor_user_id_fkey is ON DELETE SET NULL, which
@@ -329,7 +302,7 @@ describe("ticket_state_history — actor_ref survives actor_user_id deletion (KA
   });
 });
 
-describe("ticket_state_history — (account_id, idempotency_key) UNIQUE (KAI-191)", () => {
+describeLocal("ticket_state_history — (account_id, idempotency_key) UNIQUE (KAI-191)", () => {
   it("replays the same transitionTicketStatus() call as a no-op instead of a second row", async () => {
     const ticketId = await createTestTicket("idempotency-unique");
     createdTicketIds.push(ticketId);
@@ -360,7 +333,7 @@ describe("ticket_state_history — (account_id, idempotency_key) UNIQUE (KAI-191
   });
 });
 
-describe("ai_resolved invariant (KAI-191)", () => {
+describeLocal("ai_resolved invariant (KAI-191)", () => {
   it("status = 'ai_resolved' iff the last transition into the resolved family has actor_type = 'ai'", async () => {
     const ticketId = await createTestTicket("ai-resolved-invariant");
     createdTicketIds.push(ticketId);
@@ -403,7 +376,7 @@ describe("ai_resolved invariant (KAI-191)", () => {
   });
 });
 
-describe("apply_ticket_transition — creation detection is state-based, not trigger-string-based (KAI-191 code review)", () => {
+describeLocal("apply_ticket_transition — creation detection is state-based, not trigger-string-based (KAI-191 code review)", () => {
   // Regression test for a bug found in code review: v_is_creation used to be
   // `p_trigger = 'ticket_created'` — a caller-supplied string, not a fact
   // about the ticket. Anyone passing trigger: TICKET_CREATED_TRIGGER against

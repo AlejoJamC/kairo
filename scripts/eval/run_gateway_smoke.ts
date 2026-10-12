@@ -38,7 +38,7 @@ function messageFor(stage: typeof stages[number], example: typeof examples[numbe
 
 function record(stage: typeof stages[number], capability: string, model: string, started: number,
   costUsd: number | null, verdict: ModelVerdictResult, type: string, abstain: boolean, example: typeof examples[number]) {
-  const { reasoning: _reasoning, confidence: _confidence, decision: _decision, workflow: _workflow, ...prediction } = verdict;
+  const { reasoning: _reasoning, confidence: _confidence, decision: _decision, workflow: _workflow, evidence: _evidence, ...prediction } = verdict;
   measurements.push({ stage, capability, model, latencyMs: Math.round(performance.now() - started), costUsd,
     truth: { ...example.expected }, prediction: { ...prediction, type }, abstain,
     consequential: 'consequential' in example, incompleteEvidence: 'incompleteEvidence' in example });

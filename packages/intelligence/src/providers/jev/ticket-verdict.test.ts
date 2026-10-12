@@ -1,16 +1,19 @@
 import { describe, it, expect } from 'bun:test';
 
 import { ACTIONABILITY_VALUES, CATEGORY, PRIORITY, SUBJECT_MATTER_VALUES, TONE, URGENCY } from '../../classification/schema';
+import { workflowFields } from '../../classification/workflow-contract';
 import { buildTicketVerdictQuestions, parseTicketVerdictAnswers } from './ticket-verdict';
 
 describe('buildTicketVerdictQuestions', () => {
-  it('asks exactly the six ModelVerdictSchema axes, each a choice question', () => {
-    const questions = buildTicketVerdictQuestions();
-    expect(Object.keys(questions).sort()).toEqual(
-      ['actionability', 'category', 'priority', 'subject_matter', 'tone', 'urgency'].sort(),
-    );
-    for (const q of Object.values(questions)) {
-      expect(q.type).toBe('choice');
+  it('asks the six ModelVerdictSchema axes plus the workflow questions of the stage, each a choice question', () => {
+    for (const stage of [undefined, 'onboarding', 'backfill', 'new_email', 'manual'] as const) {
+      const questions = buildTicketVerdictQuestions(stage);
+      expect(Object.keys(questions).sort()).toEqual(
+        ['actionability', 'category', 'priority', 'subject_matter', 'tone', 'urgency', ...workflowFields(stage)].sort(),
+      );
+      for (const q of Object.values(questions)) {
+        expect(q.type).toBe('choice');
+      }
     }
   });
 

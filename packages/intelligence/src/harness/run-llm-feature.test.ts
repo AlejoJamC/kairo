@@ -17,6 +17,7 @@ const REPLY_VARS = {
   message_history: '[Client] I cannot log in to support@acme.com',
   similar_case: 'none',
   kb_articles: 'none',
+  business_context: 'Acme provides customer support software.',
 };
 
 const Schema = z.object({ suggestion: z.string(), confidence: z.number() });

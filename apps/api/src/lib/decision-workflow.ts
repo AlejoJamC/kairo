@@ -20,6 +20,10 @@ export interface DecisionWork {
 }
 export interface DecisionWorkDeps {
   embed?: (text: string) => Promise<number[]>;
+  decide?: typeof runDecisionFeature;
+  analyze?: typeof runLlmFeature;
+  decisionProvider?: () => ReturnType<typeof createDecisionProvider>;
+  propose?: typeof proposeEmailKnowledge;
 }
 
 export function evaluationKey(ticketId: string, revision: number, versionId: string) {
@@ -68,8 +72,8 @@ async function ticketContext(work: DecisionWork, db = supabase, deps: DecisionWo
       evidence: { truncated: history.length === 30 || (messages.data ?? []).some(row => (row.body_plain?.length ?? 0)>2000) || (source.data?.body_plain?.length ?? 0)>8000, missing: [...(identity.authority === 'authorized' ? [] : ['verified_client']), ...(settings.data?.business_context ? [] : ['business_context'])] } } };
 }
 
-async function analyzeContext(ctx: Awaited<ReturnType<typeof ticketContext>>, work: DecisionWork, promptId: string) {
-  const result = await runLlmFeature({ feature: `${work.contract}_evidence`, promptId, modelRole: 'knowledge_draft',
+async function analyzeContext(ctx: Awaited<ReturnType<typeof ticketContext>>, work: DecisionWork, promptId: string, deps: DecisionWorkDeps) {
+  const result = await (deps.analyze ?? runLlmFeature)({ feature: `${work.contract}_evidence`, promptId, modelRole: 'knowledge_draft',
     lang: ctx.language, schema: WorkflowAnalysisSchema,
     vars: { context: JSON.stringify(ctx.state), sources: JSON.stringify(ctx.sources) },
     options: { maxTokens: 2000, temperature: 0 }, context: { accountId: work.account_id, ticketId: ctx.ticket.id }, logger: recordLlmCall });
@@ -98,6 +102,8 @@ async function ensureKnowledgeEmbedding(work: DecisionWork, db: typeof supabase,
   if (insertError) throw new ProviderError('Knowledge embedding persistence failed', true);
 }
 
+const decisionProvider = (deps: DecisionWorkDeps) => deps.decisionProvider?.() ?? createDecisionProvider('gateway', 'knowledge_decision');
+
 export async function processDecisionWork(work: DecisionWork, db = supabase, deps: DecisionWorkDeps = {}) {
   if (work.contract === 'knowledge_change') {
     await ensureKnowledgeEmbedding(work, db, deps);
@@ -116,7 +122,7 @@ export async function processDecisionWork(work: DecisionWork, db = supabase, dep
     if (error) throw new ProviderError('Knowledge revision lookup failed', true);
     if (!row) return;
     const version = KnowledgeVersionSchema.parse(row);
-    const impact = await runDecisionFeature({ feature: 'knowledge_impact', provider: createDecisionProvider('gateway', 'knowledge_decision'),
+    const impact = await (deps.decide ?? runDecisionFeature)({ feature: 'knowledge_impact', provider: decisionProvider(deps),
       state: { ...ctx.state,
         case: { subject: ctx.ticket.subject, body: ctx.ticket.body_plain, messages: ctx.history },
         knowledge: knowledgeReferences([version])[0] },
@@ -124,7 +130,7 @@ export async function processDecisionWork(work: DecisionWork, db = supabase, dep
       versions: { state: WORKFLOW_VERSION, questions: WORKFLOW_VERSION } });
     const answer = z.object({ contribution: z.object({ choice: z.enum(['solution','correction','action','none','unknown']) }) }).parse(impact.data.value);
     const contribution = !['none','unknown'].includes(answer.contribution.choice);
-    const analysis = contribution ? await analyzeContext({ ...ctx, state: { ...ctx.state, approvedKnowledge: knowledgeReferences([version]) }, sources: ctx.sources.filter(source => source.authority !== 'approved_knowledge').concat({ id: version.id, text: String(version.snapshot['content'] ?? version.snapshot['summary'] ?? ''), authority: 'approved_knowledge' }) }, work, 'knowledge-impact') : null;
+    const analysis = contribution ? await analyzeContext({ ...ctx, state: { ...ctx.state, approvedKnowledge: knowledgeReferences([version]) }, sources: ctx.sources.filter(source => source.authority !== 'approved_knowledge').concat({ id: version.id, text: String(version.snapshot['content'] ?? version.snapshot['summary'] ?? ''), authority: 'approved_knowledge' }) }, work, 'knowledge-impact', deps) : null;
     const useful = contribution && !!analysis?.observations.some(row => row.citations.some(citation => citation.sourceId === version.id));
     const { data: status, error: persistError } = await db.rpc('record_ticket_enrichment', {
       p_account_id: work.account_id, p_ticket_id: ctx.ticket.id, p_revision: ctx.ticket.case_revision,
@@ -141,14 +147,14 @@ export async function processDecisionWork(work: DecisionWork, db = supabase, dep
   const { data: existing, error } = await db.from('ticket_decision_history').select('id').eq('account_id', work.account_id).eq('idempotency_key', key).maybeSingle();
   if (error) throw new ProviderError('Decision history lookup failed', true);
   if (existing) return;
-  const analysis = await analyzeContext(ctx, work, stage === 'backfill' ? 'historical-analysis' : 'incoming-analysis');
+  const analysis = await analyzeContext(ctx, work, stage === 'backfill' ? 'historical-analysis' : 'incoming-analysis', deps);
   const affected = stage === 'new_email' ? analysis.observations.map(row => row.dimension) : [];
   const classificationQuestions = buildTicketVerdictQuestions(stage);
   const affectedQuestions = {
     ...(affected.includes('impact') || affected.includes('alternative') ? { priority: classificationQuestions['priority'] } : {}),
     ...(affected.includes('deadline') ? { urgency: classificationQuestions['urgency'] } : {}),
   };
-  const decision = await runDecisionFeature({ feature: work.contract, provider: createDecisionProvider('gateway', 'knowledge_decision'),
+  const decision = await (deps.decide ?? runDecisionFeature)({ feature: work.contract, provider: decisionProvider(deps),
     state: { ...ctx.state, analysis, body: ctx.incoming?.body_plain ?? ctx.ticket.body_plain }, questions: { ...workflowQuestions(stage), ...affectedQuestions },
     context: { accountId: work.account_id, ticketId: ctx.ticket.id }, logger: recordLlmCall,
     versions: { state: WORKFLOW_VERSION, questions: WORKFLOW_VERSION } });
@@ -160,7 +166,7 @@ export async function processDecisionWork(work: DecisionWork, db = supabase, dep
     ...('priority' in affectedQuestions ? { priority: TicketAnswersSchema.shape.priority.parse(raw['priority']).choice } : {}),
     ...('urgency' in affectedQuestions ? { urgency: TicketAnswersSchema.shape.urgency.parse(raw['urgency']).choice } : {}),
   };
-  const knowledge = work.message_id ? await proposeEmailKnowledge({ accountId: work.account_id, ticketId: ctx.ticket.id, messageId: work.message_id, stage }, { db }) : { status: 'skipped', reason: 'source_unavailable' };
+  const knowledge = work.message_id ? await (deps.propose ?? proposeEmailKnowledge)({ accountId: work.account_id, ticketId: ctx.ticket.id, messageId: work.message_id, stage }, { db }) : { status: 'skipped', reason: 'source_unavailable' };
   await recordWorkflowResult({ accountId: work.account_id, ticketId: ctx.ticket.id, messageId: work.message_id ?? undefined,
     contract: work.contract, revision: ctx.ticket.case_revision, key,
     status: ctx.versions.length ? 'pending_human_review' : 'pending_knowledge',
