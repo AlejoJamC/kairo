@@ -10,6 +10,7 @@ export interface Measurement {
   abstain: boolean | null;
   latencyMs: number;
   requests: Inference[];
+  responses?: unknown[];
   output: unknown;
   calls: unknown[];
   safety: Record<string, boolean>;

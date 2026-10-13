@@ -6,7 +6,8 @@ import { syntheticCases, contracts } from './cases';
 import { summarize, reviewTemplate, type Measurement } from './metrics';
 import { guardNetwork } from './network';
 import { privatePath, privateRoot, root } from './private-files';
-import { main } from './run';
+import { loadCorpus } from './corpus';
+import { evaluationRouting, main } from './run';
 
 const row = (): Measurement => ({ case: syntheticCases[6]!, status: 'completed', prediction: { contribution: 'solution', useful: 'true' },
   abstain: null, latencyMs: 10, requests: [], output: { invented: true }, calls: [], safety: { approvedSourcesOnly: true } });
@@ -19,6 +20,23 @@ describe('evaluation accounting', () => {
     globalThis.fetch = denied as unknown as typeof fetch;
     try { expect(await main(['plan', 'main'])).toHaveProperty('network', false); expect(denied).not.toHaveBeenCalled(); }
     finally { globalThis.fetch = original; }
+  });
+  test('corpus loading needs no mailbox and does not insert an invented identity', async () => {
+    const examples = await loadCorpus('main', {
+      directory: async path => path, list: async () => ['001.eml'],
+      read: async path => path.endsWith('.eml')
+        ? 'From: client@outside.com\nTo: support@acme.com\nSubject: Access\n\nPlease restore access.'
+        : 'email_id,ticket_type,priority,urgency,category,tone\n1,support,P2,medium,account,neutral\n',
+    });
+    expect(examples).toHaveLength(1);
+    expect(examples[0]?.mailbox).toBeUndefined();
+    expect(examples[0]?.to).toContain('support@acme.com');
+  });
+  test('main resolves only its classifier and exposes the optional second call', () => {
+    const env = {INTELLIGENCE_PROVIDER:'gateway',CLASSIFICATION_MODE:'decision',AI_GATEWAY_CLASSIFICATION_MODEL:'acme/decision'};
+    expect(evaluationRouting('main',env)).toMatchObject({routes:[{role:'classification',model:'acme/decision'}],classificationCallsPerEmail:1,ensemble:null});
+    expect(evaluationRouting('main',env).routes).toHaveLength(1);
+    expect(evaluationRouting('main',{...env,CLASSIFICATION_MODE:'language',INTELLIGENCE_ENSEMBLE:'gateway:acme/second'})).toMatchObject({classificationCallsPerEmail:2,ensemble:{model:'acme/second'}});
   });
   test('unknown cost, no observations and unreviewed usefulness stay unknown', () => {
     const report = summarize([row()]);
@@ -70,6 +88,7 @@ describe('evaluation boundaries', () => {
     });
     const network = guardNetwork(1, transport as unknown as typeof fetch);
     await network.fetch('https://ai-gateway.vercel.sh/v1/chat/completions', { method: 'POST' });
+    expect(network.responses).toHaveLength(1);
     expect(network.requests).toEqual([{ status: 200, costUsd: 0, credentialType: 'byok' }]);
     await expect(network.fetch('https://ai-gateway.vercel.sh/v1/chat/completions', { method: 'POST' })).rejects.toThrow();
     expect(transport).toHaveBeenCalledTimes(1);

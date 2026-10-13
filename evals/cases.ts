@@ -20,7 +20,7 @@ export interface EvalCase {
   rubric: string[];
 }
 
-const base = { dataset: 'synthetic' as const, lang: 'en' as const, subject: 'Account access',
+const base = { mailbox: 'support@acme.com', from: 'client@outside.com', to: 'support@acme.com', dataset: 'synthetic' as const, lang: 'en' as const, subject: 'Account access',
   body: 'My Acme account rejects my password. Please help restore access.',
   businessContext: 'Acme provides customer support software.' };
 const recovery = 'For a rejected password, use the account recovery link on the sign-in page.';

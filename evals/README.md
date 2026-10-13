@@ -1,47 +1,47 @@
-# KAI-94 evaluations
+# Kairo evals
 
-Technical preparation (AC11) and measured results (AC12) are separate.
-All new evaluation code lives here. Existing helpers, rubrics, golden labels,
-data paths and ignore rules remain unchanged.
+Evaluate email classification and decision workflows against expected answers and review rubrics.
+
+## Run
 
 From the repository root:
 
 ```sh
-# No model calls or corpus reads
-bun evals/run.ts plan
-bunx --no-install tsc --noEmit -p evals/tsconfig.json
-bun evals/technical.ts
+# Preview configured models without inference or corpus reads
+bun --env-file=.env.local evals/run.ts plan main 30 100
 
-# Optional SQL guarantees: requires the already prepared disposable DB on port 55494
-bun evals/technical.ts --database
-
-# Real model execution: dataset, optional case limit, optional inference request limit
-bun --env-file=.env.local evals/run.ts execute synthetic
+# Execute: dataset, optional case limit, optional request limit (default: 100)
 bun --env-file=.env.local evals/run.ts execute main 30 100
 bun --env-file=.env.local evals/run.ts execute coverage
+bun --env-file=.env.local evals/run.ts execute synthetic
 
-# Offline scoring after reviewing the private results
+# Recalculate scores after reviewing a run
 bun evals/run.ts report <run-id>
 ```
 
-`synthetic` exercises all five production entrypoints with invented cases.
-Only storage, retrieval and logging are isolated; model answers and prompts are
-real. SQL suites separately verify permissions, races and immutable effects.
-`main` and `coverage` reuse existing private emails and classification labels
-for onboarding; they are scored separately, never pooled with synthetic data.
-They require the existing `EVAL_TENANT_MAILBOX`; `EVAL_LANG` defaults to `es`.
+- `main`, `coverage`: private email corpora and golden labels; onboarding classification. `EVAL_LANG` defaults to `es`.
+- `synthetic`: invented cases for classification, historical learning, incoming decisions, enrichment and reply suggestions. Models are real; storage and retrieval use fixtures.
 
-Outputs stay in `scripts/eval/data/output/ac11/<run-id>/`: `run.json` contains
-inputs, outputs, actual model routes, prompt hashes and per-call metadata;
-`reviews.json` contains the human rubric. Set each rating to `true` or `false`
-after checking the corresponding sources and output. Leave unobserved usefulness
-or confirmed-resolution outcomes `null`. `report` rejects stale review keys and
-reports missing reviews, errors, F1, abstention, coverage, freshness, usefulness
-and cost separately. Unknown cost is never reported as zero. No score enables
-production autonomy or automatically closes AC12.
+Models come from the application's role configuration. The runner displays resolved models before inference. Classification makes one call per case, or two with a language ensemble. Other workflows call models conditionally. Invalid model answers are recorded as failed cases and evaluation continues. Transport failures, missing BYOK evidence and the request limit stop execution.
 
-Execution is serial and stops on its first failed case or request limit. Network
-access is limited to Vercel Gateway and local Ollama. Each Gateway response must
-report BYOK; a violation stops further calls. This response check cannot prevent
-Gateway from billing the first violating request. No remote database or migrations
-are invoked. This folder must never contain corpus inputs, outputs or logs.
+## Results
+
+Runs are stored privately in `scripts/eval/data/output/ac11/<run-id>/`:
+
+- `run.json`: inputs, outputs, model routes, prompt fingerprints, requests and Gateway responses (including rejected answers).
+- `reviews.json`: human ratings; use `true` or `false`, leaving unobserved outcomes `null`.
+- `report.json`: quality, abstention, coverage, latency and available cost measurements.
+- `diagnostics.json`: private execution diagnostics.
+
+Keep corpus data, golden labels and results under `scripts/eval/data/`, never in this directory. Scores from private corpora and synthetic cases remain separate.
+
+## Local checks
+
+```sh
+bunx --no-install tsc --noEmit -p evals/tsconfig.json
+bun evals/technical.ts
+# Requires a prepared disposable PostgreSQL database on localhost:55494
+bun evals/technical.ts --database
+```
+
+Model execution permits Vercel AI Gateway and local Ollama. Gateway responses must confirm BYOK; otherwise subsequent requests stop. This check occurs after the response and cannot prevent billing of that first request. Evaluation runs do not connect to Gmail or the product database.

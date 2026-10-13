@@ -9,6 +9,7 @@ export interface Inference {
 /** Closed network boundary: no product database, telemetry or direct remote provider. */
 export function guardNetwork(maxRequests: number, transport: typeof fetch = globalThis.fetch) {
   const requests: Inference[] = [];
+  const responses: unknown[] = [];
   let stopped = false;
   const guarded = Object.assign(async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     if (stopped) throw new Error('Evaluation network stopped');
@@ -29,6 +30,7 @@ export function guardNetwork(maxRequests: number, transport: typeof fetch = glob
       if (!response.ok) throw new Error('Evaluation transport failed');
       if (inference && gateway) {
         const body = await response.clone().json() as Record<string, unknown>;
+        responses.push(body);
         const provenance = gatewayProvenance(body['providerMetadata'] ?? body['provider_metadata'], 'evaluation');
         entry.costUsd = provenance.costUsd;
         entry.credentialType = provenance.credentialType;
@@ -37,5 +39,5 @@ export function guardNetwork(maxRequests: number, transport: typeof fetch = glob
       return response;
     } catch { stopped = true; throw new Error('Evaluation network stopped'); }
   }, transport) as typeof fetch;
-  return { fetch: guarded, requests, get stopped() { return stopped; } };
+  return { fetch: guarded, requests, responses, get stopped() { return stopped; } };
 }

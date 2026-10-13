@@ -61,9 +61,16 @@ export async function classifyEmailWithDecision(
         questions: buildTicketVerdictQuestions(message.stage),
         signal,
       });
-      const validated = workflowAnswersSchema(message.stage, 'message').safeParse(decision.value);
-      if (!validated.success) throw new ProviderError('Decision classification output does not match its question contract', false);
-      decision.value = { ...TicketAnswersSchema.parse(decision.value), ...validated.data };
+      const schema = TicketAnswersSchema.extend(workflowAnswersSchema(message.stage, 'message').shape);
+      const validated = schema.safeParse(decision.value);
+      if (!validated.success) {
+        const fields = [...new Set(validated.error.issues.map(issue => {
+          const key = issue.path[0];
+          return typeof key === 'string' && key in schema.shape ? key : 'response';
+        }))];
+        throw new ProviderError(`Decision classification output does not match its question contract: ${fields.join(', ')}`, false);
+      }
+      decision.value = { ...validated.data, ...TicketAnswersSchema.parse(validated.data) };
       const verdict = Object.assign(parseTicketVerdictAnswers(decision.value), {
         evidence: message.evidence ?? { bodySource: 'stored' as const, truncated: false, missing: ['body_provenance'] },
         workflow: { contract: workflowContract(message.stage), version: WORKFLOW_VERSION, judgments: Object.fromEntries(Object.entries(validated.data).filter(([key]) => key in workflowAnswersSchema(message.stage, 'message').shape).map(([key, answer]) => [key, answer.choice])) },

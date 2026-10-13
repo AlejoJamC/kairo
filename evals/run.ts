@@ -6,7 +6,17 @@ import { syntheticCases } from './cases';
 import { privateRoot, readPrivate, writePrivate, root } from './private-files';
 import { summarize, reviewTemplate, type Measurement, type Review } from './metrics';
 import { guardNetwork } from './network';
+import { resolveEnsembleTarget } from '../packages/intelligence/src/config/ensemble';
 import { resolveModelRoute } from '../packages/intelligence/src/config/model-roles';
+
+export function evaluationRouting(dataset: string, env: Record<string, string | undefined> = process.env) {
+  const roles = dataset === 'synthetic'
+    ? ['classification', 'knowledge_decision', 'validation', 'evidence_analysis', 'knowledge_draft', 'reply'] as const
+    : ['classification'] as const;
+  const routes = roles.map(role => resolveModelRoute(role, env));
+  const ensemble = routes[0]?.capability === 'language' ? resolveEnsembleTarget(env) : null;
+  return { routes, ensemble, classificationCallsPerEmail: ensemble ? 2 : 1 };
+}
 
 async function codeFingerprint() {
   const paths = ['packages/intelligence/prompts', 'packages/intelligence/src/classification'];
@@ -41,15 +51,18 @@ export async function main(args: string[]) {
   const requestLimit = Number(rawRequests ?? 100);
   if ((limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1)) || !Number.isSafeInteger(requestLimit) || requestLimit < 1) throw new Error('Positive integer limits required');
   if (command === 'plan') return { dataset, cases: dataset === 'synthetic' ? syntheticCases.slice(0, limit).map(c => ({ id: c.id, contract: c.contract })) : 'existing private corpus',
-    requestLimit, network: false, outputs: 'scripts/eval/data/output/ac11/<run-id>/',
+    requestLimit, network: false, routing: evaluationRouting(dataset), outputs: 'scripts/eval/data/output/ac11/<run-id>/',
     entrypoints: { onboarding_triage: 'classifyEmailWithMeta', historical_learning: 'processDecisionWork',
       incoming_email_decision: 'processDecisionWork', knowledge_impact: 'processDecisionWork', reply_suggestion: 'suggestReply' } };
 
   const runId = randomUUID();
   const dir = resolve(privateRoot, 'output/ac11', runId);
-  const roles = ['classification', 'knowledge_decision', 'validation', 'evidence_analysis', 'knowledge_draft', 'reply'] as const;
+  let routing: ReturnType<typeof evaluationRouting>;
+  try { routing = evaluationRouting(dataset); }
+  catch { throw new Error('EVAL_MODEL_CONFIGURATION'); }
+  console.log(JSON.stringify({ dataset, ...routing, requestLimit }));
   const manifest = { ...await codeFingerprint(), runId, dataset, createdAt: new Date().toISOString(),
-    routes: roles.map(role => resolveModelRoute(role)), requestLimit, scope: 'real model outputs; isolated storage and retrieval',
+    ...routing, requestLimit, scope: 'real model outputs; isolated storage and retrieval',
     productionCalibration: false, databaseSafety: 'separate technical database suite' };
   const rows: Measurement[] = [];
   await writePrivate(resolve(dir, 'run.json'), { manifest, planned: 0, rows });
@@ -60,27 +73,34 @@ export async function main(args: string[]) {
   const diagnostics: unknown[][] = [];
   // Provider diagnostics can contain corpus text; only the private artifact may receive them.
   console.log = console.info = console.warn = console.error = console.debug = (...values: unknown[]) => { diagnostics.push(values.map(v => v instanceof Error ? { name: v.name, message: v.message } : v)); };
+  let phase = 'EVAL_CORPUS_LOAD';
   try {
     const examples = (dataset === 'synthetic' ? syntheticCases : await (await import('./corpus')).loadCorpus(dataset as 'main' | 'coverage')).slice(0, limit);
+    phase = 'EVAL_RUNTIME_SETUP';
     const execute = await (await import('./runtime')).createRuntime();
+    phase = 'EVAL_EXECUTION';
     for (const example of examples) {
       const started = performance.now();
       const offset = network.requests.length;
+      const responseOffset = network.responses.length;
       try {
         const result = await execute(example);
-        rows.push({ case: example, status: 'completed', ...result, latencyMs: performance.now() - started, requests: network.requests.slice(offset) });
+        rows.push({ case: example, status: 'completed', ...result, latencyMs: performance.now() - started, requests: network.requests.slice(offset), responses: network.responses.slice(responseOffset) });
       } catch (error) {
         rows.push({ case: example, status: 'failed', prediction: {}, abstain: null, latencyMs: performance.now() - started,
-          requests: network.requests.slice(offset), output: error instanceof Error ? { name: error.name, message: error.message } : { failed: true }, calls: [], safety: {} });
+          requests: network.requests.slice(offset), responses: network.responses.slice(responseOffset), output: error instanceof Error ? { name: error.name, message: error.message } : { failed: true }, calls: [], safety: {} });
       }
       await writePrivate(resolve(dir, 'run.json'), { manifest, planned: examples.length, rows });
       originalConsole.log(JSON.stringify({ case: example.id, contract: example.contract, status: rows.at(-1)!.status }));
-      if (rows.at(-1)!.status === 'failed') break;
+      if (network.stopped) break;
     }
     await writePrivate(resolve(dir, 'reviews.json'), reviewTemplate(rows));
     await writePrivate(resolve(dir, 'report.json'), { manifest, planned: examples.length, cells: summarize(rows) });
     if (rows.some(r => r.status === 'failed') || rows.length !== examples.length) process.exitCode = 1;
     return { run: runId, completed: rows.filter(r => r.status === 'completed').length, planned: examples.length, actualModelEvaluation: true };
+  } catch (error) {
+    diagnostics.push([error instanceof Error ? {name:error.name,message:error.message} : {failed:true}]);
+    throw new Error(phase);
   } finally {
     Object.assign(console, originalConsole);
     globalThis.fetch = originalFetch;
@@ -90,5 +110,8 @@ export async function main(args: string[]) {
 
 if (import.meta.main) {
   try { console.log(JSON.stringify(await main(process.argv.slice(2)), null, 2)); }
-  catch { console.error('Evaluation stopped. No raw diagnostics are printed. Check configuration and the private run artifacts.'); process.exitCode = 1; }
+  catch (error) {
+    const code = error instanceof Error && ['EVAL_MODEL_CONFIGURATION','EVAL_CORPUS_LOAD','EVAL_RUNTIME_SETUP','EVAL_EXECUTION'].includes(error.message) ? error.message : 'EVAL_SETUP';
+    console.error(`Evaluation stopped: ${code}. Raw diagnostics remain private.`); process.exitCode = 1;
+  }
 }

@@ -5,6 +5,9 @@ import { identity, storageFor, type Row } from './storage';
 
 /** Run in its own Bun process: only persistence, retrieval and logging are isolated. */
 export async function createRuntime(classifyOverride?: typeof import('../packages/intelligence/src/classification/classify').classifyEmailWithMeta) {
+  // Storage is mocked below; importing application modules must not require database credentials.
+  process.env['SUPABASE_URL'] ??= 'http://127.0.0.1:54321';
+  process.env['SUPABASE_SERVICE_ROLE_KEY'] ??= 'synthetic-eval-storage';
   let active: ReturnType<typeof storageFor> | undefined;
   const calls: LlmCallRecord[] = [];
   const current = () => { if (!active) throw new Error('No evaluation case selected'); return active; };
@@ -19,6 +22,10 @@ export async function createRuntime(classifyOverride?: typeof import('../package
     findRelevantKb: async () => ({ articles: current().retrieval.kbArticles, degraded: [] }),
     retrieveTicketContext: async () => current().retrieval,
   }));
+  const knowledgeModule = await import('../apps/api/src/lib/workflow-knowledge');
+  mock.module('../apps/api/src/lib/workflow-knowledge.js', () => ({ ...knowledgeModule,
+    approvedWorkflowKnowledge: async () => current().versions.filter(version => version.status === 'approved'),
+  }));
   const { processDecisionWork } = await import('../apps/api/src/lib/decision-workflow');
   const { suggestReply } = await import('../apps/api/src/lib/reply-suggestion');
   const { buildEmailClassifierInput } = await import('../apps/api/src/lib/classifier-input');
@@ -32,12 +39,12 @@ export async function createRuntime(classifyOverride?: typeof import('../package
     let output: unknown;
     let abstain: boolean | null = null;
     if (example.contract === 'onboarding_triage') {
-      const mailbox = example.mailbox ?? 'support@acme.com';
-      const from = example.from ?? 'client@outside.com';
-      const facts = extractMailFacts({ from, subject: example.subject, headers: { To: example.to ?? mailbox, Cc: example.cc ?? '' }, tenantMailbox: [mailbox] });
+      const mailbox = example.mailbox ?? '';
+      const from = example.from ?? '';
+      const facts = extractMailFacts({ from, subject: example.subject, headers: { To: example.to ?? '', Cc: example.cc ?? '' }, tenantMailbox: mailbox ? [mailbox] : [] });
       facts.referencesCount = example.threadDepth ?? 0;
       const input = buildEmailClassifierInput({ stage: 'onboarding', from, subject: example.subject,
-        bodyPlain: example.body, facts, context: { tenantMailbox: mailbox, tenantMailboxes: [mailbox] } });
+        bodyPlain: example.body, facts, context: { tenantMailbox: mailbox, tenantMailboxes: mailbox ? [mailbox] : [] } });
       const result = await (classifyOverride ?? classifyEmailWithMeta)({ ...input, attachments: example.attachments }, { lang: example.lang });
       output = result;
       Object.assign(prediction, { type: result.result.type, priority: result.verdict.priority,

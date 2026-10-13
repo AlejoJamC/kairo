@@ -9,7 +9,7 @@ describe('buildTicketVerdictQuestions', () => {
     for (const stage of [undefined, 'onboarding', 'backfill', 'new_email', 'manual'] as const) {
       const questions = buildTicketVerdictQuestions(stage);
       expect(Object.keys(questions).sort()).toEqual(
-        ['actionability', 'category', 'priority', 'subject_matter', 'tone', 'urgency', ...workflowFields(stage)].sort(),
+        ['actionability', 'category', 'priority', 'subject_matter', 'tone', 'urgency', ...workflowFields(stage, 'message')].sort(),
       );
       for (const q of Object.values(questions)) {
         expect(q.type).toBe('choice');

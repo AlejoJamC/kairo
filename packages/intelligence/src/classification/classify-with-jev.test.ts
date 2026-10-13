@@ -38,6 +38,20 @@ function fakeJev(answers: Record<string, ReturnType<typeof answer>>): DecisionPr
 }
 
 describe('classifyEmailWithJev', () => {
+  it('accepts rounded workflow probabilities and identifies invalid fields without repeating response values', async () => {
+    const values = {actionability:answer('needs_action',0.9),subject_matter:answer('service',0.9),priority:answer('P2',0.9),category:answer('account',0.9),tone:answer('neutral',0.9),urgency:answer('medium',0.9)};
+    const provider = fakeJev(values);
+    const original = provider.decide.bind(provider);
+    provider.decide = (async request => {
+      const response = await original(request);
+      const answers = response.value as Record<string, unknown>;
+      answers.urgency_evidence = {type:'choice',choice:'supported',confidence:0.5,probabilities:{supported:0.5,unknown:0.3,contradictory:0.21}};
+      return response;
+    }) as DecisionProvider['decide'];
+    await expect(classifyEmailWithJev({subject:'Access',body:'Please help.',from:'client@outside.com'},provider)).resolves.toHaveProperty('verdict');
+    values.tone = {...answer('neutral',0.9),probabilities:{neutral:0.5,positive:0.3,frustrated:0.3,aggressive:0}};
+    await expect(classifyEmailWithJev({subject:'Access',body:'Please help.',from:'client@outside.com'},provider)).rejects.toThrow('question contract: tone');
+  });
   it('derives the same ticket_type table every other provider uses — external + needs_action + service = support', async () => {
     const provider = fakeJev({
       actionability: answer('needs_action', 0.95),

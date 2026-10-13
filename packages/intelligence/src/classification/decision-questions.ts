@@ -38,15 +38,15 @@ const CATEGORY_CRITERIA = {
 const TONE_CRITERIA = {
   aggressive: 'Hostile, threatening or confrontational language — insults, ultimatums, all-caps anger.',
   frustrated:
-    'Annoyed or fed up without hostility, decided by insistence, not vocabulary — even when polite: repeated exclamation marks or "this is unacceptable", cited dates, elapsed days or broken commitments, or `threadDepth` of 2 or more.',
+    'Annoyed or fed up without hostility. Under this rubric, any of these counts even with polite wording: repeated exclamation marks or angry capitals; dated reminders, elapsed waiting, repeated attempts or broken commitments; threadDepth of 2 or more or stacked RE:/Fwd: prefixes in subject. Evaluate the sender of the current message, not the author of quoted history.',
   neutral: 'Professional, calm and informative, with none of the frustration signals.',
-  positive: 'Friendly, grateful or enthusiastic about something already resolved. Courtesy formulas alone are not positive.',
+  positive: 'The sender expresses satisfaction, gratitude or enthusiasm about a completed outcome. A substantive confirmation that the solution worked qualifies even in professional wording. Routine greetings and sign-offs alone do not qualify.',
 } as const satisfies ChoiceCriteria;
 
 const URGENCY_CRITERIA = {
-  high: 'No slack — something is being lost right now, someone is stuck, or there is an immediate deadline.',
+  high: 'At the time of this message there is no slack: an ongoing loss, a person or operation still blocked, an immediate deadline, or a consequence that worsens while waiting. An incident that started in the past but remains blocking belongs here, even when described politely or in past tense.',
   medium:
-    'Needs attention soon, but the event already happened or it can be scheduled. A serious case whose outcome is already settled is usually medium, not high.',
+    'Needs attention soon, but the remaining action can be scheduled without an ongoing blockage, growing loss or immediate deadline. A past event qualifies only if its consequences are settled or no longer time-critical; past tense alone is not evidence of that.',
   low: 'No time pressure — planning, inquiry or future coordination.',
 } as const satisfies ChoiceCriteria;
 
@@ -69,12 +69,12 @@ export function buildTicketVerdictQuestions(stage?: EmailMessage['stage']): Ques
       'What is the matter of this email, in terms of what the company delivers (`businessContext`)?',
       CATEGORY_CRITERIA,
     ),
-    tone: choice("What is the sender's tone?", TONE_CRITERIA),
-    urgency: choice('How much time is there to resolve this, independent of how important the case is?', URGENCY_CRITERIA),
+    tone: choice("What tone does the current sender express in `subject` and `body`, using `threadDepth` as context under this rubric? Distinguish substantive satisfaction from routine courtesy, and a polite complaint from a neutral report. Do not assign the tone of quoted messages to the current sender.", TONE_CRITERIA),
+    urgency: choice('How quickly must someone act at the time this message was written, given `subject` and `body`? Judge consequences of waiting and whether the problem is still active, independently of priority and tone. Do not use today as the clock for historical messages. A keyword flag is not an urgency judgment; absence of an English keyword does not mean absence of urgency.', URGENCY_CRITERIA),
   };
 }
 
-export const TICKET_QUESTIONS_VERSION = '1.1.0';
+export const TICKET_QUESTIONS_VERSION = '1.1.1';
 export const DECISION_STATE_VERSION = '1.1.0';
 
 export interface JevChoiceAnswer {

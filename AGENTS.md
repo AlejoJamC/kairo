@@ -69,6 +69,12 @@ Kairo — AI support cockpit for support teams. Monorepo: dashboard (Vite+React1
 - For file-based specifications, move the existing specification from `specs/pending/` to `specs/done/` and add a brief implementation summary only when the work and required validation are complete.
 - Keep long-running task progress concise and free of customer or evaluation data. Do not introduce a separate agent instruction file to persist progress.
 
+## Feature documentation
+
+- READMEs describe the domain and its current usage: purpose, commands, configuration and outputs. Keep them concise and understandable without conversation history.
+- Never frame feature documentation around Linear issues, AC numbers, implementation phases, agent activity or explanations of previous mistakes. Execution history belongs in the issue's execution comments.
+- Before saving documentation, remove any sentence that does not help someone use or maintain the feature. Do not create extra documentation unless requested or necessary for operation.
+
 ## Database migrations
 
 All schema changes must go through the Supabase CLI workflow.

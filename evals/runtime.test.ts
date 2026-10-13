@@ -28,3 +28,15 @@ test('first delivery calls the production classifier with its bounded contract',
     expect(result.safety.firstDeliveryIndependent).toBe(true);
     expect(result.abstain).toBe(true);
 });
+
+test('private corpus input keeps missing mailbox and recipients absent without network calls', async () => {
+  type Classify = typeof import('../packages/intelligence/src/classification/classify').classifyEmailWithMeta;
+  const classify = mock<Classify>(async () => ({result:{type:'support'},verdict:{priority:'P2',urgency:'medium',category:'account',tone:'neutral'},abstain:true} as Awaited<ReturnType<Classify>>));
+  const execute = await createRuntime(classify);
+  await execute({...syntheticCases[0]!,dataset:'main',mailbox:undefined,to:undefined,from:undefined});
+  const input = classify.mock.calls[0]![0];
+  expect(input.tenantMailbox).toBe('');
+  expect(input.from).toBe('');
+  expect(input.to).toBeUndefined();
+  expect(input.evidence?.missing).toContain('tenant_mailbox');
+});

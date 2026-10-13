@@ -9,7 +9,8 @@ export function choiceAnswerSchema(criteria: Record<string, unknown>) {
     probabilities: z.record(z.enum(values), z.number().min(0).max(1)),
   }).superRefine((answer, ctx) => {
     const sum = Object.values(answer.probabilities).reduce((total, value) => total + value, 0);
-    if (Math.abs(sum - 1) > 0.01) ctx.addIssue({ code: 'custom', message: 'Choice probabilities must sum to one' });
+    // Preserve provider rounding; binary arithmetic must not reject the inclusive boundary.
+    if (Math.abs(sum - 1) > 0.01 + 1e-12) ctx.addIssue({ code: 'custom', message: 'Choice probabilities must sum to one' });
     const selected = answer.probabilities[answer.choice];
     if (selected === undefined || Object.values(answer.probabilities).some((value) => value > selected + 0.0001)) {
       ctx.addIssue({ code: 'custom', message: 'Choice must match the highest probability' });
