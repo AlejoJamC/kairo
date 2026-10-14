@@ -11,6 +11,7 @@ export interface EvalCase {
   mailbox?: string;
   to?: string;
   cc?: string;
+  headers?: Record<string, string>;
   threadDepth?: number;
   attachments?: { filename: string; contentType: string }[];
   businessContext?: string;

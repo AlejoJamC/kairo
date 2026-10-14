@@ -1,7 +1,32 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { buildPrompt, extractPromptVersion, getPromptVersion } from './prompt';
 import { classifyEmail, classifyEmailWithMeta } from './classify';
 import { TONE } from './schema';
+import { GatewayCompletionProvider } from '../providers/gateway/completion';
+
+it('reserves enough output for a reasoning model to return a classification', async () => {
+  const names = ['CLASSIFICATION_MODE', 'INTELLIGENCE_PROVIDER', 'AI_GATEWAY_CLASSIFICATION_MODEL', 'AI_GATEWAY_API_KEY', 'INTELLIGENCE_ENSEMBLE'] as const;
+  const previous = names.map(name => process.env[name]);
+  Object.assign(process.env, {
+    CLASSIFICATION_MODE: 'language', INTELLIGENCE_PROVIDER: 'gateway',
+    AI_GATEWAY_CLASSIFICATION_MODEL: 'moonshotai/kimi-k2.6', AI_GATEWAY_API_KEY: 'synthetic-key',
+  });
+  delete process.env['INTELLIGENCE_ENSEMBLE'];
+  const complete = vi.spyOn(GatewayCompletionProvider.prototype, 'completeJSONWithMeta')
+    .mockRejectedValue(new Error('Request captured'));
+  try {
+    await expect(classifyEmailWithMeta({ subject: 'Access', body: 'Please help.', from: 'client@outside.com' }))
+      .rejects.toThrow('Request captured');
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(complete.mock.calls[0]?.[2]).toMatchObject({ maxTokens: 8192, reasoning: 'none' });
+  } finally {
+    complete.mockRestore();
+    names.forEach((name, index) => {
+      if (previous[index] === undefined) delete process.env[name];
+      else process.env[name] = previous[index];
+    });
+  }
+});
 
 describe('extractPromptVersion', () => {
   it('extracts a semver version from a heading', () => {

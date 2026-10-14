@@ -20,14 +20,20 @@ export async function loadCorpus(id: CorpusId, io = { read: readPrivate, directo
     ids.add(Number(emailId));
     const file = files.find(f => canonicalEmailId(f.replace(/\.eml$/, '')) === emailId);
     if (!file) throw new Error('Missing corpus position');
-    const email = parseEml(await io.read(resolve(directory, file)));
+    const raw = await io.read(resolve(directory, file));
+    const email = parseEml(raw);
+    const headers: Record<string, string> = {};
+    for (const line of raw.split(/\r?\n\r?\n/, 1)[0]!.replace(/\r?\n[ \t]+/g, ' ').split(/\r?\n/)) {
+      const separator = line.indexOf(':');
+      if (separator > 0) headers[line.slice(0, separator).toLowerCase()] ??= line.slice(separator + 1).trim();
+    }
     const expected = Object.fromEntries(['type','priority','urgency','category','tone'].flatMap(key => {
       const value = label[key === 'type' ? 'ticket_type' : key];
       return value ? [[key, value]] : [];
     }));
     if (!Object.keys(expected).length) throw new Error('No labels for corpus position');
     rows.push({ id: Number(emailId), dataset: id, contract: 'onboarding_triage', subject: email.subject, body: email.body,
-      from: email.from, to: email.to, cc: email.cc, threadDepth: email.threadDepth, attachments: email.attachments,
+      from: email.from, to: email.to, cc: email.cc, headers, threadDepth: email.threadDepth, attachments: email.attachments,
       lang: process.env['EVAL_LANG'] === 'en' ? 'en' : 'es', expected,
       rubric: ['Decisions follow the current onboarding rubric and available evidence; missing context stays explicit.'] });
   }

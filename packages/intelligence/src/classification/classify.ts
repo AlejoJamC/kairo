@@ -134,6 +134,8 @@ export async function classifyEmailWithMeta(
     async (generation) => {
       const completionOptions = {
         abortSignal: options?.abortSignal,
+        maxTokens: 8192,
+        reasoning: 'none' as const,
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
       };
 

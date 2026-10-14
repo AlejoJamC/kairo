@@ -18,8 +18,8 @@ export function evaluationRouting(dataset: string, env: Record<string, string | 
   return { routes, ensemble, classificationCallsPerEmail: ensemble ? 2 : 1 };
 }
 
-async function codeFingerprint() {
-  const paths = ['packages/intelligence/prompts', 'packages/intelligence/src/classification'];
+export async function codeFingerprint() {
+  const paths = ['packages/intelligence/prompts', 'packages/intelligence/src/classification', 'evals'];
   const entries: [string, string][] = [];
   for (const path of paths) {
     for (const name of (await readdir(resolve(root, path), { recursive: true })).sort()) {

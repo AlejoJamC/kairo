@@ -36,12 +36,16 @@ describe('Gateway providers', () => {
       const url = String(input); calls.push(url);
       expect(new URL(url).hostname).toBe('ai-gateway.vercel.sh');
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer test-key');
-      if (!url.endsWith('/config')) expect(JSON.parse(init?.body as string).providerOptions.gateway.only).toEqual(['openai']);
+      if (!url.endsWith('/config')) {
+        const request = JSON.parse(init?.body as string);
+        expect(request.providerOptions.gateway.only).toEqual(['openai']);
+        expect(request.reasoning).toBe('none');
+      }
       const body = url.endsWith('/config') ? catalog('openai/test-model') : generation('{"label":"support"}');
       return Response.json(body);
     }) as typeof fetch;
     const result = await new GatewayCompletionProvider('test-key', 'openai/test-model', globalThis.fetch)
-      .completeJSONWithMeta('Synthetic Acme support request', z.object({ label: z.literal('support') }));
+      .completeJSONWithMeta('Synthetic Acme support request', z.object({ label: z.literal('support') }), { reasoning: 'none' });
     expect(result.data.label).toBe('support');
     expect(result.usage).toEqual({ promptTokens: 8, completionTokens: 3 });
     expect(result.model).toBe('openai/reported-model');

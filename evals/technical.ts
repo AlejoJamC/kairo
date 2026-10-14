@@ -6,6 +6,7 @@ import { root, privateRoot, writePrivate } from './private-files';
 export const suites = [
   { file: 'evals/checks.test.ts', covers: ['runner', 'metrics', 'privacy', 'network limits'] },
   { file: 'evals/runtime.test.ts', covers: ['production entrypoints', 'isolated storage'] },
+  { file: 'evals/onboarding.test.ts', covers: ['random sampling', 'ticket-to-knowledge chain', 'conditional calls', 'first delivery', 'idempotency'] },
   { file: 'packages/intelligence/src/classification/workflow-contract.test.ts', covers: ['contract separation', 'insufficiency', 'contradiction', 'alternatives', 'declared risk'] },
   { file: 'apps/api/src/lib/classifier-input.test.ts', covers: ['bounded initial evidence'] },
   { file: 'apps/api/src/lib/decision-workflow.test.ts', covers: ['initial sample enrichment', 'relevance', 'current versions', 'historical and incoming contracts'] },
