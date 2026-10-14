@@ -76,6 +76,7 @@ export async function createOnboardingRuntime(examples: EvalCase[], overrides: O
   const { computePriorityScore, DEFAULT_WEIGHTS } = await import('../apps/api/src/lib/scoring');
   const { tier1ProposalStatus } = await import('../apps/api/src/functions/pipeline/tier1-proposal-status');
   const { processDecisionWork } = await import('../apps/api/src/lib/decision-workflow');
+  const { enqueueOnboardingLearning } = await import('../apps/api/src/lib/onboarding-learning');
   const { proposeEmailKnowledge } = await import('../apps/api/src/lib/email-knowledge');
   const threads = sampleThreads(examples);
   const classified: { example: EvalCase; result: Awaited<ReturnType<Classify>>; ticketId: string; messageId: string }[] = [];
@@ -146,12 +147,17 @@ export async function createOnboardingRuntime(examples: EvalCase[], overrides: O
     }
     const firstDelivery = structuredClone(storage.tables);
     const callsBeforeLearning = calls.length;
-    // Exercise the learning consumer explicitly; this is not evidence that Tier 1 dispatches it.
+    currentCase = 0;
+    await runStep('enqueue_sample_learning', () => enqueueOnboardingLearning(accountId, classified.map(item => ({
+      ticketId: item.ticketId, messageId: item.messageId,
+    })), storage.db));
     for (const item of classified) {
       if (stopped()) break;
       currentCase = item.example.id;
-      const work = { id: `acme-work-${currentCase}`, account_id: accountId, ticket_id: item.ticketId,
-        message_id: item.messageId, knowledge_version_id: null, contract: 'historical_learning', dedupe_key: `sample:${currentCase}` };
+      const queued = storage.tables['decision_work_items']!.find(row => row['message_id'] === item.messageId && row['ticket_id'] === item.ticketId);
+      if (!queued) { emit({ case: currentCase, step: 'sample_learning', status: 'failed', reason: 'source_not_queued' }); continue; }
+      const work = { id: String(queued['id']), account_id: String(queued['account_id']), ticket_id: String(queued['ticket_id']),
+        message_id: String(queued['message_id']), knowledge_version_id: null, contract: String(queued['contract']), dedupe_key: String(queued['dedupe_key']) };
       try {
         await runStep('sample_learning', () => processDecisionWork(work, storage.db, { ...overrides.work,
           propose: async (input, deps) => {

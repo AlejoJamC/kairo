@@ -4,6 +4,7 @@ export interface Inference {
   status: number;
   costUsd: number | null;
   credentialType: string | null;
+  settings?: { temperature?: number; reasoning?: string };
 }
 
 /** Closed network boundary: no product database, telemetry or direct remote provider. */
@@ -23,6 +24,11 @@ export function guardNetwork(maxRequests: number, transport: typeof fetch = glob
     const entry: Inference = { status: 0, costUsd: null, credentialType: null };
     if (inference) requests.push(entry);
     try {
+      if (inference && gateway && typeof init?.body === 'string') {
+        const options = JSON.parse(init.body) as Record<string, unknown>;
+        entry.settings = { ...(typeof options['temperature'] === 'number' ? { temperature: options['temperature'] } : {}),
+          ...(typeof options['reasoning'] === 'string' ? { reasoning: options['reasoning'] } : {}) };
+      }
       const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
       const response = await transport(input, { ...init, redirect: 'error',
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000) });

@@ -9,7 +9,7 @@ export function onboardingStorage(language: 'es' | 'en') {
   const tables: Record<string, Row[]> = Object.fromEntries([
     'tickets', 'messages', 'conversations', 'ticket_messages', 'ticket_decision_history',
     'ticket_state_history', 'clients', 'draft_contact', 'ticket_priority_sla_config',
-    'tenant_sla_rules', 'kb_articles', 'operational_learning', 'current_knowledge', 'ticket_proposals',
+    'tenant_sla_rules', 'kb_articles', 'operational_learning', 'current_knowledge', 'ticket_proposals', 'decision_work_items',
   ].map(name => [name, []]));
   tables['accounts'] = [{ id: accountId, language, business_context: null }];
   tables['account_members'] = [{ account_id: accountId, user_id: userId, role: 'owner', status: 'active' }];

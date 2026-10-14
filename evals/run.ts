@@ -1,9 +1,11 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFile, readdir } from 'node:fs/promises';
 import { resolve, relative } from 'node:path';
 import { syntheticCases } from './cases';
-import { privateRoot, readPrivate, writePrivate, root } from './private-files';
+import { readPrivate, writePrivate, root } from './private-files';
+import { createEvaluationRun, findEvaluationRun, finishEvaluationRun } from './results';
+import { captureSdkWarnings } from './warnings';
 import { summarize, reviewTemplate, type Measurement, type Review } from './metrics';
 import { guardNetwork } from './network';
 import { resolveEnsembleTarget } from '../packages/intelligence/src/config/ensemble';
@@ -28,7 +30,7 @@ export async function codeFingerprint() {
       entries.push([relative(root, file), createHash('sha256').update(await readFile(file)).digest('hex')]);
     }
   }
-  for (const name of ['decision-workflow', 'email-knowledge', 'reply-suggestion', 'classifier-input', 'workflow-knowledge']) {
+  for (const name of ['decision-workflow', 'email-knowledge', 'reply-suggestion', 'classifier-input', 'workflow-knowledge', 'onboarding-learning']) {
     const path = `apps/api/src/lib/${name}.ts`;
     entries.push([path, createHash('sha256').update(await readFile(resolve(root, path))).digest('hex')]);
   }
@@ -38,35 +40,38 @@ export async function codeFingerprint() {
 export async function main(args: string[]) {
   const [command = 'plan', dataset = 'synthetic', rawLimit, rawRequests] = args;
   if (command === 'report') {
-    if (!/^[a-f0-9-]{36}$/.test(dataset)) throw new Error('Run id required');
-    const dir = resolve(privateRoot, 'output/ac11', dataset);
+    const selected = await findEvaluationRun(dataset === 'synthetic' ? 'workflows' : 'classification', dataset as 'main' | 'coverage' | 'synthetic', rawLimit ?? 'latest');
+    const dir = selected.directory;
     const run = JSON.parse(await readPrivate(resolve(dir, 'run.json'))) as { rows: Measurement[]; planned: number; manifest: unknown };
     const reviews = JSON.parse(await readPrivate(resolve(dir, 'reviews.json'))) as Review[];
-    await writePrivate(resolve(dir, 'report.json'), { manifest: run.manifest, planned: run.planned,
+    const previous = JSON.parse(await readPrivate(resolve(dir, 'report.json'))) as Record<string, unknown>;
+    await writePrivate(resolve(dir, 'report.json'), { ...previous, manifest: run.manifest, planned: run.planned,
       completed: run.rows.filter(r => r.status === 'completed').length, cells: summarize(run.rows, reviews) });
-    return { reportUpdated: true, run: dataset };
+    return { reportUpdated: true, run: selected.name, directory: dir };
   }
   if (!['plan', 'execute'].includes(command) || !['synthetic', 'main', 'coverage'].includes(dataset)) throw new Error('Unsupported command or dataset');
   const limit = rawLimit === undefined ? undefined : Number(rawLimit);
   const requestLimit = Number(rawRequests ?? 100);
   if ((limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1)) || !Number.isSafeInteger(requestLimit) || requestLimit < 1) throw new Error('Positive integer limits required');
   if (command === 'plan') return { dataset, cases: dataset === 'synthetic' ? syntheticCases.slice(0, limit).map(c => ({ id: c.id, contract: c.contract })) : 'existing private corpus',
-    requestLimit, network: false, routing: evaluationRouting(dataset), outputs: 'scripts/eval/data/output/ac11/<run-id>/',
+    requestLimit, network: false, routing: evaluationRouting(dataset), outputs: `scripts/eval/data/output/evals/${dataset === 'synthetic' ? 'workflows' : 'classification'}/${dataset}/<UTC-date-time>/`,
     entrypoints: { onboarding_triage: 'classifyEmailWithMeta', historical_learning: 'processDecisionWork',
       incoming_email_decision: 'processDecisionWork', knowledge_impact: 'processDecisionWork', reply_suggestion: 'suggestReply' } };
 
-  const runId = randomUUID();
-  const dir = resolve(privateRoot, 'output/ac11', runId);
   let routing: ReturnType<typeof evaluationRouting>;
   try { routing = evaluationRouting(dataset); }
   catch { throw new Error('EVAL_MODEL_CONFIGURATION'); }
-  console.log(JSON.stringify({ dataset, ...routing, requestLimit }));
+  const savedRun = await createEvaluationRun(dataset === 'synthetic' ? 'workflows' : 'classification', dataset as 'main' | 'coverage' | 'synthetic');
+  const runId = savedRun.name;
+  const dir = savedRun.directory;
+  console.log(JSON.stringify({ dataset, run: runId, directory: dir, ...routing, requestLimit }));
   const manifest = { ...await codeFingerprint(), runId, dataset, createdAt: new Date().toISOString(),
     ...routing, requestLimit, scope: 'real model outputs; isolated storage and retrieval',
     productionCalibration: false, databaseSafety: 'separate technical database suite' };
   const rows: Measurement[] = [];
   await writePrivate(resolve(dir, 'run.json'), { manifest, planned: 0, rows });
   const originalConsole = { ...console };
+  const sdkWarnings = captureSdkWarnings();
   const originalFetch = globalThis.fetch;
   const network = guardNetwork(requestLimit);
   globalThis.fetch = network.fetch;
@@ -95,16 +100,21 @@ export async function main(args: string[]) {
       if (network.stopped) break;
     }
     await writePrivate(resolve(dir, 'reviews.json'), reviewTemplate(rows));
-    await writePrivate(resolve(dir, 'report.json'), { manifest, planned: examples.length, cells: summarize(rows) });
-    if (rows.some(r => r.status === 'failed') || rows.length !== examples.length) process.exitCode = 1;
-    return { run: runId, completed: rows.filter(r => r.status === 'completed').length, planned: examples.length, actualModelEvaluation: true };
+    await writePrivate(resolve(dir, 'report.json'), { manifest, planned: examples.length, cells: summarize(rows), warningCount: sdkWarnings.count() });
+    const failed = rows.some(r => r.status === 'failed') || rows.length !== examples.length;
+    if (failed) process.exitCode = 1;
+    await finishEvaluationRun(savedRun, failed ? 'failed' : 'completed');
+    return { run: runId, directory: dir, completed: rows.filter(r => r.status === 'completed').length, planned: examples.length, warningCount: sdkWarnings.count(), actualModelEvaluation: true };
   } catch (error) {
     diagnostics.push([error instanceof Error ? {name:error.name,message:error.message} : {failed:true}]);
+    await finishEvaluationRun(savedRun, 'failed');
     throw new Error(phase);
   } finally {
     Object.assign(console, originalConsole);
     globalThis.fetch = originalFetch;
+    sdkWarnings.restore();
     await writePrivate(resolve(dir, 'diagnostics.json'), diagnostics);
+    await writePrivate(resolve(dir, 'warnings.json'), sdkWarnings.events);
   }
 }
 

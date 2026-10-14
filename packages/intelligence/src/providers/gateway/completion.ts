@@ -4,6 +4,11 @@ import type { CompletionMeta, CompletionOptions, CompletionProvider } from '../b
 import { ProviderError } from '../base';
 import { GatewayClient, gatewayError, gatewayProvenance, gatewayProviderOptions, gatewayFetch, warnIfSystemCredential } from './client';
 
+/** Kimi uses provider-fixed sampling; other models receive the caller's explicit setting. */
+function samplingOptions(model: string, options: CompletionOptions) {
+  return model.startsWith('moonshotai/kimi-') || options.temperature === undefined ? {} : { temperature: options.temperature };
+}
+
 export class GatewayCompletionProvider implements CompletionProvider {
   readonly model: string;
   readonly gateway: GatewayClient;
@@ -30,6 +35,7 @@ export class GatewayCompletionProvider implements CompletionProvider {
         prompt,
         maxOutputTokens: options.maxTokens ?? 1000,
         reasoning: options.reasoning,
+        ...samplingOptions(this.model, options),
         stopSequences: options.stopSequences,
         maxRetries: 0,
         abortSignal: options.abortSignal ? AbortSignal.any([options.abortSignal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
@@ -52,6 +58,7 @@ export class GatewayCompletionProvider implements CompletionProvider {
         output: Output.object({ schema }),
         maxOutputTokens: options.maxTokens ?? 1000,
         reasoning: options.reasoning,
+        ...samplingOptions(this.model, options),
         stopSequences: options.stopSequences,
         maxRetries: 0,
         abortSignal: options.abortSignal ? AbortSignal.any([options.abortSignal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),

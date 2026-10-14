@@ -3,6 +3,14 @@ import { sampleCorpus } from './sampling';
 import { sampleThreads, createOnboardingRuntime, type OnboardingOverrides } from './onboarding-runtime';
 import { syntheticCases, type EvalCase } from './cases';
 import { workflowLanguageInstructions } from '../packages/intelligence/src/classification/workflow-contract';
+import { onboardingMain } from './onboarding';
+import { privateRoot, readPrivate, writePrivate } from './private-files';
+import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { rm } from 'node:fs/promises';
+import { findEvaluationRun, resultsRoot } from './results';
+import { enqueueOnboardingLearning } from '../apps/api/src/lib/onboarding-learning';
+import { onboardingStorage, accountId } from './onboarding-storage';
 
 const originalFetch = globalThis.fetch;
 const denied = mock(async () => { throw new Error('Network forbidden in technical tests'); });
@@ -103,3 +111,83 @@ test('server-marked spam is saved without calling classification or learning', a
   expect(fake.classify).not.toHaveBeenCalled();
   expect(fake.analyze).not.toHaveBeenCalled();
 });
+
+test('sample queue accepts only linked inbound sources of the account and does not duplicate work', async () => {
+  const { db, tables, writes } = onboardingStorage('en');
+  tables['tickets']!.push({ id: 'acme-ticket', account_id: accountId });
+  tables['messages']!.push(
+    { id: 'acme-valid', account_id: accountId, direction: 'inbound', processing_tier: 1 },
+    { id: 'acme-outbound', account_id: accountId, direction: 'outbound', processing_tier: 1 },
+    { id: 'acme-historical', account_id: accountId, direction: 'inbound', processing_tier: 2 },
+    { id: 'acme-unlinked', account_id: accountId, direction: 'inbound', processing_tier: 1 },
+    { id: 'acme-other-account', account_id: 'acme-other', direction: 'inbound', processing_tier: 1 },
+  );
+  for (const messageId of ['acme-valid', 'acme-outbound', 'acme-historical', 'acme-other-account']) tables['ticket_messages']!.push({ ticket_id: 'acme-ticket', message_id: messageId });
+  const sources = tables['messages']!.map(row => ({ ticketId: 'acme-ticket', messageId: String(row['id']) }));
+  expect(await enqueueOnboardingLearning(accountId, sources, db)).toEqual({ eligibleSources: 1 });
+  expect(tables['decision_work_items']).toHaveLength(1);
+  expect(tables['decision_work_items']![0]).toMatchObject({ contract: 'historical_learning', dedupe_key: 'message:acme-valid' });
+  const count = writes.length;
+  await enqueueOnboardingLearning(accountId, sources, db);
+  expect(writes).toHaveLength(count);
+});
+
+test('private outputs permit evaluation modes and still reject writes to corpus inputs', async () => {
+  const id = randomUUID();
+  try {
+    for (const directory of ['classification', 'onboarding']) {
+      const file = resolve(resultsRoot, directory, 'synthetic', id, 'synthetic.json');
+      await writePrivate(file, { invented: true });
+      expect(JSON.parse(await readPrivate(file))).toEqual({ invented: true });
+    }
+    await expect(writePrivate(resolve(privateRoot, 'input', id, 'synthetic.json'), {})).rejects.toThrow('Evaluation output path required');
+    await expect(writePrivate(resolve(privateRoot, 'output', 'unapproved', id, 'synthetic.json'), {})).rejects.toThrow('Evaluation output path required');
+  } finally {
+    for (const directory of ['classification', 'onboarding']) await rm(resolve(resultsRoot, directory, 'synthetic', id), { recursive: true, force: true });
+  }
+});
+
+test('the execute command saves a complete sampled run through the actual queue writer without network', async () => {
+  const names = ['INTELLIGENCE_PROVIDER', 'TEXT_PROVIDER', 'CLASSIFICATION_MODE', 'INTELLIGENCE_ENSEMBLE',
+    'AI_GATEWAY_CLASSIFICATION_MODEL', 'AI_GATEWAY_EVIDENCE_ANALYSIS_MODEL', 'AI_GATEWAY_KNOWLEDGE_DECISION_MODEL',
+    'AI_GATEWAY_KNOWLEDGE_DRAFT_MODEL', 'AI_GATEWAY_VALIDATION_MODEL'] as const;
+  const previous = names.map(name => process.env[name]);
+  Object.assign(process.env, { INTELLIGENCE_PROVIDER: 'gateway', TEXT_PROVIDER: 'gateway', CLASSIFICATION_MODE: 'language',
+    AI_GATEWAY_CLASSIFICATION_MODEL: 'acme/classification', AI_GATEWAY_EVIDENCE_ANALYSIS_MODEL: 'acme/evidence',
+    AI_GATEWAY_KNOWLEDGE_DECISION_MODEL: 'acme/decision', AI_GATEWAY_KNOWLEDGE_DRAFT_MODEL: 'acme/draft', AI_GATEWAY_VALIDATION_MODEL: 'acme/validation' });
+  delete process.env['INTELLIGENCE_ENSEMBLE'];
+  const print = console.log;
+  console.log = () => {};
+  const fake = overrides();
+  let run: string | undefined;
+  let directory: string | undefined;
+  const latestFile = resolve(resultsRoot, 'onboarding/main/latest.json');
+  const previousLatest = await readPrivate(latestFile).catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return null; throw error; });
+  try {
+    const result = await onboardingMain(['execute', 'main'], {
+      loadCorpus: async () => Array.from({ length: 50 }, (_, i) => ({ ...example, id: i + 1, dataset: 'main' as const })),
+      createRuntime: (cases, _overrides, notify, stopped) => createOnboardingRuntime(cases, fake.deps, notify, stopped),
+    });
+    expect(result).toHaveProperty('run');
+    run = (result as { run: string }).run;
+    const dir = (result as { directory: string }).directory;
+    directory = dir;
+    const manifest = JSON.parse(await readPrivate(resolve(dir, 'manifest.json')));
+    const report = JSON.parse(await readPrivate(resolve(dir, 'report.json')));
+    const saved = JSON.parse(await readPrivate(resolve(dir, 'run.json')));
+    expect(manifest.selected).toBe(Math.min(manifest.sampleSize, 50));
+    expect(new Set(manifest.positions).size).toBe(manifest.selected);
+    expect(report).toMatchObject({ failedSteps: 0, requests: 0, learningCompleted: manifest.selected });
+    expect(saved.tables.decision_work_items).toHaveLength(manifest.selected);
+    expect(saved.tables.operational_learning).toHaveLength(manifest.selected);
+    expect(fake.analyze).toHaveBeenCalledTimes(manifest.selected);
+    await expect(onboardingMain(['report', 'main', run])).resolves.toEqual({ run, directory: dir, reportUpdated: true });
+    expect(await findEvaluationRun('onboarding', 'main')).toEqual({ name: run, directory: dir });
+  } finally {
+    console.log = print;
+    names.forEach((name, i) => { if (previous[i] === undefined) delete process.env[name]; else process.env[name] = previous[i]; });
+    if (directory) await rm(directory, { recursive: true, force: true });
+    if (previousLatest) await writePrivate(latestFile, JSON.parse(previousLatest));
+    else await rm(latestFile, { force: true });
+  }
+}, 30_000);

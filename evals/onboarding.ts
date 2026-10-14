@@ -1,9 +1,10 @@
-import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { resolveModelRoute } from '../packages/intelligence/src/config/model-roles';
 import { evaluationRouting, codeFingerprint } from './run';
 import { sampleCorpus, onboardingScanSize } from './sampling';
-import { privateRoot, writePrivate, readPrivate } from './private-files';
+import { writePrivate, readPrivate } from './private-files';
+import { createEvaluationRun, findEvaluationRun, finishEvaluationRun } from './results';
+import { captureSdkWarnings } from './warnings';
 import { guardNetwork } from './network';
 import type { PipelineStep } from './onboarding-runtime';
 import type { Measurement } from './metrics';
@@ -16,8 +17,9 @@ export const onboardingSteps = [
   { step: 'ticket_creation', executor: 'upsertConversationByThread + findOrCreateTicketForThread + linkMessageToTicket', condition: 'classification succeeds' },
   { step: 'first_delivery', executor: 'persisted ticket', condition: 'ticket and source are linked' },
   { step: 'classification_history_trigger', executor: 'capture_ticket_decision', condition: 'not executed by the storage fixture; requires database verification' },
-  { step: 'sample_learning', executor: 'processDecisionWork', condition: 'explicit evaluation dispatch after first delivery; not dispatched by Tier 1' },
-  { step: 'approved_knowledge_retrieval', executor: 'empty new-account fixture', condition: 'no approved knowledge or business context is invented' },
+  { step: 'enqueue_sample_learning', executor: 'enqueueOnboardingLearning', condition: 'after first delivery; same queue writer used by Tier 1' },
+  { step: 'sample_learning', executor: 'processDecisionWork', condition: 'work queued from a saved initial-sample message' },
+  { step: 'approved_knowledge_retrieval', executor: 'new account', condition: 'starts with no approved knowledge or supplied business context' },
   { step: 'historical_learning_evidence', executor: 'historical-analysis', role: 'evidence_analysis', condition: 'created ticket with available sample conversation' },
   { step: 'historical_learning', executor: 'workflowQuestions(backfill)', role: 'knowledge_decision', condition: 'evidence analysis succeeds' },
   { step: 'email_knowledge_decision', executor: 'buildEmailKnowledgeQuestions', role: 'knowledge_decision', condition: 'linked inbound source without previous proposal' },
@@ -27,24 +29,38 @@ export const onboardingSteps = [
   { step: 'knowledge_proposals', executor: 'save_email_knowledge', condition: 'new articles/facts/rules remain pending human review' },
   { step: 'decision_history', executor: 'recordWorkflowResult', condition: 'learning completes; conclusions and missing evidence are retained' },
   { step: 'idempotency', executor: 'processDecisionWork replay', condition: 'completed work must produce no additional model calls or writes' },
-  { step: 'approval_and_enrichment', executor: 'human review required', condition: 'not executed; generated proposals are never auto-approved by this evaluation' },
 ] as const;
 
-export async function onboardingMain(args: string[]) {
+type OnboardingDeps = {
+  loadCorpus?: typeof import('./corpus').loadCorpus;
+  createRuntime?: typeof import('./onboarding-runtime').createOnboardingRuntime;
+};
+export class OnboardingEvaluationError extends Error {
+  readonly code: string;
+  readonly runId?: string;
+  constructor(code: string, runId?: string) { super(code); this.name = 'OnboardingEvaluationError'; this.code = code; this.runId = runId; }
+}
+
+export async function onboardingMain(args: string[], deps: OnboardingDeps = {}) {
   const [command = 'plan', dataset = 'main', rawBudget, suppliedSeed] = args;
   if (command === 'report') {
-    if (!/^[a-f0-9-]{36}$/.test(dataset)) throw new Error('Run id required');
-    const dir = resolve(privateRoot, 'output/onboarding', dataset);
+    const selected = await findEvaluationRun('onboarding', dataset as 'main' | 'coverage', rawBudget ?? 'latest');
+    const dir = selected.directory;
     const measurements = JSON.parse(await readPrivate(resolve(dir, 'measurements.json'))) as Measurement[];
     const reviews = JSON.parse(await readPrivate(resolve(dir, 'reviews.json'))) as Review[];
     const report = JSON.parse(await readPrivate(resolve(dir, 'report.json'))) as Record<string, unknown>;
     await writePrivate(resolve(dir, 'report.json'), { ...report, reviewedMetrics: summarize(measurements, reviews) });
-    return { run: dataset, reportUpdated: true };
+    return { run: selected.name, directory: dir, reportUpdated: true };
   }
   if (!['plan', 'execute'].includes(command) || !['main', 'coverage'].includes(dataset)) throw new Error('Unsupported evaluation command');
-  const sampleSize = await onboardingScanSize();
-  const classification = evaluationRouting(dataset);
-  const routes = [...classification.routes, ...(['evidence_analysis', 'knowledge_decision', 'knowledge_draft', 'validation'] as const).map(role => resolveModelRoute(role))];
+  let sampleSize: number;
+  let classification: ReturnType<typeof evaluationRouting>;
+  let routes: ReturnType<typeof resolveModelRoute>[];
+  try {
+    sampleSize = await onboardingScanSize();
+    classification = evaluationRouting(dataset);
+    routes = [...classification.routes, ...(['evidence_analysis', 'knowledge_decision', 'knowledge_draft', 'validation'] as const).map(role => resolveModelRoute(role))];
+  } catch { throw new OnboardingEvaluationError('EVAL_MODEL_CONFIGURATION'); }
   const maximumCallsPerEmail = classification.classificationCallsPerEmail + 5;
   const requestLimit = rawBudget === undefined ? sampleSize * maximumCallsPerEmail : Number(rawBudget);
   if (!Number.isSafeInteger(requestLimit) || requestLimit < 1) throw new Error('Positive request limit required');
@@ -53,14 +69,16 @@ export async function onboardingMain(args: string[]) {
       knowledgeCandidate: 1, draftIfCandidate: 1, validationIfGrounded: 1, maximum: maximumCallsPerEmail },
     maximumLogicalCalls: sampleSize * maximumCallsPerEmail, requestLimit, steps: onboardingSteps,
     boundary: 'production services with isolated storage and empty approved-knowledge retrieval; no Gmail, SQL triggers, Inngest or human approval',
-    productionDispatch: 'gap: Tier 1 does not enqueue learning for its sample' };
+    productionDispatch: 'Tier 1 -> enqueueOnboardingLearning -> decision_work_items -> decisionWorkflows; worker honors enable_email_knowledge' };
   if (command === 'plan') return { ...plan, network: false };
 
-  const runId = randomUUID();
-  const dir = resolve(privateRoot, 'output/onboarding', runId);
+  const savedRun = await createEvaluationRun('onboarding', dataset as 'main' | 'coverage');
+  const runId = savedRun.name;
+  const dir = savedRun.directory;
   const network = guardNetwork(requestLimit);
   const originalFetch = globalThis.fetch;
   const originalConsole = { ...console };
+  const sdkWarnings = captureSdkWarnings();
   const diagnostics: unknown[][] = [];
   globalThis.fetch = network.fetch;
   console.log = console.info = console.warn = console.error = console.debug = (...values: unknown[]) => {
@@ -68,23 +86,31 @@ export async function onboardingMain(args: string[]) {
   };
   let checkpoint = Promise.resolve();
   const trace: PipelineStep[] = [];
+  let phase = 'EVAL_CORPUS_LOAD';
   try {
-    const corpus = await (await import('./corpus')).loadCorpus(dataset as 'main' | 'coverage');
+    const corpus = await (deps.loadCorpus ?? (await import('./corpus')).loadCorpus)(dataset as 'main' | 'coverage');
     const sample = sampleCorpus(corpus, sampleSize, suppliedSeed);
     const manifest = { ...plan, ...await codeFingerprint(), runId, seed: sample.seed, positions: sample.cases.map(row => row.id),
       population: sample.population, selected: sample.cases.length, createdAt: new Date().toISOString() };
+    phase = 'EVAL_PRIVATE_WRITE';
     await writePrivate(resolve(dir, 'manifest.json'), manifest);
-    originalConsole.log(JSON.stringify({ run: runId, sampleSize: sample.cases.length, seed: sample.seed, routes, requestLimit }));
+    originalConsole.log(JSON.stringify({ run: runId, directory: dir, sampleSize: sample.cases.length, seed: sample.seed, routes, requestLimit }));
     originalConsole.log(JSON.stringify({ steps: onboardingSteps }));
-    const runtime = await (await import('./onboarding-runtime')).createOnboardingRuntime(sample.cases, {}, step => {
+    phase = 'EVAL_RUNTIME_SETUP';
+    const runtime = await (deps.createRuntime ?? (await import('./onboarding-runtime')).createOnboardingRuntime)(sample.cases, {}, step => {
       trace.push(step);
-      const snapshot = structuredClone(trace);
-      checkpoint = checkpoint.then(() => writePrivate(resolve(dir, 'trace.json'), snapshot));
+      if (['first_delivery', 'sample_learning', 'idempotency'].includes(step.step) || step.status === 'failed') {
+        const snapshot = structuredClone(trace);
+        checkpoint = checkpoint.then(() => writePrivate(resolve(dir, 'trace.json'), snapshot));
+      }
       // Only numeric positions, fixed step names and statuses may leave private storage.
       originalConsole.log(JSON.stringify({ case: step.case, step: step.step, status: step.status }));
     }, () => network.stopped);
+    phase = 'EVAL_EXECUTION';
     const result = await runtime.execute();
+    phase = 'EVAL_PRIVATE_WRITE';
     await checkpoint;
+    await writePrivate(resolve(dir, 'trace.json'), trace);
     await writePrivate(resolve(dir, 'run.json'), { manifest, ...result, requests: network.requests, responses: network.responses });
     const rows: Measurement[] = result.classified.map(({ example, result: classificationResult }) => ({
       case: example, status: 'completed', prediction: { type: classificationResult.result.type,
@@ -106,7 +132,7 @@ export async function onboardingMain(args: string[]) {
         'Attempts are distinguished from confirmed resolutions.',
         'Proposals are reusable, grounded and nonredundant.',
       ] }, status: 'completed' as const, prediction: {}, abstain: null, latencyMs: 0, requests: [], calls: [],
-      output: result.tables['ticket_decision_history']!.filter(row => row['ticket_id'] === ticketId && row['idempotency_key'] === `workflow:sample:${example.id}`), safety: result.safety,
+      output: result.tables['ticket_decision_history']!.filter(row => row['ticket_id'] === ticketId && row['message_id'] === `acme-message-${example.id}`), safety: result.safety,
     }));
     for (const row of knowledgeReviews) {
       const step = result.steps.find(step => step.case === row.case.id && step.step === 'sample_learning');
@@ -119,26 +145,38 @@ export async function onboardingMain(args: string[]) {
     const report = { run: runId, sampled: sample.cases.length, tickets: result.tables['tickets']!.length,
       learningCompleted, articles: result.tables['kb_articles']!.length, learnings: result.tables['operational_learning']!.length,
       requests: network.requests.length, failedSteps: failed, stopped: network.stopped, safety: result.safety,
+      warningCount: sdkWarnings.count(),
       productionDispatch: plan.productionDispatch, infrastructureVerified: false, knowledgeQuality: 'pending human review',
       classification: summarize(rows), costUsd: network.requests.every(row => row.costUsd !== null)
         ? network.requests.reduce((sum, row) => sum + row.costUsd!, 0) : null };
     await writePrivate(resolve(dir, 'report.json'), report);
-    if (failed || network.stopped || Object.values(result.safety).some(value => !value)) process.exitCode = 1;
-    return { run: runId, sampled: sample.cases.length, tickets: report.tickets, learningCompleted,
+    const unsuccessful = !!failed || network.stopped || Object.values(result.safety).some(value => !value);
+    if (unsuccessful) process.exitCode = 1;
+    await finishEvaluationRun(savedRun, unsuccessful ? 'failed' : 'completed');
+    return { run: runId, directory: dir, sampled: sample.cases.length, tickets: report.tickets, learningCompleted,
       pendingProposals: report.articles + report.learnings, failedSteps: failed, requests: network.requests.length,
+      warningCount: sdkWarnings.count(),
       productionDispatch: plan.productionDispatch };
   } catch (error) {
     diagnostics.push([error instanceof Error ? { name: error.name, message: error.message } : { failed: true }]);
-    throw error;
+    await finishEvaluationRun(savedRun, 'failed');
+    throw new OnboardingEvaluationError(phase, runId);
   } finally {
     Object.assign(console, originalConsole);
     globalThis.fetch = originalFetch;
+    sdkWarnings.restore();
     await checkpoint;
     await writePrivate(resolve(dir, 'diagnostics.json'), diagnostics);
+    await writePrivate(resolve(dir, 'warnings.json'), sdkWarnings.events);
   }
 }
 
 if (import.meta.main) {
   try { console.log(JSON.stringify(await onboardingMain(process.argv.slice(2)), null, 2)); }
-  catch { console.error('Onboarding evaluation stopped. Inspect the private run artifacts.'); process.exitCode = 1; }
+  catch (error) {
+    const code = error instanceof OnboardingEvaluationError ? error.code : 'EVAL_SETUP';
+    const run = error instanceof OnboardingEvaluationError && error.runId ? ` Run: ${error.runId}.` : '';
+    console.error(`Onboarding evaluation stopped: ${code}.${run} Raw diagnostics remain private.`);
+    process.exitCode = 1;
+  }
 }

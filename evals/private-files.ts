@@ -1,7 +1,8 @@
-import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 export const privateRoot = resolve(root, 'scripts/eval/data');
@@ -28,7 +29,13 @@ export async function privatePath(path: string): Promise<string> {
 export async function readPrivate(path: string) { return readFile(await privatePath(path), 'utf8'); }
 export async function writePrivate(path: string, value: unknown) {
   const target = await privatePath(path);
-  if (!relative(resolve(privateRoot, 'output/ac11'), target).match(/^(?!\.\.(?:\/|$)).+/)) throw new Error('Evaluation output path required');
+  const rel = relative(resolve(privateRoot, 'output/evals'), target);
+  const allowed = !!rel && rel !== '..' && !rel.startsWith(`..${sep}`);
+  if (!allowed) throw new Error('Evaluation output path required');
   await mkdir(dirname(target), { recursive: true, mode: 0o700 });
-  await writeFile(await privatePath(target), JSON.stringify(value, null, 2), { mode: 0o600 });
+  const temporary = `${target}.pending-${randomUUID()}`;
+  try {
+    await writeFile(await privatePath(temporary), JSON.stringify(value, null, 2), { mode: 0o600, flag: 'wx' });
+    await rename(temporary, await privatePath(target));
+  } finally { await rm(temporary, { force: true }); }
 }

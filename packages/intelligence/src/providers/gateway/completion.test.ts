@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { GatewayCompletionProvider } from './completion';
 import { GatewayEmbeddingProvider } from './embedding';
 import { ProviderConfigurationError, ProviderError } from '../base';
+import { captureSdkWarnings } from '../../../../../evals/warnings';
 
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
@@ -19,6 +20,47 @@ export function generation(text: string) {
 }
 
 describe('Gateway providers', () => {
+  it('omits fixed Kimi temperature and preserves explicit sampling for other models in both completion modes', async () => {
+    for (const model of ['moonshotai/kimi-k2.6', 'openai/test-model']) {
+      const bodies: Record<string, unknown>[] = [];
+      const transport = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).endsWith('/config')) return Response.json(catalog(model));
+        bodies.push(JSON.parse(init?.body as string) as Record<string, unknown>);
+        return Response.json(generation('{"label":"support"}'));
+      }) as typeof fetch;
+      const provider = new GatewayCompletionProvider('synthetic-sampling-key', model, transport);
+      await provider.completeWithMeta('Synthetic input', { temperature: 0 });
+      await provider.completeJSONWithMeta('Synthetic input', z.object({ label: z.string() }), { temperature: 0 });
+      expect(bodies).toHaveLength(2);
+      for (const body of bodies) {
+        if (model.startsWith('moonshotai/')) expect(body).not.toHaveProperty('temperature');
+        else expect(body.temperature).toBe(0);
+      }
+    }
+  });
+
+  it('retains upstream warnings even when no temperature was sent, without disabling SDK diagnostics', async () => {
+    const capture = captureSdkWarnings();
+    const transport = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/config')) return Response.json(catalog('moonshotai/kimi-k2.6'));
+      expect(JSON.parse(init?.body as string)).not.toHaveProperty('temperature');
+      return Response.json({ ...generation('{"label":"support"}'), warnings: [
+        { type: 'unsupported', feature: 'temperature', details: 'Synthetic upstream fixed-temperature warning' },
+        { type: 'unsupported', feature: 'responseFormat', details: 'Synthetic unrelated capability warning' },
+      ] });
+    }) as typeof fetch;
+    try {
+      expect(typeof globalThis.AI_SDK_LOG_WARNINGS).toBe('function');
+      const result = await new GatewayCompletionProvider('synthetic-warning-key', 'moonshotai/kimi-k2.6', transport)
+        .completeJSONWithMeta('Synthetic input', z.object({ label: z.string() }));
+      expect(result.data.label).toBe('support');
+      expect(capture.count()).toBe(2);
+      expect(capture.events[0]?.warnings).toEqual([
+        { type: 'unsupported', feature: 'temperature', details: 'Synthetic upstream fixed-temperature warning' },
+        { type: 'unsupported', feature: 'responseFormat', details: 'Synthetic unrelated capability warning' },
+      ]);
+    } finally { capture.restore(); }
+  });
   it('reports a reasoning-only token limit as non-retriable instead of a network failure', async () => {
     const output = { ...generation(''), content: [{ type: 'reasoning', text: 'Synthetic reasoning' }],
       finishReason: { unified: 'length', raw: 'length' } };
