@@ -86,6 +86,15 @@ describe('runLlmFeature', () => {
     expect(result.llmCallId).toBeNull();
   });
 
+  it('asks for the structured answer without hidden reasoning unless the caller requests it', async () => {
+    const provider = fakeProvider();
+    const request = { feature: 'reply_suggestion', promptId: 'reply-suggestion', lang: 'en' as const, vars: REPLY_VARS, schema: Schema, provider };
+    await runLlmFeature({ ...request, options: { maxTokens: 2000 } });
+    await runLlmFeature({ ...request, options: { maxTokens: 4000, reasoning: 'low' } });
+    const sent = (provider.completeJSONWithMeta as ReturnType<typeof mock>).mock.calls.map(call => call[2]);
+    expect(sent).toEqual([{ reasoning: 'none', maxTokens: 2000 }, { reasoning: 'low', maxTokens: 4000 }]);
+  });
+
   it('logs exactly one record on success, with the reported model and the chosen confidence field', async () => {
     const records: LlmCallRecord[] = [];
     const result = await runLlmFeature({

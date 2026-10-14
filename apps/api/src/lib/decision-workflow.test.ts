@@ -76,7 +76,7 @@ describe('durable workflow execution',()=>{
     const request = decide.mock.calls[0]?.[0];
     expect(Object.keys(request?.['questions'] as object)).toContain('outcome');
     expect(Object.keys(request?.['questions'] as object)).not.toContain('next_action');
-    expect(analyze.mock.calls[0]?.[0]).toMatchObject({promptId:'historical-analysis'});
+    expect(analyze.mock.calls[0]?.[0]).toMatchObject({promptId:'historical-analysis',options:{maxTokens:8192}});
     expect(propose.mock.calls[0]?.[0]).toMatchObject({stage:'backfill'});
     expect(saved[0]).toMatchObject({contract:'historical_learning',result:{authorization:'human_review',execution:'not_executed'}});
   });

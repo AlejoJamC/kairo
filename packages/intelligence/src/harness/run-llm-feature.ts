@@ -85,7 +85,8 @@ export interface LlmFeatureResult<D> {
  * never throws. Retry, concurrency, derivation and gating stay with the caller.
  */
 export async function runLlmFeature<T>(request: LlmFeatureJsonRequest<T>): Promise<LlmFeatureResult<T>> {
-  return run(request, (provider, prompt, options) =>
+  // A reasoning model otherwise spends the output budget before the answer starts; callers opt in explicitly.
+  return run({ ...request, options: { reasoning: 'none', ...request.options } }, (provider, prompt, options) =>
     provider.completeJSONWithMeta(prompt, request.schema, options).then(({ data, ...meta }) => ({
       data,
       meta,

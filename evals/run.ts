@@ -8,6 +8,7 @@ import { createEvaluationRun, findEvaluationRun, finishEvaluationRun } from './r
 import { captureSdkWarnings } from './warnings';
 import { summarize, reviewTemplate, type Measurement, type Review } from './metrics';
 import { guardNetwork } from './network';
+import { sampleCorpus, onboardingScanSize } from './sampling';
 import { resolveEnsembleTarget } from '../packages/intelligence/src/config/ensemble';
 import { resolveModelRoute } from '../packages/intelligence/src/config/model-roles';
 
@@ -38,7 +39,7 @@ export async function codeFingerprint() {
 }
 
 export async function main(args: string[]) {
-  const [command = 'plan', dataset = 'synthetic', rawLimit, rawRequests] = args;
+  const [command = 'plan', dataset = 'synthetic', rawLimit, rawRequests, suppliedSeed] = args;
   if (command === 'report') {
     const selected = await findEvaluationRun(dataset === 'synthetic' ? 'workflows' : 'classification', dataset as 'main' | 'coverage' | 'synthetic', rawLimit ?? 'latest');
     const dir = selected.directory;
@@ -53,7 +54,8 @@ export async function main(args: string[]) {
   const limit = rawLimit === undefined ? undefined : Number(rawLimit);
   const requestLimit = Number(rawRequests ?? 100);
   if ((limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1)) || !Number.isSafeInteger(requestLimit) || requestLimit < 1) throw new Error('Positive integer limits required');
-  if (command === 'plan') return { dataset, cases: dataset === 'synthetic' ? syntheticCases.slice(0, limit).map(c => ({ id: c.id, contract: c.contract })) : 'existing private corpus',
+  if (command === 'plan') return { dataset, cases: dataset === 'synthetic' ? syntheticCases.slice(0, limit).map(c => ({ id: c.id, contract: c.contract }))
+      : `${limit ?? await onboardingScanSize()} random emails from the private corpus`,
     requestLimit, network: false, routing: evaluationRouting(dataset), outputs: `scripts/eval/data/output/evals/${dataset === 'synthetic' ? 'workflows' : 'classification'}/${dataset}/<UTC-date-time>/`,
     entrypoints: { onboarding_triage: 'classifyEmailWithMeta', historical_learning: 'processDecisionWork',
       incoming_email_decision: 'processDecisionWork', knowledge_impact: 'processDecisionWork', reply_suggestion: 'suggestReply' } };
@@ -80,7 +82,11 @@ export async function main(args: string[]) {
   console.log = console.info = console.warn = console.error = console.debug = (...values: unknown[]) => { diagnostics.push(values.map(v => v instanceof Error ? { name: v.name, message: v.message } : v)); };
   let phase = 'EVAL_CORPUS_LOAD';
   try {
-    const examples = (dataset === 'synthetic' ? syntheticCases : await (await import('./corpus')).loadCorpus(dataset as 'main' | 'coverage')).slice(0, limit);
+    // A private corpus is sampled like an unknown new inbox: FAST_PATH_SCAN_SIZE random emails unless a size is given.
+    const sample = dataset === 'synthetic' ? null
+      : sampleCorpus(await (await import('./corpus')).loadCorpus(dataset as 'main' | 'coverage'), limit ?? await onboardingScanSize(), suppliedSeed);
+    const examples = sample ? sample.cases : syntheticCases.slice(0, limit);
+    if (sample) Object.assign(manifest, { seed: sample.seed, population: sample.population, positions: sample.cases.map(row => row.id) });
     phase = 'EVAL_RUNTIME_SETUP';
     const execute = await (await import('./runtime')).createRuntime();
     phase = 'EVAL_EXECUTION';

@@ -1,11 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { mock } from 'bun:test';
 import type { EmailMessage } from './types';
 
 // Isolated from classify.test.ts (which exercises real Ollama calls) so mocking
-// the provider here can't affect those integration tests.
+// the provider here can't affect those integration tests. A module mock reaches
+// every later file in the run, so the real module is restored after this suite.
 const completeJSONWithMeta = vi.fn();
+const realProviders = { ...await import('../config/providers') };
+afterAll(() => { mock.module('../config/providers', () => realProviders); });
 
-vi.mock('../config/providers', () => ({
+mock.module('../config/providers', () => ({
+  ...realProviders,
   createCompletionProvider: () => ({
     model: 'test-model',
     complete: vi.fn(),

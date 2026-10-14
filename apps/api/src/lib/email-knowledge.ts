@@ -81,7 +81,8 @@ export async function proposeEmailKnowledge(
     const result = await runLlmFeature({
       feature: 'email_knowledge_extraction', promptId: input.stage === 'backfill' ? 'historical-knowledge' : 'email-knowledge', modelRole: 'knowledge_draft',
       lang: value.lang, vars: { source: value.source, approved_knowledge: JSON.stringify(value.approvedKnowledge), business_context: value.businessContext ?? (value.lang === 'es' ? '(no disponible)' : '(not available)') },
-      schema: EmailKnowledgeDraftSchema, options: { maxTokens: 2000, temperature: 0 }, context: input, logger,
+      // Sized to the schema's maximum answer (five proposals with full content), not to a typical one.
+      schema: EmailKnowledgeDraftSchema, options: { maxTokens: 8192, temperature: 0 }, context: input, logger,
     });
     return { value: result.data, model: result.model, callId: result.llmCallId };
   }))({ source: source.text, businessContext: settings.businessContext, approvedKnowledge, lang: settings.language });

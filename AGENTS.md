@@ -51,6 +51,18 @@ bare id and strip it.
 ## Project
 Kairo — AI support cockpit for support teams. Monorepo: dashboard (Vite+React19), landing (Next.js 15), api (Bun+Hono), mobile (Expo). See `PROJECT.md` for full architecture, conventions, and boundaries.
 
+## ⛔ Environment files
+
+- `.env.example` is the only environment file in the repository and the only one agents may read, cite or edit.
+- Every other environment file (`.env`, `.env.local` or any other name) is gitignored and off limits: never read, grep, print, filter, edit or suggest editing it, and never mention its name or contents.
+- A command that needs a different value receives it inline (`VAR=value bun --env-file=.env.local ...`); the user's ignored files are never changed.
+
+## Business value premises
+
+- **Onboarding is the first value premise.** When an inbox is connected, Tier 1 processes the most recent `FAST_PATH_SCAN_SIZE` emails, newest first, one after another. It is never a random sample.
+- **Onboarding evals** sample `FAST_PATH_SCAN_SIZE` emails at random from the golden data, never the full corpus. The golden data is always larger than that sample and evals run repeatedly against it; a random draw replicates an unknown new inbox.
+- Never run evals or any call that spends model credits without an explicit instruction in that message. Do not change eval or model configuration (routing, mailboxes, reasoning, token budgets) unless asked.
+
 ## Implementation and workflow
 
 - When a Linear issue is referenced, its description is the specification and its acceptance criteria define completion. Read the applicable specification in full before implementing.

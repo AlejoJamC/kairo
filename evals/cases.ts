@@ -9,6 +9,8 @@ export interface EvalCase {
   lang: 'en' | 'es';
   from?: string;
   mailbox?: string;
+  /** Every mailbox the tenant reads, as `support_channels` would hold them. */
+  mailboxes?: string[];
   to?: string;
   cc?: string;
   headers?: Record<string, string>;

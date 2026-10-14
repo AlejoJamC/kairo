@@ -36,17 +36,19 @@ const CATEGORY_CRITERIA = {
 } as const satisfies ChoiceCriteria;
 
 const TONE_CRITERIA = {
-  aggressive: 'Hostile, threatening or confrontational language — insults, ultimatums, all-caps anger.',
+  aggressive: 'Hostile, threatening or confrontational language — insults, explicit threats, all-caps anger.',
   frustrated:
-    'Annoyed or fed up without hostility. Under this rubric, any of these counts even with polite wording: repeated exclamation marks or angry capitals; dated reminders, elapsed waiting, repeated attempts or broken commitments; threadDepth of 2 or more or stacked RE:/Fwd: prefixes in subject. Evaluate the sender of the current message, not the author of quoted history.',
-  neutral: 'Professional, calm and informative, with none of the frustration signals.',
-  positive: 'The sender expresses satisfaction, gratitude or enthusiasm about a completed outcome. A substantive confirmation that the solution worked qualifies even in professional wording. Routine greetings and sign-offs alone do not qualify.',
+    'The current sender shows dissatisfaction or pressure about how the company handled something, even in polite wording: complains about or escalates a failure, passes on their own customer\'s complaint, insists on a response or a claim already raised (citing earlier emails, dates or time waited), states the harm it is causing, or sets a deadline or consequence for the company. Thread depth and RE:/Fwd: prefixes alone are not frustration.',
+  neutral:
+    'Informative or procedural: reports or documents a fact, files a claim with its data, shares data, lists or attachments, asks for a concrete step, confirms or coordinates — with no frustration signal and no warmth beyond greeting and sign-off. Asking for something urgently is urgency, not tone.',
+  positive:
+    'A cordial, cooperative or appreciative register in a message with no complaint or pending problem with the company: introducing themselves or seeking a relationship or opportunity, a routine request made kindly and with thanks, accepting or confirming that something was done, or apologizing and committing to improve. A courtesy formula closing a message about a problem does not qualify.',
 } as const satisfies ChoiceCriteria;
 
 const URGENCY_CRITERIA = {
-  high: 'At the time of this message there is no slack: an ongoing loss, a person or operation still blocked, an immediate deadline, or a consequence that worsens while waiting. An incident that started in the past but remains blocking belongs here, even when described politely or in past tense.',
+  high: 'At the time of this message there is no slack: an ongoing loss, a person or operation still blocked, an immediate deadline, or a consequence that worsens while waiting. An incident that started in the past but remains blocking belongs here, even when described politely or in past tense. A loss, damage or shortage that already happened stays here while the affected party is still without the goods, service or compensation and has no confirmed solution; it is settled only once replaced, paid or closed.',
   medium:
-    'Needs attention soon, but the remaining action can be scheduled without an ongoing blockage, growing loss or immediate deadline. A past event qualifies only if its consequences are settled or no longer time-critical; past tense alone is not evidence of that.',
+    'Needs attention soon, but the remaining action can be scheduled without an ongoing blockage, growing loss or immediate deadline — for example scheduling a pickup or appointment, sending or requesting documents, or confirming a step of a case whose solution is already under way. A past event qualifies only if its consequences are settled or no longer time-critical; past tense alone is not evidence of that.',
   low: 'No time pressure — planning, inquiry or future coordination.',
 } as const satisfies ChoiceCriteria;
 
@@ -69,12 +71,12 @@ export function buildTicketVerdictQuestions(stage?: EmailMessage['stage']): Ques
       'What is the matter of this email, in terms of what the company delivers (`businessContext`)?',
       CATEGORY_CRITERIA,
     ),
-    tone: choice("What tone does the current sender express in `subject` and `body`, using `threadDepth` as context under this rubric? Distinguish substantive satisfaction from routine courtesy, and a polite complaint from a neutral report. Do not assign the tone of quoted messages to the current sender.", TONE_CRITERIA),
+    tone: choice("What stance does the sender of the current message take toward the company, as written in `subject` and `body`? Judge what this sender writes, not how serious the matter is, the thread position or the tone of quoted messages.", TONE_CRITERIA),
     urgency: choice('How quickly must someone act at the time this message was written, given `subject` and `body`? Judge consequences of waiting and whether the problem is still active, independently of priority and tone. Do not use today as the clock for historical messages. A keyword flag is not an urgency judgment; absence of an English keyword does not mean absence of urgency.', URGENCY_CRITERIA),
   };
 }
 
-export const TICKET_QUESTIONS_VERSION = '1.1.1';
+export const TICKET_QUESTIONS_VERSION = '1.1.2';
 export const DECISION_STATE_VERSION = '1.1.0';
 
 export interface JevChoiceAnswer {

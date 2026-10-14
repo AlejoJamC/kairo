@@ -40,11 +40,13 @@ export async function createRuntime(classifyOverride?: typeof import('../package
     let abstain: boolean | null = null;
     if (example.contract === 'onboarding_triage') {
       const mailbox = example.mailbox ?? '';
+      const mailboxes = example.mailboxes ?? (mailbox ? [mailbox] : []);
       const from = example.from ?? '';
-      const facts = extractMailFacts({ from, subject: example.subject, headers: { To: example.to ?? '', Cc: example.cc ?? '' }, tenantMailbox: mailbox ? [mailbox] : [] });
+      // The full header record, as Tier 1 reads it: spam, bulk, automation and authentication facts live there.
+      const facts = extractMailFacts({ from, subject: example.subject, headers: example.headers ?? { To: example.to ?? '', Cc: example.cc ?? '' }, tenantMailbox: mailboxes });
       facts.referencesCount = example.threadDepth ?? 0;
       const input = buildEmailClassifierInput({ stage: 'onboarding', from, subject: example.subject,
-        bodyPlain: example.body, facts, context: { tenantMailbox: mailbox, tenantMailboxes: mailbox ? [mailbox] : [] } });
+        bodyPlain: example.body, facts, context: { tenantMailbox: mailbox, tenantMailboxes: mailboxes } });
       const result = await (classifyOverride ?? classifyEmailWithMeta)({ ...input, attachments: example.attachments }, { lang: example.lang });
       output = result;
       Object.assign(prediction, { type: result.result.type, priority: result.verdict.priority,

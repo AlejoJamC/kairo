@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { buildPrompt, extractPromptVersion, getPromptVersion } from './prompt';
 import { classifyEmail, classifyEmailWithMeta } from './classify';
 import { TONE } from './schema';
+import { buildTicketVerdictQuestions } from './decision-questions';
 import { GatewayCompletionProvider } from '../providers/gateway/completion';
 
 it('reserves enough output for a reasoning model to return a classification', async () => {
@@ -159,6 +160,30 @@ describe('buildPrompt', () => {
     for (const tone of TONE) {
       expect(out).toContain(tone);
     }
+  });
+
+  // The language prompt and the decision criteria are two renderings of one
+  // rubric; when only one of them changed, the two classifier routes scored
+  // against different definitions of tone and urgency.
+  it('both classifier routes carry the same tone and urgency rules', async () => {
+    const es = await buildPrompt({ subject: 'Test', body: 'Test', from: 'a@b.com' }, 'es');
+    const en = await buildPrompt({ subject: 'Test', body: 'Test', from: 'a@b.com' }, 'en');
+    const questions = buildTicketVerdictQuestions('onboarding');
+    const tone = questions['tone']!.criteria! as Record<string, string>;
+    const urgency = questions['urgency']!.criteria! as Record<string, string>;
+
+    // Thread position alone is not frustration.
+    expect(es).toContain('no hace `frustrated` a un mensaje');
+    expect(en).toContain('do not make a message `frustrated`');
+    expect(tone['frustrated']).toContain('RE:/Fwd: prefixes alone are not frustration');
+    // Positive is a cordial message with nothing pending, not only satisfaction with a resolved case.
+    expect(es).toContain('sin queja ni problema pendiente');
+    expect(en).toContain('with no complaint or pending problem');
+    expect(tone['positive']).toContain('no complaint or pending problem');
+    // A loss that already happened stays urgent until it is replaced, paid or closed.
+    expect(es).toContain('se repuso, se pagó o se cerró');
+    expect(en).toContain('replaced, paid or closed');
+    expect(urgency['high']).toContain('replaced, paid or closed');
   });
 });
 

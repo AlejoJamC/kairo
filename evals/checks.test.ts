@@ -32,6 +32,15 @@ describe('evaluation accounting', () => {
     expect(examples[0]?.mailbox).toBeUndefined();
     expect(examples[0]?.to).toContain('support@acme.com');
   });
+  test('corpus loading carries the configured tenant mailboxes to every case', async () => {
+    const examples = await loadCorpus('main', {
+      directory: async path => path, list: async () => ['001.eml'], mailboxes: async () => ['support@acme.com', 'billing@acme.com'],
+      read: async path => path.endsWith('.eml')
+        ? 'From: client@outside.com\nTo: support@acme.com\nSubject: Access\n\nPlease restore access.'
+        : 'email_id,ticket_type,priority,urgency,category,tone\n1,support,P2,medium,account,neutral\n',
+    });
+    expect(examples[0]).toMatchObject({ mailbox: 'support@acme.com', mailboxes: ['support@acme.com', 'billing@acme.com'] });
+  });
   test('main resolves only its classifier and exposes the optional second call', () => {
     const env = {INTELLIGENCE_PROVIDER:'gateway',CLASSIFICATION_MODE:'decision',AI_GATEWAY_CLASSIFICATION_MODEL:'acme/decision'};
     expect(evaluationRouting('main',env)).toMatchObject({routes:[{role:'classification',model:'acme/decision'}],classificationCallsPerEmail:1,ensemble:null});

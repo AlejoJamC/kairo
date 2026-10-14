@@ -40,3 +40,15 @@ test('private corpus input keeps missing mailbox and recipients absent without n
   expect(input.to).toBeUndefined();
   expect(input.evidence?.missing).toContain('tenant_mailbox');
 });
+
+test('private corpus input passes every tenant mailbox and the full header record to the classifier', async () => {
+  type Classify = typeof import('../packages/intelligence/src/classification/classify').classifyEmailWithMeta;
+  const classify = mock<Classify>(async () => ({result:{type:'support'},verdict:{priority:'P2',urgency:'medium',category:'account',tone:'neutral'},abstain:true} as Awaited<ReturnType<Classify>>));
+  const execute = await createRuntime(classify);
+  await execute({...syntheticCases[0]!,dataset:'main',from:'billing@acme.com',mailbox:'support@acme.com',mailboxes:['support@acme.com','billing@acme.com'],
+    headers:{to:'support@acme.com',precedence:'bulk'}});
+  const input = classify.mock.calls[0]![0];
+  expect(input.tenantMailbox).toBe('support@acme.com');
+  expect(input.facts).toMatchObject({ senderIsTenantAddress: true, isBulk: true });
+  expect(input.evidence?.missing).not.toContain('tenant_mailbox');
+});

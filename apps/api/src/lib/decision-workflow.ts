@@ -93,7 +93,8 @@ async function analyzeContext(ctx: Awaited<ReturnType<typeof ticketContext>>, wo
   const result = await (deps.analyze ?? runLlmFeature)({ feature: `${work.contract}_evidence`, promptId, modelRole: 'evidence_analysis',
     lang: ctx.language, schema: WorkflowAnalysisSchema,
     vars: { context: JSON.stringify(ctx.state), sources: JSON.stringify(ctx.sources) },
-    options: { maxTokens: 2000, temperature: 0 }, context: { accountId: work.account_id, ticketId: ctx.ticket.id }, logger: recordLlmCall });
+    // Sized to the schema's maximum answer (20 quoted observations), not to a typical one.
+    options: { maxTokens: 8192, temperature: 0 }, context: { accountId: work.account_id, ticketId: ctx.ticket.id }, logger: recordLlmCall });
   return { ...groundWorkflowAnalysis(result.data, ctx.sources), model: result.model, promptVersion: result.promptVersion, callId: result.llmCallId };
 }
 

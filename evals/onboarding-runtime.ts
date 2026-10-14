@@ -99,8 +99,9 @@ export async function createOnboardingRuntime(examples: EvalCase[], overrides: O
       if (stopped()) break;
       currentCase = example.id;
       try {
+        const mailboxes = example.mailboxes ?? (example.mailbox ? [example.mailbox] : []);
         const facts = extractMailFacts({ from: example.from ?? '', subject: example.subject,
-          headers: example.headers ?? { To: example.to ?? '', Cc: example.cc ?? '' }, tenantMailbox: example.mailbox ?? '' });
+          headers: example.headers ?? { To: example.to ?? '', Cc: example.cc ?? '' }, tenantMailbox: mailboxes });
         const route = resolveRoute(facts);
         emit({ case: currentCase, step: 'routing', status: 'completed', output: route });
         if (route.kind === 'skip') {
@@ -110,7 +111,7 @@ export async function createOnboardingRuntime(examples: EvalCase[], overrides: O
           continue;
         }
         const input = buildEmailClassifierInput({ stage: 'onboarding', from: example.from ?? '', subject: example.subject,
-          bodyPlain: example.body, facts, context: { tenantMailbox: example.mailbox ?? '', tenantMailboxes: example.mailbox ? [example.mailbox] : [] } });
+          bodyPlain: example.body, facts, context: { tenantMailbox: example.mailbox ?? '', tenantMailboxes: mailboxes } });
         const result = await runStep('classification', () => (overrides.classify ?? classifyEmailWithMeta)({ ...input, attachments: example.attachments }, { lang: example.lang }));
         const persisted = await runStep('ticket_creation', async () => {
           const conversation = await upsertConversationByThread(storage.db, { accountId, channelIntegrationId: 'acme-channel',

@@ -10,8 +10,9 @@ From the repository root:
 # Preview configured models without inference or corpus reads
 bun --env-file=.env.local evals/run.ts plan main 30 100
 
-# Execute: dataset, optional case limit, optional request limit (default: 100)
-bun --env-file=.env.local evals/run.ts execute main 30 100
+# Execute: dataset, optional sample size, optional request limit (default: 100), optional seed
+bun --env-file=.env.local evals/run.ts execute main
+bun --env-file=.env.local evals/run.ts execute main 30 100 <seed>
 bun --env-file=.env.local evals/run.ts execute coverage
 bun --env-file=.env.local evals/run.ts execute synthetic
 
@@ -19,7 +20,8 @@ bun --env-file=.env.local evals/run.ts execute synthetic
 bun evals/run.ts report main latest
 ```
 
-- `main`, `coverage`: private email corpora and golden labels; onboarding classification. `EVAL_LANG` defaults to `es`.
+- `main`, `coverage`: private email corpora and golden labels; onboarding classification only, one call per email. Each run samples `FAST_PATH_SCAN_SIZE` emails at random (or the given size) and saves the seed and positions in the manifest. `EVAL_LANG` defaults to `es`.
+- The corpus tenant's mailboxes come from the private `input/tenant_mailboxes.txt` (one per line) or `EVAL_TENANT_MAILBOX`, as Tier 1 reads them from the connected account. Without them every sender is external and `tenant_mailbox` is reported missing.
 - `synthetic`: invented cases for classification, historical learning, incoming decisions, enrichment and reply suggestions. Models are real; storage and retrieval use fixtures.
 
 Models come from the application's role configuration. The runner displays resolved models before inference. Classification makes one call per case, or two with a language ensemble. Other workflows call models conditionally. Invalid model answers are recorded as failed cases and evaluation continues. Transport failures, missing BYOK evidence and the request limit stop execution.
