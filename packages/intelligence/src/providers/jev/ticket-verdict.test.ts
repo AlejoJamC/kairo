@@ -97,3 +97,15 @@ describe('parseTicketVerdictAnswers', () => {
     ).toThrow();
   });
 });
+
+describe('priority criteria', () => {
+  // Follow-ups on a case already under way were escalated to P1 when the case history counted as importance.
+  it('rates what the message brings, not how many times the case was raised', () => {
+    const questions = buildTicketVerdictQuestions('onboarding');
+    const criteria = questions['priority']!.criteria! as Record<string, string>;
+    expect(criteria['P1']).toContain('reports or escalates a new failure');
+    expect(criteria['P1']).not.toMatch(/several|accumulated|unresolved requests/i);
+    expect(criteria['P2']).toContain('status of or a reply to an earlier claim');
+    expect(questions['priority']!.instructions).toContain('do not raise it by themselves');
+  });
+});

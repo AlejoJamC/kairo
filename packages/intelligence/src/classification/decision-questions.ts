@@ -21,9 +21,9 @@ const SUBJECT_MATTER_CRITERIA = {
 } as const satisfies ChoiceCriteria;
 
 const PRIORITY_CRITERIA = {
-  P1: 'Loss, breach or blockage has already happened, or the same case has accumulated several unresolved requests.',
-  P2: 'Needs handling and affects work, but there is no consummated loss and no chain of unanswered requests.',
-  P3: 'Simple, informative or coordination request with no operational impact.',
+  P1: 'This message reports or escalates a new failure in what the company delivers — something lost, damaged, missing, not performed or wrongly closed — or demands compensation for one.',
+  P2: 'Needs handling on a case already under way, with no new failure reported: asking for the status of or a reply to an earlier claim, coordinating a pickup, appointment or document, confirming a step, or an operational complaint without a concrete failure.',
+  P3: 'Nothing for the company to fix: information, notices, confirmations or acceptances, introductions, job applications or simple routine requests.',
 } as const satisfies ChoiceCriteria;
 
 const CATEGORY_CRITERIA = {
@@ -64,7 +64,7 @@ export function buildTicketVerdictQuestions(stage?: EmailMessage['stage']): Ques
       SUBJECT_MATTER_CRITERIA,
     ),
     priority: choice(
-      'How important is this case for the company, independent of how much time there is to act on it? `threadDepth` counts the earlier messages in the same case.',
+      'How important is what this message brings to the company, independent of how much time there is to act on it? Judge this message itself: earlier messages and reminders in the thread do not raise it by themselves.',
       PRIORITY_CRITERIA,
     ),
     category: choice(
@@ -76,7 +76,7 @@ export function buildTicketVerdictQuestions(stage?: EmailMessage['stage']): Ques
   };
 }
 
-export const TICKET_QUESTIONS_VERSION = '1.1.2';
+export const TICKET_QUESTIONS_VERSION = '1.1.3';
 export const DECISION_STATE_VERSION = '1.1.0';
 
 export interface JevChoiceAnswer {
