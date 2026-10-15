@@ -30,6 +30,7 @@ describe("operational-learning-check-sql codegen guard", () => {
   });
 
   it("operational_learning.chk_operational_learning_type matches the constraint generated from OPERATIONAL_LEARNING_TYPES", () => {
-    expect(schema).toContain(generateOperationalLearningTypeCheckSql());
+    const migration = readFileSync(join(__dirname, "../../../../supabase/migrations/20261012090531_decision_workflows_and_knowledge_history.sql"), "utf8");
+    expect(migration).toContain(generateOperationalLearningTypeCheckSql());
   });
 });

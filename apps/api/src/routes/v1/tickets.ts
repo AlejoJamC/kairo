@@ -971,7 +971,7 @@ tickets.patch("/:id/assign", async (c) => {
 
   const { data: updatedTicket, error: updateErr } = await supabase
     .from("tickets")
-    .update({ assigned_to: user.id })
+    .update({ assigned_to: user.id, human_modified_at: new Date().toISOString() })
     .eq("id", id)
     .select()
     .single();

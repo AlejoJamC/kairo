@@ -26,6 +26,7 @@ import { NonRetriableError } from "inngest";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
+import { enqueueOnboardingLearning, type SampleLearningSource } from "../../lib/onboarding-learning.js";
 import { applyCustomerReplyTransition } from "../../lib/ticket-thread-transitions.js";
 import { extractKairoToken, findTicketByKairoToken } from "../../lib/ticket-traceability.js";
 import { createSemaphore } from "../../lib/semaphore.js";
@@ -212,6 +213,7 @@ export const tier1FastPath = inngest.createFunction(
     const result = await step.run("scan-and-dispatch", async () => {
       const classifiedIds: string[] = [];
       const skippedIds: string[] = [];
+      const learningSources: SampleLearningSource[] = [];
 
       // accountId resolved in fetch-headers step (ADR-022 Phase 2).
       const accountId = resolvedAccountId;
@@ -515,6 +517,7 @@ export const tier1FastPath = inngest.createFunction(
                     message_id: messageRow.id,
                     is_origin: was_created,
                   });
+                  learningSources.push({ ticketId: ticket.id, messageId: messageRow.id });
                 }
 
                 // Apply status transition if this is a follow-up (not the first message)
@@ -741,7 +744,7 @@ export const tier1FastPath = inngest.createFunction(
       await Promise.all(classificationPromises);
 
       pipelineLog("tier1:summary", `classified=${classifiedIds.length} skipped=${skippedIds.length} relevant_total=${relevantDispatched}`);
-      return { classifiedIds, skippedIds };
+      return { classifiedIds, skippedIds, learningSources };
     });
 
     // -----------------------------------------------------------------------
@@ -754,5 +757,7 @@ export const tier1FastPath = inngest.createFunction(
         processedMessageIds: [...result.classifiedIds, ...result.skippedIds],
       },
     });
+    await step.run('enqueue-sample-learning', () => enqueueOnboardingLearning(resolvedAccountId, result.learningSources ?? [], supabase));
+    await step.sendEvent('trigger-sample-learning', { name: 'decisions/work.requested', data: {} });
   }
 );

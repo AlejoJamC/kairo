@@ -7,6 +7,8 @@ describe('model role routing', () => {
       AI_GATEWAY_CLASSIFICATION_MODEL: 'typesafe-ai/jev', AI_GATEWAY_KNOWLEDGE_DECISION_MODEL: 'acme/native-decision',
       AI_GATEWAY_REPLY_MODEL: 'acme/language-a', AI_GATEWAY_KNOWLEDGE_DRAFT_MODEL: 'acme/language-b',
       AI_GATEWAY_ASSISTANT_MODEL: 'acme/language-c', AI_GATEWAY_EMBEDDING_MODEL: 'acme/vector' };
+    expect(resolveModelRoute('evidence_analysis', {...env, AI_GATEWAY_EVIDENCE_ANALYSIS_MODEL:'acme/evidence'}))
+      .toEqual({role:'evidence_analysis',provider:'gateway',capability:'language',model:'acme/evidence'});
     expect(resolveModelRoute('classification', env).capability).toBe('decision');
     expect(resolveModelRoute('knowledge_decision', env).model).toBe('acme/native-decision');
     expect(resolveModelRoute('reply', env).model).toBe('acme/language-a');

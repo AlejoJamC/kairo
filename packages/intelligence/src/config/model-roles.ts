@@ -1,6 +1,6 @@
 import { ProviderConfigurationError } from '../providers/base';
 
-export const MODEL_ROLES = ['classification', 'reply', 'knowledge_decision', 'knowledge_draft', 'validation', 'assistant', 'embedding'] as const;
+export const MODEL_ROLES = ['classification', 'reply', 'knowledge_decision', 'knowledge_draft', 'evidence_analysis', 'validation', 'assistant', 'embedding'] as const;
 export type ModelRole = (typeof MODEL_ROLES)[number];
 export type ModelCapability = 'language' | 'decision' | 'embedding';
 export interface ModelRoute {
@@ -15,6 +15,7 @@ const ROLE_VARIABLES: Record<ModelRole, string> = {
   reply: 'AI_GATEWAY_REPLY_MODEL',
   knowledge_decision: 'AI_GATEWAY_KNOWLEDGE_DECISION_MODEL',
   knowledge_draft: 'AI_GATEWAY_KNOWLEDGE_DRAFT_MODEL',
+  evidence_analysis: 'AI_GATEWAY_EVIDENCE_ANALYSIS_MODEL',
   validation: 'AI_GATEWAY_VALIDATION_MODEL',
   assistant: 'AI_GATEWAY_ASSISTANT_MODEL',
   embedding: 'AI_GATEWAY_EMBEDDING_MODEL',

@@ -42,7 +42,7 @@ export type LlmCallLogger = (record: LlmCallRecord) => Promise<string | null>;
 interface LlmFeatureRequestBase {
   /** snake_case, the `llm_calls.feature` value and the Langfuse generation name. */
   feature: string;
-  modelRole?: 'reply' | 'knowledge_draft';
+  modelRole?: 'reply' | 'knowledge_draft' | 'evidence_analysis' | 'classification';
   /** Directory under `packages/intelligence/prompts/`. */
   promptId: string;
   /** The tenant's language, resolved by the caller — never guessed from the text. */
@@ -85,7 +85,8 @@ export interface LlmFeatureResult<D> {
  * never throws. Retry, concurrency, derivation and gating stay with the caller.
  */
 export async function runLlmFeature<T>(request: LlmFeatureJsonRequest<T>): Promise<LlmFeatureResult<T>> {
-  return run(request, (provider, prompt, options) =>
+  // A reasoning model otherwise spends the output budget before the answer starts; callers opt in explicitly.
+  return run({ ...request, options: { reasoning: 'none', ...request.options } }, (provider, prompt, options) =>
     provider.completeJSONWithMeta(prompt, request.schema, options).then(({ data, ...meta }) => ({
       data,
       meta,

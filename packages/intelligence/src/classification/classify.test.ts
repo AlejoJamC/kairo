@@ -1,7 +1,33 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { buildPrompt, extractPromptVersion, getPromptVersion } from './prompt';
 import { classifyEmail, classifyEmailWithMeta } from './classify';
 import { TONE } from './schema';
+import { buildTicketVerdictQuestions } from './decision-questions';
+import { GatewayCompletionProvider } from '../providers/gateway/completion';
+
+it('reserves enough output for a reasoning model to return a classification', async () => {
+  const names = ['CLASSIFICATION_MODE', 'INTELLIGENCE_PROVIDER', 'AI_GATEWAY_CLASSIFICATION_MODEL', 'AI_GATEWAY_API_KEY', 'INTELLIGENCE_ENSEMBLE'] as const;
+  const previous = names.map(name => process.env[name]);
+  Object.assign(process.env, {
+    CLASSIFICATION_MODE: 'language', INTELLIGENCE_PROVIDER: 'gateway',
+    AI_GATEWAY_CLASSIFICATION_MODEL: 'moonshotai/kimi-k2.6', AI_GATEWAY_API_KEY: 'synthetic-key',
+  });
+  delete process.env['INTELLIGENCE_ENSEMBLE'];
+  const complete = vi.spyOn(GatewayCompletionProvider.prototype, 'completeJSONWithMeta')
+    .mockRejectedValue(new Error('Request captured'));
+  try {
+    await expect(classifyEmailWithMeta({ subject: 'Access', body: 'Please help.', from: 'client@outside.com' }))
+      .rejects.toThrow('Request captured');
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(complete.mock.calls[0]?.[2]).toMatchObject({ maxTokens: 8192, reasoning: 'none' });
+  } finally {
+    complete.mockRestore();
+    names.forEach((name, index) => {
+      if (previous[index] === undefined) delete process.env[name];
+      else process.env[name] = previous[index];
+    });
+  }
+});
 
 describe('extractPromptVersion', () => {
   it('extracts a semver version from a heading', () => {
@@ -19,11 +45,11 @@ describe('getPromptVersion', () => {
   // rubric change landing in one language only makes eval runs across the two
   // incomparable.
   it('reads a semver version from the ES classification prompt', async () => {
-    expect(await getPromptVersion('es')).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(await getPromptVersion('es')).toMatch(/^\d+\.\d+\.\d+:message_triage:\d+\.\d+\.\d+:questions:\d+\.\d+\.\d+$/);
   });
 
   it('reads a semver version from the EN classification prompt', async () => {
-    expect(await getPromptVersion('en')).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(await getPromptVersion('en')).toMatch(/^\d+\.\d+\.\d+:message_triage:\d+\.\d+\.\d+:questions:\d+\.\d+\.\d+$/);
   });
 
   it('keeps ES and EN on the same version', async () => {
@@ -134,6 +160,30 @@ describe('buildPrompt', () => {
     for (const tone of TONE) {
       expect(out).toContain(tone);
     }
+  });
+
+  // The language prompt and the decision criteria are two renderings of one
+  // rubric; when only one of them changed, the two classifier routes scored
+  // against different definitions of tone and urgency.
+  it('both classifier routes carry the same tone and urgency rules', async () => {
+    const es = await buildPrompt({ subject: 'Test', body: 'Test', from: 'a@b.com' }, 'es');
+    const en = await buildPrompt({ subject: 'Test', body: 'Test', from: 'a@b.com' }, 'en');
+    const questions = buildTicketVerdictQuestions('onboarding');
+    const tone = questions['tone']!.criteria! as Record<string, string>;
+    const urgency = questions['urgency']!.criteria! as Record<string, string>;
+
+    // Thread position alone is not frustration.
+    expect(es).toContain('no hace `frustrated` a un mensaje');
+    expect(en).toContain('do not make a message `frustrated`');
+    expect(tone['frustrated']).toContain('RE:/Fwd: prefixes alone are not frustration');
+    // Positive is a cordial message with nothing pending, not only satisfaction with a resolved case.
+    expect(es).toContain('sin queja ni problema pendiente');
+    expect(en).toContain('with no complaint or pending problem');
+    expect(tone['positive']).toContain('no complaint or pending problem');
+    // A loss that already happened stays urgent until it is replaced, paid or closed.
+    expect(es).toContain('se repuso, se pagó o se cerró');
+    expect(en).toContain('replaced, paid or closed');
+    expect(urgency['high']).toContain('replaced, paid or closed');
   });
 });
 

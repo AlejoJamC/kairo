@@ -32,6 +32,7 @@ mock.module("@/env", () => ({
 const { dispatchOnboardingClassification } = await import("./inngest");
 
 const originalNodeEnv = process.env.NODE_ENV;
+const testEnv: Record<string, string | undefined> = process.env;
 const originalInngestDev = process.env.INNGEST_DEV;
 
 const errors: string[] = [];
@@ -49,7 +50,8 @@ beforeEach(() => {
 
 afterEach(() => {
   console.error = originalErr;
-  process.env.NODE_ENV = originalNodeEnv;
+  if (originalNodeEnv === undefined) delete testEnv.NODE_ENV;
+  else testEnv.NODE_ENV = originalNodeEnv;
   if (originalInngestDev === undefined) delete process.env.INNGEST_DEV;
   else process.env.INNGEST_DEV = originalInngestDev;
 });
@@ -141,7 +143,7 @@ describe("dispatchOnboardingClassification — kill switch & config", () => {
 
   it("returns 'missing-config' when INNGEST_EVENT_KEY is unset in production", async () => {
     envState.INNGEST_EVENT_KEY = undefined;
-    process.env.NODE_ENV = "production";
+    testEnv.NODE_ENV = "production";
     delete process.env.INNGEST_DEV;
 
     const outcome = await dispatchOnboardingClassification({
@@ -156,7 +158,7 @@ describe("dispatchOnboardingClassification — kill switch & config", () => {
 
   it("dispatches in local dev even without INNGEST_EVENT_KEY (Inngest dev server)", async () => {
     envState.INNGEST_EVENT_KEY = undefined;
-    process.env.NODE_ENV = "development";
+    testEnv.NODE_ENV = "development";
 
     const outcome = await dispatchOnboardingClassification({
       userId: "user-4b",
@@ -170,7 +172,7 @@ describe("dispatchOnboardingClassification — kill switch & config", () => {
 
   it("dispatches when INNGEST_DEV=1 even if NODE_ENV=production (e.g. preview env)", async () => {
     envState.INNGEST_EVENT_KEY = undefined;
-    process.env.NODE_ENV = "production";
+    testEnv.NODE_ENV = "production";
     process.env.INNGEST_DEV = "1";
 
     const outcome = await dispatchOnboardingClassification({

@@ -1,3 +1,4 @@
+import { approvedWorkflowKnowledge, knowledgeReferences } from './workflow-knowledge.js';
 
 import {
   stripQuotedThread,
@@ -175,15 +176,29 @@ export async function resolveTenantSettings(accountId: string, db = supabase): P
   return readAccountSettings(accountId, [], db);
 }
 
+export async function loadPreviousCase(accountId: string, channelIntegrationId: string, threadId: string, db = supabase): Promise<Record<string, unknown>> {
+  const conversation = await db.from('conversations').select('id').eq('account_id', accountId)
+    .eq('channel_integration_id', channelIntegrationId).eq('external_thread_id', threadId).maybeSingle();
+  if (conversation.error) throw new Error('Previous conversation unavailable');
+  if (!conversation.data) return { status: 'new_case' };
+  const ticket = await db.from('tickets').select('id,status,model_verdict,assigned_to').eq('account_id', accountId)
+    .eq('conversation_id', conversation.data.id).is('merged_into_ticket_id', null).maybeSingle();
+  if (ticket.error) throw new Error('Previous case unavailable');
+  return ticket.data ?? { status: 'new_case' };
+}
+
 export async function withApprovedKnowledge(
   message: EmailMessage,
   accountId: string,
   retrieve: typeof findRelevantKb = findRelevantKb,
+  retrieveVersions: typeof approvedWorkflowKnowledge = approvedWorkflowKnowledge,
 ): Promise<EmailMessage> {
   const knowledge = await retrieve({ accountId, queryText: [message.subject, message.body.slice(0, 2000)].join('\n') });
+  const versions = await retrieveVersions(accountId, [message.subject, message.body.slice(0,2000)].join('\n'));
   const missing = [...(message.evidence?.missing ?? []), ...(knowledge.degraded.length ? ['approved_knowledge'] : [])];
   return {
     ...message,
+    approvedKnowledge: knowledgeReferences(versions),
     ...(knowledge.articles.length ? { businessContext: JSON.stringify({
       configuredBusinessContext: message.businessContext ?? null,
       publishedKnowledge: knowledge.articles.map(article => ({ id: article.id, title: article.title, content: article.content.slice(0, 2000) })),

@@ -43,6 +43,10 @@ export async function loadPromptTemplate(promptId: string, lang: PromptLang): Pr
   } catch (err) {
     throw new LlmFeatureError('template_missing', `prompt template ${key}.md not found`, { cause: err });
   }
+  if (promptId === 'historical-knowledge') {
+    const shared = await loadPromptTemplate('email-knowledge', lang);
+    content = content.replace(/v\d+\.\d+\.\d+/, version => `${version}+email-knowledge:${extractPromptVersion(shared)}`) + '\n' + shared;
+  }
   cache.set(key, content);
   return content;
 }
@@ -53,7 +57,7 @@ export async function loadPromptTemplate(promptId: string, lang: PromptLang): Pr
  * Returns null if no version marker is present.
  */
 export function extractPromptVersion(template: string): string | null {
-  const match = template.match(/v(\d+\.\d+\.\d+)/);
+  const match = template.match(/v(\d+\.\d+\.\d+(?:\+[a-z-]+:\d+\.\d+\.\d+)*)/);
   return match ? match[1] : null;
 }
 

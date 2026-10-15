@@ -45,6 +45,8 @@ export const ModelVerdictSchema = z.object({
 });
 
 export type ModelVerdictResult = z.infer<typeof ModelVerdictSchema> & {
+  evidence?: NonNullable<import('./types').EmailMessage['evidence']>;
+  workflow?: { contract: string; version: string; judgments: Record<string, string> };
   decision?: {
     answers: Record<string, { type: 'choice'; choice: string; confidence: number; probabilities?: Record<string, number> }>;
     stateVersion: string;

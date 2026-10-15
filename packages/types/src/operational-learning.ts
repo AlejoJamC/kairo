@@ -24,6 +24,7 @@ export type LearningStatus = (typeof LEARNING_STATUSES)[number];
 // From KAI-55's original sketch — this part of it had no existing production
 // vocabulary to conflict with, unlike ticket classification.
 export const OPERATIONAL_LEARNING_TYPES = [
+  'business_fact',
   'resolution',
   'diagnostic_pattern',
   'routing_rule',

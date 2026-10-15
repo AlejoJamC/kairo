@@ -85,6 +85,9 @@ function makeMockClient({
   // exactly as before this feature existed.
   activeMembers = [] as { user_id: string }[],
   recentlyAssigned = [] as { assigned_to: string; created_at: string }[],
+  // KAI-94: the account's client directory; an error stands for an unreadable one.
+  clients = [] as { id: string; plan_type: string | null; sla_level: string | null; authorized_emails: string[] }[],
+  clientsError = null as { message: string } | null,
 } = {}) {
   // Track how many times maybeSingle is called so we can return different values
   // for the initial SELECT (existingTicket) and the race re-read (raceTicket).
@@ -125,9 +128,13 @@ function makeMockClient({
   }));
   const accountMembersSelectFn = mock(() => ({ eq: accountMembersEqFn }));
 
+  const clientsSelectFn = mock(() => ({ eq: mock(async () => ({ data: clients, error: clientsError })) }));
+
   const fromFn = mock((_table: string) =>
     _table === "account_members"
       ? { select: accountMembersSelectFn }
+      : _table === "clients"
+      ? { select: clientsSelectFn }
       : {
           select: selectChain,
           insert: insertFn,
@@ -155,6 +162,29 @@ describe("findOrCreateTicketForThread", () => {
     expect(insertPayload.derivation_version).toBe("1.1.0");
     expect(insertPayload.prompt_version).toBe("1.5.1");
     expect(insertPayload.abstain).toBe(false);
+  });
+
+  it("links a new ticket to the client that lists its sender as authorized", async () => {
+    const client = makeMockClient({
+      insertedTicket: { id: "ticket-new", ticket_number: 101 },
+      clients: [{ id: "client-acme", plan_type: "Pro", sla_level: "Standard", authorized_emails: ["Alice@Example.com"] }],
+    });
+    await findOrCreateTicketForThread(client, BASE_ARGS);
+    expect(client._insertFn.mock.calls[0][0].client_id).toBe("client-acme");
+  });
+
+  it("leaves the ticket unlinked for an unverified sender or an unreadable directory, and still creates it", async () => {
+    const unverified = makeMockClient({
+      insertedTicket: { id: "ticket-new", ticket_number: 101 },
+      clients: [{ id: "client-other", plan_type: "Pro", sla_level: "Standard", authorized_emails: ["bob@example.com"] }],
+    });
+    await findOrCreateTicketForThread(unverified, BASE_ARGS);
+    expect(unverified._insertFn.mock.calls[0][0].client_id).toBeNull();
+
+    const unreadable = makeMockClient({ insertedTicket: { id: "ticket-new", ticket_number: 101 }, clientsError: { message: "down" } });
+    const result = await findOrCreateTicketForThread(unreadable, BASE_ARGS);
+    expect(result.was_created).toBe(true);
+    expect(unreadable._insertFn.mock.calls[0][0].client_id).toBeNull();
   });
 
   it("returns existing ticket when found (was_created=false)", async () => {

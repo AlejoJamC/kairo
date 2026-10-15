@@ -41,7 +41,7 @@ const selectMock = mock((_columns: string) => ({
 const fromMock = mock((_table: string) => ({ select: selectMock }));
 mock.module("./supabase.js", () => ({ supabase: { from: fromMock } }));
 
-const { buildClassifierBody, resolveClassifierContext, CLASSIFIER_BODY_RULES } =
+const { loadPreviousCase, buildClassifierBody, resolveClassifierContext, CLASSIFIER_BODY_RULES } =
   await import("./classifier-input.js");
 
 beforeEach(() => {
@@ -223,5 +223,32 @@ describe("buildClassifierBody — unchanged by KAI-93 context work", () => {
 
   it("falls back to the snippet when there is no decodable text part", () => {
     expect(buildClassifierBody("onboarding", null, "snippet text")).toBe("snippet text");
+  });
+});
+
+describe('previous case context', () => {
+  it('scopes the existing case to the account and integration and excludes merged tickets', async () => {
+    const filters: unknown[][] = [];
+    const prior = {id:'ticket',status:'open',model_verdict:{priority:'P2'},assigned_to:'agent'};
+    const db = {from:(table:string) => {
+      const chain = {select:()=>chain,eq:(...args:unknown[])=>{filters.push([table,...args]);return chain;},
+        is:(...args:unknown[])=>{filters.push([table,...args]);return chain;},
+        maybeSingle:async()=>({data:table === 'conversations' ? {id:'conversation'} : prior,error:null})};
+      return chain;
+    }} as unknown as NonNullable<Parameters<typeof loadPreviousCase>[3]>;
+    expect(await loadPreviousCase('account','integration','thread',db)).toEqual(prior);
+    expect(filters).toContainEqual(['conversations','channel_integration_id','integration']);
+    expect(filters).toContainEqual(['conversations','external_thread_id','thread']);
+    expect(filters).toContainEqual(['tickets','account_id','account']);
+    expect(filters).toContainEqual(['tickets','merged_into_ticket_id',null]);
+  });
+  it('distinguishes a new case from a failed context read', async () => {
+    for (const error of [null,{message:'unavailable'}]) {
+      const chain = {select:()=>chain,eq:()=>chain,maybeSingle:async()=>({data:null,error})};
+      const db = {from:()=>chain} as unknown as NonNullable<Parameters<typeof loadPreviousCase>[3]>;
+      const result = loadPreviousCase('account','integration','thread',db);
+      if(error) await expect(result).rejects.toThrow('Previous conversation unavailable');
+      else expect(await result).toEqual({status:'new_case'});
+    }
   });
 });

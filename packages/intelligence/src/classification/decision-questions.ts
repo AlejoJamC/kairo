@@ -1,3 +1,5 @@
+import { workflowQuestions } from './workflow-contract';
+import type { EmailMessage } from './types';
 import { z } from 'zod';
 import { choiceAnswerSchema } from '../providers/choice-answer-schema';
 
@@ -19,9 +21,9 @@ const SUBJECT_MATTER_CRITERIA = {
 } as const satisfies ChoiceCriteria;
 
 const PRIORITY_CRITERIA = {
-  P1: 'Loss, breach or blockage has already happened, or the same case has accumulated several unresolved requests.',
-  P2: 'Needs handling and affects work, but there is no consummated loss and no chain of unanswered requests.',
-  P3: 'Simple, informative or coordination request with no operational impact.',
+  P1: 'This message reports or escalates a new failure in what the company delivers — something lost, damaged, missing, not performed or wrongly closed — or demands compensation for one.',
+  P2: 'Needs handling on a case already under way, with no new failure reported: asking for the status of or a reply to an earlier claim, coordinating a pickup, appointment or document, confirming a step, or an operational complaint without a concrete failure.',
+  P3: 'Nothing for the company to fix: information, notices, confirmations or acceptances, introductions, job applications or simple routine requests.',
 } as const satisfies ChoiceCriteria;
 
 const CATEGORY_CRITERIA = {
@@ -34,22 +36,25 @@ const CATEGORY_CRITERIA = {
 } as const satisfies ChoiceCriteria;
 
 const TONE_CRITERIA = {
-  aggressive: 'Hostile, threatening or confrontational language — insults, ultimatums, all-caps anger.',
+  aggressive: 'Hostile, threatening or confrontational language — insults, explicit threats, all-caps anger.',
   frustrated:
-    'Annoyed or fed up without hostility, decided by insistence, not vocabulary — even when polite: repeated exclamation marks or "this is unacceptable", cited dates, elapsed days or broken commitments, or `threadDepth` of 2 or more.',
-  neutral: 'Professional, calm and informative, with none of the frustration signals.',
-  positive: 'Friendly, grateful or enthusiastic about something already resolved. Courtesy formulas alone are not positive.',
+    'The current sender shows dissatisfaction or pressure about how the company handled something, even in polite wording: complains about or escalates a failure, passes on their own customer\'s complaint, insists on a response or a claim already raised (citing earlier emails, dates or time waited), states the harm it is causing, or sets a deadline or consequence for the company. Thread depth and RE:/Fwd: prefixes alone are not frustration.',
+  neutral:
+    'Informative or procedural: reports or documents a fact, files a claim with its data, shares data, lists or attachments, asks for a concrete step, confirms or coordinates — with no frustration signal and no warmth beyond greeting and sign-off. Asking for something urgently is urgency, not tone.',
+  positive:
+    'A cordial, cooperative or appreciative register in a message with no complaint or pending problem with the company: introducing themselves or seeking a relationship or opportunity, a routine request made kindly and with thanks, accepting or confirming that something was done, or apologizing and committing to improve. A courtesy formula closing a message about a problem does not qualify.',
 } as const satisfies ChoiceCriteria;
 
 const URGENCY_CRITERIA = {
-  high: 'No slack — something is being lost right now, someone is stuck, or there is an immediate deadline.',
+  high: 'At the time of this message there is no slack: an ongoing loss, a person or operation still blocked, an immediate deadline, or a consequence that worsens while waiting. An incident that started in the past but remains blocking belongs here, even when described politely or in past tense. A loss, damage or shortage that already happened stays here while the affected party is still without the goods, service or compensation and has no confirmed solution; it is settled only once replaced, paid or closed.',
   medium:
-    'Needs attention soon, but the event already happened or it can be scheduled. A serious case whose outcome is already settled is usually medium, not high.',
+    'Needs attention soon, but the remaining action can be scheduled without an ongoing blockage, growing loss or immediate deadline — for example scheduling a pickup or appointment, sending or requesting documents, or confirming a step of a case whose solution is already under way. A past event qualifies only if its consequences are settled or no longer time-critical; past tense alone is not evidence of that.',
   low: 'No time pressure — planning, inquiry or future coordination.',
 } as const satisfies ChoiceCriteria;
 
-export function buildTicketVerdictQuestions(): Questions {
+export function buildTicketVerdictQuestions(stage?: EmailMessage['stage']): Questions {
   return {
+    ...workflowQuestions(stage, 'message'),
     actionability: choice(
       'The company is the owner of `tenantMailbox`. If nobody at the company answers this email, is something left undone?',
       ACTIONABILITY_CRITERIA,
@@ -59,20 +64,20 @@ export function buildTicketVerdictQuestions(): Questions {
       SUBJECT_MATTER_CRITERIA,
     ),
     priority: choice(
-      'How important is this case for the company, independent of how much time there is to act on it? `threadDepth` counts the earlier messages in the same case.',
+      'How important is what this message brings to the company, independent of how much time there is to act on it? Judge this message itself: earlier messages and reminders in the thread do not raise it by themselves.',
       PRIORITY_CRITERIA,
     ),
     category: choice(
       'What is the matter of this email, in terms of what the company delivers (`businessContext`)?',
       CATEGORY_CRITERIA,
     ),
-    tone: choice("What is the sender's tone?", TONE_CRITERIA),
-    urgency: choice('How much time is there to resolve this, independent of how important the case is?', URGENCY_CRITERIA),
+    tone: choice("What stance does the sender of the current message take toward the company, as written in `subject` and `body`? Judge what this sender writes, not how serious the matter is, the thread position or the tone of quoted messages.", TONE_CRITERIA),
+    urgency: choice('How quickly must someone act at the time this message was written, given `subject` and `body`? Judge consequences of waiting and whether the problem is still active, independently of priority and tone. Do not use today as the clock for historical messages. A keyword flag is not an urgency judgment; absence of an English keyword does not mean absence of urgency.', URGENCY_CRITERIA),
   };
 }
 
-export const TICKET_QUESTIONS_VERSION = '1.0.0';
-export const DECISION_STATE_VERSION = '1.0.0';
+export const TICKET_QUESTIONS_VERSION = '1.1.3';
+export const DECISION_STATE_VERSION = '1.1.0';
 
 export interface JevChoiceAnswer {
   type: 'choice';

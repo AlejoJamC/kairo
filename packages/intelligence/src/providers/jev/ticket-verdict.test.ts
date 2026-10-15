@@ -1,16 +1,19 @@
 import { describe, it, expect } from 'bun:test';
 
 import { ACTIONABILITY_VALUES, CATEGORY, PRIORITY, SUBJECT_MATTER_VALUES, TONE, URGENCY } from '../../classification/schema';
+import { workflowFields } from '../../classification/workflow-contract';
 import { buildTicketVerdictQuestions, parseTicketVerdictAnswers } from './ticket-verdict';
 
 describe('buildTicketVerdictQuestions', () => {
-  it('asks exactly the six ModelVerdictSchema axes, each a choice question', () => {
-    const questions = buildTicketVerdictQuestions();
-    expect(Object.keys(questions).sort()).toEqual(
-      ['actionability', 'category', 'priority', 'subject_matter', 'tone', 'urgency'].sort(),
-    );
-    for (const q of Object.values(questions)) {
-      expect(q.type).toBe('choice');
+  it('asks the six ModelVerdictSchema axes plus the workflow questions of the stage, each a choice question', () => {
+    for (const stage of [undefined, 'onboarding', 'backfill', 'new_email', 'manual'] as const) {
+      const questions = buildTicketVerdictQuestions(stage);
+      expect(Object.keys(questions).sort()).toEqual(
+        ['actionability', 'category', 'priority', 'subject_matter', 'tone', 'urgency', ...workflowFields(stage, 'message')].sort(),
+      );
+      for (const q of Object.values(questions)) {
+        expect(q.type).toBe('choice');
+      }
     }
   });
 
@@ -92,5 +95,17 @@ describe('parseTicketVerdictAnswers', () => {
         urgency: answer('high', 0.9),
       }),
     ).toThrow();
+  });
+});
+
+describe('priority criteria', () => {
+  // Follow-ups on a case already under way were escalated to P1 when the case history counted as importance.
+  it('rates what the message brings, not how many times the case was raised', () => {
+    const questions = buildTicketVerdictQuestions('onboarding');
+    const criteria = questions['priority']!.criteria! as Record<string, string>;
+    expect(criteria['P1']).toContain('reports or escalates a new failure');
+    expect(criteria['P1']).not.toMatch(/several|accumulated|unresolved requests/i);
+    expect(criteria['P2']).toContain('status of or a reply to an earlier claim');
+    expect(questions['priority']!.instructions).toContain('do not raise it by themselves');
   });
 });

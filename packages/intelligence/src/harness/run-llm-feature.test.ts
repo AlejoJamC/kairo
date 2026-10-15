@@ -17,6 +17,7 @@ const REPLY_VARS = {
   message_history: '[Client] I cannot log in to support@acme.com',
   similar_case: 'none',
   kb_articles: 'none',
+  business_context: 'Acme provides customer support software.',
 };
 
 const Schema = z.object({ suggestion: z.string(), confidence: z.number() });
@@ -83,6 +84,15 @@ describe('runLlmFeature', () => {
     expect(result.prompt).toContain('Cannot log in');
     expect(result.prompt).not.toMatch(/\{\{\w+\}\}/);
     expect(result.llmCallId).toBeNull();
+  });
+
+  it('asks for the structured answer without hidden reasoning unless the caller requests it', async () => {
+    const provider = fakeProvider();
+    const request = { feature: 'reply_suggestion', promptId: 'reply-suggestion', lang: 'en' as const, vars: REPLY_VARS, schema: Schema, provider };
+    await runLlmFeature({ ...request, options: { maxTokens: 2000 } });
+    await runLlmFeature({ ...request, options: { maxTokens: 4000, reasoning: 'low' } });
+    const sent = (provider.completeJSONWithMeta as ReturnType<typeof mock>).mock.calls.map(call => call[2]);
+    expect(sent).toEqual([{ reasoning: 'none', maxTokens: 2000 }, { reasoning: 'low', maxTokens: 4000 }]);
   });
 
   it('logs exactly one record on success, with the reported model and the chosen confidence field', async () => {

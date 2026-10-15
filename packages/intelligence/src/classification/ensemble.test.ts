@@ -45,7 +45,7 @@ const fakeProvider = (model: string, answer: () => ModelVerdictResult | Error) =
   completeJSONWithMeta: async () => {
     const a = answer();
     if (a instanceof Error) throw a;
-    return { data: a, rawText: '{}', model, usage: { promptTokens: null, completionTokens: null }, tokensPerSecond: null };
+    return { data: { ...a, workflow: { request:'intervention',priority_evidence:'supported',urgency_evidence:'supported',alternative:'unknown',change:'new_request',next_action:'respond' } }, rawText: '{}', model, usage: { promptTokens: null, completionTokens: null }, tokensPerSecond: null };
   },
 });
 
@@ -54,6 +54,8 @@ const fakeProvider = (model: string, answer: () => ModelVerdictResult | Error) =
 // one production runs. A module mock in bun reaches every file in the same run,
 // which is why the parser lives in its own module and is re-exported here as
 // itself rather than stubbed.
+// Restored after this suite: the replacement would otherwise reach every later file in the run.
+const realProviders = { ...await import('../config/providers') };
 mock.module('../config/providers', () => ({
   resolveEnsembleTarget,
   createCompletionProvider: (target?: Target) => {
@@ -85,7 +87,10 @@ beforeEach(() => {
   secondCalls = 0;
 });
 
-afterAll(() => useEnsemble(ORIGINAL ?? null));
+afterAll(() => {
+  useEnsemble(ORIGINAL ?? null);
+  mock.module('../config/providers', () => realProviders);
+});
 
 describe('classification ensemble', () => {
   it('asks nobody else when no ensemble is configured', async () => {

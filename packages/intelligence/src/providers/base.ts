@@ -91,6 +91,7 @@ export interface EmbeddingProvider {
 export interface CompletionOptions {
   abortSignal?: AbortSignal;
   maxTokens?: number;
+  reasoning?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   temperature?: number;
   stopSequences?: string[];
 }
