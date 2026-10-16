@@ -3,7 +3,8 @@
 .claude/settings.local.json
 # Claude Code memory (local only)
 .claude/projects/
-/packages/claude_design/
+# Commit-intent flag written by .claude/settings.json's UserPromptSubmit hook
+.claude/.commit-authorized
 
 # KAIRO
 # Evals — scripts/eval/data is a separate private repo (company data); the
@@ -12,7 +13,18 @@ scripts/eval/data/
 *.eml
 *.csv
 
+# Internal documentation
+kairo-internal/
+kairo-internal/*
+design/
+
 # KELAN
+
+# Tamagui generated cache (produced by vite-plugin and babel-plugin at build time)
+**/.tamagui/
+
+# Supabase CLI local branch state — auto-generated, never commit
+supabase/.branches
 
 # Logs
 logs
@@ -163,10 +175,6 @@ vite.config.ts.timestamp-*
 # JetBrains IDEs
 .idea/
 
-# Internal documentation
-kairo-internal/
-kairo-internal/*
-
 # Turborepo
 .turbo
 
@@ -177,12 +185,3 @@ kairo-internal/*
 *.p12
 *.key
 *.mobileprovision
-
-# Tamagui generated cache (produced by vite-plugin and babel-plugin at build time)
-**/.tamagui/
-
-# Supabase CLI local branch state — auto-generated, never commit
-supabase/.branches
-
-# Commit-intent flag written by .claude/settings.json's UserPromptSubmit hook
-.claude/.commit-authorized

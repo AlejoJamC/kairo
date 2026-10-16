@@ -100,9 +100,41 @@ Reads the corpus directly into isolated account storage. No onboarding or Tier 2
 
 Private outputs use `tier3/<dataset>/<UTC-date-time>/` with their own `latest.json`. Reports separate classification quality, historical execution, pending proposals, safety and historical closure. Mailbox, storage and SQL behavior are fixtures; the enabled closing check queues no enrichment without approved knowledge. Proposals remain unapproved.
 
+## Incoming decisions, enrichment and replies
+
+Each workflow runs independently. From the repository root:
+
+```sh
+bun --env-file=.env.local evals/incoming.ts execute main
+bun --env-file=.env.local evals/enrichment.ts execute synthetic
+bun --env-file=.env.local evals/reply.ts execute main
+```
+
+Replace `execute` with `plan` to inspect model roles, steps and maximum calls without reading data or running inference. An optional final integer caps total requests, including retries. Replace `main` with `coverage` for the other corpus, or `synthetic` for invented controls only. No earlier evaluation is required.
+
+- **Incoming:** available conversation → evidence → changed-case judgments → conditional knowledge proposals → immutable decision history → replay. Maximum **5 calls per case**. Uses `evidence_analysis`, `classification`, `knowledge_decision`, `knowledge_draft` and `validation` as configured by the application.
+- **Enrichment:** simulated approval → candidate selection → contribution judgment → conditional evidence → guarded application or proposal → replay. Maximum **2 calls per eligible case**; pending/superseded knowledge and denied approval use **0**. Uses `knowledge_decision` and `evidence_analysis`.
+- **Reply:** current conversation and approved sources → draft → guarded proposal save. **1 call per case** to `reply`; the updated-memory control makes **2**, requesting again after a version changes. Replaying persistence makes no model call.
+
+Private corpus cases and invented controls are reported separately. Corpus history comes only from explicitly linked, earlier dated messages; no conversation, prior classification, business description or knowledge is fabricated. Existing classification labels do not label relevance or reply quality. Missing workflow labels remain unscored until reviewed.
+
+Optional reviewed memory belongs in `scripts/eval/data/input/workflow-context/main.json` (or `coverage.json`), with shape `{ "cases": [{ "position": 1, "knowledge": [{ "content": "Use account recovery.", "status": "approved" }] }] }`. Entries may include `businessContext`; knowledge status may also be `pending_review` or `superseded`. It stays private and is never generated or approved automatically. Corpus enrichment requires at least one supplied approved version; `synthetic` already includes approved, irrelevant, unapproved and superseded cases.
+
+Controls cover contradictory or missing evidence, available alternatives, denied membership, human views/assignments/edits, concurrent case changes, withdrawn references, refreshed memory and idempotency. Retrieval, embeddings, approval and atomic database operations use fixtures; these commands do not verify Gmail, Inngest, SQL transactions, RLS or HTTP authorization.
+
+Outputs use separate `incoming`, `enrichment` and `reply` directories with dated runs and `latest.json`. `trace.json` lists steps; `run.json` and `measurements.json` retain private evidence, proposals, versions and calls. `report.json` separates execution, expected-answer scores at **0.7/0.8/0.9**, safety, coverage, available cost and pending human review. Confidence intervals on fully reviewed cases describe sampling uncertainty, not calibrated model confidence. Utility and confirmed solutions stay unknown until reviewed.
+
+After filling the existing `reviews.json` ratings, recalculate without inference:
+
+```sh
+bun evals/incoming.ts report main latest
+bun evals/enrichment.ts report synthetic latest
+bun evals/reply.ts report main latest
+```
+
 ## Results
 
-Runs are stored privately under `scripts/eval/data/output/evals/<mode>/<dataset>/<UTC-date-time>/`. Modes: `classification`, `workflows`, `onboarding`, `tier2`, `tier2-classification`, `tier3`, `technical`. Datasets: `main`, `coverage`, `synthetic`, `local`.
+Runs are stored privately under `scripts/eval/data/output/evals/<mode>/<dataset>/<UTC-date-time>/`. Modes: `classification`, `workflows`, `onboarding`, `tier2`, `tier2-classification`, `tier3`, `incoming`, `enrichment`, `reply`, `technical`. Datasets: `main`, `coverage`, `synthetic`, `local`.
 
 Each mode/dataset has `latest.json` with the latest run's directory, start time and status. Run folders sort chronologically, for example `2026-10-14_12-30-00-123Z`. `report main latest` recalculates the latest report; replace `latest` with a dated folder name for a specific run.
 
