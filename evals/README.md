@@ -48,9 +48,45 @@ Storage and retrieval are isolated fixtures. Gmail, Inngest, SQL triggers, datab
 
 `manifest.json` records configuration and sample; `trace.json` lists executed steps; `run.json` contains calls, outputs and saved records; `measurements.json`, `reviews.json` and `report.json` support quality review. Failures and model responses remain private.
 
+## Tier 2 historical learning
+
+With the application model environment loaded, from the repository root:
+
+```sh
+bun evals/tier2.ts plan main
+bun evals/tier2.ts execute main
+# Optional request cap and saved onboarding run (default: latest)
+bun evals/tier2.ts execute main 120 <onboarding-run>
+bun evals/tier2.ts report main latest
+# Check classification independently, without repeating knowledge generation
+bun evals/tier2.ts plan-classification main
+bun evals/tier2.ts classify main
+bun evals/tier2.ts report-classification main latest
+```
+
+Reuses a finished onboarding snapshot for the same dataset, including its tickets, pending proposals and account settings. Failed learning in that run does not prevent continuation. The initial inference is not repeated, and neither that snapshot nor the corpus is modified. Use `coverage` instead of `main` for that corpus.
+
+`classify` uses the same historical selection, classifier and routing as the full run, stopping after ingestion. It calls no evidence, knowledge or validation models. Its outputs live in `tier2-classification/<dataset>/<UTC-date-time>/`, preserving the full workflow's latest result. The optional request cap and onboarding-run selector have the same order as `execute`.
+
+Selects all dated corpus messages in `TIER_2_WINDOW_DAYS` (default: 15), excluding messages successfully classified or filtered during onboarding. Failed initial classifications remain eligible. The newest corpus date anchors a virtual inbox clock; the cutoff is midnight UTC, so fixtures remain replayable. Undated messages are reported as excluded. No random redraw or fixed email count is imposed on Tier 2.
+
+Executes the production Tier 2 job for routing, backfill classification, ticket reuse/creation, source linkage and existing proposal approval gates. Its historical learning consumer reads the available saved conversation and produces grounded proposals with novelty/support/conflict checks. Replaying completed learning must add no inference or writes. Existing ticket classifications and human decisions are checked for preservation.
+
+Tier 2 has an isolated model policy: message classification defaults to the configured language evidence model; historical judgments, candidate selection and validation use their configured decision roles. Analysis and drafting use their language roles. The initial-scan classification mode and ensemble are not inherited. `plan` displays the model, input, task and condition for every role. This evaluation policy does not change production defaults.
+
+Optional `EVAL_TIER2_<ROLE>_MODEL` variables select models independently for `CLASSIFICATION`, `EVIDENCE_ANALYSIS`, `KNOWLEDGE_DECISION`, `KNOWLEDGE_DRAFT` and `VALIDATION`. `EVAL_TIER2_CLASSIFICATION_MODE=decision` selects native classification; without an explicit classifier it uses the knowledge-decision model. `EVAL_TIER2_ENSEMBLE=provider:model` enables a second language classifier. These choices are scoped to this evaluation, without changing process settings or concurrent initial-scan execution.
+
+Per admitted email: classification **1** call (**2** with ensemble), evidence **1**, historical decision **1**, candidate selection **1**, draft **up to 1**, semantic validation **up to 1**. Maximum **6**, or **7** with ensemble. Existing shadow/canary settings can add calls; `plan` displays their allowance. Filtered mail uses **0**. The default request cap is eligible messages × the displayed maximum; retries count against it. Generation budgets remain those of the application.
+
+Outputs live under `output/evals/tier2/<dataset>/<UTC-date-time>/` inside the private data directory, with their own `latest.json`. `manifest.json` records the baseline, virtual window, selected positions, exclusions, models and limits. `trace.json` records steps; `run.json` retains evidence and proposals. `report.json` separates classification scores, historical execution, new proposals, safety checks and cost. `measurements.json` and `reviews.json` support human assessment of support, scope, confirmed outcomes, contradictions and reuse; unreviewed knowledge is not reported as validated.
+
+`report.json` compares each classification field's macro-F1 with **0.7, 0.8 and 0.9**, independently of execution status. Its 95% bootstrap intervals resample whole tickets, keeping related messages together. They estimate sampling uncertainty, not calibrated model confidence; a single ticket has no interval. `quality.proposals` separates invalid source references, duplicate knowledge, semantic support and pending human review. The report command recalculates these values from saved artifacts without inference.
+
+Mailbox reads, persistence and queue-trigger behavior are fixtures. The production handler and model services execute; live Gmail, SQL triggers/RLS, durable Inngest execution, human approval, enrichment and Tier 3 are outside this evaluation. The Tier 3 handoff is recorded without running it.
+
 ## Results
 
-Runs are stored privately under `scripts/eval/data/output/evals/<mode>/<dataset>/<UTC-date-time>/`. Modes: `classification`, `workflows`, `onboarding`, `technical`. Datasets: `main`, `coverage`, `synthetic`, `local`.
+Runs are stored privately under `scripts/eval/data/output/evals/<mode>/<dataset>/<UTC-date-time>/`. Modes: `classification`, `workflows`, `onboarding`, `tier2`, `tier2-classification`, `technical`. Datasets: `main`, `coverage`, `synthetic`, `local`.
 
 Each mode/dataset has `latest.json` with the latest run's directory, start time and status. Run folders sort chronologically, for example `2026-10-14_12-30-00-123Z`. `report main latest` recalculates the latest report; replace `latest` with a dated folder name for a specific run.
 

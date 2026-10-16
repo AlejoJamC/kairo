@@ -4,9 +4,14 @@ import { root, writePrivate } from './private-files';
 import { createEvaluationRun, finishEvaluationRun } from './results';
 
 export const suites = [
+  { file: 'evals/quality.test.ts', covers: ['quality thresholds', 'execution separation', 'ticket uncertainty', 'proposal validation counts'] },
+  { file: 'packages/intelligence/src/classification/historical-attention.test.ts', covers: ['historical rubric parity', 'independent priority and urgency', 'initial reading preservation'] },
+  { file: 'packages/intelligence/src/knowledge/source-fragments.test.ts', covers: ['exact source references', 'invalid reference isolation'] },
   { file: 'evals/checks.test.ts', covers: ['runner', 'metrics', 'privacy', 'network limits'] },
   { file: 'evals/runtime.test.ts', covers: ['production entrypoints', 'isolated storage'] },
   { file: 'evals/onboarding.test.ts', covers: ['random sampling', 'ticket-to-knowledge chain', 'conditional calls', 'first delivery', 'idempotency'] },
+  { file: 'evals/tier2.test.ts', covers: ['historical window', 'onboarding continuation', 'production Tier 2 job', 'conversation evidence', 'human decisions', 'private reports'] },
+  { file: 'evals/tier2-routing.test.ts', covers: ['historical model policy', 'independent roles', 'concurrent initial-scan isolation'] },
   { file: 'evals/results.test.ts', covers: ['dated output layout', 'latest execution', 'collision isolation'] },
   { file: 'packages/intelligence/src/classification/workflow-contract.test.ts', covers: ['contract separation', 'insufficiency', 'contradiction', 'alternatives', 'declared risk'] },
   { file: 'apps/api/src/lib/classifier-input.test.ts', covers: ['bounded initial evidence'] },

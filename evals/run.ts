@@ -22,7 +22,7 @@ export function evaluationRouting(dataset: string, env: Record<string, string | 
 }
 
 export async function codeFingerprint() {
-  const paths = ['packages/intelligence/prompts', 'packages/intelligence/src/classification', 'evals'];
+  const paths = ['packages/intelligence/prompts', 'packages/intelligence/src/classification', 'packages/intelligence/src/config', 'evals'];
   const entries: [string, string][] = [];
   for (const path of paths) {
     for (const name of (await readdir(resolve(root, path), { recursive: true })).sort()) {
@@ -35,6 +35,8 @@ export async function codeFingerprint() {
     const path = `apps/api/src/lib/${name}.ts`;
     entries.push([path, createHash('sha256').update(await readFile(resolve(root, path))).digest('hex')]);
   }
+  const tier2 = 'apps/api/src/functions/pipeline/tier2-background.ts';
+  entries.push([tier2, createHash('sha256').update(await readFile(resolve(root, tier2))).digest('hex')]);
   return { commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(), files: Object.fromEntries(entries) };
 }
 

@@ -144,6 +144,8 @@ export {
   EmailKnowledgeValidationSchema, knowledgeReviewReasons,
   type EmailKnowledgeProposal, type EmailKnowledgeValidation,
 } from './knowledge/email-knowledge';
+export { SOURCE_REFERENCE_VERSION, sourceFragments, ReferencedKnowledgeDraftSchema, resolveSourceReferences,
+  type SourceFragment, type ReferencedKnowledgeDraft } from './knowledge/source-fragments';
 
 export { knowledgeImpactQuestions, workflowContract, workflowQuestions, workflowLanguageSchema, workflowAnswersSchema, attentionRecommendation, WORKFLOW_VERSION } from './classification/workflow-contract';
 

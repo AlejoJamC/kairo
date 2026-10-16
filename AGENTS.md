@@ -59,6 +59,10 @@ Kairo — AI support cockpit for support teams. Monorepo: dashboard (Vite+React1
 
 ## Business value premises
 
+- **Kairo is not a CRM, a helpdesk add-on or a complement to Zendesk-style platforms.** Its customers have neither the time nor the interest to configure tools or pay someone to configure them: value must appear from the connected inbox with zero setup.
+- **The differentiator is unlocking each company's own business knowledge from its support.** Triage is the entry point, not the product.
+- **BYOK is an optional per-account switch, off by default.** Kairo's own keys are the default; when an account turns BYOK on, its model costs reach it directly. Kairo only offers models from its evaluated pool. Never make BYOK mandatory or require per-account manual setup.
+- **The Vercel AI SDK is the agent framework that orchestrates the intelligence pipelines.** Each workflow runs as an SDK agent with shared tools (conversation and knowledge retrieval, typed judgments, embeddings, proposal writes); deterministic code resolves lookups, SLA, permissions, eligibility and transitions; Inngest provides durability and retries. Never propose demoting the SDK to a side role or replacing it.
 - **Onboarding is the first value premise.** When an inbox is connected, Tier 1 processes the most recent `FAST_PATH_SCAN_SIZE` emails, newest first, one after another. It is never a random sample.
 - **Onboarding evals** sample `FAST_PATH_SCAN_SIZE` emails at random from the golden data, never the full corpus. The golden data is always larger than that sample and evals run repeatedly against it; a random draw replicates an unknown new inbox.
 - Never run evals or any call that spends model credits without an explicit instruction in that message. Do not change eval or model configuration (routing, mailboxes, reasoning, token budgets) unless asked.

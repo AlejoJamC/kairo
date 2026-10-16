@@ -1,4 +1,5 @@
 import { workflowQuestions } from './workflow-contract';
+import { MESSAGE_PRIORITY_CRITERIA, HISTORICAL_URGENCY_CRITERIA, HISTORICAL_ATTENTION_VERSION } from './historical-attention';
 import type { EmailMessage } from './types';
 import { z } from 'zod';
 import { choiceAnswerSchema } from '../providers/choice-answer-schema';
@@ -20,11 +21,7 @@ const SUBJECT_MATTER_CRITERIA = {
   admin: "The company's own running — hiring, compliance, summonses, paperwork, anything its own systems emit.",
 } as const satisfies ChoiceCriteria;
 
-const PRIORITY_CRITERIA = {
-  P1: 'This message reports or escalates a new failure in what the company delivers — something lost, damaged, missing, not performed or wrongly closed — or demands compensation for one.',
-  P2: 'Needs handling on a case already under way, with no new failure reported: asking for the status of or a reply to an earlier claim, coordinating a pickup, appointment or document, confirming a step, or an operational complaint without a concrete failure.',
-  P3: 'Nothing for the company to fix: information, notices, confirmations or acceptances, introductions, job applications or simple routine requests.',
-} as const satisfies ChoiceCriteria;
+const PRIORITY_CRITERIA = MESSAGE_PRIORITY_CRITERIA;
 
 const CATEGORY_CRITERIA = {
   technical:
@@ -72,12 +69,15 @@ export function buildTicketVerdictQuestions(stage?: EmailMessage['stage']): Ques
       CATEGORY_CRITERIA,
     ),
     tone: choice("What stance does the sender of the current message take toward the company, as written in `subject` and `body`? Judge what this sender writes, not how serious the matter is, the thread position or the tone of quoted messages.", TONE_CRITERIA),
-    urgency: choice('How quickly must someone act at the time this message was written, given `subject` and `body`? Judge consequences of waiting and whether the problem is still active, independently of priority and tone. Do not use today as the clock for historical messages. A keyword flag is not an urgency judgment; absence of an English keyword does not mean absence of urgency.', URGENCY_CRITERIA),
+    urgency: choice('How quickly must someone act at the time this message was written, given `subject` and `body`? Judge consequences of waiting and whether the problem is still active, independently of priority and tone. Do not use today as the clock for historical messages. A keyword flag is not an urgency judgment; absence of an English keyword does not mean absence of urgency.', stage === 'backfill' ? HISTORICAL_URGENCY_CRITERIA : URGENCY_CRITERIA),
   };
 }
 
 export const TICKET_QUESTIONS_VERSION = '1.1.3';
 export const DECISION_STATE_VERSION = '1.1.0';
+export function ticketQuestionsVersion(stage?: EmailMessage['stage']) {
+  return stage === 'backfill' ? `${TICKET_QUESTIONS_VERSION}:historical-attention:${HISTORICAL_ATTENTION_VERSION}` : TICKET_QUESTIONS_VERSION;
+}
 
 export interface JevChoiceAnswer {
   type: 'choice';
