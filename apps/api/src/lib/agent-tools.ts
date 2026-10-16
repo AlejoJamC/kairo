@@ -155,6 +155,39 @@ export function sharedAgentTools(scope: AgentToolScope, deps: AgentToolDeps = {}
       },
     },
     {
+      name: 'list_account_tickets', description: 'List the account\'s tickets, newest first: subject, opening text, classification and status. Optionally only those of one pipeline tier.',
+      inputSchema: z.object({ tier: z.number().int().min(1).max(3).optional(), limit: z.number().int().min(1).max(200).optional() }).strict(),
+      execute: async (input) => {
+        const { tier, limit } = input as { tier?: number; limit?: number };
+        let query = db.from('tickets').select('id, subject, body_plain, ticket_type, priority, category, status, classification_tier, created_at')
+          .eq('account_id', scope.accountId);
+        if (tier !== undefined) query = query.eq('classification_tier', tier);
+        const { data, error } = await query.order('created_at', { ascending: false }).limit(limit ?? 50);
+        if (error) return failed(['tickets']);
+        return read({ tickets: (data ?? []).map((row) => ({ id: row.id, subject: row.subject, opening: row.body_plain?.slice(0, 400) ?? null,
+          type: row.ticket_type, priority: row.priority, category: row.category, status: row.status, tier: row.classification_tier })) });
+      },
+    },
+    {
+      name: 'group_similar_tickets', description: 'Group the given tickets by the similarity of their stored embeddings. Returns groups of two or more tickets and the ones left alone.',
+      inputSchema: z.object({ ticketIds: z.array(z.string().min(1)).min(2).max(200), minSimilarity: z.number().min(0.5).max(0.99).optional() }).strict(),
+      execute: async (input) => {
+        const { ticketIds, minSimilarity } = input as { ticketIds: string[]; minSimilarity?: number };
+        const { data, error } = await db.from('tickets').select('id, embedding').eq('account_id', scope.accountId).in('id', ticketIds);
+        if (error) return failed(['ticket_embeddings']);
+        const vectors = new Map<string, number[]>();
+        for (const row of data ?? []) {
+          const vector = typeof row.embedding === 'string' ? JSON.parse(row.embedding) as number[] : row.embedding as number[] | null;
+          if (Array.isArray(vector) && vector.length) vectors.set(row.id as string, vector);
+        }
+        const groups = groupBySimilarity(vectors, minSimilarity ?? 0.8);
+        const withoutEmbedding = ticketIds.filter((id) => !vectors.has(id));
+        return read({ groups: groups.filter((group) => group.length > 1),
+          alone: groups.filter((group) => group.length === 1).flat(), withoutEmbedding },
+        withoutEmbedding.length ? ['ticket_embeddings'] : []);
+      },
+    },
+    {
       name: 'decide_classification', description: 'Request a classification proposal using the same decision service as email processing.',
       inputSchema: noArguments,
       execute: async () => {
@@ -214,6 +247,34 @@ export function sharedAgentTools(scope: AgentToolScope, deps: AgentToolDeps = {}
     },
   ];
   return Object.fromEntries(tools.map((definition) => [definition.name, definition]));
+}
+
+const cosine = (a: number[], b: number[]) => {
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) { dot += a[i]! * b[i]!; normA += a[i]! * a[i]!; normB += b[i]! * b[i]!; }
+  return normA && normB ? dot / Math.sqrt(normA * normB) : 0;
+};
+
+/**
+ * Each ticket joins the group whose centroid it most resembles, when that
+ * similarity reaches the threshold; otherwise it starts its own group. Comparing
+ * against centroids keeps one bridging ticket from chaining unrelated matters.
+ */
+export function groupBySimilarity(vectors: Map<string, number[]>, threshold: number): string[][] {
+  const groups: { ids: string[]; centroid: number[] }[] = [];
+  for (const id of [...vectors.keys()].sort()) {
+    const vector = vectors.get(id)!;
+    let best: (typeof groups)[number] | undefined;
+    let bestScore = threshold;
+    for (const group of groups) {
+      const score = cosine(vector, group.centroid);
+      if (score >= bestScore) { best = group; bestScore = score; }
+    }
+    if (!best) { groups.push({ ids: [id], centroid: [...vector] }); continue; }
+    best.centroid = best.centroid.map((value, i) => (value * best!.ids.length + vector[i]!) / (best!.ids.length + 1));
+    best.ids.push(id);
+  }
+  return groups.map((group) => group.ids);
 }
 
 /** The tools a block's contract lists, in contract order; an unknown name is a wiring defect. */

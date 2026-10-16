@@ -1,5 +1,6 @@
 import { workflow } from './routes/v1/workflow.js';
 import { decisionWorkflows } from './functions/pipeline/decision-workflows.js';
+import { businessSynthesis } from './functions/pipeline/business-synthesis.js';
 import { Hono } from "hono";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import { serve } from "inngest/hono";
@@ -75,7 +76,7 @@ app.use(
   "/api/inngest",
   serve({
     client: inngest,
-    functions: [decisionWorkflows, tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill, outboundMessageSend, gmailPoll, gmailPollCron, operationalSlaEscalationCron, classificationRetrySweep, autoApprovalRecomputeCron, knowledgeCandidate, emailKnowledge],
+    functions: [decisionWorkflows, businessSynthesis, tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill, outboundMessageSend, gmailPoll, gmailPollCron, operationalSlaEscalationCron, classificationRetrySweep, autoApprovalRecomputeCron, knowledgeCandidate, emailKnowledge],
   })
 );
 

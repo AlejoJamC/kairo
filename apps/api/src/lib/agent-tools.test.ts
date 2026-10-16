@@ -2,7 +2,7 @@ import { describe, expect, it, mock } from 'bun:test';
 // Application modules validate their environment on import; synthetic values keep this suite independent of file order.
 process.env['SUPABASE_URL'] ??= 'http://localhost:54321';
 process.env['SUPABASE_SERVICE_ROLE_KEY'] ??= 'synthetic-service-role-key';
-const { sharedAgentTools, contractTools } = await import('./agent-tools');
+const { sharedAgentTools, contractTools, groupBySimilarity } = await import('./agent-tools');
 const { inngestAgentSteps } = await import('./agent-steps');
 const { TICKET_ASSISTANT_CONTRACT } = await import('@kairo/intelligence');
 
@@ -83,6 +83,39 @@ describe('shared agent tools', () => {
       .propose_knowledge!.execute({ messageId: '00000000-0000-4000-8000-000000000001' });
     expect(result).toMatchObject({ status: 'proposed', authorization: 'human_review', needsReview: true });
     expect((propose.mock.calls[0] as unknown[])[0]).toEqual({ accountId: 'account', ticketId: 'ticket', messageId: '00000000-0000-4000-8000-000000000001', stage: 'backfill' });
+  });
+});
+
+describe('synthesis tools', () => {
+  it('lists the account tickets of one tier, newest first and bounded', async () => {
+    const { db, queries } = database({ tickets: [{ id: 't1', subject: 'Access', body_plain: 'x'.repeat(600), ticket_type: 'support',
+      priority: 'P2', category: 'account', status: 'open', classification_tier: 1, created_at: '2026-01-01T00:00:00Z' }] });
+    const result = await sharedAgentTools({ feature: 'business_synthesis', accountId: 'account' }, { db }).list_account_tickets!.execute({ tier: 1, limit: 30 });
+    expect(result.data).toEqual({ tickets: [{ id: 't1', subject: 'Access', opening: 'x'.repeat(400), type: 'support', priority: 'P2',
+      category: 'account', status: 'open', tier: 1 }] });
+    expect(queries[0]).toMatchObject({ table: 'tickets', filters: { account_id: 'account', classification_tier: 1 }, order: 'created_at', limit: 30 });
+  });
+
+  it('groups tickets by the similarity of their stored embeddings and reports the ones without one', async () => {
+    const rows = [
+      { id: 'a1', embedding: '[1,0,0]' }, { id: 'a2', embedding: '[0.95,0.05,0]' },
+      { id: 'b1', embedding: [0, 1, 0] }, { id: 'c1', embedding: null },
+    ];
+    const db = { from: () => {
+      const chain = { select: () => chain, eq: () => chain, in: () => chain,
+        then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: rows, error: null }).then(resolve) };
+      return chain;
+    } } as never;
+    const result = await sharedAgentTools({ feature: 'business_synthesis', accountId: 'account' }, { db })
+      .group_similar_tickets!.execute({ ticketIds: ['a1', 'a2', 'b1', 'c1'] });
+    expect(result).toMatchObject({ data: { groups: [['a1', 'a2']], alone: ['b1'], withoutEmbedding: ['c1'] }, missing: ['ticket_embeddings'] });
+  });
+
+  it('does not let one bridging ticket chain two unrelated groups', () => {
+    const groups = groupBySimilarity(new Map([
+      ['a', [1, 0]], ['b', [0.8, 0.6]], ['c', [0.6, 0.8]], ['d', [0, 1]],
+    ]), 0.9);
+    expect(groups).toEqual([['a'], ['b', 'c'], ['d']]);
   });
 });
 

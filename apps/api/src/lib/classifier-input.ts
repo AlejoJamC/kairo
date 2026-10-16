@@ -164,7 +164,13 @@ async function readAccountSettings(
     }
 
     const text = (data?.business_context as string | null | undefined)?.trim();
-    return { language, businessContext: text ? text : undefined };
+    if (text) return { language, businessContext: text };
+    // Without a written description, the business profile the owner approved from the synthesis is the context.
+    const { data: profile, error: profileError } = await db.from("operational_learning").select("summary")
+      .eq("account_id", accountId).eq("source_key", "business-profile").eq("status", "approved").maybeSingle();
+    if (profileError) degradations.push("accounts_unreadable");
+    const approved = (profile?.summary as string | null | undefined)?.trim();
+    return { language, businessContext: approved ? approved : undefined };
   } catch {
     console.warn('[classifier-input] Account context unavailable');
     degradations.push("accounts_unreadable");
