@@ -1,7 +1,7 @@
 import { workflowContract, workflowAnswersSchema, WORKFLOW_VERSION } from './workflow-contract';
 
 import type { DecisionProvider, DecisionResult } from '../providers/decision';
-import { buildTicketVerdictQuestions, parseTicketVerdictAnswers, TicketAnswersSchema, TICKET_QUESTIONS_VERSION, DECISION_STATE_VERSION, type TicketAnswers } from './decision-questions';
+import { buildTicketVerdictQuestions, parseTicketVerdictAnswers, TicketAnswersSchema, ticketQuestionsVersion, DECISION_STATE_VERSION, type TicketAnswers } from './decision-questions';
 import { withGeneration, type LangfuseContext } from '../harness/generation';
 import { deriveClassification, provenanceOf, EXTERNAL_FALLBACK_FACTS, DERIVATION_VERSION } from './derive';
 import type { ClassificationResult, ModelVerdictResult } from './schema';
@@ -52,7 +52,7 @@ export async function classifyEmailWithDecision(
       name: 'email-classification-decision',
       model: provider.model,
       input: state,
-      metadata: { provider: provider.provider, stateVersion: DECISION_STATE_VERSION, questionsVersion: TICKET_QUESTIONS_VERSION, compositionVersion: DERIVATION_VERSION },
+      metadata: { provider: provider.provider, stateVersion: DECISION_STATE_VERSION, questionsVersion: ticketQuestionsVersion(message.stage), compositionVersion: DERIVATION_VERSION },
       context: { ...(ticketId ? { ticketId } : {}), ...(accountId ? { accountId } : {}) },
     },
     async (generation) => {
@@ -77,7 +77,7 @@ export async function classifyEmailWithDecision(
         decision: {
           answers: decision.value,
           stateVersion: DECISION_STATE_VERSION,
-          questionsVersion: TICKET_QUESTIONS_VERSION,
+          questionsVersion: ticketQuestionsVersion(message.stage),
           compositionVersion: DERIVATION_VERSION,
           stage: message.stage ?? 'manual',
           evidence: message.evidence ?? { bodySource: 'stored' as const, truncated: false, missing: ['body_provenance'] },

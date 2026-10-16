@@ -15,7 +15,7 @@ function answer(value: string) {
     : ['consistent', 'conflict', 'unknown'];
   return { type: 'choice' as const, choice: value, confidence: 1, probabilities: Object.fromEntries(options.map(option => [option, option === value ? 1 : 0])) };
 }
-function setup(options: { existing?: boolean; linked?: boolean; direction?: string; insertFails?: boolean } = {}) {
+function setup(options: { existing?: boolean; linked?: boolean; direction?: string; insertFails?: boolean; processingTier?: number; noHistory?: boolean } = {}) {
   const inserted: unknown[] = [];
   const db = { rpc: async (name: string, args: { p_articles: unknown[]; p_learnings: unknown[] }) => {
     if (name !== 'save_email_knowledge') return { data: [], error: null };
@@ -35,9 +35,9 @@ function setup(options: { existing?: boolean; linked?: boolean; direction?: stri
         return chain;
       },
     };
-    if (table === 'tickets') result = { data: { id: input.ticketId, conversation_id: 'conversation-1' }, error: null };
+    if (table === 'tickets') result = { data: { id: input.ticketId, conversation_id: options.noHistory ? null : 'conversation-1' }, error: null };
     if (table === 'ticket_messages') result = { data: options.linked === false ? null : { message_id: input.messageId }, error: null };
-    if (table === 'messages') result = { data: { id: input.messageId, body_plain: source, direction: options.direction ?? 'inbound' }, error: null };
+    if (table === 'messages') result = { data: { id: input.messageId, body_plain: source, direction: options.direction ?? 'inbound', processing_tier: options.processingTier }, error: null };
     if (table === 'operational_learning') result = { data: [], error: null };
     if (table === 'kb_articles') result = { data: options.existing ? [{ id: 'existing-1' }] : [], error: null };
     return chain;
@@ -53,6 +53,42 @@ function setup(options: { existing?: boolean; linked?: boolean; direction?: stri
 }
 
 describe('incoming email knowledge workflow', () => {
+  it('historical extraction selects source references without requiring history or approved business context', async () => {
+    const { deps, inserted, validate } = setup({ processingTier: 2, noHistory: true });
+    deps.context = async () => ({ language: 'en', businessContext: undefined });
+    deps.extract = async state => {
+      expect(state.fragments?.[0]?.text).toBe(source);
+      expect(state.approvedKnowledge).toEqual([]);
+      const { evidence: _evidence, ...fields } = proposal;
+      return { value: { proposals: [{ ...fields, evidenceIds: ['e1'] }] }, model: 'text-model', callId: null };
+    };
+    const result = await proposeEmailKnowledge({ ...input, stage: 'backfill' }, deps);
+    expect(result).toMatchObject({ status: 'proposed', version: '1.1.0:source-references:1.0.1' });
+    expect(validate.mock.calls[0]?.[0]).toMatchObject({ proposals: [proposal] });
+    expect(inserted[0]).toMatchObject({ is_published: false });
+  });
+  it('unknown historical references cannot reach semantic validation or persistence', async () => {
+    const { deps, inserted, validate } = setup({ processingTier: 2 });
+    deps.extract = async () => ({ value: { proposals: [{ kind: 'article', title: 'Access', content: 'A proposed procedure.', evidenceIds: ['e99'] }] }, model: 'text-model', callId: null });
+    expect(await proposeEmailKnowledge({ ...input, stage: 'backfill' }, deps)).toMatchObject({
+      status: 'skipped', proposals: [{ status: 'blocked', reasons: ['invalid_source_reference'] }],
+    });
+    expect(validate).not.toHaveBeenCalled();
+    expect(inserted).toEqual([]);
+  });
+  it('an invalid reference blocks its proposal without losing other grounded proposals in the same response', async () => {
+    const { deps, inserted, validate } = setup({ processingTier: 2, noHistory: true });
+    const { evidence: _evidence, ...fields } = proposal;
+    deps.extract = async () => ({ value: { proposals: [
+      { ...fields, evidenceIds: ['e1-e3'] }, { ...fields, evidenceIds: ['e1'] },
+    ] }, model: 'text-model', callId: null });
+    const result = await proposeEmailKnowledge({ ...input, stage: 'backfill' }, deps);
+    expect(result).toMatchObject({ status: 'proposed', proposals: [
+      { status: 'blocked', reasons: ['invalid_source_reference'] }, { status: 'pending_review', proposal },
+    ] });
+    expect(inserted).toHaveLength(1);
+    expect(validate.mock.calls[0]?.[0]).toMatchObject({ proposals: [proposal] });
+  });
   it('feeds published knowledge back into classification without hiding incomplete evidence', async () => {
     const message = { subject: 'Return request', from: 'client@outside.com', body: source,
       businessContext: 'Acme provides account support.', evidence: { bodySource: 'full' as const, truncated: false, missing: ['tenant_mailbox'] } };

@@ -14,3 +14,4 @@ export {
   type KnowledgeDecision,
   type KnowledgeDraft,
 } from './decision';
+export { BusinessSynthesisSchema, BUSINESS_SYNTHESIS_CONTRACT, type BusinessSynthesis } from './business-synthesis';

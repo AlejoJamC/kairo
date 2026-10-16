@@ -1,4 +1,5 @@
 import { ProviderConfigurationError } from '../providers/base';
+import { currentModelRouting } from './model-context';
 
 export const MODEL_ROLES = ['classification', 'reply', 'knowledge_decision', 'knowledge_draft', 'evidence_analysis', 'validation', 'assistant', 'embedding'] as const;
 export type ModelRole = (typeof MODEL_ROLES)[number];
@@ -21,13 +22,23 @@ const ROLE_VARIABLES: Record<ModelRole, string> = {
   embedding: 'AI_GATEWAY_EMBEDDING_MODEL',
 };
 
-export function usesDecisionClassification(env: Record<string, string | undefined> = process.env): boolean {
+export function usesDecisionClassification(env?: Record<string, string | undefined>): boolean {
+  if (env === undefined) {
+    const scoped = currentModelRouting()?.routes.classification;
+    if (scoped) return scoped.capability === 'decision';
+  }
+  env ??= process.env;
   const mode = env['CLASSIFICATION_MODE'];
   if (mode && !['language', 'decision'].includes(mode)) throw new ProviderConfigurationError('Invalid CLASSIFICATION_MODE');
   return mode === 'decision' || (!mode && env['INTELLIGENCE_PROVIDER'] === 'jev');
 }
 
-export function resolveModelRoute(role: ModelRole, env: Record<string, string | undefined> = process.env): ModelRoute {
+export function resolveModelRoute(role: ModelRole, env?: Record<string, string | undefined>): ModelRoute {
+  if (env === undefined) {
+    const scoped = currentModelRouting()?.routes[role];
+    if (scoped) return scoped;
+  }
+  env ??= process.env;
   const capability: ModelCapability = role === 'embedding' ? 'embedding'
     : role === 'knowledge_decision' || role === 'validation' || (role === 'classification' && usesDecisionClassification(env)) ? 'decision' : 'language';
   const explicit = env[ROLE_VARIABLES[role]];

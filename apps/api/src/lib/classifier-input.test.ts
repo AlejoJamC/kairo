@@ -38,7 +38,10 @@ const selectMock = mock((_columns: string) => ({
   // accounts: .eq(...).maybeSingle()   support_channels: .eq(...).eq(...) awaited
   eq: () => ({ maybeSingle: maybeSingleMock, eq: channelsResult }),
 }));
-const fromMock = mock((_table: string) => ({ select: selectMock }));
+// The business profile the owner approved, read only when no description is written.
+let storedProfile: string | null = null;
+const profileChain = { eq: () => profileChain, maybeSingle: () => Promise.resolve({ data: storedProfile === null ? null : { summary: storedProfile }, error: null }) };
+const fromMock = mock((table: string) => table === "operational_learning" ? { select: () => profileChain } : { select: selectMock });
 mock.module("./supabase.js", () => ({ supabase: { from: fromMock } }));
 
 const { loadPreviousCase, buildClassifierBody, resolveClassifierContext, CLASSIFIER_BODY_RULES } =
@@ -47,6 +50,7 @@ const { loadPreviousCase, buildClassifierBody, resolveClassifierContext, CLASSIF
 beforeEach(() => {
   mailbox = "support@acme.com";
   storedContext = null;
+  storedProfile = null;
   storedLanguage = "es";
   storedChannels = [];
   storedError = null;
@@ -250,5 +254,26 @@ describe('previous case context', () => {
       if(error) await expect(result).rejects.toThrow('Previous conversation unavailable');
       else expect(await result).toEqual({status:'new_case'});
     }
+  });
+});
+
+describe("resolveClassifierContext — approved business profile", () => {
+  it("uses the approved profile when no description is written", async () => {
+    storedProfile = "Acme delivers support software to small companies.";
+    const ctx = await resolveClassifierContext("backfill", "acc-1");
+    expect(ctx.businessContext).toBe("Acme delivers support software to small companies.");
+  });
+
+  it("keeps a written description over the profile", async () => {
+    storedContext = "Acme Logistics moves freight for pharmacies.";
+    storedProfile = "Acme delivers support software to small companies.";
+    const ctx = await resolveClassifierContext("backfill", "acc-1");
+    expect(ctx.businessContext).toBe("Acme Logistics moves freight for pharmacies.");
+  });
+
+  it("never carries the profile into onboarding", async () => {
+    storedProfile = "Acme delivers support software to small companies.";
+    const ctx = await resolveClassifierContext("onboarding", "acc-1");
+    expect("businessContext" in ctx).toBe(false);
   });
 });

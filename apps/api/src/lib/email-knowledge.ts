@@ -4,6 +4,8 @@ import {
   EMAIL_KNOWLEDGE_VERSION, buildEmailKnowledgeQuestions, EmailKnowledgeCandidateSchema,
   EmailKnowledgeDraftSchema, buildEmailKnowledgeValidationQuestions, EmailKnowledgeValidationSchema,
   knowledgeReviewReasons, createDecisionProvider, runDecisionFeature, runLlmFeature, ProviderError,
+  SOURCE_REFERENCE_VERSION, sourceFragments, ReferencedKnowledgeDraftSchema, resolveSourceReferences,
+  type SourceFragment, type ReferencedKnowledgeDraft,
   type EmailKnowledgeProposal, type EmailKnowledgeValidation, type LlmCallLogger, type PromptLang,
 } from '@kairo/intelligence';
 import { resolveTenantSettings, type AccountSettings } from './classifier-input.js';
@@ -19,7 +21,7 @@ export interface EmailKnowledgeDeps {
   retrieve?: typeof retrieveTicketContext;
   retrieveApproved?: typeof approvedWorkflowKnowledge;
   candidate?: (state: unknown) => Promise<Judgment<ReturnType<typeof EmailKnowledgeCandidateSchema.parse>>>;
-  extract?: (state: { source: string; businessContext?: string; approvedKnowledge: Pick<TicketContext['kbArticles'][number], 'id' | 'title' | 'content'>[]; lang: PromptLang }) => Promise<Judgment<{ proposals: EmailKnowledgeProposal[] }>>;
+  extract?: (state: { source: string; fragments?: SourceFragment[]; businessContext?: string; approvedKnowledge: Pick<TicketContext['kbArticles'][number], 'id' | 'title' | 'content'>[]; lang: PromptLang }) => Promise<Judgment<{ proposals: EmailKnowledgeProposal[] } | ReferencedKnowledgeDraft>>;
   validate?: (state: unknown) => Promise<Judgment<EmailKnowledgeValidation[]>>;
 }
 
@@ -37,7 +39,7 @@ export async function proposeEmailKnowledge(
     .eq('ticket_id', input.ticketId).eq('message_id', input.messageId).maybeSingle();
   if (linkError) throw new ProviderError('Knowledge source linkage lookup failed', true);
   if (!link) return { status: 'skipped' as const, reason: 'source_not_linked' };
-  const { data: message, error: sourceError } = await db.from('messages').select('id, body_plain, direction')
+  const { data: message, error: sourceError } = await db.from('messages').select('id, body_plain, direction, processing_tier')
     .eq('account_id', input.accountId).eq('id', input.messageId).maybeSingle();
   if (sourceError) throw new ProviderError('Knowledge source lookup failed', true);
   if (!message || message.direction !== 'inbound' || !message.body_plain?.trim()) {
@@ -57,12 +59,14 @@ export async function proposeEmailKnowledge(
   if (historyError) throw new ProviderError('Knowledge conversation lookup failed', true);
   const fullText = input.stage === 'backfill' ? [...(history ?? [])].reverse().map(row => `[${row.direction}] ${row.body_plain ?? ''}`).join('\n\n') || message.body_plain : message.body_plain as string;
   const source = { text: fullText.slice(0, 20_000), truncated: fullText.length > 20_000, author: 'unverified_sender' };
-  const state = { contract: input.stage === 'backfill' ? 'historical_learning' : 'incoming_email_decision', stateVersion: EMAIL_KNOWLEDGE_VERSION, businessContext: settings.businessContext ?? null, source };
+  const fragments = input.stage === 'backfill' && message.processing_tier === 2 ? sourceFragments(source.text) : undefined;
+  const version = fragments ? `${EMAIL_KNOWLEDGE_VERSION}:source-references:${SOURCE_REFERENCE_VERSION}` : EMAIL_KNOWLEDGE_VERSION;
+  const state = { contract: input.stage === 'backfill' ? 'historical_learning' : 'incoming_email_decision', stateVersion: version, businessContext: settings.businessContext ?? null, source };
   const logger = deps.logger ?? recordLlmCall;
   async function decide<T>(feature: string, value: unknown, questions: unknown): Promise<Judgment<T>> {
     const result = await runDecisionFeature<T>({
       feature, state: value, questions, provider: createDecisionProvider('gateway', feature === 'email_knowledge_validation' ? 'validation' : 'knowledge_decision'),
-      context: input, logger, versions: { state: EMAIL_KNOWLEDGE_VERSION, questions: EMAIL_KNOWLEDGE_VERSION },
+      context: input, logger, versions: { state: version, questions: EMAIL_KNOWLEDGE_VERSION },
     });
     return { value: result.data.value, model: result.data.modelVersion, callId: result.llmCallId };
   }
@@ -78,16 +82,18 @@ export async function proposeEmailKnowledge(
   const approvedKnowledge = [...knowledgeReferences(operational).map(ref => ({ id: ref.id, title: ref.kind, content: ref.content })), ...knowledge.kbArticles.map(article => ({ id: article.id, title: article.title, content: article.content.slice(0, 2000) }))];
 
   const extracted = await (deps.extract ?? (async value => {
-    const result = await runLlmFeature({
-      feature: 'email_knowledge_extraction', promptId: input.stage === 'backfill' ? 'historical-knowledge' : 'email-knowledge', modelRole: 'knowledge_draft',
-      lang: value.lang, vars: { source: value.source, approved_knowledge: JSON.stringify(value.approvedKnowledge), business_context: value.businessContext ?? (value.lang === 'es' ? '(no disponible)' : '(not available)') },
+    const result = await runLlmFeature<{ proposals: EmailKnowledgeProposal[] } | ReferencedKnowledgeDraft>({
+      feature: 'email_knowledge_extraction', promptId: value.fragments ? 'historical-knowledge-references' : input.stage === 'backfill' ? 'historical-knowledge' : 'email-knowledge', modelRole: 'knowledge_draft',
+      lang: value.lang, vars: { source: value.fragments ? JSON.stringify(value.fragments) : value.source, approved_knowledge: JSON.stringify(value.approvedKnowledge), business_context: value.businessContext ?? (value.lang === 'es' ? '(no disponible)' : '(not available)') },
       // Sized to the schema's maximum answer (five proposals with full content), not to a typical one.
-      schema: EmailKnowledgeDraftSchema, options: { maxTokens: 8192, temperature: 0 }, context: input, logger,
+      schema: value.fragments ? ReferencedKnowledgeDraftSchema : EmailKnowledgeDraftSchema, options: { maxTokens: 8192, temperature: 0 }, context: input, logger,
     });
     return { value: result.data, model: result.model, callId: result.llmCallId };
-  }))({ source: source.text, businessContext: settings.businessContext, approvedKnowledge, lang: settings.language });
-  const proposals = EmailKnowledgeDraftSchema.parse(extracted.value).proposals;
+  }))({ source: source.text, fragments, businessContext: settings.businessContext, approvedKnowledge, lang: settings.language });
+  const resolved = fragments ? resolveSourceReferences(ReferencedKnowledgeDraftSchema.parse(extracted.value), fragments) : null;
+  const proposals = resolved?.proposals ?? EmailKnowledgeDraftSchema.parse(extracted.value).proposals;
   const results = [];
+  results.push(...(resolved?.blocked ?? []));
   const rows = [];
   const learningRows = [];
   const grounded = proposals.filter(proposal => proposal.evidence.every(quote => source.text.includes(quote)));
@@ -127,7 +133,7 @@ export async function proposeEmailKnowledge(
   if (storeError) throw new ProviderError('Knowledge proposal persistence failed', true);
   const articleIds = (stored ?? []) as string[];
   const articlesByIndex = new Map(rows.flatMap((row, index) => articleIds[index] ? [[Number(row.source_key.split(':').at(-1)), articleIds[index]!] as const] : []));
-  return { status: rows.length || learningRows.length ? 'proposed' as const : 'skipped' as const, reason: rows.length || learningRows.length ? null : 'no_contribution', version: EMAIL_KNOWLEDGE_VERSION, candidate,
+  return { status: rows.length || learningRows.length ? 'proposed' as const : 'skipped' as const, reason: rows.length || learningRows.length ? null : 'no_contribution', version, candidate,
     extraction: { model: extracted.model, callId: extracted.callId }, articleIds,
     proposals: results.map(result => result.status === 'pending_review'
       ? { ...result, articleId: articlesByIndex.get(result.proposalIndex) ?? null } : result) };

@@ -759,5 +759,6 @@ export const tier1FastPath = inngest.createFunction(
     });
     await step.run('enqueue-sample-learning', () => enqueueOnboardingLearning(resolvedAccountId, result.learningSources ?? [], supabase));
     await step.sendEvent('trigger-sample-learning', { name: 'decisions/work.requested', data: {} });
+    await step.sendEvent('trigger-business-synthesis', { name: 'knowledge/synthesis.requested', data: { accountId: resolvedAccountId, scope: 'onboarding' } });
   }
 );

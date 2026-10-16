@@ -209,7 +209,18 @@ async function classifyWindow(
   daysTo: number
 ): Promise<void> {
   const messages = await fetchGmailRange(accessToken, daysFrom, daysTo);
+  await processTier3Messages({ userId, accountId, classifierContext, autoApproved, channelIntegrationId, messages });
+}
 
+export async function processTier3Messages(input: {
+  userId: string;
+  accountId: string;
+  classifierContext: ClassifierContext;
+  autoApproved: TicketType[];
+  channelIntegrationId: string | null;
+  messages: GmailMessage[];
+}): Promise<void> {
+  const { userId, accountId, classifierContext, autoApproved, channelIntegrationId, messages } = input;
   if (messages.length === 0) return;
 
   // Dedup: check tickets table directly by (account_id, gmail_message_id).
@@ -651,6 +662,13 @@ async function classifyWindow(
 // Inngest function
 // ---------------------------------------------------------------------------
 
+export async function checkTier3PendingKnowledge(accountId: string): Promise<void> {
+  if (!getFlag('enable_email_knowledge')) return;
+  const { error } = await supabase.rpc('enqueue_pending_knowledge', { p_account_id: accountId,
+    p_threshold: env.EMBEDDING_SIMILARITY_THRESHOLD, p_limit: env.KNOWLEDGE_CANDIDATE_LIMIT });
+  if (error) throw new Error('Pending knowledge check failed');
+}
+
 export const tier3Deferred = inngest.createFunction(
   {
     id: "tier3-deferred",
@@ -766,9 +784,7 @@ export const tier3Deferred = inngest.createFunction(
       );
     });
     if (getFlag('enable_email_knowledge')) await step.run('check-pending-knowledge', async () => {
-      const { error } = await supabase.rpc('enqueue_pending_knowledge', { p_account_id: accountId,
-        p_threshold: env.EMBEDDING_SIMILARITY_THRESHOLD, p_limit: env.KNOWLEDGE_CANDIDATE_LIMIT });
-      if (error) throw new Error('Pending knowledge check failed');
+      await checkTier3PendingKnowledge(accountId);
     });
   }
 );

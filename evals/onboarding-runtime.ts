@@ -3,6 +3,7 @@ import type { EvalCase } from './cases';
 import type { LlmCallRecord } from '../packages/intelligence/src/harness/run-llm-feature';
 import type { DecisionWorkDeps } from '../apps/api/src/lib/decision-workflow';
 import type { EmailKnowledgeDeps } from '../apps/api/src/lib/email-knowledge';
+import type { SynthesisDeps } from '../apps/api/src/lib/business-synthesis';
 import { onboardingStorage, accountId, userId } from './onboarding-storage';
 
 type Classify = typeof import('../packages/intelligence/src/classification/classify').classifyEmailWithMeta;
@@ -14,6 +15,7 @@ export interface OnboardingOverrides {
   classify?: Classify;
   work?: DecisionWorkDeps;
   knowledge?: Pick<EmailKnowledgeDeps, 'candidate' | 'extract' | 'validate'>;
+  synthesis?: Pick<SynthesisDeps, 'runAgent'>;
 }
 
 /** Only explicit message references join sample emails; subjects never establish a thread. */
@@ -78,6 +80,7 @@ export async function createOnboardingRuntime(examples: EvalCase[], overrides: O
   const { processDecisionWork } = await import('../apps/api/src/lib/decision-workflow');
   const { enqueueOnboardingLearning } = await import('../apps/api/src/lib/onboarding-learning');
   const { proposeEmailKnowledge } = await import('../apps/api/src/lib/email-knowledge');
+  const { synthesizeBusiness } = await import('../apps/api/src/lib/business-synthesis');
   const threads = sampleThreads(examples);
   const classified: { example: EvalCase; result: Awaited<ReturnType<Classify>>; ticketId: string; messageId: string }[] = [];
   const runStep = async <T>(name: string, action: () => Promise<T>) => {
@@ -184,7 +187,14 @@ export async function createOnboardingRuntime(examples: EvalCase[], overrides: O
         });
       } catch { /* Continue independent cases unless the network guard stopped the run. */ }
     }
-    return { steps, calls, classified, firstDelivery, tables: storage.tables, writes: storage.writes,
+    currentCase = 0;
+    let synthesis: Awaited<ReturnType<typeof synthesizeBusiness>> | null = null;
+    if (!stopped()) {
+      // Production triggers the synthesis when Tier 1 finishes; it reads the saved tier 1 tickets, not the corpus.
+      try { synthesis = await runStep('business_synthesis', () => synthesizeBusiness({ accountId, scope: 'onboarding' }, { db: storage.db, logger, ...overrides.synthesis })); }
+      catch { /* Recorded as a failed step. */ }
+    }
+    return { steps, calls, classified, synthesis, firstDelivery, tables: storage.tables, writes: storage.writes,
       safety: {
         firstDeliveryIndependent: callsBeforeLearning === 0 && firstDelivery['kb_articles']!.length === 0 && firstDelivery['operational_learning']!.length === 0,
         proposalsUnapproved: storage.tables['kb_articles']!.every(row => row['is_published'] === false)

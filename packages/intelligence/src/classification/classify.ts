@@ -6,7 +6,7 @@ import { ModelVerdictSchema, type ClassificationResult, type ModelVerdictResult 
 import { deriveClassification, provenanceOf, EXTERNAL_FALLBACK_FACTS } from './derive';
 import { buildPrompt, getPromptVersion, type PromptLang, DEFAULT_LANG } from './prompt';
 import { generationResultMetadata, generationStartMetadata } from './telemetry';
-import { TICKET_QUESTIONS_VERSION, buildTicketVerdictQuestions } from './decision-questions';
+import { ticketQuestionsVersion, buildTicketVerdictQuestions } from './decision-questions';
 import { classifyEmailWithDecision, stateFromMessage } from './classify-with-decision';
 import { z } from 'zod';
 import type { EmailMessage } from './types';
@@ -87,7 +87,7 @@ async function classifyEmailWithDecisionAsMeta(
       tokensPerSecond: null,
     },
     prompt: JSON.stringify({ state: stateFromMessage(message), questions: buildTicketVerdictQuestions(message.stage) }),
-    promptVersion: TICKET_QUESTIONS_VERSION,
+    promptVersion: ticketQuestionsVersion(message.stage),
   };
 }
 

@@ -5,20 +5,26 @@ export const accountId = 'acme-account';
 export const userId = 'acme-owner';
 
 /** Stateful service-test adapter. SQL triggers, transactions and RLS are not simulated. */
-export function onboardingStorage(language: 'es' | 'en') {
+export function onboardingStorage(language: 'es' | 'en', options: {
+  afterInsert?: (table: string, row: Row, tables: Record<string, Row[]>) => void;
+} = {}) {
   const tables: Record<string, Row[]> = Object.fromEntries([
     'tickets', 'messages', 'conversations', 'ticket_messages', 'ticket_decision_history',
     'ticket_state_history', 'clients', 'draft_contact', 'ticket_priority_sla_config',
     'tenant_sla_rules', 'kb_articles', 'operational_learning', 'current_knowledge', 'ticket_proposals', 'decision_work_items',
+    'channel_integrations', 'ticket_classification_history', 'ticket_activity_log', 'ticket_type_auto_approval',
   ].map(name => [name, []]));
   tables['accounts'] = [{ id: accountId, language, business_context: null }];
   tables['account_members'] = [{ account_id: accountId, user_id: userId, role: 'owner', status: 'active' }];
   const writes: { operation: string; value: Row }[] = [];
   let sequence = 0;
   const insert = (table: string, value: Row) => {
-    const row = { id: `acme-row-${++sequence}`, ...value };
+    let generated: string;
+    do { generated = `acme-row-${++sequence}`; } while (Object.values(tables).some(rows => rows.some(row => row['id'] === generated)));
+    const row = { id: generated, ...value };
     tables[table]!.push(row);
     writes.push({ operation: table, value: structuredClone(row) });
+    options.afterInsert?.(table, row, tables);
     return row;
   };
   const adapter = {
@@ -26,6 +32,12 @@ export function onboardingStorage(language: 'es' | 'en') {
       if (!(table in tables)) throw new Error('Unsupported evaluation table');
       let rows = [...tables[table]!];
       let error: { code: string; message: string } | null = null;
+      let patch: Row | undefined;
+      const apply = () => {
+        if (!patch) return;
+        for (const row of rows) { Object.assign(row, patch); writes.push({ operation: table, value: structuredClone(row) }); }
+        patch = undefined;
+      };
       const query = {
         select() { return query; },
         eq(key: string, value: unknown) { rows = rows.filter(row => row[key] === value); return query; },
@@ -36,6 +48,7 @@ export function onboardingStorage(language: 'es' | 'en') {
         like(key: string, prefix: string) { rows = rows.filter(row => String(row[key]).startsWith(prefix.replace(/%$/, ''))); return query; },
         order(key: string, options: { ascending: boolean }) { rows.sort((a, b) => String(a[key]).localeCompare(String(b[key])) * (options.ascending ? 1 : -1)); return query; },
         limit(size: number) { rows = rows.slice(0, size); return query; },
+        update(value: Row) { patch = value; return query; },
         insert(value: Row) {
           const keys = table === 'conversations' ? ['account_id', 'channel_integration_id', 'external_thread_id']
             : table === 'tickets' ? ['account_id', 'conversation_id'] : ['id'];
@@ -56,10 +69,10 @@ export function onboardingStorage(language: 'es' | 'en') {
           else rows = [insert(table, value)];
           return query;
         },
-        async single() { return { data: rows[0] ?? null, error }; },
-        async maybeSingle() { return { data: rows[0] ?? null, error }; },
+        async single() { apply(); return { data: rows[0] ?? null, error }; },
+        async maybeSingle() { apply(); return { data: rows[0] ?? null, error }; },
         then<T>(done: (value: { data: Row[]; error: typeof error }) => T | PromiseLike<T>) {
-          return Promise.resolve({ data: rows, error }).then(done);
+          apply(); return Promise.resolve({ data: rows, error }).then(done);
         },
       };
       return query;

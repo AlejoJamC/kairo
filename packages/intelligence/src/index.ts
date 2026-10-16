@@ -130,6 +130,10 @@ export {
 } from './knowledge';
 
 export { runAgentFeature, OperationResultSchema, type OperationResult, type AgentTool } from './harness/run-agent-feature';
+export { runAgent, inlineAgentSteps, type AgentContract, type AgentRunRequest, type AgentStepRunner } from './harness/run-agent';
+export { TICKET_ASSISTANT_CONTRACT } from './harness/run-agent-feature';
+export { BusinessSynthesisSchema, BUSINESS_SYNTHESIS_CONTRACT, type BusinessSynthesis } from './knowledge/business-synthesis';
+export { askJudgments, JudgmentRequestSchema, type JudgmentRequest } from './harness/ask-judgments';
 export { GatewayCompletionProvider } from './providers/gateway/completion';
 export { GatewayEmbeddingProvider } from './providers/gateway/embedding';
 
@@ -144,6 +148,8 @@ export {
   EmailKnowledgeValidationSchema, knowledgeReviewReasons,
   type EmailKnowledgeProposal, type EmailKnowledgeValidation,
 } from './knowledge/email-knowledge';
+export { SOURCE_REFERENCE_VERSION, sourceFragments, ReferencedKnowledgeDraftSchema, resolveSourceReferences,
+  type SourceFragment, type ReferencedKnowledgeDraft } from './knowledge/source-fragments';
 
 export { knowledgeImpactQuestions, workflowContract, workflowQuestions, workflowLanguageSchema, workflowAnswersSchema, attentionRecommendation, WORKFLOW_VERSION } from './classification/workflow-contract';
 

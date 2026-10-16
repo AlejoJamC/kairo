@@ -9,6 +9,7 @@ import { guardNetwork } from './network';
 import type { PipelineStep } from './onboarding-runtime';
 import type { Measurement } from './metrics';
 import { summarize, reviewTemplate, type Review } from './metrics';
+import { BUSINESS_SYNTHESIS_CONTRACT } from '../packages/intelligence/src/knowledge/business-synthesis';
 
 export const onboardingSteps = [
   { step: 'routing', executor: 'extractMailFacts + resolveRoute', condition: 'each sampled email' },
@@ -29,6 +30,7 @@ export const onboardingSteps = [
   { step: 'knowledge_proposals', executor: 'save_email_knowledge', condition: 'new articles/facts/rules remain pending human review' },
   { step: 'decision_history', executor: 'recordWorkflowResult', condition: 'learning completes; conclusions and missing evidence are retained' },
   { step: 'idempotency', executor: 'processDecisionWork replay', condition: 'completed work must produce no additional model calls or writes' },
+  { step: 'business_synthesis', executor: 'synthesizeBusiness', role: 'knowledge_draft', condition: 'after sample learning; reads the saved tier 1 tickets and proposes the business profile and recurring themes for review' },
 ] as const;
 
 type OnboardingDeps = {
@@ -62,12 +64,15 @@ export async function onboardingMain(args: string[], deps: OnboardingDeps = {}) 
     routes = [...classification.routes, ...(['evidence_analysis', 'knowledge_decision', 'knowledge_draft', 'validation'] as const).map(role => resolveModelRoute(role))];
   } catch { throw new OnboardingEvaluationError('EVAL_MODEL_CONFIGURATION'); }
   const maximumCallsPerEmail = classification.classificationCallsPerEmail + 5;
-  const requestLimit = rawBudget === undefined ? sampleSize * maximumCallsPerEmail : Number(rawBudget);
+  // One synthesis per account: each agent step is a model call and may ask one set of typed judgments.
+  const synthesisCalls = BUSINESS_SYNTHESIS_CONTRACT.maxSteps * 2;
+  const requestLimit = rawBudget === undefined ? sampleSize * maximumCallsPerEmail + synthesisCalls : Number(rawBudget);
   if (!Number.isSafeInteger(requestLimit) || requestLimit < 1) throw new Error('Positive request limit required');
   const plan = { dataset, sampleSize, sampling: 'random without replacement', routes, ensemble: classification.ensemble,
     callsPerAdmittedEmail: { classification: classification.classificationCallsPerEmail, evidence: 1, historicalDecision: 1,
       knowledgeCandidate: 1, draftIfCandidate: 1, validationIfGrounded: 1, maximum: maximumCallsPerEmail },
-    maximumLogicalCalls: sampleSize * maximumCallsPerEmail, requestLimit, steps: onboardingSteps,
+    callsPerAccount: { synthesis: synthesisCalls },
+    maximumLogicalCalls: sampleSize * maximumCallsPerEmail + synthesisCalls, requestLimit, steps: onboardingSteps,
     boundary: 'production services with isolated storage and empty approved-knowledge retrieval; no Gmail, SQL triggers, Inngest or human approval',
     productionDispatch: 'Tier 1 -> enqueueOnboardingLearning -> decision_work_items -> decisionWorkflows; worker honors enable_email_knowledge' };
   if (command === 'plan') return { ...plan, network: false };
@@ -145,6 +150,7 @@ export async function onboardingMain(args: string[], deps: OnboardingDeps = {}) 
     const report = { run: runId, sampled: sample.cases.length, tickets: result.tables['tickets']!.length,
       learningCompleted, articles: result.tables['kb_articles']!.length, learnings: result.tables['operational_learning']!.length,
       requests: network.requests.length, failedSteps: failed, stopped: network.stopped, safety: result.safety,
+      synthesis: synthesisReport(result.tables),
       warningCount: sdkWarnings.count(),
       productionDispatch: plan.productionDispatch, infrastructureVerified: false, knowledgeQuality: 'pending human review',
       classification: summarize(rows), costUsd: network.requests.every(row => row.costUsd !== null)
@@ -169,6 +175,16 @@ export async function onboardingMain(args: string[], deps: OnboardingDeps = {}) 
     await writePrivate(resolve(dir, 'diagnostics.json'), diagnostics);
     await writePrivate(resolve(dir, 'warnings.json'), sdkWarnings.events);
   }
+}
+
+/** What the owner receives from the synthesis, and how much of the sample its themes explain. */
+export function synthesisReport(tables: Record<string, Record<string, unknown>[]>) {
+  const proposals = (tables['operational_learning'] ?? []).filter(row => row['source_key'] === 'business-profile' || String(row['source_key']).startsWith('theme:'));
+  const themes = proposals.filter(row => String(row['source_key']).startsWith('theme:'));
+  const covered = new Set(themes.flatMap(row => row['ticket_ids'] as string[]));
+  const tickets = (tables['tickets'] ?? []).length;
+  return { profile: proposals.some(row => row['source_key'] === 'business-profile'), themes: themes.length,
+    reviewItems: proposals.length, themeCoverage: tickets ? covered.size / tickets : null };
 }
 
 if (import.meta.main) {

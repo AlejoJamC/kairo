@@ -1,116 +1,60 @@
-# Prompt Management Guide
+# Intelligence prompts
 
-This directory contains LLM prompts used by the intelligence layer.
+Versioned instructions in `<prompt-id>/en.md` and `<prompt-id>/es.md`. Model selection belongs to [model roles](../src/config/model-roles.ts), independently of prompt versions.
 
-## Prompt Versioning
+## Classification contracts
 
-Prompts are business logic. They are versioned in git and reviewed via PR.
+[buildPrompt](../src/classification/prompt.ts) combines `email-classification/` with the contract selected by the message stage:
 
-### Version Format
+- `onboarding_triage/`: initial inbox reading, available evidence and missing information.
+- `historical_learning/`: historical message classification for ingestion; conversation learning runs separately.
+- `incoming_email_decision/`: classification of new mail with available case context.
+- `message_triage/`: manual or unspecified-stage classification without assuming an incoming-event context.
 
-`X.Y.Z`, and **it is not semver.** Read the rule below, not your instincts.
+Message classification asks only message-level questions. Conversation-level outcome, learning and next-action questions are selected separately by [workflow-contract.ts](../src/classification/workflow-contract.ts).
 
-**X is frozen at 1.** It was bumped to 2.0.0 and then 3.0.0 during development
-and reset to 1.2.0 in `1c0a2e8`; that reset is the correct state, not a mistake
-to undo. A prompt edit never touches the first number.
+Backfill classification uses shared priority and urgency criteria from [historical-attention.ts](../src/classification/historical-attention.ts). These remain independent axes; uncertainty records missing evidence instead of forcing escalation. The initial-reading rubric is unchanged.
 
-Freezing X removes a position, so the other two shift up in meaning. There are
-three kinds of change and only two positions left, so the bottom two merge:
+## Analysis and generation
 
-| Position | Role | When |
-|---|---|---|
-| **X** — `1`.y.z | frozen | never |
-| **Y** — 1.`Y`.z | **the major** | A block rewritten end to end. A field the model stops answering. A class that stops existing. Something radical, with unequivocal evidence that it is radical. |
-| **Z** — 1.y.`Z` | **medium and minor, merged** | Everything else. A new rule, a changed threshold, a redefined class, reworded prose, reordered sections — all of it. |
+- `historical-analysis/`: reconstruct conversation evidence, attempted actions and confirmed outcomes. Role: `evidence_analysis`.
+- `incoming-analysis/`: identify changes, remaining requests and affected decisions. Role: `evidence_analysis`.
+- `knowledge-impact/`: assess an approved knowledge version against a ticket. Role: `evidence_analysis`.
+- `incoming-decision/`: structured incoming-case judgments when classification uses a language model. Role: `classification`.
+- `email-knowledge/`: propose reusable business facts, rules, exceptions and articles from available evidence. Role: `knowledge_draft`.
+- `historical-knowledge/`: historical extraction instructions composed with `email-knowledge/` by the loader. Role: `knowledge_draft`.
+- `historical-knowledge-references/`: Tier 2 proposals select source fragment IDs. Code resolves original text before semantic validation. Role: `knowledge_draft`.
+- `knowledge-draft/`: draft an article from a resolved ticket selected by the knowledge-candidate workflow. Role: `knowledge_draft`.
+- `reply-suggestion/`: draft a response from current case context and approved knowledge. Role: `reply`.
+- `ticket-assistant/`: conversational tool use for inspecting tickets and proposing actions. Role: `assistant`.
 
-**The common error is spending Y on an edit that changes some email's answer.**
-That is not the test. A rule that moves labels is still a rule, and rules live
-in Z. The question for Y is only: *did a block disappear, or get replaced
-whole?* If not, it is a Z.
+## Native decision questions
 
-Worked examples from this file's history:
+Typed decision models receive questions and criteria defined in code:
 
-| Change | Version | Why |
-|---|---|---|
-| The envelope-facts block is added and one bullet is reworded — 3 changed lines | 1.4.1 → **1.4.2** | Labels moved, but nothing was replaced. A rule edit is a Z, however much it moves |
-| The `type` section is deleted and replaced by two sections, one per orthogonal axis; the model stops emitting `type` at all | 1.4.2 → **1.5.0** | A block gone and a field removed from the model's answer. This is what Y is for |
+- [decision-questions.ts](../src/classification/decision-questions.ts): classification axes, priority, category, tone and urgency.
+- [workflow-contract.ts](../src/classification/workflow-contract.ts): questions selected by stage and message/case scope; knowledge relevance.
+- [email-knowledge.ts](../src/knowledge/email-knowledge.ts): candidate selection and novelty, support and conflict validation. Roles: `knowledge_decision` and `validation`.
+- [decision.ts](../src/knowledge/decision.ts): resolved-ticket knowledge candidate selection. Role: `knowledge_decision`.
 
-Versions before 1.4.1 were numbered by reading Y and Z as semver's minor and
-patch. That reading was wrong and is not a precedent.
+These criteria are written in English. Language classification uses the EN/ES markdown plus the selected workflow questions. Allowed classification identifiers and schemas come from code, not YAML frontmatter.
 
-### Making Changes
+## Loading and versions
 
-1. Edit the prompt file
-2. Update version in frontmatter
-3. Update `date` field
-4. Test with sample emails (see Testing section)
-5. Create PR with clear description of changes
-6. Get review from product owner
+- [loadPromptTemplate](../src/harness/template.ts) loads and caches the requested language; a missing file is an error, with no language fallback.
+- Versions are read from a heading such as `# Prompt name — v1.0.0`. YAML frontmatter is not required.
+- `{{variable}}` placeholders receive runtime values. `fillTemplate` rejects missing variables.
+- Historical extraction records both the historical and shared knowledge prompt versions.
+- Classification records the base prompt, selected contract and workflow-question versions. Native decisions also record state/question versions.
 
-### Testing Prompts
+Prompt versions use `1.Y.Z`, with `1` fixed. Increment `Y` and reset `Z` for a whole-block replacement or removal of a model output field/class. Increment `Z` for rules, thresholds, definitions, wording and ordering changes. Keep EN/ES versions aligned; update the corresponding version constants when changing native criteria.
 
-```bash
-# Run prompt against test emails (requires Ollama or set INTELLIGENCE_PROVIDER / keys)
-cd packages/intelligence
-bun test src/classification/classify.test.ts
+## Checks
 
-# Skip LLM integration tests (e.g. CI without a local model)
-SKIP_LLM_INTEGRATION=1 bun test src/classification/classify.test.ts
+From the repository root, without model calls:
 
-# Manual testing with Ollama
-ollama run llama3.2 "$(cat prompts/email-classification.md)"
+```sh
+bun test packages/intelligence/src/classification/prompt-parity.test.ts packages/intelligence/src/classification/workflow-contract.test.ts
 ```
 
-## Directory Structure
-
-Each prompt lives in its own subdirectory named after the prompt. Inside, one markdown file per supported language:
-
-```
-prompts/
-  email-classification/
-    en.md   ← English prompt body
-    es.md   ← Spanish prompt body
-  reply-suggestion/
-    en.md
-    es.md
-```
-
-## File Format
-
-All prompt files use markdown with YAML frontmatter:
-
-```markdown
----
-version: 1.0.0
-author: Your Name
-date: 2026-03-29
-model: claude-sonnet-4-20250514
-fallback_model: llama3.2
-description: Short description
----
-
-# Prompt Title
-
-[Prompt content here with {{placeholders}}]
-```
-
-## Placeholder Syntax
-
-Use `{{variable}}` for template variables. The prompt loader replaces these at runtime.
-
-Example:
-- `{{from}}` → Replaced with email sender
-- `{{subject}}` → Replaced with email subject
-- `{{body}}` → Replaced with email body
-
-## Current Prompts
-
-| Directory | Purpose | Languages |
-|-----------|---------|-----------|
-| `email-classification/` | Classify support emails by type, priority, category, tone, urgency | `en`, `es` |
-| `reply-suggestion/` | Suggest AI draft replies for tickets | `en`, `es` |
-
-## Planned Prompts
-
-- `email-summarization/` — Generate ticket summaries
-- `knowledge-search/` — Semantic search query reformulation
+For model-based quality checks, use the [evaluation runners](../../../evals/README.md). Corpus data and results stay in their existing private location.

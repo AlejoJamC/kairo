@@ -15,6 +15,7 @@ import {
   isCompletionProviderId,
   type CompletionProviderId,
 } from './completion-registry';
+import { currentModelRouting } from './model-context';
 
 /** A provider and the model to ask on it. */
 export interface CompletionTarget {
@@ -35,8 +36,11 @@ export interface CompletionTarget {
  * primary from answering.
  */
 export function resolveEnsembleTarget(
-  env: Record<string, string | undefined> = process.env,
+  env?: Record<string, string | undefined>,
 ): CompletionTarget | null {
+  const scoped = currentModelRouting();
+  if (env === undefined && scoped?.ensemble !== undefined) return scoped.ensemble;
+  env ??= process.env;
   const raw = env['INTELLIGENCE_ENSEMBLE']?.trim();
   if (!raw) return null;
 

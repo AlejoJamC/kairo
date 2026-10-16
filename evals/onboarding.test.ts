@@ -3,7 +3,7 @@ import { sampleCorpus } from './sampling';
 import { sampleThreads, createOnboardingRuntime, type OnboardingOverrides } from './onboarding-runtime';
 import { syntheticCases, type EvalCase } from './cases';
 import { workflowLanguageInstructions } from '../packages/intelligence/src/classification/workflow-contract';
-import { onboardingMain } from './onboarding';
+import { onboardingMain, synthesisReport } from './onboarding';
 import { privateRoot, readPrivate, writePrivate } from './private-files';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -35,8 +35,10 @@ function overrides(candidate = true, validQuote = true) {
     content: 'Proposed returns period: 14 days.', evidence: [validQuote ? example.body : 'Returns within 90 days.'] }] }, model: 'acme/draft', callId: null }));
   const validate = mock(async () => ({ value: [{ novelty: answer('new', ['new', 'redundant', 'unknown']),
     support: answer('supported', ['supported', 'unsupported', 'uncertain']), policy: answer('unknown', ['consistent', 'conflict', 'unknown']) }], model: 'acme/validation', callId: null }));
-  const deps = { classify, work: { analyze, decide, decisionProvider: () => ({ model: 'acme/decision' }) }, knowledge: { candidate: select, extract, validate } } as unknown as OnboardingOverrides;
-  return { deps, classify, analyze, decide, select, extract, validate };
+  const synthesize = mock(async () => ({ output: { profile: null, themes: [], missing: ['business_profile'] }, model: 'acme/draft', promptVersion: '1.0.0' }));
+  const deps = { classify, work: { analyze, decide, decisionProvider: () => ({ model: 'acme/decision' }) }, knowledge: { candidate: select, extract, validate },
+    synthesis: { runAgent: synthesize } } as unknown as OnboardingOverrides;
+  return { deps, classify, analyze, decide, select, extract, validate, synthesize };
 }
 
 test('sampling uses the configured count without replacement and can replay the same draw', () => {
@@ -79,6 +81,23 @@ test('the same saved sample flows from tickets to grounded pending knowledge and
   expect(fake.decide).toHaveBeenCalledTimes(2);
   expect(fake.extract).toHaveBeenCalledTimes(2);
   expect(fake.validate).toHaveBeenCalledTimes(2);
+});
+
+test('the synthesis reads the saved tier 1 tickets and leaves at most five proposals for the owner', async () => {
+  const fake = overrides(false);
+  fake.synthesize.mockImplementation((async (_contract: unknown, request: { tools: { name: string; execute: (input: unknown) => Promise<{ data: Record<string, unknown> }> }[] }) => {
+    const listed = await request.tools.find(tool => tool.name === 'list_account_tickets')!.execute({ tier: 1 });
+    const ids = (listed.data['tickets'] as { id: string }[]).map(ticket => ticket.id);
+    return { output: { profile: { summary: 'Acme handles returns for its customers.', evidenceTicketIds: [ids[0]!] },
+      themes: [{ name: 'Returns', description: 'Return requests.', ticketIds: ids }, { name: 'Unsupported', description: 'Invented evidence.', ticketIds: ['acme-invented', 'acme-other'] }],
+      missing: [] }, model: 'acme/draft', promptVersion: '1.0.0' };
+  }) as never);
+  const result = await (await createOnboardingRuntime([example, { ...example, id: 2 }], fake.deps)).execute();
+  expect(result.steps).toContainEqual(expect.objectContaining({ step: 'business_synthesis', status: 'completed' }));
+  expect(result.synthesis).toEqual({ profile: true, themes: 1, droppedThemes: 1, missing: [] });
+  expect(synthesisReport(result.tables)).toEqual({ profile: true, themes: 1, reviewItems: 2, themeCoverage: 1 });
+  expect(result.tables['operational_learning']!.every(row => row['status'] === 'pending_review')).toBe(true);
+  expect(Object.values(result.safety).every(Boolean)).toBe(true);
 });
 
 test('non-candidates stop before drafting; fabricated quotations stop before semantic validation', async () => {

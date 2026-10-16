@@ -1,4 +1,5 @@
 import { workflowContract, workflowLanguageInstructions, WORKFLOW_VERSION } from './workflow-contract';
+import { renderHistoricalAttention, HISTORICAL_ATTENTION_VERSION } from './historical-attention';
 import { extractPromptVersion, loadPromptTemplate } from '../harness/template';
 import type { EmailMessage } from './types';
 
@@ -189,7 +190,8 @@ export async function buildPrompt(
   message: EmailMessage,
   lang: PromptLang = DEFAULT_LANG,
 ): Promise<string> {
-  const template = await loadTemplate(lang);
+  const baseTemplate = await loadTemplate(lang);
+  const template = message.stage === 'backfill' ? renderHistoricalAttention(baseTemplate, lang) : baseTemplate;
   const na = UNAVAILABLE[lang];
 
   const contract = await loadPromptTemplate(workflowContract(message.stage), lang);
@@ -224,5 +226,5 @@ export async function buildPrompt(
 export async function getPromptVersion(lang: PromptLang = DEFAULT_LANG, stage?: EmailMessage['stage']): Promise<string | null> {
   const template = await loadTemplate(lang);
   const contract = await loadPromptTemplate(workflowContract(stage), lang);
-  return `${extractPromptVersion(template)}:${workflowContract(stage)}:${extractPromptVersion(contract)}:questions:${WORKFLOW_VERSION}`;
+  return `${extractPromptVersion(template)}:${workflowContract(stage)}:${extractPromptVersion(contract)}:questions:${WORKFLOW_VERSION}${stage === 'backfill' ? `:historical-attention:${HISTORICAL_ATTENTION_VERSION}` : ''}`;
 }
