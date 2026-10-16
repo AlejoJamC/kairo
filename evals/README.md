@@ -84,9 +84,25 @@ Outputs live under `output/evals/tier2/<dataset>/<UTC-date-time>/` inside the pr
 
 Mailbox reads, persistence and queue-trigger behavior are fixtures. The production handler and model services execute; live Gmail, SQL triggers/RLS, durable Inngest execution, human approval, enrichment and Tier 3 are outside this evaluation. The Tier 3 handoff is recorded without running it.
 
+## Tier 3 historical learning
+
+```sh
+bun evals/tier3.ts plan main
+bun evals/tier3.ts execute main
+# Optional request cap
+bun evals/tier3.ts execute main 120
+bun evals/tier3.ts report main latest
+```
+
+Reads the corpus directly into isolated account storage. No onboarding or Tier 2 execution, snapshot or result is required. Every corpus message enters the production Tier 3 message processor, followed by historical analysis, knowledge proposals, source validation, decision history and replay checks. Source dates remain unchanged; age never excludes a workflow case. Gmail calendar selection is tested separately. Empty input stops before inference.
+
+`plan` lists the models, steps, conditions and call allowance. The maximum is **6 calls per admitted email**, plus configured ensemble/shadow/canary calls; retries consume the same hard request cap. Independent `EVAL_TIER3_<ROLE>_MODEL`, `EVAL_TIER3_CLASSIFICATION_MODE` and `EVAL_TIER3_ENSEMBLE` select routes using the historical role names above.
+
+Private outputs use `tier3/<dataset>/<UTC-date-time>/` with their own `latest.json`. Reports separate classification quality, historical execution, pending proposals, safety and historical closure. Mailbox, storage and SQL behavior are fixtures; the enabled closing check queues no enrichment without approved knowledge. Proposals remain unapproved.
+
 ## Results
 
-Runs are stored privately under `scripts/eval/data/output/evals/<mode>/<dataset>/<UTC-date-time>/`. Modes: `classification`, `workflows`, `onboarding`, `tier2`, `tier2-classification`, `technical`. Datasets: `main`, `coverage`, `synthetic`, `local`.
+Runs are stored privately under `scripts/eval/data/output/evals/<mode>/<dataset>/<UTC-date-time>/`. Modes: `classification`, `workflows`, `onboarding`, `tier2`, `tier2-classification`, `tier3`, `technical`. Datasets: `main`, `coverage`, `synthetic`, `local`.
 
 Each mode/dataset has `latest.json` with the latest run's directory, start time and status. Run folders sort chronologically, for example `2026-10-14_12-30-00-123Z`. `report main latest` recalculates the latest report; replace `latest` with a dated folder name for a specific run.
 

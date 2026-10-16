@@ -12,6 +12,7 @@ export const suites = [
   { file: 'evals/onboarding.test.ts', covers: ['random sampling', 'ticket-to-knowledge chain', 'conditional calls', 'first delivery', 'idempotency'] },
   { file: 'evals/tier2.test.ts', covers: ['historical window', 'onboarding continuation', 'production Tier 2 job', 'conversation evidence', 'human decisions', 'private reports'] },
   { file: 'evals/tier2-routing.test.ts', covers: ['historical model policy', 'independent roles', 'concurrent initial-scan isolation'] },
+  { file: 'evals/tier3.test.ts', covers: ['independent corpus scenario', 'deferred batches', 'historical learning', 'closure', 'private reports'] },
   { file: 'evals/results.test.ts', covers: ['dated output layout', 'latest execution', 'collision isolation'] },
   { file: 'packages/intelligence/src/classification/workflow-contract.test.ts', covers: ['contract separation', 'insufficiency', 'contradiction', 'alternatives', 'declared risk'] },
   { file: 'apps/api/src/lib/classifier-input.test.ts', covers: ['bounded initial evidence'] },
