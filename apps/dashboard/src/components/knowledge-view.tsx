@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Clock } from "lucide-react";
 import { getKnowledgeDrafts, getKbEvidence, reviewKnowledge } from "@kairo/client-core/endpoints";
 import { useAuth } from "@kairo/client-core/auth";
 import type { AppView } from "@/types";
+import { Spinner } from "@kairo/ui";
 
 type ArticleFilter = "draft" | "published";
 
@@ -194,7 +194,7 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
         <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
           {loading && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
-              <Clock style={{ width: 20, height: 20, color: "var(--k-text-tertiary)" }} className="animate-spin" />
+              <Spinner size="lg" />
             </div>
           )}
 

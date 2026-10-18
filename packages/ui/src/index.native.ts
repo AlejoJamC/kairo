@@ -1,23 +1,22 @@
-// Native barrel — TypeScript resolves this when customConditions includes "react-native".
-// Metro also resolves this file automatically at bundle time.
-//
-// Components shared between web and RN (no DOM APIs) are imported from the
-// same source. Components with platform splits import from the .native.tsx stub
-// so TypeScript sees RN-safe types only.
+// Native barrel, resolved by Metro for React Native. Relative imports resolve to
+// the .native variant when one exists (tsconfig.native.json sets moduleSuffixes).
 export * from './badge'
 export * from './button'
 export * from './card'
-export * from './collapsible'
-export * from './input'
-export * from './separator'
-// Platform-split — import .native.tsx explicitly so TypeScript never traverses the DOM-using .tsx files
-export * from './scroll-area.native'
-export * from './sheet.native'
-export * from './dropdown-menu.native'
-export * from './table.native'
 export * from './provider'
 export * from './priority-glyph'
 export * from './chip'
 export * from './category-chip'
 export * from './avatar'
-export { cn } from './lib/utils'
+export * from './loading'
+export * from './kbd'
+export * from './switch'
+export * from './empty-state'
+export * from './tooltip'
+export * from './icon'
+export * from './popover'
+export * from './dialog'
+export * from './drawer'
+export * from './menu'
+export * from './field'
+export * from './resizer'

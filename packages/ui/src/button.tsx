@@ -1,189 +1,193 @@
-import { styled, Stack, type GetProps } from '@tamagui/core'
+import type { ReactNode } from 'react'
+import { styled, Stack, Text, type GetProps } from '@tamagui/core'
+import { tokens } from '@kairo/tokens'
+import { domProps } from './lib/dom-props'
+import { px } from './lib/units'
+import { Spinner } from './loading'
 
-// ─── Size map ────────────────────────────────────────────────────────────────
-// height / paddingHorizontal / borderRadius per size token.
-// icon sizes collapse width = height, padding = 0.
+// Triggers an action. One primary action per area; secondary actions use the
+// outlined button. Failures never recolor a button: it returns to default and
+// the caller shows a message next to it.
 
-const sizeVariants = {
-  default: {
-    height: 36,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    gap: 8,
-  },
-  xs: {
-    height: 24,
-    paddingHorizontal: 8,
-    paddingVertical: 0,
-    borderRadius: 6,
-    gap: 4,
-  },
-  sm: {
-    height: 32,
-    paddingHorizontal: 12,
-    paddingVertical: 0,
-    borderRadius: 6,
-    gap: 6,
-  },
-  lg: {
-    height: 40,
-    paddingHorizontal: 24,
-    paddingVertical: 0,
-    borderRadius: 6,
-    gap: 8,
-  },
-  icon: {
-    height: 36,
-    width: 36,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-    borderRadius: 6,
-    gap: 0,
-  },
-  'icon-xs': {
-    height: 24,
-    width: 24,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-    borderRadius: 6,
-    gap: 0,
-  },
-  'icon-sm': {
-    height: 32,
-    width: 32,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-    borderRadius: 6,
-    gap: 0,
-  },
-  'icon-lg': {
-    height: 40,
-    width: 40,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-    borderRadius: 6,
-    gap: 0,
-  },
+const focusRing = {
+  outlineWidth: 2,
+  outlineStyle: 'solid',
+  outlineColor: tokens['border.focus'],
+  outlineOffset: 1,
 } as const
-
-// ─── Styled primitive ────────────────────────────────────────────────────────
 
 const ButtonFrame = styled(Stack, {
   name: 'Button',
-  tag: 'button',            // renders as <button> on web
+  tag: 'button',
   flexDirection: 'row',
   alignItems: 'center',
   justifyContent: 'center',
   flexShrink: 0,
-  borderWidth: 0,
+  gap: 6,
+  borderWidth: 1,
   borderColor: 'transparent',
+  borderRadius: px(tokens['radius.control']),
   cursor: 'pointer',
   userSelect: 'none',
   outlineWidth: 0,
-
-  // Focus ring (web keyboard nav)
-  focusVisibleStyle: {
-    outlineWidth: 2,
-    outlineStyle: 'solid',
-    outlineColor: '$primary',
-    outlineOffset: 2,
-  },
+  focusVisibleStyle: focusRing,
 
   variants: {
     variant: {
-      default: {
-        backgroundColor: '$primary',
-        color: '$background',
-        hoverStyle: { opacity: 0.9 },
-        pressStyle: { opacity: 0.85 },
-      },
-      destructive: {
-        backgroundColor: '$danger',
-        color: '#ffffff',
-        hoverStyle: { opacity: 0.9 },
-        pressStyle: { opacity: 0.85 },
-        focusVisibleStyle: {
-          outlineWidth: 2,
-          outlineStyle: 'solid',
-          outlineColor: '$danger',
-          outlineOffset: 2,
-        },
-      },
-      outline: {
-        backgroundColor: '$background',
-        borderWidth: 1,
-        borderColor: '$borderColor',
-        color: '$color',
-        hoverStyle: { backgroundColor: '$backgroundHover' },
-        pressStyle: { backgroundColor: '$backgroundPress' },
-      },
       secondary: {
-        backgroundColor: '$backgroundHover',
-        color: '$color',
-        hoverStyle: { backgroundColor: '$backgroundPress' },
-        pressStyle: { opacity: 0.85 },
+        backgroundColor: tokens['surface.panel'],
+        borderColor: tokens['border.default'],
+        boxShadow: tokens['shadow.xs'],
+        hoverStyle: { backgroundColor: tokens['surface.hover'], borderColor: tokens['border.strong'] },
+        pressStyle: { backgroundColor: tokens['surface.sunken'], borderColor: tokens['border.strong'] },
+      },
+      primary: {
+        backgroundColor: tokens['accent.default'],
+        hoverStyle: { backgroundColor: tokens['accent.hover'] },
+        pressStyle: { backgroundColor: tokens['accent.hover'], opacity: 0.92 },
       },
       ghost: {
         backgroundColor: 'transparent',
-        color: '$color',
-        hoverStyle: { backgroundColor: '$backgroundHover' },
-        pressStyle: { backgroundColor: '$backgroundPress' },
+        hoverStyle: { backgroundColor: tokens['surface.hover'] },
+        pressStyle: { backgroundColor: tokens['border.strong'] },
       },
       link: {
         backgroundColor: 'transparent',
-        color: '$primary',
-        textDecorationLine: 'underline',
-        hoverStyle: { opacity: 0.8 },
-        pressStyle: { opacity: 0.7 },
+        paddingHorizontal: 0,
+        height: 'auto' as never,
       },
     },
-
-    size: sizeVariants,
-
-    disabled: {
-      true: {
-        opacity: 0.5,
-        pointerEvents: 'none',
-        cursor: 'not-allowed',
-      },
+    size: {
+      md: { height: 30, paddingHorizontal: 12 },
+      sm: { height: 28, paddingHorizontal: 10 },
+      web: { height: 40, paddingHorizontal: 16 },
+      webLg: { height: 44, paddingHorizontal: 20 },
     },
+    full: { true: { width: '100%' } },
+    disabled: { true: { opacity: 0.6, cursor: 'default', pointerEvents: 'none' } },
   } as const,
 
-  defaultVariants: {
-    variant: 'default',
-    size: 'default',
-    disabled: false,
-  },
+  defaultVariants: { variant: 'secondary', size: 'md' },
 })
 
-// ─── Public component ────────────────────────────────────────────────────────
-// asChild removed — no consumer in the dashboard or mobile codebase used it.
-// If polymorphism is needed, pass the `tag` prop directly (e.g. tag="a").
+const LabelText = styled(Text, {
+  name: 'ButtonLabel',
+  fontWeight: '500',
+  variants: {
+    variant: {
+      secondary: { color: tokens['text.primary'] },
+      primary: { color: tokens['text.onAccent'] },
+      ghost: { color: tokens['text.secondary'] },
+      link: { color: tokens['accent.ink'] },
+    },
+    size: {
+      md: { fontSize: 12.5 },
+      sm: { fontSize: 12.5 },
+      web: { fontSize: 14 },
+      webLg: { fontSize: 14.5 },
+    },
+  } as const,
+})
 
-type ButtonProps = GetProps<typeof ButtonFrame> & {
-  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
-  size?: 'default' | 'xs' | 'sm' | 'lg' | 'icon' | 'icon-xs' | 'icon-sm' | 'icon-lg'
+type Variant = 'secondary' | 'primary' | 'ghost' | 'link'
+type Size = 'md' | 'sm' | 'web' | 'webLg'
+
+type ButtonProps = Omit<GetProps<typeof ButtonFrame>, 'variant' | 'size' | 'children' | 'onPress'> & {
+  variant?: Variant
+  size?: Size
+  children: string
+  onPress?: () => void
+  /** Leading icon in its semantic color. */
+  icon?: ReactNode
+  /** Trailing icon, for example an arrow. */
+  iconEnd?: ReactNode
+  /** Primary web button: disabled with a spinner and this label while it runs. */
+  loading?: boolean
+  loadingLabel?: string
+  /** Shortcut, carried in the title. */
+  shortcut?: string
+  title?: string
 }
 
 function Button({
-  variant = 'default',
-  size = 'default',
+  variant = 'secondary',
+  size = 'md',
+  children,
+  icon,
+  iconEnd,
+  loading,
+  loadingLabel,
+  shortcut,
   disabled,
+  title,
   ...props
 }: ButtonProps) {
+  const inactive = disabled || loading
   return (
     <ButtonFrame
       variant={variant}
       size={size}
-      disabled={disabled}
-      aria-disabled={disabled}
+      disabled={inactive}
+      aria-disabled={inactive || undefined}
+      aria-busy={loading || undefined}
+      {...domProps({ title: title ?? (shortcut ? `${children} (${shortcut})` : undefined) })}
       {...props}
-    />
+    >
+      {loading ? <Spinner onAccent={variant === 'primary'} /> : icon}
+      <LabelText variant={variant} size={size}>
+        {loading && loadingLabel ? loadingLabel : children}
+      </LabelText>
+      {iconEnd}
+    </ButtonFrame>
   )
 }
 
-// buttonVariants re-exported as ButtonFrame so any consumer that imported it
-// for className generation gets a TS error at the import site.
-export { Button, ButtonFrame as buttonVariants }
-export type { ButtonProps }
+const IconFrame = styled(Stack, {
+  name: 'IconButton',
+  tag: 'button',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+  borderWidth: 0,
+  borderRadius: px(tokens['radius.control']),
+  backgroundColor: 'transparent',
+  cursor: 'pointer',
+  outlineWidth: 0,
+  focusVisibleStyle: focusRing,
+  hoverStyle: { backgroundColor: tokens['surface.hover'] },
+  pressStyle: { backgroundColor: tokens['border.strong'] },
+  variants: {
+    size: {
+      md: { width: 28, height: 28 },
+      lg: { width: 44, height: 44 },
+    },
+    disabled: { true: { opacity: 0.6, cursor: 'default', pointerEvents: 'none' } },
+  } as const,
+  defaultVariants: { size: 'md' },
+})
+
+type IconButtonProps = Omit<GetProps<typeof IconFrame>, 'children' | 'onPress'> & {
+  /** Required: an icon-only button needs an accessible name. */
+  label: string
+  children: ReactNode
+  onPress?: () => void
+  shortcut?: string
+  title?: string
+}
+
+function IconButton({ label, children, shortcut, title, disabled, ...props }: IconButtonProps) {
+  return (
+    <IconFrame
+      aria-label={label}
+      aria-disabled={disabled || undefined}
+      disabled={disabled}
+      {...domProps({ title: title ?? (shortcut ? `${label} (${shortcut})` : undefined) })}
+      {...props}
+    >
+      {children}
+    </IconFrame>
+  )
+}
+
+export { Button, IconButton }
+export type { ButtonProps, IconButtonProps }

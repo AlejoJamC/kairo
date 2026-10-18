@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Dialog } from "radix-ui";
-import { X, Loader2 } from "lucide-react";
+import { Button, Chip, Dialog, FieldLabel, FieldTextarea } from "@kairo/ui";
 import { correctClassification } from "@kairo/client-core/endpoints";
 import { TICKET_PRIORITIES, TICKET_TYPES, TICKET_CATEGORIES, TICKET_TONES, type Ticket } from "@kairo/types";
 
@@ -57,6 +56,7 @@ export function CorrectionDialog({
   const [success, setSuccess]   = useState(false);
 
   const NOTE_MAX = 2000;
+  const notesId = useId();
 
   function resetForm() {
     setPriority("");
@@ -73,9 +73,7 @@ export function CorrectionDialog({
     onOpenChange(next);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
+  async function handleSubmit() {
     if (!priority && !ticketType && !category && !sentiment) {
       setError(t("correction.errorEmpty"));
       return;
@@ -111,141 +109,136 @@ export function CorrectionDialog({
     }
   }
 
+  const dirty = Boolean(priority || ticketType || category || sentiment || notes);
+
   return (
-    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 40,
-            background: "rgba(0,0,0,0.4)",
-            backdropFilter: "blur(2px)",
-          }}
-          className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+    <Dialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={t("correction.dialogTitle")}
+      dirty={dirty || loading}
+      closeLabel={t("correction.cancel")}
+      footer={
+        <>
+          <Button variant="ghost" size="sm" disabled={loading} onPress={() => handleOpenChange(false)}>
+            {t("correction.cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            loading={loading}
+            loadingLabel={t("correction.submitting")}
+            disabled={notes.length > NOTE_MAX}
+            onPress={handleSubmit}
+          >
+            {t("correction.submit")}
+          </Button>
+        </>
+      }
+    >
+      <p style={{ margin: 0, fontSize: 12, color: "var(--k-text-tertiary)" }}>{t("correction.dialogSubtitle")}</p>
+
+      {/* Current AI values */}
+      <div style={{ borderRadius: 6, background: "var(--k-surface)", border: "1px solid var(--k-border-subtle)", padding: "6px 10px", fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>
+        AI: {[ticket.priority, ticket.ticket_type, ticket.category, ticket.sentiment]
+          .filter(Boolean)
+          .join(" · ") || "—"}
+      </div>
+
+      <ChoiceGroup
+        label={t("correction.fieldPriority")}
+        options={PRIORITY_OPTIONS}
+        value={priority}
+        onChange={setPriority}
+        format={(v) => v}
+        disabled={loading}
+      />
+      <ChoiceGroup
+        label={t("correction.fieldType")}
+        options={TYPE_OPTIONS}
+        value={ticketType}
+        onChange={setTicketType}
+        format={(v) => t(`ticketTypes.${v}`)}
+        disabled={loading}
+      />
+      <ChoiceGroup
+        label={t("correction.fieldCategory")}
+        options={CATEGORY_OPTIONS}
+        value={category}
+        onChange={setCategory}
+        format={(v) => t(`ticketCategories.${v}`)}
+        disabled={loading}
+      />
+      <ChoiceGroup
+        label={t("correction.fieldSentiment")}
+        options={SENTIMENT_OPTIONS}
+        value={sentiment}
+        onChange={setSentiment}
+        format={(v) => t(`correction.tones.${v}`)}
+        disabled={loading}
+      />
+
+      {/* Notes */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <FieldLabel htmlFor={notesId}>{t("correction.fieldNotes")}</FieldLabel>
+          <span style={{ color: notes.length > NOTE_MAX ? "var(--kairo-color-bad)" : "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)", fontSize: 11 }}>
+            {notes.length}/{NOTE_MAX}
+          </span>
+        </div>
+        <FieldTextarea
+          id={notesId}
+          rows={2}
+          maxLength={NOTE_MAX}
+          placeholder={t("correction.fieldNotesPlaceholder")}
+          value={notes}
+          onChangeText={setNotes}
+          disabled={loading}
         />
+      </div>
 
-        <Dialog.Content
-          style={{
-            position: "fixed",
-            left: "50%",
-            top: "50%",
-            zIndex: 50,
-            width: "100%",
-            maxWidth: 440,
-            transform: "translate(-50%, -50%)",
-            background: "white",
-            borderRadius: 12,
-            padding: 24,
-            boxShadow: "0 4px 16px rgba(9,9,11,0.08), 0 1px 2px rgba(9,9,11,0.04)",
-          }}
-          className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
-        >
-          {/* Header */}
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
-            <div>
-              <Dialog.Title style={{ fontSize: 15, fontWeight: 600, color: "var(--k-text-primary)", fontFamily: "var(--k-font-display)", margin: 0 }}>
-                {t("correction.dialogTitle")}
-              </Dialog.Title>
-              <Dialog.Description style={{ marginTop: 2, fontSize: 12, color: "var(--k-text-tertiary)" }}>
-                {t("correction.dialogSubtitle")}
-              </Dialog.Description>
-            </div>
-            <Dialog.Close
-              style={{ borderRadius: 6, padding: 4, color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer" }}
-            >
-              <X style={{ width: 16, height: 16 }} />
-            </Dialog.Close>
-          </div>
+      {error && <p role="alert" style={{ fontSize: 12, color: "var(--kairo-color-bad)", margin: 0 }}>{error}</p>}
+      {success && <p role="status" style={{ fontSize: 12, color: "var(--kairo-color-ok)", fontWeight: 500, margin: 0 }}>{t("correction.successMsg")}</p>}
+    </Dialog>
+  );
+}
 
-          {/* Current AI values */}
-          <div style={{ marginBottom: 16, borderRadius: 6, background: "var(--k-surface)", border: "1px solid var(--k-border-subtle)", padding: "6px 10px", fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>
-            AI: {[ticket.priority, ticket.ticket_type, ticket.category, ticket.sentiment]
-              .filter(Boolean)
-              .join(" · ") || "—"}
-          </div>
+// ---------------------------------------------------------------------------
+// ChoiceGroup — one label and a row of chips; pressing the chosen chip again
+// clears the choice, so "leave as classified" stays the default.
+// ---------------------------------------------------------------------------
 
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {/* Priority */}
-            <div>
-              <label className="k-label">{t("correction.fieldPriority")}</label>
-              <select className="k-select" value={priority} onChange={(e) => setPriority(e.target.value)} disabled={loading}>
-                <option value="">—</option>
-                {PRIORITY_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-
-            {/* Ticket type */}
-            <div>
-              <label className="k-label">{t("correction.fieldType")}</label>
-              <select className="k-select" value={ticketType} onChange={(e) => setTicketType(e.target.value)} disabled={loading}>
-                <option value="">—</option>
-                {TYPE_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-
-            {/* Category */}
-            <div>
-              <label className="k-label">{t("correction.fieldCategory")}</label>
-              <select className="k-select" value={category} onChange={(e) => setCategory(e.target.value)} disabled={loading}>
-                <option value="">—</option>
-                {CATEGORY_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-
-            {/* Sentiment */}
-            <div>
-              <label className="k-label">{t("correction.fieldSentiment")}</label>
-              <select className="k-select" value={sentiment} onChange={(e) => setSentiment(e.target.value)} disabled={loading}>
-                <option value="">—</option>
-                {SENTIMENT_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label className="k-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span>{t("correction.fieldNotes")}</span>
-                <span style={{ color: notes.length > NOTE_MAX ? "var(--kairo-color-bad)" : "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)", fontSize: 11 }}>
-                  {notes.length}/{NOTE_MAX}
-                </span>
-              </label>
-              <textarea
-                className="k-textarea"
-                rows={2}
-                maxLength={NOTE_MAX}
-                placeholder={t("correction.fieldNotesPlaceholder")}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-
-            {/* Error / success */}
-            {error   && <p style={{ fontSize: 12, color: "var(--kairo-color-bad)", margin: 0 }}>{error}</p>}
-            {success && <p style={{ fontSize: 12, color: "var(--kairo-color-ok)", fontWeight: 500, margin: 0 }}>{t("correction.successMsg")}</p>}
-
-            {/* Actions */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
-              <Dialog.Close
-                type="button"
-                disabled={loading}
-                className="k-btn-secondary"
-              >
-                {t("correction.cancel")}
-              </Dialog.Close>
-              <button
-                type="submit"
-                disabled={loading || notes.length > NOTE_MAX}
-                className="k-btn-primary"
-              >
-                {loading && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
-                {loading ? t("correction.submitting") : t("correction.submit")}
-              </button>
-            </div>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+function ChoiceGroup<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  format,
+  disabled,
+}: {
+  label: string;
+  options: readonly T[];
+  value: string;
+  onChange: (next: string) => void;
+  format: (option: T) => string;
+  disabled?: boolean;
+}) {
+  const labelId = useId();
+  return (
+    <div role="group" aria-labelledby={labelId} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <FieldLabel tag="div" id={labelId}>{label}</FieldLabel>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {options.map((option) => (
+          <Chip
+            key={option}
+            selected={value === option}
+            disabled={disabled}
+            onPress={() => onChange(value === option ? "" : option)}
+          >
+            {format(option)}
+          </Chip>
+        ))}
+      </div>
+    </div>
   );
 }

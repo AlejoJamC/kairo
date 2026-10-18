@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import { Clock } from "lucide-react";
 import { useStatusTickets } from "@kairo/client-core/hooks/use-status-tickets";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TicketDetail } from "@/components/ticket-detail";
@@ -8,6 +7,7 @@ import { TicketCard } from "@/components/ticket-card";
 import type { AppView } from "@/types";
 import type { Ticket } from "@kairo/types";
 import { ESCALATED_STATUSES } from "@kairo/client-core/triage-status";
+import { EmptyState, Spinner } from "@kairo/ui";
 
 // Own bucket in triage-status.ts (STATUS_BUCKET), counted by the Escalado
 // badge and not by Triage — mirrors ResolvedView's setup one status down.
@@ -78,14 +78,12 @@ export function EscalatedView({ onViewChange: _onViewChange }: EscalatedViewProp
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
         {loading && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
-            <Clock style={{ width: 20, height: 20, color: "var(--k-text-tertiary)" }} className="animate-spin" />
+            <Spinner size="lg" />
           </div>
         )}
 
         {!loading && tickets.length === 0 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 80, textAlign: "center" }}>
-            <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t("escalatedView.empty")}</p>
-          </div>
+          <EmptyState title={t("escalatedView.empty")} paddingTop={80} />
         )}
 
         {!loading &&

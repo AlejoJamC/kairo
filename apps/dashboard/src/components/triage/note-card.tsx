@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Avatar } from "@kairo/ui";
+import { Avatar, Icon } from "@kairo/ui";
 import { NoteBody } from "./note-body";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 
@@ -163,7 +162,7 @@ export function NoteCard({ note, onJump }: NoteCardProps) {
               gap: 4,
             }}
           >
-            <ArrowRight style={{ width: 10, height: 10 }} />
+            <Icon name="arrow" size={10} />
             {t("notes.jump", "View in thread")}
           </span>
         </div>

@@ -51,7 +51,8 @@
     "cancelButton": "Cancelar",
     "requiredError": "El ID Interno y el Nombre de la Empresa son requeridos",
     "saveError": "Error al guardar el cliente. Inténtalo de nuevo.",
-    "duplicateIdError": "Ya existe un cliente con este ID Interno"
+    "duplicateIdError": "Ya existe un cliente con este ID Interno",
+    "removePerson": "Quitar persona de contacto"
   },
   "actions": {
     "edit": "Editar",

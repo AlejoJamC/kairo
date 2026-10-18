@@ -1,24 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Download,
-  Plus,
-  MoreHorizontal,
-  Loader2,
-  X,
-  Edit2,
-  Trash2,
-  SmilePlus,
-  Meh,
-  Frown,
-  Search,
-  AlertCircle,
-  RefreshCw,
-  Check,
-  XCircle,
-  RotateCcw,
-  Pencil,
-} from "lucide-react";
 import { ClientFormModal } from "@/components/client-form-modal";
 import { listClients, deleteClient } from "@kairo/client-core/endpoints";
 import { useAuth } from "@kairo/client-core/auth";
@@ -33,6 +14,7 @@ import {
   type EditPatch,
 } from "@kairo/client-core/draft-actions";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
+import { Button, Icon, Skeleton, Spinner } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -201,10 +183,10 @@ function KpiStrip({ clients }: { clients: Client[] }) {
 function CsatCell({ value }: { value: number | null }) {
   if (value == null) return <span style={{ color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)" }}>—</span>;
   const color = value >= 4.7 ? "var(--kairo-color-ok)" : value >= 4.0 ? "var(--kairo-color-warn)" : "var(--kairo-color-bad)";
-  const Icon  = value >= 4.7 ? SmilePlus : value >= 4.0 ? Meh : Frown;
+  const face = value >= 4.7 ? "face-add" : value >= 4.0 ? "face-neutral" : "face-frown";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-      <Icon style={{ width: 14, height: 14, color }} />
+      <Icon name={face} size={14} color={color} />
       <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 13 }}>{value}</span>
     </div>
   );
@@ -327,7 +309,7 @@ function ContactCard({
               opacity: hover ? 1 : 0, transition: "opacity 0.1s",
             }}
           >
-            <Check style={{ width: 11, height: 11 }} />
+            <Icon name="check" size={11} />
             {t("actions.confirm")}
           </button>
         )}
@@ -341,7 +323,7 @@ function ContactCard({
                 opacity: hover ? 1 : 0, transition: "opacity 0.1s",
               }}
             >
-              <MoreHorizontal style={{ width: 14, height: 14 }} />
+              <Icon name="more" size={14} />
             </button>
             {menuOpen && (
               <div style={{
@@ -356,7 +338,7 @@ function ContactCard({
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--k-surface)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
                 >
-                  <Edit2 style={{ width: 13, height: 13, color: "var(--k-text-tertiary)" }} /> Editar
+                  <Icon name="draft" size={13} color="var(--k-text-tertiary)" /> Editar
                 </button>
                 <button
                   onClick={(e) => { setMenuOpen(false); onDelete?.(e); }}
@@ -366,8 +348,8 @@ function ContactCard({
                   onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
                 >
                   {deleting
-                    ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />
-                    : <Trash2 style={{ width: 13, height: 13 }} />}
+                    ? <Spinner />
+                    : <Icon name="trash" size={13} />}
                   Eliminar
                 </button>
               </div>
@@ -631,10 +613,15 @@ export function ClientDirectory() {
         {/* Skeleton */}
         <div style={{ flex: 1, padding: "24px 32px" }}>
           {[1, 2, 3].map((i) => (
-            <div key={i} style={{
-              height: 56, marginBottom: 1, borderRadius: i === 1 ? "12px 12px 0 0" : i === 3 ? "0 0 12px 12px" : 0,
-              background: "var(--k-surface)", animation: "pulse 1.5s ease-in-out infinite",
-            }} />
+            <Skeleton
+              key={i}
+              height={56}
+              marginBottom={1}
+              borderTopLeftRadius={i === 1 ? 12 : 0}
+              borderTopRightRadius={i === 1 ? 12 : 0}
+              borderBottomLeftRadius={i === 3 ? 12 : 0}
+              borderBottomRightRadius={i === 3 ? 12 : 0}
+            />
           ))}
         </div>
       </div>
@@ -696,13 +683,13 @@ export function ClientDirectory() {
             background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", border: "1px solid var(--kairo-color-bad-line)",
             display: "flex", alignItems: "center", gap: 8,
           }}>
-            <AlertCircle style={{ width: 14, height: 14, flexShrink: 0 }} />
+            <Icon name="alert" size={14} style={{ flexShrink: 0 }} />
             <span style={{ flex: 1 }}>{t("errorMessage")}</span>
             <button
               onClick={retryDrafts}
               style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, background: "none", border: "none", cursor: "pointer", color: "var(--kairo-color-bad-ink)", fontWeight: 500 }}
             >
-              <RefreshCw style={{ width: 12, height: 12 }} />
+              <Icon name="refresh" size={12} />
               {t("retry")}
             </button>
           </div>
@@ -782,7 +769,7 @@ export function ClientDirectory() {
             border: "1px solid var(--k-border)", background: "white",
             marginLeft: showPlanFilters ? "auto" : undefined,
           }}>
-            <Search style={{ width: 13, height: 13, color: "var(--k-text-tertiary)" }} />
+            <Icon name="search" size={13} color="var(--k-text-tertiary)" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -795,7 +782,7 @@ export function ClientDirectory() {
             />
             {search && (
               <button onClick={() => setSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", padding: 0 }}>
-                <X style={{ width: 12, height: 12 }} />
+                <Icon name="x" size={12} />
               </button>
             )}
           </div>
@@ -810,17 +797,12 @@ export function ClientDirectory() {
                 color: "var(--k-text-secondary)", cursor: "pointer",
               }}
             >
-              <Download style={{ width: 13, height: 13 }} />
+              <Icon name="download" size={13} />
               Exportar
             </button>
-            <button
-              onClick={() => { setEditing(null); setFormOpen(true); }}
-              className="k-btn-primary"
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", fontSize: 13 }}
-            >
-              <Plus style={{ width: 13, height: 13 }} />
+            <Button variant="primary" icon={<Icon name="plus" size={13} color="white" />} onPress={() => { setEditing(null); setFormOpen(true); }}>
               Agregar cliente
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -934,7 +916,7 @@ export function ClientDirectory() {
                   display: "flex", alignItems: "center", gap: 6,
                 }}
               >
-                {bulkConfirming && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
+                {bulkConfirming && <Spinner />}
                 {t("actions.confirm")}
               </button>
             </div>
@@ -1134,7 +1116,7 @@ function ContactDetailDrawer({
               cursor: "pointer", color: "var(--k-text-tertiary)", marginLeft: 8, flexShrink: 0,
             }}
           >
-            <X style={{ width: 14, height: 14 }} />
+            <Icon name="x" size={14} />
           </button>
         </div>
 
@@ -1235,7 +1217,7 @@ function ContactDetailDrawer({
                         background: "var(--kairo-color-ok)", color: "white", border: "none",
                       }}
                     >
-                      {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <Check style={{ width: 13, height: 13 }} />}
+                      {actionBusy ? <Spinner /> : <Icon name="check" size={13} />}
                       {t("actions.confirm")}
                     </button>
                     <button
@@ -1247,7 +1229,7 @@ function ContactDetailDrawer({
                         background: "white", color: "var(--kairo-color-bad-ink)", border: "1px solid var(--kairo-color-bad-line)",
                       }}
                     >
-                      {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <XCircle style={{ width: 13, height: 13 }} />}
+                      {actionBusy ? <Spinner /> : <Icon name="reject" size={13} />}
                       {t("actions.reject")}
                     </button>
                   </div>
@@ -1259,7 +1241,7 @@ function ContactDetailDrawer({
                       background: "none", border: "none", color: "var(--k-text-secondary)", textDecoration: "underline",
                     }}
                   >
-                    <Pencil style={{ width: 12, height: 12 }} />
+                    <Icon name="draft" size={12} />
                     {t("actions.edit")}
                   </button>
                 </div>
@@ -1302,7 +1284,7 @@ function ContactDetailDrawer({
                         background: "var(--kairo-color-accent)", color: "white", border: "none",
                       }}
                     >
-                      {saving && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
+                      {saving && <Spinner />}
                       {t("actions.save")}
                     </button>
                     <button
@@ -1335,7 +1317,7 @@ function ContactDetailDrawer({
                         background: "var(--kairo-color-ok)", color: "white", border: "none",
                       }}
                     >
-                      {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <Check style={{ width: 13, height: 13 }} />}
+                      {actionBusy ? <Spinner /> : <Icon name="check" size={13} />}
                       {t("actions.confirm")}
                     </button>
                     <button
@@ -1347,7 +1329,7 @@ function ContactDetailDrawer({
                         background: "white", color: "var(--kairo-color-bad-ink)", border: "1px solid var(--kairo-color-bad-line)",
                       }}
                     >
-                      {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <XCircle style={{ width: 13, height: 13 }} />}
+                      {actionBusy ? <Spinner /> : <Icon name="reject" size={13} />}
                       {t("actions.reject")}
                     </button>
                   </div>
@@ -1365,7 +1347,7 @@ function ContactDetailDrawer({
                     background: "white", border: "1px solid var(--k-border)", color: "var(--k-text-secondary)",
                   }}
                 >
-                  {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <RotateCcw style={{ width: 13, height: 13 }} />}
+                  {actionBusy ? <Spinner /> : <Icon name="undo" size={13} />}
                   {t("actions.reactivate")}
                 </button>
               )}

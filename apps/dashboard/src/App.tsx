@@ -15,6 +15,7 @@ import { AiReviewView } from "@/components/ai-review-view";
 import { KnowledgeView } from "@/components/knowledge-view";
 import { ChannelsSettings } from "@/components/channels-settings";
 import type { AppView } from "@/types";
+import { Spinner } from "@kairo/ui";
 
 const COMING_SOON_VIEWS: AppView[] = ["in-progress"];
 
@@ -74,8 +75,7 @@ function AppContent() {
           background: "var(--k-bg)",
         }}
       >
-        {/* kairo-spinner defined in index.css — uses --k-accent */}
-        <div className="kairo-spinner" />
+        <Spinner size="lg" />
         <p style={{ color: "var(--k-text-tertiary)", fontSize: 13 }}>Loading Kairo…</p>
       </div>
     );

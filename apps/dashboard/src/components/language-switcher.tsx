@@ -1,36 +1,30 @@
-import { Globe } from "lucide-react";
 import { useLocale } from "@/hooks/useLocale";
 import type { SupportedLanguage } from "@/i18n/types";
+import { useTranslation } from "react-i18next";
+import { Field, FieldSelect, Icon } from "@kairo/ui";
 
 export function LanguageSwitcher() {
+  const { t } = useTranslation("common");
   const { language, setLanguage, supportedLanguages, languageMeta } =
     useLocale();
 
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-      <Globe
-        style={{
-          position: "absolute",
-          left: 8,
-          width: 13,
-          height: 13,
-          color: "var(--k-text-tertiary)",
-          pointerEvents: "none",
-          zIndex: 1,
-        }}
-      />
-      <select
-        className="k-select"
+      <Icon name="globe" size={13} color="var(--k-text-tertiary)" style={{ position: "absolute", left: 8, pointerEvents: "none", zIndex: 1 }} />
+      <Field label={t("language")} hideLabel>
+      <FieldSelect
         value={language}
-        onChange={(e) => setLanguage(e.target.value as SupportedLanguage)}
-        style={{ paddingLeft: 26, height: 30, fontSize: 12, minWidth: 110 }}
+        onValueChange={(next) => setLanguage(next as SupportedLanguage)}
+        paddingLeft={26}
+        minWidth={110}
       >
         {supportedLanguages.map((lang: SupportedLanguage) => (
           <option key={lang} value={lang}>
             {languageMeta[lang].nativeLabel}
           </option>
         ))}
-      </select>
+      </FieldSelect>
+      </Field>
     </div>
   );
 }

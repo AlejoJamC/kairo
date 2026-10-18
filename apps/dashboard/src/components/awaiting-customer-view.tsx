@@ -1,11 +1,11 @@
 import { useTranslation } from "react-i18next";
-import { Clock, ArrowRight, AlertTriangle } from "lucide-react";
 import { useStatusTickets } from "@kairo/client-core/hooks/use-status-tickets";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TicketDetail } from "@/components/ticket-detail";
 import { AiAssistant } from "@/components/ai-assistant";
 import type { AppView } from "@/types";
 import type { Ticket } from "@kairo/types";
+import { Button, EmptyState, Icon, Spinner } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // SLA badge
@@ -126,14 +126,12 @@ export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCu
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
         {loading && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
-            <Clock style={{ width: 20, height: 20, color: "var(--k-text-tertiary)" }} className="animate-spin" />
+            <Spinner size="lg" />
           </div>
         )}
 
         {!loading && tickets.length === 0 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 80, textAlign: "center" }}>
-            <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t("awaitingView.empty")}</p>
-          </div>
+          <EmptyState title={t("awaitingView.empty")} paddingTop={80} />
         )}
 
         {!loading && tickets.length > 0 && (
@@ -167,7 +165,7 @@ export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCu
                         <SlaBadge slaDate={ticket.sla_due_at} breached={ticket.sla_breached ?? false} />
                       )}
                       {ticket.sla_breached && (
-                        <AlertTriangle style={{ width: 13, height: 13, color: "var(--kairo-color-bad)", flexShrink: 0 }} />
+                        <Icon name="warning" size={13} color="var(--kairo-color-bad)" style={{ flexShrink: 0 }} />
                       )}
                     </div>
                     <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
@@ -189,15 +187,12 @@ export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCu
                   </div>
 
                   {/* Action */}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); openThread(ticket); }}
-                    className="k-btn-secondary"
-                    style={{ flexShrink: 0, height: 30, fontSize: 12 }}
+                  <Button
+                    iconEnd={<Icon name="arrow" size={12} />}
+                    onPress={() => openThread(ticket)}
                   >
                     {t("awaitingView.followUp")}
-                    <ArrowRight style={{ width: 12, height: 12 }} />
-                  </button>
+                  </Button>
                 </li>
               );
             })}

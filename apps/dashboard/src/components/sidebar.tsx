@@ -3,28 +3,13 @@
 // Toggle button moved to TopChrome; sidebar only receives collapsed state.
 
 import { useRef, useState, useEffect } from "react";
-import {
-  Inbox,
-  Clock,
-  CircleCheck,
-  ArrowUpCircle,
-  Sparkles,
-  BookOpen,
-  Users,
-  Settings,
-} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { useAuth } from "@kairo/client-core/auth";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useSidebarCounts, VIEW_TO_STATUS } from "@/hooks/useSidebarCounts";
 import type { AppView } from "@/types";
+import { Icon, Tooltip, type IconName } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // NavBadge — count pill / collapsed dot
@@ -91,7 +76,7 @@ function NavBadge({
 // ---------------------------------------------------------------------------
 
 type NavItem = {
-  icon: typeof Inbox;
+  icon: IconName;
   label: string;
   view: AppView;
 };
@@ -109,17 +94,17 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
   const counts = useSidebarCounts();
 
   const mainNavItems: NavItem[] = [
-    { icon: Inbox,         label: t("dashboard:sidebar.triage"),         view: "triage" },
-    { icon: Clock,         label: t("dashboard:sidebar.pendingClient"),  view: "awaiting" },
-    { icon: CircleCheck,   label: t("dashboard:sidebar.resolved"),       view: "resolved" },
-    { icon: ArrowUpCircle, label: t("dashboard:sidebar.escalation"),     view: "escalated" },
-    { icon: Sparkles,      label: t("dashboard:sidebar.aiReview"),       view: "ai-review" },
-    { icon: BookOpen,      label: t("dashboard:sidebar.knowledge"),      view: "knowledge" },
+    { icon: "triage",         label: t("dashboard:sidebar.triage"),         view: "triage" },
+    { icon: "awaiting",         label: t("dashboard:sidebar.pendingClient"),  view: "awaiting" },
+    { icon: "resolved",   label: t("dashboard:sidebar.resolved"),       view: "resolved" },
+    { icon: "escalated", label: t("dashboard:sidebar.escalation"),     view: "escalated" },
+    { icon: "spark",      label: t("dashboard:sidebar.aiReview"),       view: "ai-review" },
+    { icon: "knowledge",      label: t("dashboard:sidebar.knowledge"),      view: "knowledge" },
   ];
 
   const adminNavItems: NavItem[] = [
-    { icon: Users,    label: t("dashboard:sidebar.clients"),  view: "clients" },
-    { icon: Settings, label: t("dashboard:sidebar.settings"), view: "settings" },
+    { icon: "clients",    label: t("dashboard:sidebar.clients"),  view: "clients" },
+    { icon: "settings", label: t("dashboard:sidebar.settings"), view: "settings" },
   ];
 
   const getCount = (view: AppView): number => {
@@ -160,7 +145,7 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
         }}
       >
         <span className="relative shrink-0">
-          <item.icon style={{ width: 16, height: 16 }} />
+          <Icon name={item.icon} size={16} />
           {collapsed && <NavBadge count={count} collapsed isActive={isActive} />}
         </span>
         {!collapsed && (
@@ -175,15 +160,14 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
     if (!collapsed) return <div key={item.view}>{btn}</div>;
 
     return (
-      <Tooltip key={item.view} delayDuration={200}>
-        <TooltipTrigger asChild>{btn}</TooltipTrigger>
-        <TooltipContent side="right">{item.label}</TooltipContent>
+      <Tooltip key={item.view} label={item.label} side="right">
+        {btn}
       </Tooltip>
     );
   };
 
   return (
-    <TooltipProvider>
+    <>
       <aside
         style={{
           width: collapsed ? 56 : 240,
@@ -228,6 +212,6 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
           <UserMenu collapsed={collapsed} />
         </div>
       </aside>
-    </TooltipProvider>
+    </>
   );
 }

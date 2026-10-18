@@ -2,28 +2,15 @@
 // FIG 2.4 · Notificaciones popover
 // FIG 2.5 · Cuenta popover
 
-import { useRef, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Search,
-  Bell,
-  PanelLeft,
-  Sparkles,
-  User,
-  Settings,
-  Zap,
-  BookOpen,
-  LogOut,
-  Check,
-  ChevronDown,
-} from "lucide-react";
 import { useAuth } from "@kairo/client-core/auth";
 import { getNotifications, markNotificationRead, markAllNotificationsRead } from "@kairo/client-core/endpoints";
 import { fetchTicketById } from "@kairo/client-core/queries";
 import { getNumericFlag } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { Avatar, getInitials } from "@kairo/ui";
+import { Avatar, EmptyState, Icon, Kbd, KbdGroup, Menu, MenuItem, Popover, PopoverContent, PopoverTrigger, getInitials } from "@kairo/ui";
 import type { AppView } from "@/types";
 
 // KAI-232 — how often the bell re-fetches /api/v1/notifications, in seconds.
@@ -198,11 +185,7 @@ function NotificationsPopover({ items, onMarkAll, onSelect }: NotifPopoverProps)
   ];
 
   return (
-    <div style={{
-      position: "absolute", top: "calc(100% + 8px)", right: 0, width: 380,
-      background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10,
-      boxShadow: T.shadow, overflow: "hidden", zIndex: 100,
-    }}>
+    <div style={{ width: 380, overflow: "hidden", borderRadius: 11 }}>
       {/* Header */}
       <div style={{ padding: "12px 14px 8px", borderBottom: `1px solid ${T.borderSubtle}` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -255,9 +238,7 @@ function NotificationsPopover({ items, onMarkAll, onSelect }: NotifPopoverProps)
       {/* List */}
       <div style={{ maxHeight: 420, overflowY: "auto" }}>
         {filtered.length === 0 && (
-          <div style={{ padding: "40px 20px", textAlign: "center", fontSize: 12, color: T.textTertiary, fontFamily: T.mono }}>
-            {t("dashboard:topChrome.notifications.empty")}
-          </div>
+          <EmptyState title={t("dashboard:topChrome.notifications.empty")} paddingVertical={40} />
         )}
         {filtered.map((n) => (
           <NotifRow key={n.id} n={n} onSelect={onSelect} />
@@ -428,18 +409,14 @@ function ProfilePopover({
   const cur = STATUS_OPTIONS.find((s) => s.id === status) ?? STATUS_OPTIONS[0];
 
   const MENU_ITEMS: { icon: React.ReactNode; label: string; kbd: string | null; action: () => void }[] = [
-    { icon: <User size={14} color={T.textTertiary}/>,     label: t("dashboard:topChrome.account.menuProfile"),   kbd: null,  action: () => {} },
-    { icon: <Settings size={14} color={T.textTertiary}/>, label: t("dashboard:topChrome.account.menuSettings"),  kbd: "⌘,",  action: () => onNavigate("settings") },
-    { icon: <Zap size={14} color={T.textTertiary}/>,      label: t("dashboard:topChrome.account.menuShortcuts"), kbd: "⌘?",  action: () => {} },
-    { icon: <BookOpen size={14} color={T.textTertiary}/>, label: t("dashboard:topChrome.account.menuDocs"),      kbd: null,  action: () => {} },
+    { icon: <Icon name="user" size={14} color={T.textTertiary} />,     label: t("dashboard:topChrome.account.menuProfile"),   kbd: null,  action: () => {} },
+    { icon: <Icon name="settings" size={14} color={T.textTertiary} />, label: t("dashboard:topChrome.account.menuSettings"),  kbd: "⌘,",  action: () => onNavigate("settings") },
+    { icon: <Icon name="zap" size={14} color={T.textTertiary} />,      label: t("dashboard:topChrome.account.menuShortcuts"), kbd: "⌘?",  action: () => {} },
+    { icon: <Icon name="knowledge" size={14} color={T.textTertiary} />, label: t("dashboard:topChrome.account.menuDocs"),      kbd: null,  action: () => {} },
   ];
 
   return (
-    <div style={{
-      position: "absolute", top: "calc(100% + 8px)", right: 0, width: 300,
-      background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10,
-      boxShadow: T.shadow, overflow: "hidden", zIndex: 100,
-    }}>
+    <div style={{ width: 300, overflow: "hidden", borderRadius: 11 }}>
       {/* User card */}
       <div style={{ padding: 14, borderBottom: `1px solid ${T.borderSubtle}` }}>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
@@ -467,7 +444,7 @@ function ProfilePopover({
               display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4,
               padding: "1px 6px", borderRadius: 4, background: T.accentSubtle,
             }}>
-              <Sparkles size={9} color={T.accent}/>
+              <Icon name="spark" size={9} color={T.accent} />
               <span style={{ fontSize: 10, fontFamily: T.mono, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 {t("dashboard:topChrome.account.roleBadge")}
               </span>
@@ -517,11 +494,17 @@ function ProfilePopover({
       </div>
 
       {/* Menu items */}
-      <div style={{ padding: 6 }}>
+      <Menu label={t("dashboard:topChrome.account.title", "Account")}>
         {MENU_ITEMS.map((item) => (
-          <MenuButton key={item.label} icon={item.icon} label={item.label} kbd={item.kbd} action={item.action}/>
+          <MenuItem
+            key={item.label}
+            icon={item.icon}
+            label={item.label}
+            shortcut={item.kbd ? <Kbd>{item.kbd}</Kbd> : undefined}
+            onSelect={item.action}
+          />
         ))}
-      </div>
+      </Menu>
 
       {/* Theme toggle */}
       <div style={{ padding: "6px 10px 10px", borderTop: `1px solid ${T.borderSubtle}` }}>
@@ -552,9 +535,15 @@ function ProfilePopover({
       </div>
 
       {/* Sign out */}
-      <div style={{ padding: 6, borderTop: `1px solid ${T.borderSubtle}` }}>
-        <SignOutButton onSignOut={onSignOut} initials={initials}/>
-      </div>
+      <Menu label={t("dashboard:topChrome.account.signOut")} style={{ borderTop: `1px solid ${T.borderSubtle}` }}>
+        <MenuItem
+          destructive
+          icon={<Icon name="logout" size={14} color="var(--kairo-color-bad-ink)" />}
+          label={t("dashboard:topChrome.account.signOut")}
+          shortcut={<span style={{ fontFamily: T.mono, fontSize: 10, color: "var(--kairo-color-bad-ink)", opacity: 0.6 }}>{initials}</span>}
+          onSelect={onSignOut}
+        />
+      </Menu>
     </div>
   );
 }
@@ -579,62 +568,7 @@ function StatusOptionButton({
     >
       <span style={{ width: 7, height: 7, borderRadius: 999, background: s.dot, flexShrink: 0 }}/>
       <span style={{ flex: 1 }}>{s.label}</span>
-      {active && <Check size={11} color={T.textPrimary}/>}
-    </button>
-  );
-}
-
-function MenuButton({
-  icon, label, kbd, action,
-}: { icon: React.ReactNode; label: string; kbd: string | null; action: () => void }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <button
-      onClick={action}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        width: "100%", display: "flex", alignItems: "center", gap: 10,
-        padding: "7px 10px", borderRadius: 5,
-        color: T.textSecondary, fontSize: 13, textAlign: "left",
-        background: hov ? T.surface2 : "transparent",
-        border: "none", cursor: "pointer",
-      }}
-    >
-      {icon}
-      <span style={{ flex: 1 }}>{label}</span>
-      {kbd && (
-        <kbd style={{
-          fontFamily: T.mono, fontSize: 10, padding: "1px 5px",
-          background: T.surface, border: `1px solid ${T.border}`,
-          borderRadius: 3, color: T.textTertiary,
-        }}>
-          {kbd}
-        </kbd>
-      )}
-    </button>
-  );
-}
-
-function SignOutButton({ onSignOut, initials }: { onSignOut: () => void; initials: string }) {
-  const { t } = useTranslation(["dashboard"]);
-  const [hov, setHov] = useState(false);
-  return (
-    <button
-      onClick={onSignOut}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        width: "100%", display: "flex", alignItems: "center", gap: 10,
-        padding: "7px 10px", borderRadius: 5,
-        color: "var(--kairo-color-bad-ink)", fontSize: 13, textAlign: "left",
-        background: hov ? "var(--kairo-color-bad-soft)" : "transparent",
-        border: "none", cursor: "pointer",
-      }}
-    >
-      <LogOut size={14} color="var(--kairo-color-bad-ink)"/>
-      <span style={{ flex: 1 }}>{t("dashboard:topChrome.account.signOut")}</span>
-      <span style={{ fontFamily: T.mono, fontSize: 10, color: "var(--kairo-color-bad-ink)", opacity: 0.6 }}>{initials}</span>
+      {active && <Icon name="check" size={11} color={T.textPrimary} />}
     </button>
   );
 }
@@ -655,7 +589,6 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
   const [notifs, setNotifs] = useState<NotifItem[]>([]);
   const [status, setStatus] = useState<UserStatus>("online");
   const [theme, setTheme] = useState<Theme>("light");
-  const ref = useRef<HTMLDivElement>(null);
 
   // KAI-168 — real in-app notifications (SLA escalations + KAI-232 mentions).
   // KAI-232: polled rather than fetched once, so a mention reaches the bell
@@ -720,28 +653,13 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
     if (item.ticketEventId) requestScrollToMessage(item.ticketEventId);
   }
 
-  // Click-outside + Escape
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(null);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(null); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   return (
-    <div ref={ref} style={{ display: "flex", alignItems: "center", gap: 6, position: "relative" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       {/* Bell */}
-      <div style={{ position: "relative" }}>
+      <Popover open={open === "notif"} onOpenChange={(next) => setOpen(next ? "notif" : null)}>
+        <PopoverTrigger>
         <button
           aria-label="Notificaciones"
-          onClick={() => setOpen((o) => (o === "notif" ? null : "notif"))}
           style={{
             padding: 6, borderRadius: 6, border: "none", cursor: "pointer",
             position: "relative",
@@ -750,7 +668,7 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
             display: "flex", alignItems: "center",
           }}
         >
-          <Bell size={18}/>
+          <Icon name="bell" size={18} />
           {unread > 0 && (
             <span style={{
               position: "absolute", top: 2, right: 2,
@@ -774,20 +692,22 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
             }}/>
           )}
         </button>
-        {open === "notif" && (
+        </PopoverTrigger>
+        <PopoverContent label="Notificaciones" align="end">
           <NotificationsPopover
             items={notifs}
             onMarkAll={markAllRead}
             onSelect={handleNotifSelect}
           />
-        )}
-      </div>
+        </PopoverContent>
+      </Popover>
 
       {/* Avatar + chevron */}
-      <div style={{ position: "relative", paddingLeft: 8, marginLeft: 2, borderLeft: `1px solid ${T.border}` }}>
+      <div style={{ paddingLeft: 8, marginLeft: 2, borderLeft: `1px solid ${T.border}` }}>
+      <Popover open={open === "profile"} onOpenChange={(next) => setOpen(next ? "profile" : null)}>
+        <PopoverTrigger>
         <button
           aria-label="Cuenta"
-          onClick={() => setOpen((o) => (o === "profile" ? null : "profile"))}
           style={{
             display: "flex", alignItems: "center", gap: 6, padding: 2, borderRadius: 999,
             background: open === "profile" ? T.surface2 : "transparent",
@@ -810,9 +730,10 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
               background: curStatusDot, border: `2px solid ${T.bg}`,
             }}/>
           </div>
-          <ChevronDown size={12} color={T.textTertiary}/>
+          <Icon name="down" size={12} color={T.textTertiary} />
         </button>
-        {open === "profile" && (
+        </PopoverTrigger>
+        <PopoverContent label="Cuenta" align="end">
           <ProfilePopover
             initials={initials}
             displayName={displayName}
@@ -824,7 +745,8 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
             onNavigate={(view) => { setOpen(null); onViewChange(view); }}
             onSignOut={() => { setOpen(null); onSignOut(); }}
           />
-        )}
+        </PopoverContent>
+      </Popover>
       </div>
     </div>
   );
@@ -889,7 +811,7 @@ export function TopChrome({ collapsed, onToggle, onViewChange }: TopChromeProps)
             borderRadius: 6, display: "flex", alignItems: "center",
           }}
         >
-          <PanelLeft size={16}/>
+          <Icon name="sidebar" size={16} />
         </button>
       </div>
 
@@ -900,15 +822,9 @@ export function TopChrome({ collapsed, onToggle, onViewChange }: TopChromeProps)
         display: "flex", alignItems: "center", padding: "0 10px", gap: 8,
         background: T.surface, color: T.textTertiary, fontSize: 13,
       }}>
-        <Search size={14}/>
+        <Icon name="search" size={14} />
         <span style={{ flex: 1 }}>{t("dashboard:topChrome.searchPlaceholder")}</span>
-        <kbd style={{
-          fontFamily: T.mono, fontSize: 11, padding: "1px 6px",
-          background: T.bg, border: `1px solid ${T.border}`,
-          borderRadius: 4, color: T.textTertiary,
-        }}>
-          ⌘K
-        </kbd>
+        <KbdGroup keys={["⌘", "K"]} />
       </div>
 
       {/* Right actions */}

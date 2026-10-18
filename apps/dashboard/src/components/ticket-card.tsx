@@ -1,13 +1,12 @@
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Users, ArrowUp, Lock } from "lucide-react";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { normalizeTicketType } from "@/lib/ticket-labels";
-import { CategoryChip, PriorityGlyph } from "@kairo/ui";
+import { CategoryChip, Icon, PriorityGlyph } from "@kairo/ui";
 
 const NO_NOTE_COUNTS = { notes: 0, unread_mentions: 0 } as const;
 
@@ -349,7 +348,7 @@ export function TicketCard({
               fontSize: 9.5,
             }}
           >
-            <Lock style={{ width: 8, height: 8 }} />
+            <Icon name="lock" size={8} />
             {noteCounts.notes}
           </span>
         )}
@@ -473,7 +472,7 @@ export function TicketCard({
             }}
             title={t("ticketCard.groupedTooltip", { count: groupCount - 1 })}
           >
-            <Users style={{ width: 10, height: 10, flexShrink: 0 }} />+ {groupCount - 1}
+            <Icon name="clients" size={10} style={{ flexShrink: 0 }} />+ {groupCount - 1}
           </span>
         )}
         {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount <= 1 && (
@@ -481,9 +480,7 @@ export function TicketCard({
             style={{ display: "inline-flex", flexShrink: 0 }}
             title={t("ticketCard.groupedAloneTooltip", "Este ticket pertenece a un grupo")}
           >
-            <Users
-              style={{ width: 12, height: 12, color: "var(--k-text-tertiary)", flexShrink: 0 }}
-            />
+            <Icon name="clients" size={12} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
           </span>
         )}
 
@@ -601,7 +598,7 @@ export function TicketCard({
                 gap: 3,
               }}
             >
-              <ArrowUp style={{ width: 10, height: 10 }} />
+              <Icon name="escalate" size={10} />
               {t("ticketCard.escalate")}
             </button>
           )}

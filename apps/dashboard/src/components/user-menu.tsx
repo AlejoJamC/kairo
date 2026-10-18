@@ -1,9 +1,8 @@
 // UserMenu — compact profile row at sidebar bottom.
 // Light-theme restyle (KAI-156); supports collapsed mode (icon only).
 
-import { LogOut } from "lucide-react";
 import { useAuth } from "@kairo/client-core/auth";
-import { Avatar } from "@kairo/ui";
+import { Avatar, Icon } from "@kairo/ui";
 
 interface UserMenuProps {
   collapsed?: boolean;
@@ -80,7 +79,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
           (e.currentTarget as HTMLButtonElement).style.background = "none";
         }}
       >
-        <LogOut style={{ width: 14, height: 14 }} />
+        <Icon name="logout" size={14} />
       </button>
     </div>
   );

@@ -1,5 +1,4 @@
 import * as React from "react";
-import { Paperclip, Send, X, Zap, RefreshCw, Lock, AlertTriangle, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
@@ -15,7 +14,7 @@ import {
 } from "@kairo/client-core/note-mentions";
 import { MentionDropdown } from "./triage/mention-dropdown";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar } from "@kairo/ui";
+import { Avatar, Icon } from "@kairo/ui";
 import { useAuth } from "@kairo/client-core/auth";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import type { TicketStatus } from "@kairo/types";
@@ -143,7 +142,7 @@ function SelectedMentionChip({
           color: hovered ? "white" : "var(--kairo-color-inverse-link)",
         }}
       >
-        <X style={{ width: 8, height: 8 }} strokeWidth={3} />
+        <Icon name="x" size={8} strokeWidth={3} />
       </button>
     </span>
   );
@@ -661,7 +660,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             transition: "all 0.1s ease",
           }}
         >
-          <Send style={{ width: 10, height: 10 }} />
+          <Icon name="send" size={10} />
           {t("replyBar.modeReply", "Reply")}
         </button>
         <button
@@ -683,7 +682,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             transition: "all 0.1s ease",
           }}
         >
-          <Lock style={{ width: 10, height: 10 }} />
+          <Icon name="lock" size={10} />
           {t("replyBar.modeNote", "Internal note")}
         </button>
       </div>
@@ -708,7 +707,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
                 cursor: "pointer",
               }}
             >
-              <Zap style={{ width: 11, height: 11 }} />
+              <Icon name="zap" size={11} />
               {t("ticketDetail.quickReply")}
             </button>
           </TemplatePicker>
@@ -739,7 +738,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             cursor: "pointer",
           }}
         >
-          <Paperclip style={{ width: 11, height: 11 }} />
+          <Icon name="clip" size={11} />
           {t("ticketDetail.attach")}
         </button>
       </div>
@@ -806,7 +805,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
                   borderRadius: 4,
                 }}
               >
-                <RefreshCw style={{ width: 10, height: 10 }} />
+                <Icon name="refresh" size={10} />
                 {t("replyBar.regenerate", "Regenerate")}
               </button>
               <button
@@ -824,7 +823,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
                 }}
                 aria-label={t("replyBar.dismissSuggestion")}
               >
-                <X style={{ width: 13, height: 13 }} />
+                <Icon name="x" size={13} />
               </button>
             </div>
           </div>
@@ -941,7 +940,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-            <AlertTriangle style={{ width: 12, height: 12, color: "var(--kairo-color-sla-escalate-ink)", flexShrink: 0 }} />
+            <Icon name="warning" size={12} color="var(--kairo-color-sla-escalate-ink)" style={{ flexShrink: 0 }} />
             <span style={{ fontSize: 12, fontWeight: 600, color: "var(--kairo-color-sla-escalate-ink)" }}>
               {t("replyBar.escalateTitle", "Escalate ticket")}
             </span>
@@ -960,7 +959,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
               }}
               aria-label={t("replyBar.escalateCancel", "Cancel")}
             >
-              <X style={{ width: 12, height: 12 }} />
+              <Icon name="x" size={12} />
             </button>
           </div>
           <textarea
@@ -1120,7 +1119,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
               transition: "background 0.1s ease",
             }}
           >
-            <Lock style={{ width: 11, height: 11 }} />
+            <Icon name="lock" size={11} />
             {sending ? t("replyBar.sendingNote", "Saving…") : t("replyBar.sendNote", "Add note")}
           </button>
         ) : (
@@ -1146,7 +1145,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
                 transition: "background 0.1s ease",
               }}
             >
-              <Send style={{ width: 12, height: 12 }} />
+              <Icon name="send" size={12} />
               {sending ? t("replyBar.sending") : t("ticketDetail.send")}
             </button>
 
@@ -1173,7 +1172,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
                 transition: "background 0.1s ease",
               }}
             >
-              <ChevronDown style={{ width: 13, height: 13 }} />
+              <Icon name="down" size={13} />
             </button>
 
             {sendMenuOpen && (

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Clock, X } from "lucide-react";
 import { fetchProposals } from "@kairo/client-core/queries";
 import { approveClassification } from "@kairo/client-core/endpoints";
 import { useAuth } from "@kairo/client-core/auth";
@@ -10,6 +9,7 @@ import { AiAssistant } from "@/components/ai-assistant";
 import { TicketCard } from "@/components/ticket-card";
 import type { AppView } from "@/types";
 import type { Ticket } from "@kairo/types";
+import { Icon, Spinner } from "@kairo/ui";
 
 type ProposalFilter = "pending" | "auto_approved";
 
@@ -126,7 +126,7 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
         {loading && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
-            <Clock style={{ width: 20, height: 20, color: "var(--k-text-tertiary)" }} className="animate-spin" />
+            <Spinner size="lg" />
           </div>
         )}
 
@@ -201,11 +201,11 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
             <button type="button" disabled={busy} style={buttonStyle(true)} onClick={() => void review(selected, "confirm")}>
-              <Check style={{ width: 14, height: 14 }} />
+              <Icon name="check" size={14} />
               {t("aiReviewView.confirm")}
             </button>
             <button type="button" disabled={busy} style={buttonStyle(false)} onClick={() => void review(selected, "reject")}>
-              <X style={{ width: 14, height: 14 }} />
+              <Icon name="x" size={14} />
               {t("aiReviewView.reject")}
             </button>
             {error && (

@@ -7,10 +7,10 @@ import {
   NotesHeader,
   NoteSkeleton,
   PrivacyFootnote,
-  EmptyBlock,
   TeamOnlyChip,
 } from "./note-primitives";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
+import { EmptyState, LoadingStatus } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // KAI-232 / ADR-025 §7.2 — right-panel "Notes" tab.
@@ -102,9 +102,9 @@ export function NotesPanel({ ticketId, onNewNote }: NotesPanelProps) {
 
   if (!ticketId) {
     return (
-      <EmptyBlock
+      <EmptyState
         title={t("notes.noTicket", "No ticket selected")}
-        sub={t("notes.noTicketHint", "Pick a ticket from the queue to see its internal notes and mentions.")}
+        description={t("notes.noTicketHint", "Pick a ticket from the queue to see its internal notes and mentions.")}
       />
     );
   }
@@ -112,22 +112,8 @@ export function NotesPanel({ ticketId, onNewNote }: NotesPanelProps) {
   if (loading) {
     return (
       <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-          <span
-            className="pulse"
-            style={{ width: 5, height: 5, borderRadius: 999, background: "var(--k-note-rail)" }}
-          />
-          <span
-            style={{
-              fontFamily: "var(--k-font-mono)",
-              fontSize: 10.5,
-              color: "var(--k-text-tertiary)",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-          >
-            {t("notes.loading", "loading notes…")}
-          </span>
+        <div style={{ marginBottom: 10 }}>
+          <LoadingStatus>{t("notes.loading", "loading notes…")}</LoadingStatus>
         </div>
         <NoteSkeleton />
         <NoteSkeleton />
@@ -141,12 +127,11 @@ export function NotesPanel({ ticketId, onNewNote }: NotesPanelProps) {
       <div>
         {/* The header stays: "New note" is the empty state's main action (B7). */}
         <NotesHeader count={0} onNewNote={onNewNote} />
-        <EmptyBlock
+        <EmptyState
           title={t("notes.empty.title", "No internal notes yet")}
-          sub={t("notes.empty.hint", "Write the first one from the composer's «Internal note» mode. Only your team can see them.")}
-        >
-          <TeamOnlyChip />
-        </EmptyBlock>
+          description={t("notes.empty.hint", "Write the first one from the composer's «Internal note» mode. Only your team can see them.")}
+          hint={<TeamOnlyChip />}
+        />
       </div>
     );
   }

@@ -16,7 +16,13 @@
     "errorEmpty": "Select at least one field to correct",
     "errorGeneric": "Failed to save correction. Try again.",
     "correctedBadge": "Corrected",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "tones": {
+      "aggressive": "aggressive",
+      "frustrated": "frustrated",
+      "neutral": "neutral",
+      "positive": "positive"
+    }
   },
   "ticketCard": {
     "slaBreached": "OVERDUE",

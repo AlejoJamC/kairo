@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Lock } from "lucide-react";
 import type { Ticket } from "@kairo/types";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { CategoryChip, Chip, PriorityGlyph } from "@kairo/ui";
+import { CategoryChip, Chip, Icon, PriorityGlyph } from "@kairo/ui";
 import { normalizeTicketCategory, normalizeTicketType } from "@/lib/ticket-labels";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { CorrectionDialog } from "@/components/correction-dialog";
@@ -120,7 +119,7 @@ export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
           )}
           {/* KAI-232 spec A1 — how many internal notes this ticket carries. */}
           {INTERNAL_NOTES_ENABLED && noteCount > 0 && (
-            <Chip tone="note" icon={<Lock style={{ width: 9, height: 9 }} />}>
+            <Chip tone="note" icon={<Icon name="lock" size={9} />}>
               {t("notes.headerCount", { count: noteCount, defaultValue: "{{count}} notes" })}
             </Chip>
           )}

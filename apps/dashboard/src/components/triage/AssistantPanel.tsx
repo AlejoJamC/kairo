@@ -4,12 +4,8 @@ import { z } from "zod";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Sparkles, Check, ChevronRight, Copy, Plus, BookOpen,
-  Ticket as TicketIcon, User, ArrowUp, Square, AtSign,
-  Activity, PenLine, Layers, type LucideIcon,
-} from "lucide-react";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { Caret, Icon, Spinner, type IconName } from "@kairo/ui";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface Step { label: string; detail: string }
@@ -34,11 +30,11 @@ type StarterKey =
   | "ai.assistantStarterPolicy"
   | "ai.assistantStarterDraft"
   | "ai.assistantStarterSimilar";
-const STARTERS: { id: string; icon: LucideIcon; labelKey: StarterKey }[] = [
-  { id: "resume",  icon: Activity, labelKey: "ai.assistantStarterResume"  },
-  { id: "policy",  icon: BookOpen, labelKey: "ai.assistantStarterPolicy"  },
-  { id: "draft",   icon: PenLine,  labelKey: "ai.assistantStarterDraft"   },
-  { id: "similar", icon: Layers,   labelKey: "ai.assistantStarterSimilar" },
+const STARTERS: { id: string; icon: IconName; labelKey: StarterKey }[] = [
+  { id: "resume",  icon: "activity", labelKey: "ai.assistantStarterResume"  },
+  { id: "policy",  icon: "knowledge", labelKey: "ai.assistantStarterPolicy"  },
+  { id: "draft",   icon: "pen",  labelKey: "ai.assistantStarterDraft"   },
+  { id: "similar", icon: "layers",   labelKey: "ai.assistantStarterSimilar" },
 ];
 
 const AssistantResponseSchema = z.object({
@@ -79,13 +75,9 @@ function AssistantMark({ size = 24 }: { size?: number }) {
       display: "flex", alignItems: "center", justifyContent: "center",
       boxShadow: "0 0 0 1px rgba(43,91,255,0.18), 0 4px 12px rgba(43,91,255,0.28)",
     }}>
-      <Sparkles style={{ width: size * 0.56, height: size * 0.56, color: "white" }} />
+      <Icon name="spark" size={size * 0.56} color="white" />
     </div>
   );
-}
-
-function Caret() {
-  return <span className="kai-caret" style={{ display: "inline-block", width: 7, height: 14, marginLeft: 1, marginBottom: -2, background: "var(--k-accent)", borderRadius: 1 }} />;
 }
 
 // ── Reasoning stepper ────────────────────────────────────────────────────────
@@ -102,11 +94,11 @@ function Steps({ steps, phase }: { steps: Step[]; phase: Phase }) {
         style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", padding: "2px 0", background: "none", border: "none", cursor: "pointer" }}
       >
         {!done
-          ? <span className="kai-spin" style={{ width: 11, height: 11, borderRadius: 999, border: "1.6px solid var(--k-border)", borderTopColor: "var(--k-accent)", display: "inline-block" }} />
-          : <Check style={{ width: 12, height: 12, color: "var(--k-success)" }} />}
+          ? <Spinner />
+          : <Icon name="check" size={12} color="var(--k-success)" />}
         <span>{done ? t("ai.assistantReasoned", { count: steps.length }) : t("ai.assistantThinking")}</span>
         <span style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s", display: "inline-flex" }}>
-          <ChevronRight style={{ width: 11, height: 11, color: "var(--k-text-tertiary)" }} />
+          <Icon name="right" size={11} color="var(--k-text-tertiary)" />
         </span>
       </button>
       {open && (
@@ -134,8 +126,8 @@ function CitationCard({ c }: { c: Citation }) {
     >
       <div style={{ width: 22, height: 22, borderRadius: 5, flexShrink: 0, marginTop: 1, background: c.kind === "kb" ? "var(--k-accent-subtle)" : "var(--k-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
         {c.kind === "kb"
-          ? <BookOpen style={{ width: 12, height: 12, color: "var(--k-accent)" }} />
-          : <TicketIcon style={{ width: 12, height: 12, color: "var(--k-text-secondary)" }} />}
+          ? <Icon name="knowledge" size={12} color="var(--k-accent)" />
+          : <Icon name="ticket" size={12} color="var(--k-text-secondary)" />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -156,7 +148,7 @@ function DraftCard({ d, onInsert, inserted }: { d: Draft; onInsert: () => void; 
       <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: "var(--k-gradient-ai)" }} />
       <div style={{ padding: "8px 11px", borderBottom: "1px solid var(--k-border-subtle)", display: "flex", alignItems: "center", gap: 7, background: "var(--k-surface)" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, fontFamily: "var(--k-font-mono)", letterSpacing: "0.02em", padding: "2px 7px", borderRadius: 999, background: "var(--k-accent-subtle)", color: "var(--k-accent)", border: "1px solid var(--k-accent-border)" }}>
-          <Sparkles style={{ width: 9, height: 9 }} /> {t("ai.assistantDraftBadge")}
+          <Icon name="spark" size={9} /> {t("ai.assistantDraftBadge")}
         </span>
         <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.subject}</span>
       </div>
@@ -167,7 +159,7 @@ function DraftCard({ d, onInsert, inserted }: { d: Draft; onInsert: () => void; 
           onClick={() => { getPlatform().clipboard.writeText(d.body).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1400); }}
           style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, padding: "5px 9px", border: "1px solid var(--k-border)", borderRadius: 6, color: copied ? "var(--k-success)" : "var(--k-text-secondary)", background: "white", cursor: "pointer" }}
         >
-          {copied ? <Check style={{ width: 12, height: 12 }} /> : <Copy style={{ width: 12, height: 12 }} />}
+          {copied ? <Icon name="check" size={12} /> : <Icon name="copy" size={12} />}
           {copied ? t("ai.assistantCopied") : t("ai.assistantCopy")}
         </button>
         <button
@@ -176,7 +168,7 @@ function DraftCard({ d, onInsert, inserted }: { d: Draft; onInsert: () => void; 
           disabled={inserted}
           style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, padding: "5px 11px", borderRadius: 6, color: "white", background: inserted ? "var(--k-success)" : "var(--k-accent)", fontWeight: 500, border: "none", cursor: inserted ? "default" : "pointer" }}
         >
-          {inserted ? <Check style={{ width: 12, height: 12 }} /> : <Plus style={{ width: 12, height: 12 }} />}
+          {inserted ? <Icon name="check" size={12} /> : <Icon name="plus" size={12} />}
           {inserted ? t("ai.assistantInserted") : t("ai.assistantInsert")}
         </button>
       </div>
@@ -219,7 +211,7 @@ function AssistantTurn({ answer, onInsert, onFollowup }: {
           const streaming = phase === "streaming" && i === proseN;
           if (b.type === "p") {
             const txt = streaming ? b.text.slice(0, charN) : b.text;
-            return <p key={i} style={{ margin: "0 0 9px", fontSize: 13.5, lineHeight: 1.6, color: "var(--k-text-secondary)" }}>{renderInline(txt)}{streaming && <Caret />}</p>;
+            return <p key={i} style={{ margin: "0 0 9px", fontSize: 13.5, lineHeight: 1.6, color: "var(--k-text-secondary)" }}>{renderInline(txt)}{streaming && <Caret display="inline-flex" marginLeft={1} marginBottom={-2} />}</p>;
           }
           const joined = b.items.join("\n");
           const shown = streaming ? joined.slice(0, charN).split("\n") : b.items;
@@ -228,7 +220,7 @@ function AssistantTurn({ answer, onInsert, onFollowup }: {
               {shown.map((it, j) => it !== "" && (
                 <li key={j} style={{ display: "flex", gap: 8, fontSize: 13, lineHeight: 1.55, color: "var(--k-text-secondary)" }}>
                   <span style={{ marginTop: 7, width: 4, height: 4, borderRadius: 999, background: "var(--k-accent)", flexShrink: 0 }} />
-                  <span>{renderInline(it)}{streaming && j === shown.length - 1 && <Caret />}</span>
+                  <span>{renderInline(it)}{streaming && j === shown.length - 1 && <Caret display="inline-flex" marginLeft={1} marginBottom={-2} />}</span>
                 </li>
               ))}
             </ul>
@@ -270,7 +262,7 @@ function AssistantTurn({ answer, onInsert, onFollowup }: {
                 onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-surface-2)"; e.currentTarget.style.color = "var(--k-text-primary)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "white"; e.currentTarget.style.color = "var(--k-text-secondary)"; }}
               >
-                <Sparkles style={{ width: 10, height: 10, color: "var(--k-accent)" }} />{f}
+                <Icon name="spark" size={10} color="var(--k-accent)" />{f}
               </button>
             ))}
           </div>
@@ -302,9 +294,9 @@ function Composer({ onSend, busy, onStop, ticketLabel, senderName, modelName }: 
     if (ref.current) ref.current.style.height = "auto";
   };
 
-  const chips: { icon: LucideIcon; label: string }[] = [
-    { icon: TicketIcon, label: ticketLabel },
-    { icon: User, label: senderName },
+  const chips: { icon: IconName; label: string }[] = [
+    { icon: "ticket", label: ticketLabel },
+    { icon: "user", label: senderName },
   ];
 
   return (
@@ -314,12 +306,12 @@ function Composer({ onSend, busy, onStop, ticketLabel, senderName, modelName }: 
         <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 8px 0", flexWrap: "wrap" }}>
           {chips.map((c, i) => (
             <span key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontFamily: "var(--k-font-mono)", padding: "2px 7px", borderRadius: 6, background: "var(--k-surface)", border: "1px solid var(--k-border)", color: "var(--k-text-secondary)", maxWidth: 150 }}>
-              <c.icon style={{ width: 11, height: 11, color: "var(--k-text-tertiary)", flexShrink: 0 }} />
+              <Icon name={c.icon} size={11} color="var(--k-text-tertiary)" />
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.label}</span>
             </span>
           ))}
           <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontFamily: "var(--k-font-mono)", padding: "2px 7px", borderRadius: 6, color: "var(--k-text-tertiary)", border: "1px dashed var(--k-border)" }}>
-            <AtSign style={{ width: 11, height: 11 }} />{t("ai.assistantContextChip")}
+            <Icon name="mention" size={11} />{t("ai.assistantContextChip")}
           </span>
         </div>
         <textarea
@@ -342,11 +334,11 @@ function Composer({ onSend, busy, onStop, ticketLabel, senderName, modelName }: 
           <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>{t("ai.assistantModelContext")}</span>
           {busy ? (
             <button type="button" onClick={onStop} style={{ marginLeft: "auto", flexShrink: 0, width: 30, height: 30, borderRadius: 8, background: "var(--k-surface-2)", display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer" }}>
-              <Square style={{ width: 12, height: 12, color: "var(--k-text-secondary)" }} />
+              <Icon name="square" size={12} color="var(--k-text-secondary)" />
             </button>
           ) : (
             <button type="button" onClick={submit} disabled={!val.trim()} style={{ marginLeft: "auto", flexShrink: 0, width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: val.trim() ? "var(--k-accent)" : "var(--k-surface-2)", border: "none", cursor: val.trim() ? "pointer" : "default", transition: "background .12s" }}>
-              <ArrowUp style={{ width: 15, height: 15, color: val.trim() ? "white" : "var(--k-text-tertiary)" }} />
+              <Icon name="escalate" size={15} color={val.trim() ? "white" : "var(--k-text-tertiary)"} />
             </button>
           )}
         </div>
@@ -460,10 +452,10 @@ export function AssistantPanel() {
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--k-border)"; e.currentTarget.style.background = "white"; }}
                 >
                   <div style={{ width: 26, height: 26, borderRadius: 6, background: "var(--k-accent-subtle)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <s.icon style={{ width: 14, height: 14, color: "var(--k-accent)" }} />
+                    <Icon name={s.icon} size={14} color="var(--k-accent)" />
                   </div>
                   <span style={{ flex: 1 }}>{t(s.labelKey)}</span>
-                  <ChevronRight style={{ width: 13, height: 13, color: "var(--k-text-tertiary)" }} />
+                  <Icon name="right" size={13} color="var(--k-text-tertiary)" />
                 </button>
               ))}
             </div>

@@ -1,8 +1,7 @@
 import * as React from "react";
-import { Search } from "lucide-react";
-import { Popover } from "radix-ui";
 import { useTranslation } from "react-i18next";
 import { listTemplates } from "@kairo/client-core/endpoints";
+import { Icon, Popover, PopoverContent, PopoverTrigger } from "@kairo/ui";
 
 interface Template {
   id: string;
@@ -22,7 +21,7 @@ export interface TemplatePreviewVars {
 
 interface TemplatePickerProps {
   onSelect: (content: string) => void;
-  children: React.ReactNode;
+  children: React.ReactElement<Record<string, unknown>>;
   /** When provided, variables in preview are substituted with real values. */
   previewVars?: TemplatePreviewVars;
 }
@@ -105,33 +104,17 @@ export function TemplatePicker({ onSelect, children, previewVars }: TemplatePick
   const hovered = templates.find((tmpl) => tmpl.id === hoveredId);
 
   return (
-    <Popover.Root open={open} onOpenChange={handleOpenChange}>
-      <Popover.Trigger asChild>{children}</Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          side="top"
-          align="end"
-          sideOffset={8}
-          style={{
-            zIndex: 50,
-            width: 320,
-            borderRadius: 10,
-            border: "1px solid var(--k-border)",
-            background: "white",
-            boxShadow: "0 4px 16px rgba(9,9,11,0.08), 0 1px 2px rgba(9,9,11,0.04)",
-            outline: "none",
-          }}
-          className="animate-in fade-in-0 zoom-in-95"
-        >
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger>{children}</PopoverTrigger>
+      <PopoverContent label={t("templatePicker.searchPlaceholder")} side="top" align="end" width={320}>
           {/* Search bar */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--k-border-subtle)", padding: "8px 12px" }}>
-            <Search style={{ width: 13, height: 13, flexShrink: 0, color: "var(--k-text-tertiary)" }} />
+            <Icon name="search" size={13} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
             <input
               style={{ flex: 1, fontSize: 13, color: "var(--k-text-primary)", outline: "none", background: "none", border: "none" }}
               placeholder={t("templatePicker.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              autoFocus
             />
           </div>
 
@@ -212,9 +195,7 @@ export function TemplatePicker({ onSelect, children, previewVars }: TemplatePick
             </div>
           </div>
 
-          <Popover.Arrow style={{ fill: "white" }} />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+      </PopoverContent>
+    </Popover>
   );
 }

@@ -1,9 +1,10 @@
 import { getPlatform } from "@kairo/client-core/config";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 // ---------------------------------------------------------------------------
-// useResizablePanel — drag-to-resize for the Triage right panel (KAI-249)
+// useResizablePanel — size, limits and persistence for the Triage right panel.
+// The drag handle itself is the shared `Resizer` from @kairo/ui.
 //
 // The panel is pinned to the right edge of its flex row (`<main>`), so widening
 // it steals width from the CENTER column only — the left rail + ticket list are
@@ -37,7 +38,11 @@ interface ResizablePanelOptions {
 interface ResizablePanel {
   panelRef: RefObject<HTMLDivElement | null>;
   width: number;
-  onHandleMouseDown: (e: React.MouseEvent) => void;
+  /** Live ceiling for the current viewport. */
+  max: number;
+  setWidth: (width: number) => void;
+  /** Persist the settled width. */
+  commit: (width: number) => void;
   /** Reset to the floor (used on double-click of the handle). */
   reset: () => void;
 }
@@ -86,38 +91,19 @@ export function useResizablePanel({ min, cap, reserveLeft, centerMin }: Resizabl
     return () => window.removeEventListener("resize", onResize);
   }, [clampToContainer]);
 
-  const onHandleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const parent = panelRef.current?.parentElement;
-      if (!parent) return;
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-
-      function onMove(ev: MouseEvent) {
-        const rect = parent!.getBoundingClientRect();
-        const next = Math.min(Math.max(rect.right - ev.clientX, min), maxFor(rect.width));
-        setWidth(next);
-      }
-      function onUp() {
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-        setWidth((w) => { persist(w); return w; });
-      }
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    },
-    [maxFor, min],
-  );
-
   const reset = useCallback(() => {
     const next = clampToContainer(min);
     setWidth(next);
     persist(next);
   }, [clampToContainer, min]);
 
-  return { panelRef, width, onHandleMouseDown, reset };
+  const [max, setMax] = useState<number>(cap);
+  useLayoutEffect(() => {
+    const parent = panelRef.current?.parentElement;
+    setMax(maxFor(parent?.clientWidth ?? window.innerWidth));
+  }, [maxFor, width]);
+
+  const commit = useCallback((next: number) => persist(next), []);
+
+  return { panelRef, width, max, setWidth, commit, reset };
 }

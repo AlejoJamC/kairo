@@ -16,7 +16,13 @@
     "errorEmpty": "Selecciona al menos un campo para corregir",
     "errorGeneric": "No se pudo guardar la corrección. Intenta de nuevo.",
     "correctedBadge": "Corregido",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "tones": {
+      "aggressive": "agresivo",
+      "frustrated": "frustrado",
+      "neutral": "neutral",
+      "positive": "positivo"
+    }
   },
   "ticketCard": {
     "slaBreached": "VENCIDO",

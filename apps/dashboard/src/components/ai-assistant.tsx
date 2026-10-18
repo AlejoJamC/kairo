@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  CheckCircle2, Loader2, BookOpen, MessageSquarePlus,
-} from "lucide-react";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { getRelatedHistory, getKnowledgeContext, requestEscalationReasons, escalateTicket, getClientProfile } from "@kairo/client-core/endpoints";
 import type { ClientProfile } from "@kairo/client-core/stores/triage-store";
@@ -14,6 +11,9 @@ import { useResizablePanel } from "@/hooks/use-resizable-panel";
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
 import { NotesPanel } from "@/components/triage/NotesPanel";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
+import { Button, Field, FieldTextarea, Icon, Resizer, Skeleton } from "@kairo/ui";
+
+const RESIZE_MIN = 340;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Dashboard > Right Panel — Feature Flags (VITE_FF_*)
@@ -145,11 +145,11 @@ function ClientTab({ loading }: { loading: boolean }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <ClientProfileSkeleton />
-        <div className="shimmer" style={{ height: 112, borderRadius: 8 }} />
+        <Skeleton height={112} borderRadius={8} />
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div className="shimmer" style={{ height: 9, width: 100 }} />
-          <div className="shimmer" style={{ height: 9, width: "90%" }} />
-          <div className="shimmer" style={{ height: 9, width: "80%" }} />
+          <Skeleton height={9} width={100} />
+          <Skeleton height={9} width="90%" />
+          <Skeleton height={9} width="80%" />
         </div>
       </div>
     );
@@ -280,8 +280,8 @@ function SimilarTab({ ticketId, lang }: { ticketId: string | null; lang: string 
   if (loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div className="shimmer" style={{ height: 80, borderRadius: 8 }} />
-        <div className="shimmer" style={{ height: 80, borderRadius: 8 }} />
+        <Skeleton height={80} borderRadius={8} />
+        <Skeleton height={80} borderRadius={8} />
       </div>
     );
   }
@@ -338,7 +338,7 @@ function SimilarTab({ ticketId, lang }: { ticketId: string | null; lang: string 
                     style={{ fontSize: 11, color: "var(--k-accent)", fontWeight: 500, background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left", display: "flex", alignItems: "center", gap: 4 }}
                     onClick={() => setSuggestedReply(c.resolution_summary!)}
                   >
-                    <MessageSquarePlus style={{ width: 12, height: 12 }} />
+                    <Icon name="note" size={12} />
                     {t("ai.useInReply")}
                   </button>
                 </>
@@ -378,8 +378,8 @@ function ArticlesTab({ ticketId }: { ticketId: string | null }) {
   if (loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div className="shimmer" style={{ height: 72, borderRadius: 8 }} />
-        <div className="shimmer" style={{ height: 72, borderRadius: 8 }} />
+        <Skeleton height={72} borderRadius={8} />
+        <Skeleton height={72} borderRadius={8} />
       </div>
     );
   }
@@ -401,7 +401,7 @@ function ArticlesTab({ ticketId }: { ticketId: string | null }) {
         >
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", lineHeight: 1.35, display: "flex", alignItems: "center", gap: 6 }}>
-              <BookOpen style={{ width: 13, height: 13, color: "var(--k-text-tertiary)", flexShrink: 0 }} />
+              <Icon name="knowledge" size={13} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
               {article.title}
             </span>
             {formatSim(article.similarity) && (
@@ -423,7 +423,7 @@ function ArticlesTab({ ticketId }: { ticketId: string | null }) {
             style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
             onClick={() => setSuggestedReply(article.content)}
           >
-            <MessageSquarePlus style={{ width: 12, height: 12 }} />
+            <Icon name="note" size={12} />
             {t("ai.useInReply")}
           </button>
         </div>
@@ -506,8 +506,8 @@ function EscalateTab({
         </p>
         {reasonsLoading ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div className="shimmer" style={{ height: 10, width: "80%" }} />
-            <div className="shimmer" style={{ height: 10, width: "60%" }} />
+            <Skeleton height={10} width="80%" />
+            <Skeleton height={10} width="60%" />
           </div>
         ) : reasons.length === 0 ? (
           <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", fontStyle: "italic", margin: 0 }}>
@@ -537,7 +537,7 @@ function EscalateTab({
       {/* Escalation packet */}
       {escalatedAt ? (
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--kairo-color-ok)", fontWeight: 500 }}>
-          <CheckCircle2 style={{ width: 13, height: 13 }} />
+          <Icon name="resolve" size={13} />
           <span>{t("ai.escalatedSuccess")} {escalatedAt}</span>
         </div>
       ) : (
@@ -561,41 +561,34 @@ function EscalateTab({
           </div>
 
           {editMode && (
-            <div>
-              <label className="k-label" style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                {t("ai.escalationReason")}
-              </label>
-              <textarea
+            <Field label={t("ai.escalationReason")}>
+              <FieldTextarea
                 value={escReason}
-                onChange={(e) => setEscReason(e.target.value)}
+                onChangeText={setEscReason}
                 placeholder={t("ai.escalationReasonPlaceholder")}
                 rows={3}
-                className="k-textarea"
-                style={{ fontSize: 12 }}
               />
-            </div>
+            </Field>
           )}
 
           <div style={{ display: "flex", gap: 6 }}>
             {editMode ? (
               <>
-                <button className="k-btn-secondary" style={{ flex: 1, fontSize: 12 }} onClick={() => setEditMode(false)}>
+                <Button flex={1} onPress={() => setEditMode(false)}>
                   {t("ai.cancelEdit")}
-                </button>
-                <button className="k-btn-primary" style={{ flex: 1, fontSize: 12 }} disabled={escalating} onClick={handleEscalate}>
-                  {escalating && <Loader2 style={{ width: 12, height: 12 }} className="animate-spin" />}
-                  {escalating ? t("ai.escalating") : t("ai.confirmEscalation")}
-                </button>
+                </Button>
+                <Button variant="primary" flex={1} loading={escalating} loadingLabel={t("ai.escalating")} onPress={handleEscalate}>
+                  {t("ai.confirmEscalation")}
+                </Button>
               </>
             ) : (
               <>
-                <button className="k-btn-secondary" style={{ fontSize: 12 }} onClick={() => setEditMode(true)}>
+                <Button onPress={() => setEditMode(true)}>
                   {t("ai.editDetails")}
-                </button>
-                <button className="k-btn-primary" style={{ flex: 1, fontSize: 12 }} disabled={escalating} onClick={handleEscalate}>
-                  {escalating && <Loader2 style={{ width: 12, height: 12 }} className="animate-spin" />}
-                  {escalating ? t("ai.escalating") : t("ai.escalateToLevel", { level })}
-                </button>
+                </Button>
+                <Button variant="primary" flex={1} loading={escalating} loadingLabel={t("ai.escalating")} onPress={handleEscalate}>
+                  {t("ai.escalateToLevel", { level })}
+                </Button>
               </>
             )}
           </div>
@@ -671,8 +664,8 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   // Drag-to-resize. Floor = the current fixed width (340). Ceiling is computed
   // so the center column keeps a usable width; the left rail + ticket list
   // (reserveLeft) are never touched — only the center yields. See the hook.
-  const { panelRef, width, onHandleMouseDown, reset } = useResizablePanel({
-    min: 340,          // current fixed design width — the minimum
+  const { panelRef, width, max, setWidth, commit, reset } = useResizablePanel({
+    min: RESIZE_MIN,   // current fixed design width — the minimum
     cap: 720,          // absolute ceiling (optimal reading/chat line length)
     reserveLeft: 360,  // fixed ticket-list column to the panel's left
     centerMin: 520,    // smallest comfortable width for the email/composer column
@@ -683,14 +676,18 @@ export function AiAssistant({ customer }: AiAssistantProps) {
 
       {/* Resize handle — drag the left edge to widen (steals from center only);
           double-click to reset to the minimum width. */}
-      <div
-        onMouseDown={onHandleMouseDown}
-        onDoubleClick={reset}
-        title={t("ai.resizeHint")}
-        style={{ position: "absolute", left: -3, top: 0, bottom: 0, width: 6, cursor: "col-resize", zIndex: 5 }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-accent-subtle)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-      />
+      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 5, display: "flex" }}>
+        <Resizer
+          label={t("ai.resizeHint")}
+          value={width}
+          min={RESIZE_MIN}
+          max={max}
+          invert
+          onValueChange={setWidth}
+          onCommit={commit}
+          onReset={reset}
+        />
+      </div>
 
       {/* Tab bar */}
       <div style={{ padding: "12px 14px 0", flexShrink: 0 }}>

@@ -1,27 +1,10 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Check,
-  AlertCircle,
-  Loader2,
-  LayoutPanelLeft,
-  Users,
-  Layers,
-  Sparkles,
-  BookOpen,
-  Tag,
-  Lock,
-  Code,
-  Globe,
-  Plus,
-  X,
-  MoreHorizontal,
-  AlarmClock,
-} from "lucide-react";
 import { useAuth } from "@kairo/client-core/auth";
 import { updateProfileName } from "@kairo/client-core/queries";
 import { getOperationalSlaConfig, saveOperationalSlaConfig } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
+import { Icon, Spinner, Switch, type IconName } from "@kairo/ui";
 
 interface Props {
   onViewChange: (view: AppView) => void;
@@ -39,17 +22,17 @@ type SettingsSection =
   | "api";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildNavItems(t: (...args: any[]) => string): { id: SettingsSection; label: string; Icon: React.ElementType }[] {
+function buildNavItems(t: (...args: any[]) => string): { id: SettingsSection; label: string; icon: IconName }[] {
   return [
-    { id: "workspace",    label: t("dashboard:settings.nav.workspace"),    Icon: LayoutPanelLeft },
-    { id: "team",         label: t("dashboard:settings.nav.team"),         Icon: Users },
-    { id: "integrations", label: t("dashboard:settings.nav.integrations"), Icon: Layers },
-    { id: "triage",       label: t("dashboard:settings.nav.triage"),       Icon: Sparkles },
-    { id: "sla",          label: t("dashboard:settings.nav.sla"),          Icon: AlarmClock },
-    { id: "kb",           label: t("dashboard:settings.nav.kb"),           Icon: BookOpen },
-    { id: "billing",      label: t("dashboard:settings.nav.billing"),      Icon: Tag },
-    { id: "security",     label: t("dashboard:settings.nav.security"),     Icon: Lock },
-    { id: "api",          label: t("dashboard:settings.nav.api"),          Icon: Code },
+    { id: "workspace",    label: t("dashboard:settings.nav.workspace"),    icon: "panel" },
+    { id: "team",         label: t("dashboard:settings.nav.team"),         icon: "clients" },
+    { id: "integrations", label: t("dashboard:settings.nav.integrations"), icon: "layers" },
+    { id: "triage",       label: t("dashboard:settings.nav.triage"),       icon: "spark" },
+    { id: "sla",          label: t("dashboard:settings.nav.sla"),          icon: "alarm" },
+    { id: "kb",           label: t("dashboard:settings.nav.kb"),           icon: "knowledge" },
+    { id: "billing",      label: t("dashboard:settings.nav.billing"),      icon: "tag" },
+    { id: "security",     label: t("dashboard:settings.nav.security"),     icon: "lock" },
+    { id: "api",          label: t("dashboard:settings.nav.api"),          icon: "code" },
   ];
 }
 
@@ -114,7 +97,7 @@ function WorkspaceSection() {
       </div>
 
       <div style={{ ...styles.card, display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-        <Globe size={16} style={{ color: "var(--k-text-tertiary)", flexShrink: 0 }} />
+        <Icon name="globe" size={16} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t("dashboard:settings.workspace.langTitle")}</div>
           <div style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t("dashboard:settings.workspace.langDesc")}</div>
@@ -128,7 +111,7 @@ function WorkspaceSection() {
 
       {msg && (
         <div style={{ ...styles.msgBanner, background: msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" : "var(--kairo-color-bad-soft)", color: msg.type === "success" ? "var(--kairo-color-ok-ink)" : "var(--kairo-color-bad-ink)", border: `1px solid ${msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" : "var(--kairo-color-bad-line)"}`, marginBottom: 16 }}>
-          {msg.type === "success" ? <Check size={14} /> : <AlertCircle size={14} />}
+          {msg.type === "success" ? <Icon name="check" size={14} /> : <Icon name="alert" size={14} />}
           {msg.text}
         </div>
       )}
@@ -136,7 +119,7 @@ function WorkspaceSection() {
       <div style={styles.formFooter}>
         <button style={styles.btnGhost}>{t("dashboard:settings.discard")}</button>
         <button style={styles.btnPrimary} onClick={save} disabled={saving}>
-          {saving && <Loader2 size={13} className="animate-spin" />}
+          {saving && <Spinner />}
           {saving ? t("dashboard:settings.savingState") : t("dashboard:settings.saveChanges")}
         </button>
       </div>
@@ -159,7 +142,7 @@ function TeamSection() {
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
         <h1 style={{ ...styles.pageTitle, margin: 0 }}>{t("dashboard:settings.team.title")}</h1>
         <button style={styles.btnPrimary}>
-          <Plus size={13} /> {t("dashboard:settings.team.invite")}
+          <Icon name="plus" size={13} /> {t("dashboard:settings.team.invite")}
         </button>
       </div>
       <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "8px 0 24px" }}>
@@ -195,7 +178,7 @@ function TeamSection() {
               {m.status === "online" ? t("dashboard:settings.team.statusActive") : t("dashboard:settings.team.statusAway")}
             </span>
             <button style={{ color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer", padding: 4 }}>
-              <MoreHorizontal size={14} />
+              <Icon name="more" size={14} />
             </button>
           </div>
         ))}
@@ -289,24 +272,6 @@ const TIER_COLORS = ["var(--kairo-color-faint)", "var(--kairo-color-bad)", "var(
 // Default category keys — stored in i18n so they switch language automatically
 const DEFAULT_CATEGORY_KEYS = ["billing", "apiBugs", "configuration", "sales", "product", "onboarding", "account"] as const;
 
-function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
-  return (
-    <button
-      onClick={onChange}
-      style={{
-        width: 36, height: 20, borderRadius: 10, padding: 2,
-        background: on ? "var(--kairo-color-accent)" : "var(--k-border)",
-        border: "none", cursor: "pointer", flexShrink: 0,
-        display: "flex", alignItems: "center",
-        justifyContent: on ? "flex-end" : "flex-start",
-        transition: "background 0.15s",
-      }}
-    >
-      <span style={{ width: 16, height: 16, borderRadius: "50%", background: "white", display: "block" }} />
-    </button>
-  );
-}
-
 function TriageSection() {
   const { t } = useTranslation(["dashboard"]);
   const [confidence, setConfidence] = useState(0.85);
@@ -350,7 +315,11 @@ function TriageSection() {
                 <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t(`dashboard:settings.triage.${tier.nameKey}`)}</div>
                 <div style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t(`dashboard:settings.triage.${tier.descKey}`)}</div>
               </div>
-              <Toggle on={tiers[i]} onChange={() => setTiers((p) => p.map((v, j) => j === i ? !v : v))} />
+              <Switch
+                checked={tiers[i]}
+                label={t(`dashboard:settings.triage.${tier.nameKey}`)}
+                onCheckedChange={() => setTiers((p) => p.map((v, j) => j === i ? !v : v))}
+              />
             </div>
           );
         })}
@@ -390,7 +359,7 @@ function TriageSection() {
               onKeyDown={(e) => e.key === "Enter" && addCat()}
             />
             <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px", display: "flex", alignItems: "center", gap: 4 }} onClick={addCat}>
-              <Plus size={12} /> {t("dashboard:settings.triage.addCategory")}
+              <Icon name="plus" size={12} /> {t("dashboard:settings.triage.addCategory")}
             </button>
           </div>
         </div>
@@ -399,7 +368,7 @@ function TriageSection() {
             <span key={c} style={{ padding: "5px 10px", fontSize: 12, borderRadius: 6, border: "1px solid var(--k-border)", display: "flex", alignItems: "center", gap: 6, color: "var(--k-text-primary)", background: "var(--k-bg)" }}>
               {c}
               <button style={{ color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }} onClick={() => setCategories((p) => p.filter((x) => x !== c))}>
-                <X size={11} />
+                <Icon name="x" size={11} />
               </button>
             </span>
           ))}
@@ -489,7 +458,7 @@ function OperationalSlaSection() {
     return (
       <div>
         <h1 style={styles.pageTitle}>{t("dashboard:settings.nav.sla")}</h1>
-        <Loader2 size={20} className="animate-spin" style={{ color: "var(--k-text-tertiary)" }} />
+        <Spinner size="lg" />
       </div>
     );
   }
@@ -559,14 +528,14 @@ function OperationalSlaSection() {
 
       {msg && (
         <div style={{ ...styles.msgBanner, background: msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" : "var(--kairo-color-bad-soft)", color: msg.type === "success" ? "var(--kairo-color-ok-ink)" : "var(--kairo-color-bad-ink)", border: `1px solid ${msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" : "var(--kairo-color-bad-line)"}`, marginBottom: 16 }}>
-          {msg.type === "success" ? <Check size={14} /> : <AlertCircle size={14} />}
+          {msg.type === "success" ? <Icon name="check" size={14} /> : <Icon name="alert" size={14} />}
           {msg.text}
         </div>
       )}
 
       <div style={styles.formFooter}>
         <button style={styles.btnPrimary} onClick={save} disabled={saving}>
-          {saving && <Loader2 size={13} className="animate-spin" />}
+          {saving && <Spinner />}
           {saving ? t("dashboard:settings.savingState") : t("dashboard:settings.saveChanges")}
         </button>
       </div>
@@ -753,7 +722,7 @@ export function ProfileSettings({ onViewChange }: Props) {
   if (!profile) {
     return (
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Loader2 style={{ width: 28, height: 28, color: "var(--k-text-tertiary)" }} className="animate-spin" />
+        <Spinner size="lg" />
       </div>
     );
   }
@@ -788,7 +757,7 @@ export function ProfileSettings({ onViewChange }: Props) {
                 cursor: "pointer",
               }}
             >
-              <item.Icon size={14} />
+              <Icon name={item.icon} size={14} />
               <span>{item.label}</span>
             </button>
           );

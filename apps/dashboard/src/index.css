@@ -1,6 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -272,36 +270,6 @@
   box-shadow: var(--kairo-shadow-xs);
 }
 
-/* Shimmer skeleton animation */
-@keyframes k-shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
-}
-.shimmer {
-  background: linear-gradient(90deg, var(--k-surface-2) 0%, var(--k-border-subtle) 50%, var(--k-surface-2) 100%);
-  background-size: 200% 100%;
-  animation: k-shimmer 1.4s infinite linear;
-  border-radius: 4px;
-}
-
-/* Amber-tinted skeleton for internal-note cards (KAI-232): same motion as
-   .shimmer, but reads as a note instead of a generic block. */
-.shimmer-note {
-  background: linear-gradient(90deg, var(--k-note-bg-strong) 0%, var(--k-note-border) 50%, var(--k-note-bg-strong) 100%);
-  background-size: 200% 100%;
-  animation: k-shimmer 1.4s infinite linear;
-  border-radius: 4px;
-}
-
-/* Soft opacity pulse — loading dots and live-stream indicators (KAI-232). */
-@keyframes k-pulse-soft {
-  0%, 100% { opacity: 0.4; }
-  50%      { opacity: 1; }
-}
-.pulse {
-  animation: k-pulse-soft 1.6s ease-in-out infinite;
-}
-
 /* Transient highlight for a thread message jumped to from the Notes tab or a
    mention notification (KAI-232 · spec B5): outline + amber halo over 1.6s. */
 @keyframes k-note-jump {
@@ -316,24 +284,9 @@
   animation: k-note-jump 1600ms ease-out forwards;
 }
 
-/* Auth-gate spinner — CSS animation using --k-accent */
-@keyframes kairo-spin {
-  to { transform: rotate(360deg); }
-}
-.kairo-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--k-accent-subtle);
-  border-top-color: var(--k-accent);
-  border-radius: 50%;
-  animation: kairo-spin 0.7s linear infinite;
-}
 /* KAI-249 — Assistant chat copilot animations (mirror Kairo Assistant.html) */
-@keyframes kai-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-.kai-caret { animation: kai-blink 1s steps(2) infinite; }
 @keyframes kai-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .kai-fade { animation: kai-fade-in 0.26s ease both; }
-.kai-spin { animation: kairo-spin 0.7s linear infinite; }
 
 /* KAI-227 — new draft row enters the directory: slide from the right + fade in */
 @keyframes kairo-row-in {

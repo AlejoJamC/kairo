@@ -1,7 +1,6 @@
 import { useRef, useState, useEffect, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
-import { MoreHorizontal, RefreshCw } from "lucide-react";
 import { useTriageStore, pickPreferredGroupId, type Ticket } from "@kairo/client-core/stores/triage-store";
 import { TicketCard } from "@/components/ticket-card";
 import { RelatedHistoryDrawer, type RelatedHistoryItem } from "@/components/related-history-drawer";
@@ -10,6 +9,7 @@ import { isTriageActive } from "@kairo/client-core/triage-status";
 import { createTicketGroup, assignTicketsToGroup, getSimilarTickets, getRelatedHistory, syncGmail, classifyBatch } from "@kairo/client-core/endpoints";
 import { fetchTicketById, fetchInboxTickets, fetchBatchJobStatus } from "@kairo/client-core/queries";
 import { useAuth } from "@kairo/client-core/auth";
+import { EmptyState, Icon, Skeleton, Spinner } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // Skeleton placeholder
@@ -19,11 +19,11 @@ function TicketSkeleton() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, borderBottom: "1px solid var(--k-border-subtle)", padding: "12px 16px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div className="shimmer" style={{ height: 11, width: 128 }} />
-        <div className="shimmer" style={{ height: 11, width: 32 }} />
+        <Skeleton height={11} width={128} />
+        <Skeleton height={11} width={32} />
       </div>
-      <div className="shimmer" style={{ height: 10, width: "100%" }} />
-      <div className="shimmer" style={{ height: 8, width: "75%" }} />
+      <Skeleton height={10} width="100%" />
+      <Skeleton height={8} width="75%" />
     </div>
   );
 }
@@ -671,8 +671,8 @@ export function TicketList() {
               }}
             >
               {busy
-                ? <RefreshCw style={{ width: 13, height: 13 }} className="animate-spin" />
-                : <MoreHorizontal style={{ width: 15, height: 15 }} />}
+                ? <Spinner />
+                : <Icon name="more" size={15} />}
             </button>
 
             {menuOpen && (
@@ -708,7 +708,7 @@ export function TicketList() {
                   onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-surface)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                 >
-                  <RefreshCw style={{ width: 13, height: 13, color: "var(--k-text-tertiary)", flexShrink: 0 }} />
+                  <Icon name="refresh" size={13} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
                   {t("ticketList.syncGmail", "Sincronizar Gmail")}
                 </button>
 
@@ -733,7 +733,7 @@ export function TicketList() {
                   onMouseEnter={(e) => { if (tickets.length > 0) e.currentTarget.style.background = "var(--k-surface)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                 >
-                  <RefreshCw style={{ width: 13, height: 13, color: "var(--k-text-tertiary)", flexShrink: 0 }} />
+                  <Icon name="refresh" size={13} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
                   {classifyingAll
                     ? (classifyProgress ?? t("ticketList.classifying"))
                     : t("ticketList.classifyAll")}
@@ -947,16 +947,12 @@ export function TicketList() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 32, textAlign: "center" }}>
-          {tickets.length === 0 ? (
-            <>
-              <p style={{ fontSize: 13, color: "var(--k-text-secondary)" }}>{t("ticketList.noTickets")}</p>
-              <p style={{ fontSize: 12, color: "var(--k-text-tertiary)" }}>{t("ticketList.checkingEmails")}</p>
-            </>
-          ) : (
-            <p style={{ fontSize: 13, color: "var(--k-text-secondary)" }}>{t("ticketList.noMatch")}</p>
-          )}
-        </div>
+        <EmptyState
+          flex={1}
+          title={tickets.length === 0 ? t("ticketList.noTickets") : t("ticketList.noMatch")}
+          description={tickets.length === 0 ? t("ticketList.checkingEmails") : undefined}
+          scanning={tickets.length === 0}
+        />
       ) : filtered.length > VIRTUALIZE_THRESHOLD ? (
         <VirtualTicketList
           tickets={filtered}

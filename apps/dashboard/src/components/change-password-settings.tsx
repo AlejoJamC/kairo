@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Check, X, Loader2 } from "lucide-react";
 import { useAuth } from "@kairo/client-core/auth";
 import { updatePassword } from "@kairo/client-core/queries";
 import type { AppView } from "@/types";
+import { Button, Field, FieldInput, Icon } from "@kairo/ui";
 
 interface Props {
   onViewChange: (view: AppView) => void;
@@ -27,8 +27,8 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
   const passwordsMatch = password === confirmPassword && password.length > 0;
   const isValid = hasMinLength && hasUppercase && hasNumber && passwordsMatch;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!isValid) return;
 
     setSaving(true);
@@ -61,7 +61,7 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
             onClick={() => onViewChange("settings")}
             style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer", marginBottom: 12, padding: 0 }}
           >
-            <ArrowLeft style={{ width: 14, height: 14 }} />
+            <Icon name="back" size={14} />
             {t("dashboard:changePassword.backToSettings")}
           </button>
           <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--k-text-primary)", fontFamily: "var(--k-font-display)", margin: 0 }}>
@@ -80,7 +80,7 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
           {success ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "32px 0", textAlign: "center" }}>
               <div style={{ width: 48, height: 48, borderRadius: 999, background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Check style={{ width: 22, height: 22, color: "var(--kairo-color-ok)" }} />
+                <Icon name="check" size={22} color="var(--kairo-color-ok)" />
               </div>
               <p style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>
                 {t("dashboard:changePassword.successMessage")}
@@ -97,27 +97,13 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
                 </div>
               )}
 
-              <div>
-                <label className="k-label">{t("dashboard:changePassword.newPasswordLabel")}</label>
-                <input
-                  type="password"
-                  className="k-input"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                />
-              </div>
+              <Field label={t("dashboard:changePassword.newPasswordLabel")}>
+                <FieldInput secureTextEntry value={password} onChangeText={setPassword} placeholder="••••••••" />
+              </Field>
 
-              <div>
-                <label className="k-label">{t("dashboard:changePassword.confirmPasswordLabel")}</label>
-                <input
-                  type="password"
-                  className="k-input"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                />
-              </div>
+              <Field label={t("dashboard:changePassword.confirmPasswordLabel")}>
+                <FieldInput secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} placeholder="••••••••" />
+              </Field>
 
               {/* Requirements */}
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -132,8 +118,8 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
                 ].map(({ met, label }) => (
                   <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
                     {met
-                      ? <Check style={{ width: 14, height: 14, color: "var(--kairo-color-ok)", flexShrink: 0 }} />
-                      : <X style={{ width: 14, height: 14, color: "var(--k-text-tertiary)", flexShrink: 0 }} />}
+                      ? <Icon name="check" size={14} color="var(--kairo-color-ok)" style={{ flexShrink: 0 }} />
+                      : <Icon name="x" size={14} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />}
                     <span style={{ color: met ? "var(--kairo-color-ok-ink)" : "var(--k-text-tertiary)" }}>{label}</span>
                   </div>
                 ))}
@@ -141,14 +127,15 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
 
               {/* Actions */}
               <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 4 }}>
-                <button type="submit" className="k-btn-primary" disabled={!isValid || saving}>
-                  {saving && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
-                  {saving
-                    ? t("dashboard:changePassword.updating")
-                    : hasPassword
-                      ? t("dashboard:changePassword.updateButton")
-                      : t("dashboard:changePassword.setButton")}
-                </button>
+                <Button
+                  variant="primary"
+                  loading={saving}
+                  loadingLabel={t("dashboard:changePassword.updating")}
+                  disabled={!isValid}
+                  onPress={handleSubmit}
+                >
+                  {hasPassword ? t("dashboard:changePassword.updateButton") : t("dashboard:changePassword.setButton")}
+                </Button>
                 <button
                   type="button"
                   onClick={() => onViewChange("settings")}

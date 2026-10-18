@@ -51,7 +51,8 @@
     "cancelButton": "Cancel",
     "requiredError": "Internal ID and Company Name are required",
     "saveError": "Failed to save client. Please try again.",
-    "duplicateIdError": "A client with this Internal ID already exists"
+    "duplicateIdError": "A client with this Internal ID already exists",
+    "removePerson": "Remove contact person"
   },
   "actions": {
     "edit": "Edit",

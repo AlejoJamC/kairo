@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Phone, Copy, Check } from "lucide-react";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { getPlatform } from "@kairo/client-core/config";
-import { getInitials } from "@kairo/ui";
+import { Icon, Skeleton, getInitials } from "@kairo/ui";
 
 const initials = (name: string | null) => getInitials(name);
 
@@ -15,17 +14,17 @@ export function ClientProfileSkeleton() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div className="shimmer" style={{ width: 36, height: 36, borderRadius: 999, flexShrink: 0 }} />
+        <Skeleton width={36} height={36} borderRadius={999} flexShrink={0} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-          <div className="shimmer" style={{ height: 11, width: 112 }} />
-          <div className="shimmer" style={{ height: 9, width: 64 }} />
+          <Skeleton height={11} width={112} />
+          <Skeleton height={9} width={64} />
         </div>
       </div>
       <div style={{ display: "flex", gap: 6 }}>
-        <div className="shimmer" style={{ height: 16, width: 56, borderRadius: 999 }} />
-        <div className="shimmer" style={{ height: 16, width: 80, borderRadius: 999 }} />
+        <Skeleton height={16} width={56} borderRadius={999} />
+        <Skeleton height={16} width={80} borderRadius={999} />
       </div>
-      <div className="shimmer" style={{ height: 10, width: 144 }} />
+      <Skeleton height={10} width={144} />
     </div>
   );
 }
@@ -121,11 +120,11 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--k-surface-2)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
         >
-          <Phone style={{ width: 11, height: 11, color: "var(--k-text-tertiary)", flexShrink: 0 }} />
+          <Icon name="phone" size={11} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
           <span style={{ flex: 1, textAlign: "left", fontFamily: "var(--k-font-mono)" }}>{phone}</span>
           {copied
-            ? <Check style={{ width: 11, height: 11, color: "var(--kairo-color-ok)", flexShrink: 0 }} />
-            : <Copy  style={{ width: 11, height: 11, color: "var(--k-text-tertiary)", flexShrink: 0 }} />}
+            ? <Icon name="check" size={11} color="var(--kairo-color-ok)" style={{ flexShrink: 0 }} />
+            : <Icon name="copy" size={11} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />}
         </button>
       )}
 

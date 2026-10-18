@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { Mail, Plus, Trash2, Star, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
 import { useAuth } from "@kairo/client-core/auth";
 import { listChannels, deleteChannel, startGmailConnect } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
+import { Icon, Spinner } from "@kairo/ui";
 
 interface SupportChannel {
   id: string;
@@ -69,7 +69,7 @@ export function ChannelsSettings({ onViewChange }: Props) {
           onClick={() => onViewChange("settings")}
           style={{ background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", padding: 4, borderRadius: 6, display: "flex" }}
         >
-          <ArrowLeft size={18} />
+          <Icon name="back" size={18} />
         </button>
         <div>
           <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--k-text-primary)" }}>
@@ -84,7 +84,7 @@ export function ChannelsSettings({ onViewChange }: Props) {
       {/* Error */}
       {error && (
         <div style={{ display: "flex", gap: 8, alignItems: "center", background: "var(--kairo-color-bad-soft)", border: "1px solid var(--kairo-color-bad-line)", borderRadius: 8, padding: "10px 14px", marginBottom: 20 }}>
-          <AlertCircle size={15} color="var(--kairo-color-bad)" />
+          <Icon name="alert" size={15} color="var(--kairo-color-bad)" />
           <p style={{ fontSize: 13, color: "var(--kairo-color-bad-ink)", margin: 0 }}>{error}</p>
         </div>
       )}
@@ -93,11 +93,11 @@ export function ChannelsSettings({ onViewChange }: Props) {
       <div style={{ background: "var(--k-surface)", border: "1px solid var(--k-border)", borderRadius: 10, overflow: "hidden", marginBottom: 20 }}>
         {loading ? (
           <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
-            <Loader2 size={20} color="var(--k-text-tertiary)" style={{ animation: "spin 1s linear infinite" }} />
+            <Spinner size="lg" />
           </div>
         ) : channels.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center" }}>
-            <Mail size={28} color="var(--k-text-tertiary)" style={{ marginBottom: 8 }} />
+            <Icon name="mail" size={28} color="var(--k-text-tertiary)" style={{ marginBottom: 8 }} />
             <p style={{ fontSize: 14, color: "var(--k-text-secondary)", margin: 0 }}>
               No channels connected yet.
             </p>
@@ -117,7 +117,7 @@ export function ChannelsSettings({ onViewChange }: Props) {
                 borderBottom: i < channels.length - 1 ? "1px solid var(--k-border)" : "none",
               }}
             >
-              <Mail size={16} color="var(--k-text-tertiary)" />
+              <Icon name="mail" size={16} color="var(--k-text-tertiary)" />
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>
@@ -125,7 +125,7 @@ export function ChannelsSettings({ onViewChange }: Props) {
                   </span>
                   {ch.is_primary && (
                     <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "var(--kairo-color-warn)", fontWeight: 500 }}>
-                      <Star size={10} fill="var(--kairo-color-warn)" /> Primary
+                      <Icon name="star" size={10} color="var(--kairo-color-warn)" fill="var(--kairo-color-warn)" /> Primary
                     </span>
                   )}
                 </div>
@@ -144,8 +144,8 @@ export function ChannelsSettings({ onViewChange }: Props) {
                 }}
               >
                 {disconnecting === ch.id
-                  ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
-                  : <Trash2 size={14} />
+                  ? <Spinner />
+                  : <Icon name="trash" size={14} />
                 }
               </button>
             </div>
@@ -163,7 +163,7 @@ export function ChannelsSettings({ onViewChange }: Props) {
           cursor: "pointer", fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)",
         }}
       >
-        <Plus size={16} />
+        <Icon name="plus" size={16} />
         Connect Gmail inbox
       </button>
 

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Plus, Trash2, Loader2 } from "lucide-react";
-import { Input } from "@kairo/ui";
+import { Button, Dialog, Field, FieldInput, FieldSelect, FieldTextarea, Icon, IconButton } from "@kairo/ui";
 import { saveClient } from "@kairo/client-core/endpoints";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
 
@@ -57,11 +56,12 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [baseline, setBaseline] = useState<FormState>(emptyForm);
 
   useEffect(() => {
     if (!isOpen) return;
     if (client) {
-      setForm({
+      const loaded: FormState = {
         internal_id: client.internalId,
         name: client.name,
         legal_id: client.legalId ?? "",
@@ -70,9 +70,12 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
         sla_level: client.slaLevel ?? "",
         emails: client.authorizedEmails.join("\n"),
         contactPersons: client.contactPersons.map((cp) => ({ ...cp })),
-      });
+      };
+      setForm(loaded);
+      setBaseline(loaded);
     } else {
       setForm(emptyForm);
+      setBaseline(emptyForm);
     }
     setError(null);
   }, [client, isOpen]);
@@ -102,8 +105,7 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
       ),
     }));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     if (!form.internal_id.trim() || !form.name.trim()) {
       setError(t("form.requiredError"));
       return;
@@ -146,135 +148,113 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
     }
   };
 
+  const dirty = saving || JSON.stringify(form) !== JSON.stringify(baseline);
+
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }}>
-      <div style={{ position: "relative", width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", borderRadius: 12, background: "white", boxShadow: "0 4px 16px rgba(9,9,11,0.08), 0 1px 2px rgba(9,9,11,0.04)" }}>
-        {/* Header */}
-        <div style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--k-border)", background: "white", padding: "16px 24px" }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: "var(--k-text-primary)", fontFamily: "var(--k-font-display)", margin: 0 }}>
-            {client ? t("form.editTitle") : t("form.createTitle")}
-          </h2>
-          <button
-            onClick={onClose}
-            style={{ borderRadius: 6, padding: 4, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)" }}
-            type="button"
-          >
-            <X style={{ width: 16, height: 16 }} />
-          </button>
+    <Dialog
+      open
+      onOpenChange={(next) => { if (!next) onClose(); }}
+      title={client ? t("form.editTitle") : t("form.createTitle")}
+      maxWidth={520}
+      dirty={dirty}
+      footer={
+        <>
+          <Button variant="ghost" size="sm" onPress={onClose}>
+            {t("form.cancelButton")}
+          </Button>
+          <Button variant="primary" size="sm" loading={saving} loadingLabel={t("form.savingButton")} onPress={handleSubmit}>
+            {t("form.saveButton")}
+          </Button>
+        </>
+      }
+    >
+      {error && (
+        <div role="alert" style={{ borderRadius: 6, background: "var(--kairo-color-bad-soft)", border: "1px solid var(--kairo-color-bad-line)", padding: "8px 12px", fontSize: 13, color: "var(--kairo-color-bad-ink)" }}>
+          {error}
         </div>
+      )}
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16, padding: 24 }}>
-          {error && (
-            <div style={{ borderRadius: 6, background: "var(--kairo-color-bad-soft)", border: "1px solid var(--kairo-color-bad-line)", padding: "8px 12px", fontSize: 13, color: "var(--kairo-color-bad-ink)" }}>
-              {error}
-            </div>
-          )}
-
-          {/* Internal ID & Name */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <div>
-              <label className="k-label">{t("form.internalIdLabel")} *</label>
-              <Input
-                value={form.internal_id}
-                onChangeText={(text) => set("internal_id", text)}
-                placeholder={t("form.internalIdPlaceholder")}
-                disabled={!!client}
-              />
-            </div>
-            <div>
-              <label className="k-label">{t("form.nameLabel")} *</label>
-              <Input value={form.name} onChangeText={(text) => set("name", text)} placeholder={t("form.namePlaceholder")} />
-            </div>
-          </div>
-
-          {/* Legal ID & Telephone */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <div>
-              <label className="k-label">{t("form.legalIdLabel")}</label>
-              <Input value={form.legal_id} onChangeText={(text) => set("legal_id", text)} placeholder={t("form.legalIdPlaceholder")} />
-            </div>
-            <div>
-              <label className="k-label">{t("form.telephoneLabel")}</label>
-              <Input value={form.telephone} onChangeText={(text) => set("telephone", text)} placeholder={t("form.telephonePlaceholder")} />
-            </div>
-          </div>
-
-          {/* Plan & SLA */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <div>
-              <label className="k-label">{t("form.planLabel")}</label>
-              <select className="k-select" value={form.plan_type} onChange={(e) => set("plan_type", e.target.value as PlanType | "")}>
-                <option value="">{t("form.planPlaceholder")}</option>
-                <option value="Enterprise">Enterprise</option>
-                <option value="Pro">Pro</option>
-                <option value="Starter">Starter</option>
-              </select>
-            </div>
-            <div>
-              <label className="k-label">{t("form.slaLabel")}</label>
-              <select className="k-select" value={form.sla_level} onChange={(e) => set("sla_level", e.target.value as SlaLevel | "")}>
-                <option value="">{t("form.slaPlaceholder")}</option>
-                <option value="Critical">Critical</option>
-                <option value="High">High</option>
-                <option value="Standard">Standard</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Authorized Emails */}
-          <div>
-            <label className="k-label">{t("form.authorizedEmailsLabel")}</label>
-            <textarea
-              className="k-textarea"
-              value={form.emails}
-              onChange={(e) => set("emails", e.target.value)}
-              placeholder={t("form.emailPlaceholder")}
-              rows={3}
-            />
-          </div>
-
-          {/* Contact Persons */}
-          <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <label className="k-label" style={{ margin: 0 }}>{t("form.contactPersonsLabel")}</label>
-              <button
-                type="button"
-                onClick={addPerson}
-                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer" }}
-              >
-                <Plus style={{ width: 12, height: 12 }} />
-                {t("form.addPerson")}
-              </button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {form.contactPersons.map((cp, i) => (
-                <div key={i} style={{ display: "flex", gap: 8 }}>
-                  <Input value={cp.name} onChangeText={(text) => updatePerson(i, "name", text)} placeholder={t("form.personNamePlaceholder")} />
-                  <Input value={cp.role} onChangeText={(text) => updatePerson(i, "role", text)} placeholder={t("form.personRolePlaceholder")} />
-                  <button
-                    type="button"
-                    onClick={() => removePerson(i)}
-                    style={{ borderRadius: 6, padding: 6, background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", flexShrink: 0 }}
-                  >
-                    <Trash2 style={{ width: 14, height: 14 }} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, borderTop: "1px solid var(--k-border-subtle)", paddingTop: 16 }}>
-            <button type="button" onClick={onClose} className="k-btn-secondary">
-              {t("form.cancelButton")}
-            </button>
-            <button type="submit" disabled={saving} className="k-btn-primary">
-              {saving && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
-              {saving ? t("form.savingButton") : t("form.saveButton")}
-            </button>
-          </div>
-        </form>
+      {/* Internal ID & Name */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <Field label={`${t("form.internalIdLabel")} *`}>
+          <FieldInput
+            value={form.internal_id}
+            onChangeText={(text) => set("internal_id", text)}
+            placeholder={t("form.internalIdPlaceholder")}
+            disabled={!!client}
+          />
+        </Field>
+        <Field label={`${t("form.nameLabel")} *`}>
+          <FieldInput value={form.name} onChangeText={(text) => set("name", text)} placeholder={t("form.namePlaceholder")} />
+        </Field>
       </div>
-    </div>
+
+      {/* Legal ID & Telephone */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <Field label={t("form.legalIdLabel")}>
+          <FieldInput value={form.legal_id} onChangeText={(text) => set("legal_id", text)} placeholder={t("form.legalIdPlaceholder")} />
+        </Field>
+        <Field label={t("form.telephoneLabel")}>
+          <FieldInput value={form.telephone} onChangeText={(text) => set("telephone", text)} placeholder={t("form.telephonePlaceholder")} />
+        </Field>
+      </div>
+
+      {/* Plan & SLA */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <Field label={t("form.planLabel")}>
+          <FieldSelect value={form.plan_type} onValueChange={(next) => set("plan_type", next as PlanType | "")}>
+            <option value="">{t("form.planPlaceholder")}</option>
+            <option value="Enterprise">Enterprise</option>
+            <option value="Pro">Pro</option>
+            <option value="Starter">Starter</option>
+          </FieldSelect>
+        </Field>
+        <Field label={t("form.slaLabel")}>
+          <FieldSelect value={form.sla_level} onValueChange={(next) => set("sla_level", next as SlaLevel | "")}>
+            <option value="">{t("form.slaPlaceholder")}</option>
+            <option value="Critical">Critical</option>
+            <option value="High">High</option>
+            <option value="Standard">Standard</option>
+          </FieldSelect>
+        </Field>
+      </div>
+
+      {/* Authorized Emails */}
+      <Field label={t("form.authorizedEmailsLabel")}>
+        <FieldTextarea
+          value={form.emails}
+          onChangeText={(text) => set("emails", text)}
+          placeholder={t("form.emailPlaceholder")}
+          rows={3}
+        />
+      </Field>
+
+      {/* Contact Persons */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 10.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--k-text-tertiary)" }}>
+            {t("form.contactPersonsLabel")}
+          </span>
+          <Button variant="link" icon={<Icon name="plus" size={12} color="var(--k-accent)" />} onPress={addPerson}>
+            {t("form.addPerson")}
+          </Button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {form.contactPersons.map((cp, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+              <Field label={t("form.personNamePlaceholder")} hideLabel>
+                <FieldInput value={cp.name} onChangeText={(text) => updatePerson(i, "name", text)} placeholder={t("form.personNamePlaceholder")} />
+              </Field>
+              <Field label={t("form.personRolePlaceholder")} hideLabel>
+                <FieldInput value={cp.role} onChangeText={(text) => updatePerson(i, "role", text)} placeholder={t("form.personRolePlaceholder")} />
+              </Field>
+              <IconButton label={t("form.removePerson")} onPress={() => removePerson(i)}>
+                <Icon name="trash" size={14} color="var(--k-text-tertiary)" />
+              </IconButton>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Dialog>
   );
 }

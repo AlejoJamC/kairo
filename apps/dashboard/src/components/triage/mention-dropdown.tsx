@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Avatar } from "@kairo/ui";
+import { Avatar, Kbd, Skeleton } from "@kairo/ui";
 import type { AccountMember } from "@kairo/client-core/hooks/use-account-members";
 
 // ---------------------------------------------------------------------------
@@ -36,23 +36,6 @@ function highlightMatch(text: string, query: string) {
       </span>
       {text.slice(at + query.length)}
     </>
-  );
-}
-
-function Kbd({ children }: { children: string }) {
-  return (
-    <kbd
-      style={{
-        fontFamily: "var(--k-font-mono)",
-        fontSize: 9,
-        padding: "0 4px",
-        background: "white",
-        border: "1px solid var(--k-border)",
-        borderRadius: 3,
-      }}
-    >
-      {children}
-    </kbd>
   );
 }
 
@@ -130,10 +113,10 @@ export function MentionDropdown({
         <div style={{ padding: 6 }}>
           {[0, 1, 2, 3].map((i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px" }}>
-              <div className="shimmer" style={{ width: 24, height: 24, borderRadius: 999 }} />
+              <Skeleton width={24} height={24} borderRadius={999} />
               <div style={{ flex: 1 }}>
-                <div className="shimmer" style={{ height: 8, width: 108 - i * 12, marginBottom: 5 }} />
-                <div className="shimmer" style={{ height: 7, width: 62 }} />
+                <Skeleton height={8} width={108 - i * 12} marginBottom={5} />
+                <Skeleton height={7} width={62} />
               </div>
             </div>
           ))}
@@ -219,19 +202,7 @@ export function MentionDropdown({
                   </span>
                 </span>
                 {active && (
-                  <kbd
-                    style={{
-                      fontFamily: "var(--k-font-mono)",
-                      fontSize: 9.5,
-                      padding: "1px 5px",
-                      background: "white",
-                      border: "1px solid var(--k-mention-border)",
-                      borderRadius: 3,
-                      color: "var(--k-accent)",
-                    }}
-                  >
-                    ↵
-                  </kbd>
+                  <Kbd>↵</Kbd>
                 )}
               </button>
             );

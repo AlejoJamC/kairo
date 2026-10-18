@@ -1,6 +1,5 @@
 import { TicketDecisions } from './ticket-decisions';
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mail, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
 import { TicketHeader } from "./ticket-header";
@@ -10,7 +9,7 @@ import { useTicketThread, type ThreadMessage } from "@kairo/client-core/hooks/us
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar } from "@kairo/ui";
+import { Avatar, Icon } from "@kairo/ui";
 import { startGmailConnect } from "@kairo/client-core/endpoints";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
@@ -455,7 +454,7 @@ export function TicketDetail() {
           gap: 8,
         }}
       >
-        <Mail style={{ width: 40, height: 40, color: "var(--k-border)" }} />
+        <Icon name="mail" size={40} color="var(--k-border)" />
         <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>
           {t("ticketDetail.selectPrompt", "Select a ticket to view details")}
         </p>
@@ -522,9 +521,7 @@ export function TicketDetail() {
               border: "1px solid var(--kairo-color-accent-line)",
             }}
           >
-            <Sparkles
-              style={{ width: 13, height: 13, color: "var(--k-accent)", flexShrink: 0, marginTop: 1 }}
-            />
+            <Icon name="spark" size={13} color="var(--k-accent)" style={{ flexShrink: 0, marginTop: 1 }} />
             <div style={{ fontSize: 12, color: "var(--k-text-secondary)", flex: 1, lineHeight: 1.5 }}>
               <span style={{ color: "var(--k-accent)", fontWeight: 500 }}>
                 Triage Intelligence

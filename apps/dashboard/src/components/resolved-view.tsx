@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import { Clock } from "lucide-react";
 import { useStatusTickets } from "@kairo/client-core/hooks/use-status-tickets";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TicketDetail } from "@/components/ticket-detail";
@@ -7,6 +6,7 @@ import { AiAssistant } from "@/components/ai-assistant";
 import { TicketCard } from "@/components/ticket-card";
 import type { AppView } from "@/types";
 import { RESOLVED_STATUSES, type Ticket } from "@kairo/types";
+import { EmptyState, Spinner } from "@kairo/ui";
 
 // Terminal statuses shown in this view — both are already rendered read-only
 // by TicketDetail (KAI-25), so no per-ticket prop plumbing is needed here.
@@ -79,14 +79,12 @@ export function ResolvedView({ onViewChange: _onViewChange }: ResolvedViewProps)
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
         {loading && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
-            <Clock style={{ width: 20, height: 20, color: "var(--k-text-tertiary)" }} className="animate-spin" />
+            <Spinner size="lg" />
           </div>
         )}
 
         {!loading && tickets.length === 0 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 80, textAlign: "center" }}>
-            <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t("resolvedView.empty")}</p>
-          </div>
+          <EmptyState title={t("resolvedView.empty")} paddingTop={80} />
         )}
 
         {!loading &&
