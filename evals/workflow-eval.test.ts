@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { workflowMain, workflowPlan, workflowReport, validateWorkflowRoutes, WorkflowPreflightError } from './workflow-eval';
+import { workflowMain, workflowPlan, workflowReport, validateWorkflowRoutes, WorkflowPreflightError, reviewedKnowledgeSummary, failedWorkflowScenarios } from './workflow-eval';
 import { GatewayClient } from '../packages/intelligence/src/providers/gateway/client';
 import { workflowControls } from './workflow-scenarios';
 import { withModelRouting } from '../packages/intelligence/src/config/model-context';
@@ -9,9 +9,57 @@ import type { ModelRole, ModelRoute } from '../packages/intelligence/src/config/
 import { readPrivate, writePrivate } from './private-files';
 import { resultsRoot } from './results';
 import { reviewTemplate, type Measurement } from './metrics';
+import type { MemoryProposal } from './enrichment-memory';
 
 const policy = { routes: Object.fromEntries((['classification', 'evidence_analysis', 'knowledge_decision', 'knowledge_draft', 'validation', 'reply'] as ModelRole[])
   .map(role => [role, { role, provider: 'gateway', capability: ['knowledge_decision','validation'].includes(role) ? 'decision' : 'language', model: `acme/${role}` }])) as Record<ModelRole, ModelRoute> };
+
+test('reports separate skipped cases, abstention and no contribution without inventing quality labels', () => {
+  const base: Measurement = { case: { ...workflowControls('enrichment')[0]!, dataset: 'main', expected: {} },
+    status: 'completed', prediction: {}, abstain: null, latencyMs: 1, requests: [], output: {}, calls: [], safety: {} };
+  const rows: Measurement[] = [
+    { ...base, prediction: { skipped: 'true' } },
+    { ...base, prediction: { skipped: 'false', contribution: 'none', useful: 'false' } },
+    { ...base, prediction: { skipped: 'false', contribution: 'unknown', useful: 'false' } },
+  ];
+  const report = workflowReport('enrichment', rows, []);
+  expect(report.execution).toEqual({ attempted: 3, completed: 3, failed: 0 });
+  expect(report.cells[0]).toMatchObject({ reviewPending: 2, abstention: 0.5 });
+  expect(report.outcomes[0]).toMatchObject({ skipped: 1, enrichment: { evaluatedPairs: 2, withoutContribution: 1, indeterminate: 1 } });
+  expect(report.quality[0]!.review.acceptedFraction).toBeNull();
+  const control = workflowReport('enrichment', [{ ...base, case: { ...base.case, dataset: 'synthetic' } }], []);
+  expect(control.cells[0]!.reviewPending).toBe(0);
+});
+
+test('reuses human knowledge reviews only for unchanged source proposals', () => {
+  const proposal: MemoryProposal = { id: 1, sourcePosition: 1, sourceText: 'Acme supports password recovery.',
+    title: 'Account recovery', content: 'Acme supports password recovery.', evidence: ['Acme supports password recovery.'],
+    reviewReasons: [], decision: 'pending_review', reviewer: '', targetPositions: [] };
+  const reviewed = { ...proposal, decision: 'approved' as const, reviewer: 'Local reviewer' };
+  expect(reviewedKnowledgeSummary([proposal], [reviewed])).toMatchObject({ proposals: 1, approved: 1, rejected: 0, pending: 0, acceptanceRate: 1 });
+  expect(() => reviewedKnowledgeSummary([proposal], [{ ...reviewed, content: 'A different policy.' }])).toThrow('EVAL_REVIEW_SOURCE_CHANGED');
+  expect(() => reviewedKnowledgeSummary([proposal], [{ ...reviewed, evidence: ['Unsupported quote.'] }])).toThrow('EVAL_REVIEW_SOURCE_CHANGED');
+});
+
+test('reply reports retain failed support judgments rather than reporting only saved drafts', () => {
+  const row: Measurement = { case: { ...workflowControls('reply')[0]!, dataset: 'main', expected: {} },
+    status: 'failed', prediction: {}, abstain: null, latencyMs: 1, requests: [], output: { history: [] }, safety: {},
+    calls: [
+      { feature: 'reply_suggestion', errorCode: null },
+      { feature: 'reply_support_validation', responseText: JSON.stringify({ support: { choice: 'unsupported' } }) },
+    ] };
+  const report = workflowReport('reply', [row], []);
+  expect(report.execution).toEqual({ attempted: 1, completed: 0, failed: 1 });
+  expect(report.outcomes[0]!.reply).toMatchObject({ generatedDrafts: 1, drafts: 0, supportChecks: { unsupported: 1 }, humanUtilityVerified: false });
+  const completed: Measurement = { ...row, status: 'completed' };
+  const control: Measurement = { ...completed, case: { ...completed.case, dataset: 'synthetic' } };
+  const retries = failedWorkflowScenarios([completed, row, control]);
+  expect(retries).toHaveLength(1);
+  expect(retries[0]).toMatchObject(row.case);
+  retries[0]!.body = 'Changed test copy.';
+  expect(row.case.body).not.toBe(retries[0]!.body);
+  expect(failedWorkflowScenarios([completed, control])).toEqual([]);
+});
 
 test('plans list only each workflow roles and do not load sources, create a runtime or infer', async () => {
   const denied = mock(async () => { throw new Error('Forbidden'); });
@@ -69,7 +117,7 @@ test('each runner writes a dated private result and recalculates reviews without
       created.push(directory);
       expect(directory).toContain(`/evals/${mode}/synthetic/`);
       const manifest = JSON.parse(await readPrivate(resolve(directory, 'manifest.json')));
-      expect(manifest.requestLimit).toBe(mode === 'incoming' ? 25 : mode === 'enrichment' ? 14 : 8);
+      expect(manifest.requestLimit).toBe(mode === 'incoming' ? 25 : mode === 'enrichment' ? 14 : 16);
       expect(JSON.parse(await readPrivate(resolve(directory, 'reviews.json')))).toHaveLength(workflowControls(mode).length);
       const updated = await workflowMain(mode, ['report', 'synthetic', directory.split('/').at(-1)!]);
       expect(updated).toHaveProperty('reportUpdated', true);

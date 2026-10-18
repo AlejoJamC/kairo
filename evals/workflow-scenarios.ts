@@ -72,7 +72,7 @@ export function workflowControls(mode: WorkflowMode): Scenario[] {
 }
 
 /** Optional independently reviewed memory. This file never moves or modifies a corpus or its golden labels. */
-export interface WorkflowMemory { cases: { position: number; businessContext?: string; knowledge: NonNullable<EvalCase['knowledge']> }[]; }
+export interface WorkflowMemory { approvedPool?: { id: number; content: string; title: string }[]; cases: { position: number; businessContext?: string; knowledge: NonNullable<EvalCase['knowledge']> }[]; }
 export function parseWorkflowMemory(input: unknown): WorkflowMemory {
   if (!input || typeof input !== 'object' || !('cases' in input) || !Array.isArray(input.cases)) throw new Error('EVAL_WORKFLOW_MEMORY');
   const cases = input.cases.map((row: unknown) => {
@@ -94,7 +94,7 @@ export async function loadWorkflowMemory(dataset: 'main' | 'coverage'): Promise<
   try { return parseWorkflowMemory(JSON.parse(await readPrivate(resolve(privateRoot, 'input/workflow-context', `${dataset}.json`)))); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      try { return parseWorkflowMemory(JSON.parse(await readPrivate(resolve(privateRoot, 'output/evals/enrichment', dataset, 'approved-memory.json')))); }
+      try { return parseWorkflowMemory(JSON.parse(await readPrivate(resolve(privateRoot, 'input/knowledge-labels', dataset, 'approved-memory.json')))); }
       catch (preparedError) { if ((preparedError as NodeJS.ErrnoException).code === 'ENOENT') return { cases: [] }; throw new Error('EVAL_WORKFLOW_MEMORY'); }
     }
     throw new Error('EVAL_WORKFLOW_MEMORY');

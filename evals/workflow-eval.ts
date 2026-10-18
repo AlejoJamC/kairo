@@ -10,6 +10,8 @@ import { captureSdkWarnings } from './warnings';
 import { codeFingerprint } from './run';
 import { corpusScenarios, loadWorkflowMemory, workflowControls, workflowContracts, type Scenario, type WorkflowMode } from './workflow-scenarios';
 import type { WorkflowStep } from './workflow-runtime';
+import { workflowOutcomes } from './workflow-outcomes';
+import { collectMemoryProposals, memoryDirectory, type MemoryProposal } from './enrichment-memory';
 
 export const workflowSteps = {
   incoming: [
@@ -90,7 +92,9 @@ function wilson(values: boolean[]) {
 }
 
 export function workflowReport(mode: WorkflowMode, rows: Measurement[], steps: WorkflowStep[], reviews: Review[] = []) {
-  const cells = summarize(rows, reviews).filter(cell => cell.attempted > 0);
+  const measured = rows.map(row => ({ ...row, abstain: mode === 'enrichment' && row.prediction['skipped'] === 'false'
+    ? row.prediction['contribution'] === 'unknown' : null }));
+  const cells = summarize(measured, reviews).filter(cell => cell.attempted > 0);
   return { mode, execution: { attempted: rows.length, completed: rows.filter(row => row.status === 'completed').length,
     failed: rows.filter(row => row.status === 'failed').length }, cells,
     quality: cells.map(cell => {
@@ -108,6 +112,7 @@ export function workflowReport(mode: WorkflowMode, rows: Measurement[], steps: W
         calibratedModelConfidence: null, sampling: cell.dataset === 'synthetic' ? 'controlled cases; not population accuracy' : 'corpus cases; no new workflow golden labels inferred',
       };
     }),
+    outcomes: workflowOutcomes(mode, rows),
     proposals: proposalQuality(steps),
     safety: Object.fromEntries([...new Set(rows.flatMap(row => Object.keys(row.safety)))].map(key => [key, {
       checked: rows.filter(row => key in row.safety).length,
@@ -127,9 +132,38 @@ interface WorkflowEvalDeps {
   preflight?: typeof validateWorkflowRoutes;
 }
 
+export function reviewedKnowledgeSummary(original: MemoryProposal[], reviewed: MemoryProposal[]) {
+  if (reviewed.length !== original.length || new Set(reviewed.map(item => item.id)).size !== original.length) throw new Error('EVAL_REVIEW_SOURCE_CHANGED');
+  for (const item of reviewed) {
+    const source = original.find(value => value.id === item.id);
+    if (!source || source.content !== item.content || source.sourcePosition !== item.sourcePosition ||
+      source.sourceText !== item.sourceText || source.title !== item.title || JSON.stringify(source.evidence) !== JSON.stringify(item.evidence) ||
+      !['approved','rejected','pending_review'].includes(item.decision) ||
+      (item.decision !== 'pending_review' && !item.reviewer?.trim())) throw new Error('EVAL_REVIEW_SOURCE_CHANGED');
+  }
+  const approved = reviewed.filter(item => item.decision === 'approved').length;
+  const rejected = reviewed.filter(item => item.decision === 'rejected').length;
+  return { proposals: original.length, approved, rejected, pending: original.length - approved - rejected,
+    acceptanceRate: approved + rejected ? approved / (approved + rejected) : null,
+    scope: 'human review of knowledge proposals; not approval of case decisions or generated replies' };
+}
+
+async function savedKnowledgeReview(mode: WorkflowMode, dataset: string, run: string, rows: Measurement[]) {
+  if (mode !== 'incoming' || (dataset !== 'main' && dataset !== 'coverage')) return null;
+  let saved: { sourceRun: string; sourceMode: string; proposals: MemoryProposal[] };
+  try { saved = JSON.parse(await readPrivate(resolve(memoryDirectory(dataset), 'review.json'))); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
+  if (saved.sourceRun !== run || saved.sourceMode !== mode) return null;
+  return reviewedKnowledgeSummary(collectMemoryProposals({ rows }, dataset), saved.proposals);
+}
+
+export function failedWorkflowScenarios(rows: Measurement[]): Scenario[] {
+  return rows.filter(row => row.status === 'failed').map(row => structuredClone(row.case) as Scenario);
+}
+
 export async function workflowMain(mode: WorkflowMode, args: string[], deps: WorkflowEvalDeps = {}) {
   const [command = 'plan', dataset = mode === 'enrichment' ? 'synthetic' : 'main', rawLimit] = args;
-  if (args.length > 3 || !['plan', 'execute', 'report'].includes(command) || !['main', 'coverage', 'synthetic'].includes(dataset)) throw new Error('EVAL_ARGUMENTS');
+  if (args.length > 3 || !['plan', 'execute', 'report', 'retry-failed'].includes(command) || !['main', 'coverage', 'synthetic'].includes(dataset)) throw new Error('EVAL_ARGUMENTS');
   const selectedDataset = dataset as 'main' | 'coverage' | 'synthetic';
   if (command === 'report') {
     const saved = await findEvaluationRun(mode, selectedDataset, rawLimit ?? 'latest');
@@ -137,10 +171,17 @@ export async function workflowMain(mode: WorkflowMode, args: string[], deps: Wor
     const steps = JSON.parse(await readPrivate(resolve(saved.directory, 'trace.json'))) as WorkflowStep[];
     const reviews = JSON.parse(await readPrivate(resolve(saved.directory, 'reviews.json'))) as Review[];
     const previous = JSON.parse(await readPrivate(resolve(saved.directory, 'report.json'))) as Record<string, unknown>;
-    await writePrivate(resolve(saved.directory, 'report.json'), { ...previous, ...workflowReport(mode, rows, steps, reviews) });
-    return { run: saved.name, directory: saved.directory, reportUpdated: true };
+    const report = { ...previous, ...workflowReport(mode, rows, steps, reviews),
+      reviewedKnowledge: await savedKnowledgeReview(mode, selectedDataset, saved.name, rows) };
+    await writePrivate(resolve(saved.directory, 'report.json'), report);
+    return { run: saved.name, directory: saved.directory, reportUpdated: true, outcomes: report.outcomes,
+      reviewedKnowledge: report.reviewedKnowledge, safety: report.safety,
+      qualityReviewPending: report.cells.reduce((sum, cell) => sum + cell.reviewPending, 0) };
   }
-  const budget = rawLimit === undefined ? null : Number(rawLimit);
+  const retrySource = command === 'retry-failed' ? await findEvaluationRun(mode, selectedDataset, rawLimit ?? 'latest') : null;
+  const retryCases = retrySource ? failedWorkflowScenarios(JSON.parse(await readPrivate(resolve(retrySource.directory, 'measurements.json')))) : null;
+  if (retryCases?.length === 0) return { mode, dataset, sourceRun: retrySource!.name, retried: 0, requests: 0 };
+  const budget = rawLimit === undefined || retrySource ? null : Number(rawLimit);
   if (budget !== null && (!Number.isSafeInteger(budget) || budget < 1)) throw new Error('EVAL_REQUEST_LIMIT');
   const plan = workflowPlan(mode, dataset);
   if (command === 'plan') return { ...plan, requestLimit: budget ?? plan.requestLimit };
@@ -155,17 +196,18 @@ export async function workflowMain(mode: WorkflowMode, args: string[], deps: Wor
   };
   globalThis.fetch = Object.assign(async () => { throw new Error('Evaluation setup network rejected'); }, originalFetch) as typeof fetch;
   try {
-    const controls = workflowControls(mode);
-    const corpus = selectedDataset === 'synthetic' ? [] : corpusScenarios(mode,
+    const controls = retryCases ? retryCases.filter(row => row.dataset === 'synthetic') : workflowControls(mode);
+    const corpus = retryCases ? retryCases.filter(row => row.dataset !== 'synthetic') : selectedDataset === 'synthetic' ? [] : corpusScenarios(mode,
       await (deps.loadCorpus ?? (await import('./corpus')).loadCorpus)(selectedDataset),
       await (deps.loadMemory ?? loadWorkflowMemory)(selectedDataset));
-    if (mode === 'enrichment' && selectedDataset !== 'synthetic' && !corpus.some(row => row.knowledge?.some(item => item.status === 'approved'))) throw new Error('EVAL_APPROVED_MEMORY_MISSING');
+    if (mode === 'enrichment' && selectedDataset !== 'synthetic' && !retryCases && !corpus.some(row => row.knowledge?.some(item => item.status === 'approved'))) throw new Error('EVAL_APPROVED_MEMORY_MISSING');
     const scenarios: Scenario[] = [...corpus, ...controls];
     const allowance = scenarios.map(row => ({ dataset: row.dataset, case: row.id,
       maximum: mode === 'enrichment' && (row.member === 'suspended' || row.knowledge?.[row.targetKnowledge ?? 0]?.status !== 'approved') ? 0
         : plan.maximumCallsPerCase + (row.refresh ? 2 : 0) }));
     const requestLimit = budget ?? Math.max(1, allowance.reduce((sum, row) => sum + row.maximum, 0));
     const manifest = { ...plan, network: undefined, requestLimit, allowance, run: saved.name, createdAt: saved.startedAt,
+      ...(retrySource ? { sourceRun: retrySource.name, selection: 'failed cases only; original saved inputs; completed cases and controls are not repeated' } : {}),
       ...await codeFingerprint(), positions: corpus.map(row => row.id), controls: controls.map(row => row.id) };
     await writePrivate(resolve(saved.directory, 'manifest.json'), manifest);
     originalConsole.log(JSON.stringify({ run: saved.name, mode, directory: saved.directory,
@@ -206,6 +248,7 @@ export async function workflowMain(mode: WorkflowMode, args: string[], deps: Wor
     await finishEvaluationRun(saved, failed ? 'failed' : 'completed');
     if (failed) process.exitCode = 1;
     return { run: saved.name, mode, directory: saved.directory, ...report.execution,
+      ...(retrySource ? { sourceRun: retrySource.name } : {}),
       corpusCases: corpus.length, controlCases: controls.length, requests: network.requests.length,
       safetyFailures: Object.values(report.safety).reduce((sum, value) => sum + value.failed, 0), qualityReviewPending: report.cells.reduce((sum, cell) => sum + cell.reviewPending, 0) };
   } catch (error) {

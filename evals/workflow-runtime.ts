@@ -172,7 +172,8 @@ export async function createWorkflowRuntime(notify: (step: WorkflowStep) => void
       decisionHistoryPreserved: initial['ticket_decision_history']!.every(before => active!.tables['ticket_decision_history']!.some(after => JSON.stringify(before) === JSON.stringify(after))),
     };
     emit('idempotency', !replayPerformed ? 'skipped' : replaySafe ? 'completed' : 'failed');
-    return { completed, prediction, abstain: mode === 'incoming' ? true : null, output: { result: output, blocked,
+    return { completed, prediction, abstain: mode === 'enrichment' && prediction['skipped'] === 'false'
+      ? prediction['contribution'] === 'unknown' : null, output: { result: output, blocked,
       history: histories, tables: active.tables, initial, writes: active.writes, failure }, calls: [...calls], steps: [...steps], safety };
   };
 }

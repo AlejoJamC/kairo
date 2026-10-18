@@ -120,11 +120,33 @@ Private corpus cases and invented controls are reported separately. Corpus histo
 
 Optional reviewed memory belongs in `scripts/eval/data/input/workflow-context/main.json` (or `coverage.json`), with shape `{ "cases": [{ "position": 1, "knowledge": [{ "content": "Use account recovery.", "status": "approved" }] }] }`. Entries may include `businessContext`; knowledge status may also be `pending_review` or `superseded`. It stays private and is never generated or approved automatically. Corpus enrichment requires at least one supplied approved version; `synthetic` already includes approved, irrelevant, unapproved and superseded cases.
 
+To prepare reviewed memory from a saved incoming run without model calls:
+
+```bash
+bun evals/enrichment.ts prepare main incoming <dated-run>
+```
+
+Run `bun evals/review-memory.ts main` to open a localhost review interface. It displays proposals and source evidence, records explicit approvals or rejections, and prepares approved memory without model calls.
+
+Review `input/knowledge-labels/main/review.json` inside the private data directory. Each proposal retains its source position, original text, evidence and review reasons. Set `decision` to `approved` or `rejected`; approved entries require `reviewer`. Review source support only; no manual ticket destinations are required. Leave uncertain entries pending. Preparation never overwrites an existing review.
+
+```bash
+bun evals/enrichment.ts apply-review main
+bun --env-file=.env.local evals/enrichment.ts select-candidates main
+bun --env-file=.env.local evals/enrichment.ts execute main
+```
+
+`apply-review` makes no model calls. It checks proposals against the permanent source snapshot and preserves human approval before writing `input/knowledge-labels/main/approved-memory.json`. The workflow uses this memory when no explicit input memory file exists. Human decisions and source snapshots remain in `input/knowledge-labels/<dataset>/`, independently of run outputs. Each save backs up the previous review in `history/`. Corpus files and existing golden labels are unchanged.
+
+`select-candidates` embeds corpus tickets and approved knowledge with the configured embedding provider, then applies cosine similarity, `EMBEDDING_SIMILARITY_THRESHOLD` (default and minimum **0.7**, maximum **0.9**) and `KNOWLEDGE_CANDIDATE_LIMIT`. It caches vectors privately, reports candidate pairs and the maximum enrichment calls, and does not run decision or generation models. Candidate selection is not a human relevance label.
+
 Controls cover contradictory or missing evidence, available alternatives, denied membership, human views/assignments/edits, concurrent case changes, withdrawn references, refreshed memory and idempotency. Retrieval, embeddings, approval and atomic database operations use fixtures; these commands do not verify Gmail, Inngest, SQL transactions, RLS or HTTP authorization.
 
 Outputs use separate `incoming`, `enrichment` and `reply` directories with dated runs and `latest.json`. `trace.json` lists steps; `run.json` and `measurements.json` retain private evidence, proposals, versions and calls. `report.json` separates execution, expected-answer scores at **0.7/0.8/0.9**, safety, coverage, available cost and pending human review. Confidence intervals on fully reviewed cases describe sampling uncertainty, not calibrated model confidence. Utility and confirmed solutions stay unknown until reviewed.
 
-After filling the existing `reviews.json` ratings, recalculate without inference:
+`report` recalculates saved outcomes without inference: separate corpus/control counts, skipped cases, contributions, abstentions and calls. Incoming reports reuse unchanged human knowledge reviews; those approvals do not label case decisions or reply utility. Skipped cases and synthetic controls do not add pending human reviews. Explicit `reviews.json` ratings remain supported.
+
+`retry-failed <dataset> <dated-run>` repeats only failed cases using their saved inputs and current code/model configuration. It creates a separate run linked by `sourceRun`; it neither overwrites the original results nor reruns successful cases or controls. This subset is not a new full-corpus score.
 
 ```sh
 bun evals/incoming.ts report main latest

@@ -43,7 +43,8 @@ export function summarize(rows: Measurement[], reviews: Review[] = []) {
     }));
     const judgments = completed.flatMap(r => Object.entries(r.prediction).filter(([key]) => key.endsWith('_evidence') || ['outcome', 'change', 'contribution'].includes(key)));
     const requests = group.flatMap(r => r.requests);
-    const noContribution = completed.filter(r => r.prediction['useful'] === 'false');
+    const noContribution = completed.filter(r => r.prediction['contribution'] === 'none');
+    const indeterminate = completed.filter(r => r.prediction['contribution'] === 'unknown');
     const eligible = group.filter(r => r.case.expected['useful'] === 'true');
     const accepted = reviewed.filter(r => typeof r?.acceptedImprovement === 'boolean');
     const confirmed = reviewed.filter(r => typeof r?.confirmedSolution === 'boolean');
@@ -51,7 +52,8 @@ export function summarize(rows: Measurement[], reviews: Review[] = []) {
       fields, abstention: ratio(completed.filter(r => r.abstain === true).length, completed.filter(r => r.abstain !== null).length),
       unknownJudgments: ratio(judgments.filter(([, v]) => v === 'unknown').length, judgments.length),
       contradictoryJudgments: judgments.filter(([, v]) => v === 'contradictory').length,
-      reviewPending: completed.filter((_, i) => !reviewed[i] || reviewed[i]!.ratings.some(v => v === null)).length,
+      reviewPending: completed.filter((row, i) => row.case.dataset !== 'synthetic' && row.prediction['skipped'] !== 'true' &&
+        (!reviewed[i] || reviewed[i]!.ratings.some(v => v === null))).length,
       rubricFailures: reviewed.flatMap(r => r?.ratings ?? []).filter(v => v === false).length,
       safetyFailures: completed.flatMap(r => Object.values(r.safety)).filter(v => !v).length,
       enrichment: contract !== 'knowledge_impact' ? null : {
@@ -60,6 +62,8 @@ export function summarize(rows: Measurement[], reviews: Review[] = []) {
         acceptedImprovements: ratio(accepted.filter(r => r!.acceptedImprovement).length, accepted.length),
         confirmedSolutions: ratio(confirmed.filter(r => r!.confirmedSolution).length, confirmed.length),
         noContribution: noContribution.length,
+        indeterminate: indeterminate.length,
+        indeterminateCostUsd: totalCost(indeterminate.flatMap(r => r.requests)),
         noContributionCostUsd: totalCost(noContribution.flatMap(r => r.requests)),
       },
       costUsd: totalCost(requests), requests: requests.length,
