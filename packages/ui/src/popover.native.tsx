@@ -62,16 +62,17 @@ type PopoverContentProps = {
   label: string
   side?: 'bottom' | 'top'
   align?: 'start' | 'end'
+  width?: number
   style?: ViewStyle
   children?: ReactNode
 }
 
-function PopoverContent({ label, style, children }: PopoverContentProps) {
+function PopoverContent({ label, width, style, children }: PopoverContentProps) {
   const { open, setOpen } = usePopover()
   return (
     <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
       <Pressable style={styles.scrim} onPress={() => setOpen(false)} accessibilityLabel={label}>
-        <View style={[styles.surface, style]} onStartShouldSetResponder={() => true}>
+        <View style={[styles.surface, width ? { width } : null, style]} onStartShouldSetResponder={() => true}>
           {children}
         </View>
       </Pressable>

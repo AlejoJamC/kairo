@@ -16,13 +16,8 @@ function Skeleton({ width = '60%', height = 10, style }: SkeletonProps) {
   )
 }
 
-function PulseDot({ style }: { style?: ViewStyle }) {
-  return (
-    <View
-      accessibilityElementsHidden
-      style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: tokens['accent.default'] }, style]}
-    />
-  )
+function PulseDot({ width = 6, height = 6, backgroundColor = tokens['accent.default'], style }: { width?: number; height?: number; backgroundColor?: string; style?: ViewStyle }) {
+  return <View accessibilityElementsHidden style={[{ width, height, borderRadius: Math.max(width, height) / 2, backgroundColor }, style]} />
 }
 
 type SpinnerProps = { size?: 'sm' | 'lg'; label?: string; onAccent?: boolean }

@@ -85,6 +85,14 @@ Kairo — AI support cockpit for support teams. Monorepo: dashboard (Vite+React1
 - For file-based specifications, move the existing specification from `specs/pending/` to `specs/done/` and add a brief implementation summary only when the work and required validation are complete.
 - Keep long-running task progress concise and free of customer or evaluation data. Do not introduce a separate agent instruction file to persist progress.
 
+## ⛔ Nothing is published that was not asked for
+
+**Architecture decision records are private.** They live only in the git-ignored internal folder. Never create an ADR, a folder for ADRs or any architecture-decision document in a tracked location (`docs/`, `README`, `AGENTS.md`, skills, comments, Linear, commit or PR text), never propose one, and never quote or paraphrase the content of a private ADR in anything tracked. When a task or criterion calls for one, say so and wait for the explicit order: it is then written in the internal folder with the next free id.
+
+**The rule is wider than ADRs.** Do not add any file, folder, document, section, rule or explanation to the repository or to an external tool unless the user asked for it in that message. A requirement found in a ticket, a spec or an earlier note is not an order to publish something; if its location is unclear, ask. Information that came from a private location never moves into a tracked one.
+
+**Mistakes are reported, never hidden.** Do not delete, rewrite or "clean up" a wrongly published artifact on your own initiative, and do not rewrite pushed history without an explicit order: state what was published, where it is, and let the user decide.
+
 ## Frontend architecture
 
 One component library and one set of design values serve every client (web dashboard, landing, kelan, mobile, desktop shell). Read `skills/kairo-ui/SKILL.md` before any UI work.

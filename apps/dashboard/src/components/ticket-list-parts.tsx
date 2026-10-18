@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Box, Pressable, Skeleton } from "@kairo/ui";
+import { Box, Skeleton } from "@kairo/ui";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type Ticket } from "@kairo/client-core/stores/triage-store";
 import { TicketCard } from "@/components/ticket-card";
@@ -51,26 +51,6 @@ export function applyFilters(tickets: Ticket[], f: FilterState): Ticket[] {
     if (f.status === "unclassified" && t.classified_at) return false;
     return true;
   });
-}
-
-// ---------------------------------------------------------------------------
-// FilterChip — small toggle button
-// ---------------------------------------------------------------------------
-
-export function FilterChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Pressable onClick={onClick} fontSize={11} paddingVertical={4} paddingHorizontal={8} borderRadius={4} backgroundColor={active ? "var(--k-surface-2)" : "transparent"} color={active ? "var(--k-text-primary)" : "var(--k-text-tertiary)"} font="mono" cursor="pointer" borderWidth={0} transition="background 0.1s ease, color 0.1s ease">
-      {label}
-    </Pressable>
-  );
 }
 
 // ---------------------------------------------------------------------------

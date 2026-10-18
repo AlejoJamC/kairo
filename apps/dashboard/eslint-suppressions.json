@@ -4,7 +4,7 @@
       "count": 1
     },
     "no-restricted-syntax": {
-      "count": 4
+      "count": 3
     },
     "react-hooks/set-state-in-effect": {
       "count": 5
@@ -70,7 +70,7 @@
   },
   "src/components/reply-bar.tsx": {
     "no-restricted-syntax": {
-      "count": 4
+      "count": 2
     },
     "react-hooks/immutability": {
       "count": 1
@@ -88,9 +88,6 @@
     }
   },
   "src/components/ticket-card.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
-    },
     "react-hooks/purity": {
       "count": 1
     }
@@ -115,7 +112,7 @@
   },
   "src/components/top-chrome.tsx": {
     "no-restricted-syntax": {
-      "count": 3
+      "count": 2
     }
   },
   "src/components/triage/AssistantPanel.tsx": {
@@ -139,11 +136,6 @@
   "src/components/triage/mention-dropdown.tsx": {
     "no-restricted-syntax": {
       "count": 1
-    }
-  },
-  "src/components/triage/note-card.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
     }
   },
   "src/test/render-with-providers.tsx": {

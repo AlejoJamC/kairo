@@ -9,8 +9,8 @@ import { isTriageActive } from "@kairo/client-core/triage-status";
 import { getSimilarTickets, getRelatedHistory, syncGmail, classifyBatch } from "@kairo/client-core/endpoints";
 import { fetchTicketById, fetchInboxTickets, fetchBatchJobStatus } from "@kairo/client-core/queries";
 import { useAuth } from "@kairo/client-core/auth";
-import { Box, EmptyState, Icon, Pressable, PulseDot, Spinner, Text } from "@kairo/ui";
-import { FilterChip, INITIAL_FILTERS, TicketSkeleton, VirtualTicketList, applyFilters, assignToGroupOrCreate, deriveGroupName, type BatchTicketResult, type FilterState, type SimilarTicketRow } from "@/components/ticket-list-parts";
+import { Box, Callout, EmptyState, Icon, Pressable, PulseDot, Segmented, Spinner, Text } from "@kairo/ui";
+import { INITIAL_FILTERS, TicketSkeleton, VirtualTicketList, applyFilters, assignToGroupOrCreate, deriveGroupName, type BatchTicketResult, type FilterState, type SimilarTicketRow } from "@/components/ticket-list-parts";
 
 
 // ---------------------------------------------------------------------------
@@ -455,21 +455,18 @@ export function TicketList() {
         </Box>
 
         {/* Filter chips */}
-        <Box display="flex" gap={4}>
-          <FilterChip
-            label={t("ticketList.filterAll", "Todos")}
-            active={filters.priority === null && filters.type === null}
-            onClick={() => setFilters(INITIAL_FILTERS)}
-          />
-          {(["P1", "P2", "P3"] as const).map((p) => (
-            <FilterChip
-              key={p}
-              label={p}
-              active={filters.priority === p}
-              onClick={() => toggleFilter("priority", p)}
-            />
-          ))}
-        </Box>
+        <Segmented
+          label={t("ticketList.filterLabel", "Filtrar por prioridad")}
+          semantics="group"
+          value={filters.priority === null && filters.type === null ? "all" : filters.priority ?? "all"}
+          items={[
+            { value: "all", label: t("ticketList.filterAll", "Todos") },
+            { value: "P1", label: "P1" },
+            { value: "P2", label: "P2" },
+            { value: "P3", label: "P3" },
+          ]}
+          onChange={(value) => (value === "all" ? setFilters(INITIAL_FILTERS) : toggleFilter("priority", value))}
+        />
       </Box>
 
       {/* KAI-24 — multi-select action bar (behind VITE_FF_ENABLE_TICKET_GROUPING) */}
@@ -498,9 +495,9 @@ export function TicketList() {
 
       {/* KAI-24 — grouping error banner (manual selection or AI-suggested) */}
       {groupError && (
-        <Text tag="div" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="var(--kairo-color-bad-soft)" paddingVertical={5} paddingHorizontal={14} fontSize={11} font="mono" color="var(--kairo-color-bad-ink)" display="block" borderStyle="solid">
-          {groupError}
-        </Text>
+        <Box paddingVertical={6} paddingHorizontal={14}>
+          <Callout tone="error">{groupError}</Callout>
+        </Box>
       )}
 
       {/* KAI-24 — AI similarity suggestion callout (behind VITE_FF_ENABLE_TICKET_GROUPING) */}
@@ -530,9 +527,9 @@ export function TicketList() {
         </Text>
       )}
       {syncError && (
-        <Text tag="div" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="var(--kairo-color-bad-soft)" paddingVertical={5} paddingHorizontal={14} fontSize={11} font="mono" color="var(--kairo-color-bad-ink)" display="block" borderStyle="solid">
-          {syncError}
-        </Text>
+        <Box paddingVertical={6} paddingHorizontal={14}>
+          <Callout tone="error">{syncError}</Callout>
+        </Box>
       )}
 
       {/* Scanning banner */}

@@ -4,7 +4,7 @@ import { useAuth } from "@kairo/client-core/auth";
 import { updateProfileName } from "@kairo/client-core/queries";
 import { getOperationalSlaConfig, saveOperationalSlaConfig } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
-import { Avatar, Box, Icon, PlainInput, PlainSelect, Pressable, Spinner, Switch, Text, type IconName } from "@kairo/ui";
+import { Avatar, Box, Callout, Icon, PlainInput, PlainSelect, Pressable, Spinner, Switch, Text, type IconName } from "@kairo/ui";
 
 interface Props {
   onViewChange: (view: AppView) => void;
@@ -105,10 +105,9 @@ function WorkspaceSection() {
       </Box>
 
       {msg && (
-        <Text tag="div" display="flex" alignItems="center" gap={8} borderRadius={6} paddingVertical={8} paddingHorizontal={12} fontSize={13} backgroundColor={msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" : "var(--kairo-color-bad-soft)"} color={msg.type === "success" ? "var(--kairo-color-ok-ink)" : "var(--kairo-color-bad-ink)"} borderWidth={1} borderColor={msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" : "var(--kairo-color-bad-line)"} marginBottom={16} borderStyle="solid">
-          {msg.type === "success" ? <Icon name="check" size={14} /> : <Icon name="alert" size={14} />}
-          {msg.text}
-        </Text>
+        <Box marginBottom={16}>
+          <Callout tone={msg.type === "success" ? "neutral" : "error"} icon={<Icon name={msg.type === "success" ? "check" : "alert"} size={14} />}>{msg.text}</Callout>
+        </Box>
       )}
 
       <Box display="flex" justifyContent="flex-end" gap={8} paddingTop={20} borderTopWidth={1} borderTopColor="var(--k-border)" borderStyle="solid">
@@ -469,10 +468,9 @@ function OperationalSlaSection() {
       })}
 
       {msg && (
-        <Text tag="div" display="flex" alignItems="center" gap={8} borderRadius={6} paddingVertical={8} paddingHorizontal={12} fontSize={13} backgroundColor={msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" : "var(--kairo-color-bad-soft)"} color={msg.type === "success" ? "var(--kairo-color-ok-ink)" : "var(--kairo-color-bad-ink)"} borderWidth={1} borderColor={msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" : "var(--kairo-color-bad-line)"} marginBottom={16} borderStyle="solid">
-          {msg.type === "success" ? <Icon name="check" size={14} /> : <Icon name="alert" size={14} />}
-          {msg.text}
-        </Text>
+        <Box marginBottom={16}>
+          <Callout tone={msg.type === "success" ? "neutral" : "error"} icon={<Icon name={msg.type === "success" ? "check" : "alert"} size={14} />}>{msg.text}</Callout>
+        </Box>
       )}
 
       <Box display="flex" justifyContent="flex-end" gap={8} paddingTop={20} borderTopWidth={1} borderTopColor="var(--k-border)" borderStyle="solid">

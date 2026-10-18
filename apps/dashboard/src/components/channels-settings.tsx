@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@kairo/client-core/auth";
 import { listChannels, deleteChannel, startGmailConnect } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
-import { Box, Icon, Pressable, Spinner, Text } from "@kairo/ui";
+import { Box, Callout, Icon, Pressable, Spinner, Text } from "@kairo/ui";
 
 interface SupportChannel {
   id: string;
@@ -80,9 +80,8 @@ export function ChannelsSettings({ onViewChange }: Props) {
 
       {/* Error */}
       {error && (
-        <Box display="flex" gap={8} alignItems="center" backgroundColor="var(--kairo-color-bad-soft)" borderWidth={1} borderColor="var(--kairo-color-bad-line)" borderRadius={8} paddingVertical={10} paddingHorizontal={14} marginBottom={20} borderStyle="solid">
-          <Icon name="alert" size={15} color="var(--kairo-color-bad)" />
-          <Text tag="p" fontSize={13} color="var(--kairo-color-bad-ink)" margin={0} display="block">{error}</Text>
+        <Box marginBottom={20}>
+          <Callout tone="error" icon={<Icon name="alert" size={15} color="var(--kairo-color-bad)" />}>{error}</Callout>
         </Box>
       )}
 

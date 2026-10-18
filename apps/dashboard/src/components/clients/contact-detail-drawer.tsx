@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { type ContactRow } from "@kairo/client-core/contact-row";
 import { confirmDraft, rejectDraft, unrejectDraft, editDraft, type EditPatch } from "@kairo/client-core/draft-actions";
 import type { Client } from "@/types";
-import { Avatar, Box, Icon, PlainInput, Pressable, Spinner, Text } from "@kairo/ui";
+import { Avatar, Box, Callout, Icon, PlainInput, Pressable, PropRow, Spinner, Text } from "@kairo/ui";
 import { ExternalSourceBadge, StatusBadge, relativeTime } from "@/components/clients/contact-parts";
 
 // ---------------------------------------------------------------------------
@@ -163,12 +163,12 @@ export function ContactDetailDrawer({
             ))}
           </Box>
 
-          {row.organization && <DetailField label={t("detail.organization")} value={row.organization} />}
-          {row.email && <DetailField label={t("detail.email")} value={row.email} />}
-          {row.phone && <DetailField label={t("detail.phone")} value={row.phone} />}
+          {row.organization && <PropRow label={t("detail.organization")}>{row.organization}</PropRow>}
+          {row.email && <PropRow label={t("detail.email")}>{row.email}</PropRow>}
+          {row.phone && <PropRow label={t("detail.phone")}>{row.phone}</PropRow>}
 
           {/* CRM-only fields */}
-          {client?.legalId && <DetailField label={t("detail.legalId")} value={client.legalId} />}
+          {client?.legalId && <PropRow label={t("detail.legalId")}>{client.legalId}</PropRow>}
 
           {client && client.authorizedEmails.length > 0 && (
             <Box marginBottom={16}>
@@ -206,9 +206,9 @@ export function ContactDetailDrawer({
             <Box marginTop={20}>
               {/* Action error */}
               {actionError && (
-                <Text tag="div" marginBottom={10} paddingVertical={8} paddingHorizontal={12} borderRadius={6} fontSize={12} backgroundColor="var(--kairo-color-bad-soft)" color="var(--kairo-color-bad-ink)" borderWidth={1} borderColor="var(--kairo-color-bad-line)" display="block" borderStyle="solid">
-                  {actionError}
-                </Text>
+                <Box marginBottom={10}>
+                  <Callout tone="error">{actionError}</Callout>
+                </Box>
               )}
 
               {/* ── proposed + kairo_created: confirm / reject / edit ── */}
@@ -303,17 +303,3 @@ export function ContactDetailDrawer({
 // ---------------------------------------------------------------------------
 // DetailField — small reusable label/value row inside the drawer
 // ---------------------------------------------------------------------------
-
-export function DetailField({ label, value }: { label: string; value: string }) {
-  return (
-    <Box marginBottom={16}>
-      <Text tag="p" fontSize={11} fontWeight={500} color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.44} marginBottom={4} display="block">
-        {label}
-      </Text>
-      <Text tag="p" fontSize={13} color="var(--k-text-primary)" margin={0} wordBreak="break-word" display="block">
-        {value}
-      </Text>
-    </Box>
-  );
-}
-

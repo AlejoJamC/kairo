@@ -11,7 +11,7 @@ import { useResizablePanel } from "@/hooks/use-resizable-panel";
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
 import { NotesPanel } from "@/components/triage/NotesPanel";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
-import { Box, Button, Field, FieldTextarea, Icon, Pressable, Resizer, Skeleton, Text } from "@kairo/ui";
+import { Box, Button, Field, FieldTextarea, Icon, Pressable, Resizer, Skeleton, Tab, Tabs, Text } from "@kairo/ui";
 
 const RESIZE_MIN = 340;
 
@@ -661,25 +661,20 @@ export function AiAssistant({ customer }: AiAssistantProps) {
 
       {/* Tab bar */}
       <Box paddingTop={12} paddingHorizontal={14} paddingBottom={0} flexShrink={0}>
-        <Box display="flex" borderBottomWidth={1} borderBottomColor="var(--k-border)" borderStyle="solid">
+        <Tabs label={t("ai.contextTabs", "Context")}>
           {tabs.map(({ id, label, disabled }) => (
-            <Pressable key={id} type="button" onClick={() => !disabled && setActiveTab(id)} disabled={disabled} display="flex" alignItems="center" gap={5} fontSize={12} paddingVertical={8} paddingHorizontal={10} fontWeight={activeTab === id ? 500 : 400} color={disabled
-                  ? "var(--k-text-disabled, #C0C0C0)"
-                  : activeTab === id ? "var(--k-text-primary)" : "var(--k-text-tertiary)"} borderBottomWidth={2} borderBottomColor={activeTab === id ? "var(--k-accent)" : "transparent"} marginBottom={-1} backgroundColor="transparent" cursor={disabled ? "not-allowed" : "pointer"} whiteSpace="nowrap" transition="color 0.1s" opacity={disabled ? 0.5 : 1} borderStyle="solid">
-              {/* `ai` dot commented out — only ever set on the assistant tab, no
-                  tooltip/label explaining what it means, no clear value as-is.
-                  Pending: reuse this visual for an actual "in testing"/special-tab
-                  indicator if that's ever a real need, instead of an unexplained dot. */}
+            <Tab
+              key={id}
+              selected={activeTab === id}
+              disabled={disabled}
+              onPress={() => setActiveTab(id)}
+              count={id === "notes" && notesBadge > 0 ? notesBadge : undefined}
+              unread
+            >
               {label}
-              {/* KAI-232 — unread mentions on this ticket's notes (spec E2). */}
-              {id === "notes" && notesBadge > 0 && (
-                <Text minWidth={15} height={15} paddingVertical={0} paddingHorizontal={4} borderRadius={999} backgroundColor="var(--k-mention-solid)" color="white" font="mono" fontSize={9} fontWeight={600} display="inline-flex" alignItems="center" justifyContent="center">
-                  {notesBadge}
-                </Text>
-              )}
-            </Pressable>
+            </Tab>
           ))}
-        </Box>
+        </Tabs>
       </Box>
 
       {/* Tab content — the Assistant chat owns full height (internal scroll +

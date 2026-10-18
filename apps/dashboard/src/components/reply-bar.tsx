@@ -14,7 +14,7 @@ import {
 } from "@kairo/client-core/note-mentions";
 import { MentionDropdown } from "./triage/mention-dropdown";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, Box, Icon, PlainTextarea, Pressable, type PressableProps, Text } from "@kairo/ui";
+import { Avatar, Box, Icon, PlainTextarea, Pressable, Segmented, Text, type PressableProps } from "@kairo/ui";
 import { useAuth } from "@kairo/client-core/auth";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import type { TicketStatus } from "@kairo/types";
@@ -562,15 +562,24 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       {/* ── DIMENSION 1: Mode selector ─────────────────────────────────── */}
       {/* KAI-232: the reply/note switch only exists when internal notes are on. */}
       {INTERNAL_NOTES_ENABLED && (
-      <Box display="flex" gap={2} marginBottom={8} backgroundColor="var(--k-surface)" borderRadius={8} padding={3} borderWidth={1} borderColor="var(--k-border-subtle)" width="fit-content" borderStyle="solid">
-        <Pressable type="button" onClick={() => { setMode("reply"); setSendError(null); setSendSuccess(false); }} display="flex" alignItems="center" gap={4} fontSize={11} fontWeight={mode === "reply" ? 600 : 400} paddingVertical={4} paddingHorizontal={10} borderRadius={6} borderWidth={0} backgroundColor={mode === "reply" ? "white" : "transparent"} color={mode === "reply" ? "var(--k-text-primary)" : "var(--k-text-tertiary)"} cursor="pointer" boxShadow={mode === "reply" ? "0 1px 3px rgba(0,0,0,0.08)" : "none"} transition="all 0.1s ease">
-          <Icon name="send" size={10} />
-          {t("replyBar.modeReply", "Reply")}
-        </Pressable>
-        <Pressable type="button" onClick={() => { setMode("note"); setShowAiBanner(false); setSendError(null); setSendSuccess(false); setShowEscalatePanel(false); }} display="flex" alignItems="center" gap={4} fontSize={11} fontWeight={mode === "note" ? 600 : 400} paddingVertical={4} paddingHorizontal={10} borderRadius={6} borderWidth={0} backgroundColor={mode === "note" ? "var(--kairo-color-note-soft)" : "transparent"} color={mode === "note" ? "var(--kairo-color-note-ink)" : "var(--k-text-tertiary)"} cursor="pointer" boxShadow={mode === "note" ? "0 1px 3px rgba(0,0,0,0.08)" : "none"} transition="all 0.1s ease">
-          <Icon name="lock" size={10} />
-          {t("replyBar.modeNote", "Internal note")}
-        </Pressable>
+      <Box marginBottom={8}>
+        <Segmented
+          label={t("replyBar.modeLabel", "Composer mode")}
+          value={mode}
+          items={[
+            { value: "reply", label: t("replyBar.modeReply", "Reply") },
+            { value: "note", label: t("replyBar.modeNote", "Internal note"), tone: "note" },
+          ]}
+          onChange={(next) => {
+            setMode(next);
+            setSendError(null);
+            setSendSuccess(false);
+            if (next === "note") {
+              setShowAiBanner(false);
+              setShowEscalatePanel(false);
+            }
+          }}
+        />
       </Box>
       )}
 

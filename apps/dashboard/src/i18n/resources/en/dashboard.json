@@ -93,7 +93,8 @@
     "similarSuggestion_one": "{{count}} ticket seems to be about the same issue. Group them?",
     "similarSuggestion_other": "{{count}} tickets seem to be about the same issue. Group them?",
     "similarAccept": "Group",
-    "similarDismiss": "Dismiss"
+    "similarDismiss": "Dismiss",
+    "filterLabel": "Filter by priority"
   },
   "tickets": {
     "title": "Open Tickets",
@@ -365,7 +366,14 @@
     "updating": "Updating…",
     "updateButton": "Update Password",
     "setButton": "Set Password",
-    "error": "Failed to update password. Please try again."
+    "error": "Failed to update password. Please try again.",
+    "strength": {
+      "0": "—",
+      "1": "weak",
+      "2": "fair",
+      "3": "good",
+      "4": "strong"
+    }
   },
   "ticketDetail": {
     "customer": "Customer",
@@ -424,7 +432,8 @@
     "escalateConfirm": "Confirm escalation",
     "escalateCancel": "Cancel",
     "escalating": "Escalating…",
-    "mentionChipLabel": "Mentioned: {{name}}"
+    "mentionChipLabel": "Mentioned: {{name}}",
+    "modeLabel": "Composer mode"
   },
   "notes": {
     "loading": "loading notes…",
@@ -581,7 +590,8 @@
     "assistantOperation_proposed": "Requires human review",
     "assistantOperation_failed": "Failed",
     "assistantRequestFailed": "Assistant unavailable. Try again.",
-    "assistantWaiting": "Consulting the ticket…"
+    "assistantWaiting": "Consulting the ticket…",
+    "contextTabs": "Context"
   },
   "relatedHistory": {
     "title": "Related history",

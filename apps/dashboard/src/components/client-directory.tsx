@@ -7,8 +7,8 @@ import { useDraftContacts } from "@kairo/client-core/hooks/use-draft-contacts";
 import { mapClientToRow, type ContactRow } from "@kairo/client-core/contact-row";
 import { confirmDraft, bulkConfirmByOrganization } from "@kairo/client-core/draft-actions";
 import type { Client } from "@/types";
-import { Box, Button, Icon, PlainInput, PlainSelect, Pressable, Skeleton, Spinner, Text } from "@kairo/ui";
-import { ContactCard, KpiStrip, mapRow } from "@/components/clients/contact-parts";
+import { Box, Button, Callout, Icon, KpiStrip, PlainInput, PlainSelect, Pressable, Skeleton, Spinner, Text } from "@kairo/ui";
+import { ContactCard, clientKpis, mapRow } from "@/components/clients/contact-parts";
 import { ContactDetailDrawer } from "@/components/clients/contact-detail-drawer";
 
 type StatusFilter = "all" | "drafts" | "confirmed" | "rejected";
@@ -320,18 +320,17 @@ export function ClientDirectory() {
         </Box>
 
         {/* KPI strip — always computed over clients */}
-        <KpiStrip clients={clients} />
+        <Box marginTop={20}>
+          <KpiStrip items={clientKpis(clients)} loading={clientsLoading} />
+        </Box>
 
         {/* Draft polling error banner */}
         {draftsError && (
-          <Text tag="div" marginTop={12} paddingVertical={10} paddingHorizontal={14} borderRadius={8} fontSize={13} backgroundColor="var(--kairo-color-bad-soft)" color="var(--kairo-color-bad-ink)" borderWidth={1} borderColor="var(--kairo-color-bad-line)" display="flex" alignItems="center" gap={8} borderStyle="solid">
-            <Icon name="alert" size={14} />
-            <Text flexGrow={1} flexShrink={1} flexBasis="0%">{t("errorMessage")}</Text>
-            <Pressable onClick={retryDrafts} display="flex" alignItems="center" gap={4} fontSize={12} backgroundColor="transparent" borderWidth={0} cursor="pointer" color="var(--kairo-color-bad-ink)" fontWeight={500}>
-              <Icon name="refresh" size={12} />
-              {t("retry")}
-            </Pressable>
-          </Text>
+          <Box marginTop={12}>
+            <Callout tone="error" icon={<Icon name="alert" size={14} />} actionLabel={t("retry")} onAction={retryDrafts}>
+              {t("errorMessage")}
+            </Callout>
+          </Box>
         )}
 
         {/* Status pills */}

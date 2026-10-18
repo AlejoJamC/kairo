@@ -96,7 +96,7 @@ describe("TicketCard — sentiment emoji tooltip i18n", () => {
     renderWithProviders(
       React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
     );
-    const emoji = screen.getByText("😩");
+    const emoji = screen.getByText("😠");
     expect(emoji).toHaveAttribute("title", "ticketCard.emotionFrustrated:");
     expect(emoji).toHaveAttribute("aria-label", "ticketCard.emotionFrustrated:");
   });

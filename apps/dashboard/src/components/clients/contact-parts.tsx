@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { type ContactRow, type ContactRowStatus } from "@kairo/client-core/contact-row";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
-import { Avatar, Box, Icon, Pressable, Spinner, Text } from "@kairo/ui";
+import { Avatar, Box, Icon, Pressable, Spinner, Text, type KpiItem } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,40 +90,18 @@ export function ExternalSourceBadge({ source }: { source: string }) {
 // KPI cards (unchanged — still computed over clients only)
 // ---------------------------------------------------------------------------
 
-export function KpiStrip({ clients }: { clients: Client[] }) {
-  const active    = clients.filter((c) => c.ticketCount > 0 || c.plan != null).length;
-  const csatVals  = clients.map((c) => c.csatAvg).filter((v): v is number => v != null);
-  const csatAvg   = csatVals.length ? (csatVals.reduce((a, b) => a + b, 0) / csatVals.length).toFixed(1) : "—";
+export function clientKpis(clients: Client[]): KpiItem[] {
+  const active = clients.filter((c) => c.ticketCount > 0 || c.plan != null).length;
+  const csatVals = clients.map((c) => c.csatAvg).filter((v): v is number => v != null);
+  const csatAvg = csatVals.length ? (csatVals.reduce((a, b) => a + b, 0) / csatVals.length).toFixed(1) : null;
   const churnRisk = clients.filter((c) => c.slaLevel === "Critical").length;
 
-  const items = [
-    { label: "MRR TOTAL",        value: "—",                          delta: null,         accent: undefined },
-    { label: "ACTIVOS",          value: `${active} / ${clients.length}`, delta: null,      accent: undefined },
-    { label: "CSAT PROMEDIO",    value: csatAvg,                      delta: null,         accent: undefined },
-    { label: "RIESGO DE CHURN",  value: String(churnRisk),            delta: churnRisk > 0 ? `↑${churnRisk}` : null, accent: churnRisk > 0 ? "var(--kairo-color-bad)" : undefined },
+  return [
+    { label: "MRR TOTAL", value: null },
+    { label: "ACTIVOS", value: `${active} / ${clients.length}` },
+    { label: "CSAT PROMEDIO", value: csatAvg },
+    { label: "RIESGO DE CHURN", value: churnRisk, urgent: churnRisk > 0 },
   ];
-
-  return (
-    <Box grid gridTemplateColumns="repeat(4,1fr)" gap={1} backgroundColor="var(--k-border-subtle)" borderWidth={1} borderColor="var(--k-border)" borderRadius={10} overflow="hidden" marginTop={20} borderStyle="solid">
-      {items.map((s) => (
-        <Box key={s.label} backgroundColor="white" padding={16}>
-          <Text tag="div" fontSize={11} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.55} display="block">
-            {s.label}
-          </Text>
-          <Box display="flex" alignItems="baseline" gap={8} marginTop={4}>
-            <Text fontSize={24} fontWeight={600} color={s.accent ?? "var(--k-text-primary)"} font="display">
-              {s.value}
-            </Text>
-            {s.delta && (
-              <Text fontSize={12} color={s.accent ?? "var(--kairo-color-ok)"} font="mono">
-                {s.delta}
-              </Text>
-            )}
-          </Box>
-        </Box>
-      ))}
-    </Box>
-  );
 }
 
 // ---------------------------------------------------------------------------

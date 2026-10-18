@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Box, Button, Dialog, Field, FieldInput, FieldSelect, FieldTextarea, Icon, IconButton, Text } from "@kairo/ui";
+import { Box, Button, Callout, Dialog, Field, FieldInput, FieldSelect, FieldTextarea, Icon, IconButton, Text } from "@kairo/ui";
 import { saveClient } from "@kairo/client-core/endpoints";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
 
@@ -169,9 +169,7 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
       }
     >
       {error && (
-        <Text tag="div" role="alert" borderRadius={6} backgroundColor="var(--kairo-color-bad-soft)" borderWidth={1} borderColor="var(--kairo-color-bad-line)" paddingVertical={8} paddingHorizontal={12} fontSize={13} color="var(--kairo-color-bad-ink)" display="block" borderStyle="solid">
-          {error}
-        </Text>
+        <Callout tone="error">{error}</Callout>
       )}
 
       {/* Internal ID & Name */}

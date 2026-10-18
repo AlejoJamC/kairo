@@ -7,7 +7,7 @@ import { SlaBadge } from "@/components/sla-badge";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { normalizeTicketType } from "@/lib/ticket-labels";
-import { Box, CategoryChip, Icon, PlainInput, Pressable, PriorityGlyph, Text, type TextProps } from "@kairo/ui";
+import { Box, Button, CategoryChip, Chip, Icon, PlainInput, Pressable, Text, TicketRow, type Sentiment, type TextProps } from "@kairo/ui";
 
 const NO_NOTE_COUNTS = { notes: 0, unread_mentions: 0 } as const;
 
@@ -15,24 +15,6 @@ const NO_NOTE_COUNTS = { notes: 0, unread_mentions: 0 } as const;
 // Sentiment helpers — stripe colors come from the sentiment scale of
 // @kairo/tokens; the emoji is the indicator the design specifies.
 // ---------------------------------------------------------------------------
-
-const STRIPE_COLOR: Record<string, string> = {
-  aggressive: "var(--kairo-sentiment-aggressive)",
-  frustrated: "var(--kairo-sentiment-frustrated)",
-  neutral:    "var(--kairo-sentiment-neutral)",
-  positive:   "var(--kairo-sentiment-positive)",
-};
-
-const EMOTION_EMOJI: Record<string, string> = {
-  aggressive: "🤬",
-  frustrated: "😩",
-  neutral:    "😐",
-  positive:   "😊",
-};
-
-function stripeColor(sentiment: string | null | undefined): string {
-  return STRIPE_COLOR[(sentiment ?? "").toLowerCase()] ?? "var(--kairo-color-line-strong)";
-}
 
 const EMOTION_LABEL_KEY = {
   aggressive: "ticketCard.emotionAggressive",
@@ -174,127 +156,96 @@ export function TicketCard({
 
   const isSpam = (ticket.ticket_type ?? "").toLowerCase() === "spam";
   const relativeTime = useRelativeTime(ticket.received_at ?? ticket.created_at);
-  const emoji = EMOTION_EMOJI[(ticket.sentiment ?? "").toLowerCase()] ?? "";
   const emotionKey = (ticket.sentiment ?? "").toLowerCase() as keyof typeof EMOTION_LABEL_KEY;
   const emotionLabel = EMOTION_LABEL_KEY[emotionKey] ? t(EMOTION_LABEL_KEY[emotionKey]) : "";
 
+  const hasConfidence = ticket.classification_confidence !== null && ticket.classification_confidence !== undefined;
+
   return (
-    <Pressable onClick={() => {
-        if (longPressFired.current) {
-          longPressFired.current = false;
-          return;
+    <Box
+      position="relative"
+      onPointerDown={handlePointerDown}
+      onPointerUp={clearLongPressTimer}
+      onPointerLeave={clearLongPressTimer}
+      onPointerCancel={clearLongPressTimer}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <TicketRow
+        code={ticket.ticket_number ? `KAI-${ticket.ticket_number}` : ""}
+        subject={ticket.subject ?? ""}
+        priority={ticket.priority}
+        escalated={ticket.status === "escalated"}
+        age={relativeTime}
+        sentiment={emotionKey in EMOTION_LABEL_KEY ? (emotionKey as Sentiment) : null}
+        sentimentLabel={emotionLabel}
+        sender={ticket.from_name ?? ticket.from_email ?? "Unknown"}
+        mention={INTERNAL_NOTES_ENABLED && noteCounts.unread_mentions > 0 ? { label: t("notes.queueMentionTooltip", "You have an unread mention here") } : undefined}
+        notes={INTERNAL_NOTES_ENABLED ? { count: noteCounts.notes, label: t("notes.queueChipTooltip", "Internal notes on this ticket") } : undefined}
+        sla={
+          <>
+            <SlaBadge slaDate={ticket.sla_due_at} />
+            <PrioritySlaBadge ticket={ticket} />
+          </>
         }
-        onSelect(ticket.id);
-      }} onPointerDown={handlePointerDown} onPointerUp={clearLongPressTimer} onPointerLeave={clearLongPressTimer} onPointerCancel={clearLongPressTimer} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} aria-selected={selected} position="relative" display="flex" flexDirection="column" width="100%" paddingTop={12} paddingRight={14} paddingBottom={12} paddingLeft={18} borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor={selected
-          ? "var(--k-surface-2)"
-          : hovered
-          ? "var(--k-surface)"
-          : "transparent"} borderLeftWidth={2} borderLeftColor={selected ? "var(--k-accent)" : "transparent"} cursor="pointer" opacity={isSpam ? 0.55 : 1} textAlign="left" transition="background 0.1s ease" borderStyle="solid">
-      {/* Priority stripe */}
-      <Box position="absolute" left={0} top={8} bottom={8} width={3} backgroundColor={stripeColor(ticket.sentiment)} borderTopLeftRadius={0} borderTopRightRadius={2} borderBottomRightRadius={2} borderBottomLeftRadius={0} />
-
-      {/* Row 1: ticket ID + priority + type + corrected + time */}
-      <Box display="flex" alignItems="center" gap={6} marginBottom={8} flexWrap="wrap">
-        {onToggleSelect && (
-          <Text width={14} display="inline-flex" alignItems="center" flexShrink={0}>
-            {(hovered || multiSelectMode || isChecked) && (
-              <PlainInput type="checkbox" checked={isChecked} aria-label={t("ticketCard.selectForGrouping", "Seleccionar para agrupar")} onClick={(e) => e.stopPropagation()} onChange={(e) => {
-                  e.stopPropagation();
-                  onToggleSelect(ticket.id);
-                }} width={13} height={13} cursor="pointer" />
+        confidence={hasConfidence ? ticket.classification_confidence : undefined}
+        confidenceLabel={t("ticketCard.confidenceLabel", "Confianza")}
+        extras={
+          <>
+            {ticket.ticket_type && (
+              <CategoryChip
+                scale="ticketType"
+                value={normalizeTicketType(ticket.ticket_type)}
+                label={t(`ticketTypes.${normalizeTicketType(ticket.ticket_type)}`)}
+                size="sm"
+              />
             )}
-          </Text>
-        )}
-        {ticket.ticket_number && (
-          <Text fontSize={11} font="mono" color="var(--k-text-primary)" fontWeight={700} letterSpacing={0.22}>
-            KAI-{ticket.ticket_number}
-          </Text>
-        )}
-        <PriorityGlyph priority={ticket.priority} size={12} />
-        {/* KAI-232 — internal notes on this ticket (amber chip) and a blue dot
-            when one of them holds an unread mention of you (spec A1). Counts
-            come from the store, computed server-side per request. */}
-        {INTERNAL_NOTES_ENABLED && noteCounts.notes > 0 && (
-          <Text title={t("notes.queueChipTooltip", "Internal notes on this ticket")} display="inline-flex" alignItems="center" gap={3} paddingVertical={1} paddingHorizontal={5} borderRadius={3} backgroundColor="var(--k-note-bg)" borderWidth={1} borderColor="var(--k-note-border)" color="var(--k-note-label)" font="mono" fontSize={9.5} borderStyle="solid">
-            <Icon name="lock" size={8} />
-            {noteCounts.notes}
-          </Text>
-        )}
-        {INTERNAL_NOTES_ENABLED && noteCounts.unread_mentions > 0 && (
-          <Text title={t("notes.queueMentionTooltip", "You have an unread mention here")} width={5} height={5} borderRadius={999} backgroundColor="var(--k-mention-solid)" flexShrink={0} />
-        )}
-        {ticket.ticket_type && (
-          <CategoryChip
-            scale="ticketType"
-            value={normalizeTicketType(ticket.ticket_type)}
-            label={t(`ticketTypes.${normalizeTicketType(ticket.ticket_type)}`)}
-            size="sm"
-          />
-        )}
-        {isCorrected && (
-          <Text fontSize={10} fontWeight={600} paddingVertical={2} paddingHorizontal={6} borderRadius={4} backgroundColor="var(--kairo-color-note-soft)" color="var(--kairo-color-note)">
-            {t("correction.correctedBadge")}
-          </Text>
-        )}
-        <Text marginLeft="auto" fontSize={10} font="mono" color="var(--k-text-tertiary)">
-          {relativeTime}
-        </Text>
-      </Box>
-
-      {/* Row 2: subject */}
-      <Text tag="div" fontSize={12} fontWeight={500} color="var(--k-text-primary)" marginBottom={8} lineHeight={16.2} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
-        {ticket.subject}
-      </Text>
-
-      {/* Row 3: sentiment emoji + name | priority score + confidence */}
-      <Text tag="div" display="flex" alignItems="center" gap={6} fontSize={12} color="var(--k-text-secondary)">
-        {emoji && (
-          <Text aria-label={emotionLabel} title={emotionLabel} fontSize={13} flexShrink={0} lineHeight={13}>
-            {emoji}
-          </Text>
-        )}
-        <Text flexGrow={1} flexShrink={1} flexBasis="0%" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
-          {ticket.from_name ?? ticket.from_email ?? "Unknown"}
-        </Text>
-      </Text>
-
-      {/* Row 4: SLA + grouped badge + priority score/confidence (ticket number moved to Row 1) */}
-      <Box display="flex" alignItems="center" gap={6} marginTop={6}>
-        <SlaBadge slaDate={ticket.sla_due_at} />
-        {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount > 1 && (
-          <Text title={t("ticketCard.groupedTooltip", { count: groupCount - 1 })} display="flex" alignItems="center" gap={4} fontSize={10} color="var(--k-text-tertiary)" paddingVertical={2} paddingHorizontal={7} borderRadius={4} borderWidth={1} borderColor="var(--k-border)" font="mono" whiteSpace="nowrap" flexShrink={0} borderStyle="dashed">
-            <Icon name="clients" size={10} />+ {groupCount - 1}
-          </Text>
-        )}
-        {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount <= 1 && (
-          <Text title={t("ticketCard.groupedAloneTooltip", "Este ticket pertenece a un grupo")} display="inline-flex" flexShrink={0}>
-            <Icon name="clients" size={12} color="var(--k-text-tertiary)" />
-          </Text>
-        )}
-
-        <Box marginLeft="auto" flexShrink={0} display="flex" alignItems="center" gap={6}>
-          <PrioritySlaBadge ticket={ticket} />
-          {ticket.priority_score !== null && ticket.priority_score !== undefined && (
-            <Text title={t("ticketCard.priorityScoreTooltip", "Peso de prioridad")} font="mono" fontSize={10} fontWeight={600} paddingVertical={1} paddingHorizontal={5} borderRadius={4} backgroundColor="var(--k-surface-2)" color="var(--k-text-tertiary)">
-              {Math.round(ticket.priority_score)}
-            </Text>
-          )}
-          {ticket.classification_confidence !== null &&
-            ticket.classification_confidence !== undefined && (
-              <Text title={t("ticketCard.confidenceTooltip", "Confianza de la clasificación IA (0.00–1.00)")} font="mono" fontSize={10} color="var(--k-text-tertiary)">
-                {ticket.classification_confidence.toFixed(2)}
+            {isCorrected && (
+              <Chip size="sm" tone="note">{t("correction.correctedBadge")}</Chip>
+            )}
+            {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount > 1 && (
+              <Text title={t("ticketCard.groupedTooltip", { count: groupCount - 1 })} display="flex" alignItems="center" gap={4} fontSize={10} color="var(--k-text-tertiary)">
+                <Icon name="clients" size={10} />+ {groupCount - 1}
               </Text>
             )}
-        </Box>
-      </Box>
+            {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount <= 1 && (
+              <Text title={t("ticketCard.groupedAloneTooltip", "Este ticket pertenece a un grupo")} display="inline-flex" flexShrink={0}>
+                <Icon name="clients" size={12} color="var(--k-text-tertiary)" />
+              </Text>
+            )}
+            {ticket.priority_score !== null && ticket.priority_score !== undefined && (
+              <Text title={t("ticketCard.priorityScoreTooltip", "Peso de prioridad")} font="mono" fontSize={10} fontWeight={600} color="var(--k-text-tertiary)">
+                {Math.round(ticket.priority_score)}
+              </Text>
+            )}
+          </>
+        }
+        leading={
+          onToggleSelect && (hovered || multiSelectMode || isChecked) ? (
+            <PlainInput type="checkbox" checked={isChecked} aria-label={t("ticketCard.selectForGrouping", "Seleccionar para agrupar")} onClick={(e) => e.stopPropagation()} onChange={(e) => {
+                e.stopPropagation();
+                onToggleSelect(ticket.id);
+              }} width={13} height={13} cursor="pointer" />
+          ) : undefined
+        }
+        selected={selected}
+        muted={isSpam}
+        onPress={() => {
+          if (longPressFired.current) {
+            longPressFired.current = false;
+            return;
+          }
+          onSelect(ticket.id);
+        }}
+      />
 
       {/* KAI-25 — historical context trigger (selected card only, when related history exists) */}
       {selected && hasRelatedHistory && onOpenHistory && (
-        <Box marginTop={6}>
+        <Box paddingHorizontal={34} paddingBottom={8}>
           <Pressable onClick={(e) => {
               e.stopPropagation();
               onOpenHistory(ticket.id);
-            }} fontSize={11} fontWeight={500} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={0} textAlign="left" textDecoration="underline" textUnderlineOffset={2}>
+            }} fontSize={11} fontWeight={500} color="var(--k-accent)" textDecoration="underline" textUnderlineOffset={2}>
             {t("ticketCard.viewRelatedHistory")}
           </Pressable>
         </Box>
@@ -304,25 +255,18 @@ export function TicketCard({
       {hovered && (onGroup || onEscalate) && (
         <Box position="absolute" right={8} top={8} display="flex" alignItems="center" gap={4}>
           {onGroup && (
-            <Pressable onClick={(e) => {
-                e.stopPropagation();
-                onGroup(ticket.id);
-              }} fontSize={10} fontWeight={500} paddingVertical={2} paddingHorizontal={6} borderRadius={4} backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" color="var(--k-text-secondary)" boxShadow="0 1px 2px rgba(9,9,11,0.04)" cursor="pointer" borderStyle="solid">
+            <Button size="sm" onPress={() => onGroup(ticket.id)}>
               {t("ticketCard.group")}
-            </Pressable>
+            </Button>
           )}
           {onEscalate && (
-            <Pressable onClick={(e) => {
-                e.stopPropagation();
-                onEscalate(ticket.id);
-              }} fontSize={10} fontWeight={500} paddingVertical={2} paddingHorizontal={6} borderRadius={4} backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" color="var(--k-text-secondary)" boxShadow="0 1px 2px rgba(9,9,11,0.04)" cursor="pointer" display="flex" alignItems="center" gap={3} borderStyle="solid">
-              <Icon name="escalate" size={10} />
+            <Button size="sm" icon={<Icon name="escalate" size={10} />} onPress={() => onEscalate(ticket.id)}>
               {t("ticketCard.escalate")}
-            </Pressable>
+            </Button>
           )}
         </Box>
       )}
-    </Pressable>
+    </Box>
   );
 }
 

@@ -93,7 +93,8 @@
     "similarSuggestion_one": "{{count}} ticket parece referirse al mismo problema. ¿Agruparlos?",
     "similarSuggestion_other": "{{count}} tickets parecen referirse al mismo problema. ¿Agruparlos?",
     "similarAccept": "Agrupar",
-    "similarDismiss": "Descartar"
+    "similarDismiss": "Descartar",
+    "filterLabel": "Filtrar por prioridad"
   },
   "tickets": {
     "title": "Tickets Abiertos",
@@ -365,7 +366,14 @@
     "updating": "Actualizando…",
     "updateButton": "Actualizar Contraseña",
     "setButton": "Establecer Contraseña",
-    "error": "Error al actualizar la contraseña. Inténtalo de nuevo."
+    "error": "Error al actualizar la contraseña. Inténtalo de nuevo.",
+    "strength": {
+      "0": "—",
+      "1": "débil",
+      "2": "media",
+      "3": "buena",
+      "4": "fuerte"
+    }
   },
   "ticketDetail": {
     "customer": "Cliente",
@@ -424,7 +432,8 @@
     "escalateConfirm": "Confirmar escalación",
     "escalateCancel": "Cancelar",
     "escalating": "Escalando…",
-    "mentionChipLabel": "Mencionado: {{name}}"
+    "mentionChipLabel": "Mencionado: {{name}}",
+    "modeLabel": "Modo del compositor"
   },
   "notes": {
     "loading": "cargando notas…",
@@ -581,7 +590,8 @@
     "assistantOperation_proposed": "Requiere revisión humana",
     "assistantOperation_failed": "Fallido",
     "assistantRequestFailed": "Asistente no disponible. Inténtalo de nuevo.",
-    "assistantWaiting": "Consultando el ticket…"
+    "assistantWaiting": "Consultando el ticket…",
+    "contextTabs": "Contexto"
   },
   "relatedHistory": {
     "title": "Historial relacionado",

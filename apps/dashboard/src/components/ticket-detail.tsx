@@ -9,7 +9,7 @@ import { useTicketThread, type ThreadMessage } from "@kairo/client-core/hooks/us
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, Box, Icon, Pressable, Text } from "@kairo/ui";
+import { Avatar, Box, Chip, Icon, Pressable, Text, ThreadMessage as ThreadMessageView } from "@kairo/ui";
 import { startGmailConnect } from "@kairo/client-core/endpoints";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
@@ -122,101 +122,72 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
 
   const bodyText = message.body_plain ?? message.snippet ?? null;
 
-  // Internal note: amber card, full-width, no avatar offset (KAI-232 spec B5)
+  const body = bodyText ? (
+    <Text tag="pre" display="block" fontSize={13} lineHeightRatio={1.65} whiteSpace="pre-wrap" wordBreak="break-word" overflowX="hidden" margin={0}>
+      {bodyText}
+    </Text>
+  ) : null;
+
   if (isInternal) {
     return (
-      <Box display="flex" flexDirection="column" gap={0} borderLeftWidth={3} borderLeftColor="var(--k-note-rail)" backgroundColor="var(--k-note-bg)" borderWidth={1} borderColor="var(--k-note-border)" borderRadius={12} overflow="hidden" borderStyle="solid">
-        <Box display="flex" alignItems="center" gap={9} paddingVertical={10} paddingHorizontal={14} borderBottomWidth={1} borderBottomColor="var(--k-note-border)" borderStyle="solid">
-          <Avatar
-            name={message.sender_display_name}
-            email={message.sender_external_id}
-            seed={message.author_id ?? message.sender_external_id}
-            size={22}
-          />
-          <Text fontSize={13} fontWeight={500} color="var(--k-note-text-strong)">
-            {message.is_own_note ? t("notes.you", "You") : senderLabel}
-          </Text>
-          <TeamOnlyChip />
-          {/* Only exists while the jump highlight is running (spec B5). */}
-          {jumped && (
-            <Text font="mono" fontSize={9.5} color="var(--k-note-label)" backgroundColor="rgba(245,158,11,0.16)" paddingVertical={2} paddingHorizontal={6} borderRadius={3} letterSpacing={0.38}>
-              ↳ {t("notes.jumpedFromNotes", "JUMPED FROM NOTES")}
-            </Text>
-          )}
-          <Text marginLeft="auto" font="mono" fontSize={10.5} color="var(--k-note-label)" flexShrink={0}>
-            {timestamp}
-          </Text>
-        </Box>
-        <Box paddingVertical={12} paddingHorizontal={14}>
-          {/* KAI-232: mention tokens render as chips, never as raw @[user:…]. */}
-          <NoteBody
-            body={bodyText}
-            mentions={message.mentions}
-            fontSize={13.5} lineHeightRatio={1.6} color="var(--k-note-text-strong)"
-          />
-        </Box>
-      </Box>
+      <ThreadMessageView
+        variant="note"
+        avatar={<Avatar name={message.sender_display_name} email={message.sender_external_id} seed={message.author_id ?? message.sender_external_id} size={22} />}
+        name={message.is_own_note ? t("notes.you", "You") : senderLabel}
+        tag={
+          <>
+            <TeamOnlyChip />
+            {/* Only exists while the jump highlight is running. */}
+            {jumped && (
+              <Text font="mono" fontSize={9.5} color="var(--k-note-label)" backgroundColor="rgba(245,158,11,0.16)" paddingVertical={2} paddingHorizontal={6} borderRadius={3} letterSpacing={0.38}>
+                ↳ {t("notes.jumpedFromNotes", "JUMPED FROM NOTES")}
+              </Text>
+            )}
+          </>
+        }
+        meta={timestamp}
+        missingBody={t("ticketDetail.noBody", "No email body available.")}
+      >
+        {/* Mention tokens render as chips, never as raw @[user:…]. */}
+        {bodyText ? <NoteBody body={bodyText} mentions={message.mentions} fontSize={13.5} lineHeightRatio={1.6} /> : null}
+      </ThreadMessageView>
     );
   }
 
-  return (
-    <Box display="flex" flexDirection="column" gap={8} marginLeft={isOutbound ? 48 : 0} marginRight={isOutbound ? 0 : 48}>
-      {/* Message header row */}
-      <Box display="flex" alignItems="flex-start" gap={10}>
-        <SenderAvatar
-          name={message.sender_display_name}
-          email={message.sender_external_id}
-        />
-        <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
-          <Box display="flex" alignItems="center" gap={6} flexWrap="wrap">
-            <Text tag="p" fontSize={13} fontWeight={600} color="var(--k-text-primary)" margin={0} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
-              {senderLabel}
-            </Text>
-            {message.is_origin && (
-              <Text fontSize={10} fontWeight={600} color="var(--k-accent)" backgroundColor="var(--k-accent-subtle)" borderWidth={1} borderColor="var(--kairo-color-accent-line)" borderRadius={4} paddingVertical={1} paddingHorizontal={5} flexShrink={0} borderStyle="solid">
-                {t("ticketDetail.originMessage", "Initial message")}
-              </Text>
-            )}
-            {isOutbound && (
-              <Text fontSize={10} fontWeight={600} color="var(--kairo-color-faint)" backgroundColor="var(--kairo-color-hover)" borderWidth={1} borderColor="var(--kairo-color-line)" borderRadius={4} paddingVertical={1} paddingHorizontal={5} flexShrink={0} borderStyle="solid">
-                {t("ticketDetail.outbound", "Reply sent")}
-              </Text>
-            )}
-            {isOutbound && message.delivery_status && message.delivery_status !== "sent" && (
-              <Text fontSize={10} fontWeight={600} color={message.delivery_status === "failed" ? "var(--kairo-color-bad-ink)" : "var(--kairo-color-note-ink)"} backgroundColor={message.delivery_status === "failed" ? "var(--kairo-color-bad-soft)" : "var(--kairo-color-note-soft)"} borderWidth={1} borderColor={message.delivery_status === "failed" ? "var(--kairo-color-bad-line)" : "var(--kairo-color-note-line)"} borderRadius={4} paddingVertical={1} paddingHorizontal={5} flexShrink={0} borderStyle="solid">
-                {message.delivery_status === "failed"
-                  ? t("ticketDetail.deliveryFailed", "Failed to send")
-                  : t("ticketDetail.deliverySending", "Sending…")}
-              </Text>
-            )}
-            {isOutbound
-              && message.delivery_status === "failed"
-              && message.send_error?.code === "INSUFFICIENT_SCOPE" && (
-              <Pressable type="button" onClick={() => { startGmailConnect(); }} fontSize={10} fontWeight={600} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} padding={0} cursor="pointer" textDecoration="underline" flexShrink={0}>
-                {t("ticketDetail.reconnectGmail", "Reconnect Gmail to retry")}
-              </Pressable>
-            )}
-          </Box>
-          <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" margin={0} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
-            {senderEmail}
-            {timestamp ? (senderEmail ? ` · ${timestamp}` : timestamp) : ""}
-          </Text>
-        </Box>
-      </Box>
+  const tag = (
+    <>
+      {message.is_origin && <Chip tone="accent" size="sm">{t("ticketDetail.originMessage", "Initial message")}</Chip>}
+      {isOutbound && <Chip size="sm">{t("ticketDetail.outbound", "Reply sent")}</Chip>}
+      {isOutbound && message.delivery_status && message.delivery_status !== "sent" && (
+        <Chip size="sm" tone={message.delivery_status === "failed" ? "neutral" : "note"}>
+          {message.delivery_status === "failed" ? t("ticketDetail.deliveryFailed", "Failed to send") : t("ticketDetail.deliverySending", "Sending…")}
+        </Chip>
+      )}
+      {isOutbound && message.delivery_status === "failed" && message.send_error?.code === "INSUFFICIENT_SCOPE" && (
+        <Pressable type="button" onClick={() => { startGmailConnect(); }} fontSize={10} fontWeight={600} color="var(--k-accent)" textDecoration="underline">
+          {t("ticketDetail.reconnectGmail", "Reconnect Gmail to retry")}
+        </Pressable>
+      )}
+    </>
+  );
 
-      {/* Message body */}
-      <Box backgroundColor={isOutbound ? "var(--k-accent-subtle)" : "white"} borderWidth={1} borderColor={isOutbound ? "var(--kairo-color-accent-line)" : "var(--k-border)"} borderRadius={10} overflow="hidden" paddingVertical={14} paddingHorizontal={16} borderStyle="solid">
-        {bodyText ? (
-          <Text tag="pre" display="block" fontSize={13} lineHeightRatio={1.65} whiteSpace="pre-wrap" wordBreak="break-word" overflowX="hidden" color="var(--k-text-primary)" margin={0}>
-            {bodyText}
-          </Text>
+  return (
+    <ThreadMessageView
+      variant={isOutbound ? "reply" : "initial"}
+      avatar={
+        isOutbound ? (
+          <Avatar name={message.sender_display_name} email={message.sender_external_id} size={36} />
         ) : (
-          <Text tag="p" margin={0} fontStyle="italic" color="var(--k-text-tertiary)" fontSize={13} display="block">
-            {t("ticketDetail.noBody", "No email body available.")}
-          </Text>
-        )}
-      </Box>
-    </Box>
+          <SenderAvatar name={message.sender_display_name} email={message.sender_external_id} />
+        )
+      }
+      name={senderLabel}
+      tag={tag}
+      meta={`${senderEmail}${timestamp ? (senderEmail ? ` · ${timestamp}` : timestamp) : ""}`}
+      missingBody={t("ticketDetail.noBody", "No email body available.")}
+    >
+      {body}
+    </ThreadMessageView>
   );
 }
 

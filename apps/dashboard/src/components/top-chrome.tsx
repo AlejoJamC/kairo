@@ -10,7 +10,7 @@ import { fetchTicketById } from "@kairo/client-core/queries";
 import { getNumericFlag } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { Avatar, Box, EmptyState, Icon, Kbd, KbdGroup, Menu, MenuItem, Popover, PopoverContent, PopoverTrigger, Pressable, PulseDot, Text, getInitials } from "@kairo/ui";
+import { Avatar, Box, EmptyState, Icon, Kbd, KbdGroup, Menu, MenuItem, NotificationRow, Popover, PopoverContent, PopoverTrigger, Pressable, PulseDot, Text, getInitials } from "@kairo/ui";
 import type { AppView } from "@/types";
 
 // KAI-232 — how often the bell re-fetches /api/v1/notifications, in seconds.
@@ -143,11 +143,6 @@ const NOTIF_DOT_COLOR: Record<NotifItem["kind"], string> = {
   sla_escalation: "var(--kairo-color-bad)",
 };
 
-function NotifDot({ kind }: { kind: NotifItem["kind"] }) {
-  return (
-    <Text width={6} height={6} borderRadius={999} backgroundColor={NOTIF_DOT_COLOR[kind]} flexShrink={0} inlineBlock />
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Notifications Popover
@@ -242,58 +237,36 @@ function firstName(full: string): string {
 
 function NotifRow({ n, onSelect }: { n: NotifItem; onSelect: (item: NotifItem) => void }) {
   const { t } = useTranslation(["dashboard"]);
-  const [hovered, setHovered] = useState(false);
-  const isMention = n.kind === "mention";
-  // Only mention rows lead somewhere today (KAI-232); the rest stay inert.
-  const clickable = isMention && !!n.ticketId;
+  if (n.kind === "mention") {
+    return (
+      <NotificationRow
+        variant="mention"
+        avatar={<Avatar name={n.who} seed={n.who} size={26} />}
+        text={
+          <>
+            <Text tag="strong" fontWeight={n.unread ? 600 : 500}>{firstName(n.who)}</Text>{" "}
+            {t("dashboard:notes.mentionedYouIn")}
+            {n.target && <Text font="mono" color={T.accent} marginLeft={4}>{n.target}</Text>}
+          </>
+        }
+        excerpt={n.preview}
+        time={n.time}
+        unread={n.unread}
+        onPress={() => onSelect(n)}
+      />
+    );
+  }
   return (
-    <Box onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onClick={clickable ? () => onSelect(n) : undefined} role={clickable ? "button" : undefined} tabIndex={clickable ? 0 : undefined} onKeyDown={
-        clickable
-          ? (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onSelect(n);
-              }
-            }
-          : undefined
-      } paddingVertical={11} paddingHorizontal={14} borderBottomWidth={1} borderBottomColor={T.borderSubtle} backgroundColor={hovered ? T.surface2 : n.unread ? "#FAFBFF" : T.bg} display="flex" gap={10} cursor={clickable ? "pointer" : "default"} position="relative" borderStyle="solid">
-      {n.unread && (
-        <Text position="absolute" left={5} top={16} width={4} height={4} borderRadius={999} backgroundColor={T.accent} />
-      )}
-      {/* Actor avatar — mentions show the teammate; system kinds keep a glyph. */}
-      {isMention ? (
-        <Avatar name={n.who} seed={n.who} size={28} />
-      ) : (
-        <Text tag="div" width={28} height={28} borderRadius={999} backgroundColor={n.actorBg} color={n.actorColor ?? "white"} flexShrink={0} display="flex" alignItems="center" justifyContent="center" fontSize={11} fontWeight={600}>
-          {n.actor}
-        </Text>
-      )}
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
-        <Box display="flex" alignItems="center" gap={6} marginBottom={2}>
-          <NotifDot kind={n.kind}/>
-          <Text fontSize={12} color={T.textPrimary} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" flexGrow={1} flexShrink={1} flexBasis="0%">
-            <Text tag="strong" fontWeight={n.unread ? 600 : 500}>{firstName(n.who)}</Text>
-            <Text color={T.textSecondary}>
-              {isMention ? ` ${t("dashboard:notes.mentionedYouIn")}` : ` ${n.title}`}
-            </Text>
-            {n.target && (
-              <Text font="mono" color={T.accent} marginLeft={4}>{n.target}</Text>
-            )}
-          </Text>
-          <Text fontSize={10} font="mono" color={T.textTertiary} flexShrink={0}>{n.time}</Text>
-        </Box>
-        {/* A mention excerpt is quoted in the note's own amber, so it reads as
-            internal at a glance (KAI-232 spec D1). */}
-        <Text tag="div" fontSize={12} color={isMention ? "var(--k-note-text)" : T.textSecondary} lineHeightRatio={1.45} lineClamp={2} {...(isMention ? { paddingVertical: 4, paddingHorizontal: 7, borderRadius: 5, backgroundColor: "var(--k-note-bg)", borderWidth: 1, borderStyle: "solid" as const, borderColor: "var(--k-note-border)" } : null)}>
-          {n.preview}
-        </Text>
-        {clickable && hovered && (
-          <Text tag="div" marginTop={6} display="flex" alignItems="center" gap={5} font="mono" fontSize={10} color={T.accent}>
-            → {t("dashboard:notes.openAtNote")}
-          </Text>
-        )}
-      </Box>
-    </Box>
+    <NotificationRow
+      variant="activity"
+      who={firstName(n.who)}
+      what={n.title}
+      target={n.target ?? undefined}
+      time={n.time}
+      unread={n.unread}
+      dotColor={NOTIF_DOT_COLOR[n.kind]}
+      onPress={() => onSelect(n)}
+    />
   );
 }
 

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { Box, Caret, Icon, PlainTextarea, Pressable, Spinner, Text, type IconName } from "@kairo/ui";
+import { Box, Button, Caret, DraftCard as DraftCardView, FollowUps, Icon, PlainTextarea, Pressable, PromptStarters, SourceList, Spinner, Text, type IconName } from "@kairo/ui";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface Step { label: string; detail: string }
@@ -107,49 +107,33 @@ function Steps({ steps, phase }: { steps: Step[]; phase: Phase }) {
   );
 }
 
-function CitationCard({ c }: { c: Citation }) {
-  return (
-    <Pressable type="button" hoverStyle={{ borderColor: "var(--k-accent-border)", backgroundColor: "var(--k-accent-faint)" }} display="flex" alignItems="flex-start" gap={9} width="100%" textAlign="left" paddingVertical={8} paddingHorizontal={10} borderWidth={1} borderColor="var(--k-border)" borderRadius={8} backgroundColor="white" cursor="pointer" transition="all .12s" borderStyle="solid">
-      <Box width={22} height={22} borderRadius={5} flexShrink={0} marginTop={1} backgroundColor={c.kind === "kb" ? "var(--k-accent-subtle)" : "var(--k-surface-2)"} display="flex" alignItems="center" justifyContent="center">
-        {c.kind === "kb"
-          ? <Icon name="knowledge" size={12} color="var(--k-accent)" />
-          : <Icon name="ticket" size={12} color="var(--k-text-secondary)" />}
-      </Box>
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
-        <Box display="flex" alignItems="center" gap={6}>
-          <Text font="mono" fontSize={10.5} color="var(--k-text-tertiary)">{c.id}</Text>
-          <Text marginLeft="auto" font="mono" fontSize={10} color={c.kind === "kb" ? "var(--k-accent)" : "var(--k-success)"}>{c.meta}</Text>
-        </Box>
-        <Text tag="div" fontSize={12.5} color="var(--k-text-primary)" lineHeight={16.88} marginTop={1} display="block">{c.title}</Text>
-      </Box>
-    </Pressable>
-  );
-}
-
 function DraftCard({ d, onInsert, inserted }: { d: Draft; onInsert: () => void; inserted: boolean }) {
   const { t } = useTranslation("dashboard");
   const [copied, setCopied] = useState(false);
   return (
-    <Box borderWidth={1} borderColor="var(--k-border)" borderRadius={10} overflow="hidden" position="relative" borderStyle="solid">
-      <Box position="absolute" left={0} top={0} bottom={0} width={2} backgroundColor="var(--k-gradient-ai)" />
-      <Box paddingVertical={8} paddingHorizontal={11} borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" display="flex" alignItems="center" gap={7} backgroundColor="var(--k-surface)" borderStyle="solid">
-        <Text display="inline-flex" alignItems="center" gap={4} fontSize={10} fontWeight={600} font="mono" letterSpacing={0.2} paddingVertical={2} paddingHorizontal={7} borderRadius={999} backgroundColor="var(--k-accent-subtle)" color="var(--k-accent)" borderWidth={1} borderColor="var(--k-accent-border)" borderStyle="solid">
-          <Icon name="spark" size={9} /> {t("ai.assistantDraftBadge")}
-        </Text>
-        <Text fontSize={11} color="var(--k-text-tertiary)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{d.subject}</Text>
-      </Box>
-      <Text tag="div" paddingVertical={11} paddingHorizontal={13} fontSize={12.5} lineHeight={20} color="var(--k-text-primary)" whiteSpace="pre-wrap" maxHeight={168} scroll display="block">{d.body}</Text>
-      <Box paddingVertical={8} paddingHorizontal={10} borderTopWidth={1} borderTopColor="var(--k-border-subtle)" display="flex" gap={6} borderStyle="solid">
-        <Pressable type="button" onClick={() => { getPlatform().clipboard.writeText(d.body).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1400); }} display="flex" alignItems="center" gap={5} fontSize={11.5} paddingVertical={5} paddingHorizontal={9} borderWidth={1} borderColor="var(--k-border)" borderRadius={6} color={copied ? "var(--k-success)" : "var(--k-text-secondary)"} backgroundColor="white" cursor="pointer" borderStyle="solid">
-          {copied ? <Icon name="check" size={12} /> : <Icon name="copy" size={12} />}
-          {copied ? t("ai.assistantCopied") : t("ai.assistantCopy")}
-        </Pressable>
-        <Pressable type="button" onClick={onInsert} disabled={inserted} marginLeft="auto" display="flex" alignItems="center" gap={5} fontSize={11.5} paddingVertical={5} paddingHorizontal={11} borderRadius={6} color="white" backgroundColor={inserted ? "var(--k-success)" : "var(--k-accent)"} fontWeight={500} borderWidth={0} cursor={inserted ? "default" : "pointer"}>
-          {inserted ? <Icon name="check" size={12} /> : <Icon name="plus" size={12} />}
-          {inserted ? t("ai.assistantInserted") : t("ai.assistantInsert")}
-        </Pressable>
-      </Box>
-    </Box>
+    <DraftCardView
+      badge={t("ai.assistantDraftBadge")}
+      heading={d.subject}
+      body={d.body}
+      actions={
+        <>
+          <Button
+            size="sm"
+            icon={<Icon name={copied ? "check" : "copy"} size={12} />}
+            onPress={() => {
+              getPlatform().clipboard.writeText(d.body).catch(() => {});
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1400);
+            }}
+          >
+            {copied ? t("ai.assistantCopied") : t("ai.assistantCopy")}
+          </Button>
+          <Button variant="primary" size="sm" disabled={inserted} icon={<Icon name={inserted ? "check" : "plus"} size={12} color="white" />} onPress={onInsert}>
+            {inserted ? t("ai.assistantInserted") : t("ai.assistantInsert")}
+          </Button>
+        </>
+      }
+    />
   );
 }
 
@@ -218,23 +202,27 @@ function AssistantTurn({ answer, onInsert, onFollowup }: {
         )}
 
         {done && answer.citations && (
-          <Box fadeIn marginBottom={12}>
-            <Text tag="div" fontSize={10.5} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.63} marginBottom={6} display="block">
-              {t("ai.assistantSources")} · {answer.citations.length}
-            </Text>
-            <Box display="flex" flexDirection="column" gap={6}>
-              {answer.citations.map((c, i) => <CitationCard key={i} c={c} />)}
-            </Box>
+          <Box marginBottom={12}>
+            <SourceList
+              title={`${t("ai.assistantSources")} · ${answer.citations.length}`}
+              items={answer.citations.map((c, index) => ({
+                id: String(index),
+                kind: "ticket" as const,
+                icon: c.kind === "kb" ? ("knowledge" as const) : undefined,
+                code: c.id,
+                title: c.title,
+                meta: c.meta,
+              }))}
+            />
           </Box>
         )}
 
         {done && answer.followups && (
-          <Box fadeIn display="flex" flexWrap="wrap" gap={6}>
-            {answer.followups.map((f, i) => (
-              <Pressable key={i} type="button" onClick={() => onFollowup(f)} hoverStyle={{ backgroundColor: "var(--k-surface-2)", color: "var(--k-text-primary)" }} display="flex" alignItems="center" gap={5} fontSize={12} paddingVertical={5} paddingHorizontal={10} borderWidth={1} borderColor="var(--k-border)" borderRadius={999} color="var(--k-text-secondary)" backgroundColor="white" cursor="pointer" borderStyle="solid">
-                <Icon name="spark" size={10} color="var(--k-accent)" />{f}
-              </Pressable>
-            ))}
+          <Box fadeIn>
+            <FollowUps
+              items={answer.followups.map((text, index) => ({ id: String(index), text }))}
+              onPick={(id) => onFollowup(answer.followups![Number(id)]!)}
+            />
           </Box>
         )}
       </Box>
@@ -400,20 +388,14 @@ export function AssistantPanel() {
             <Text tag="p" fontSize={13.5} lineHeight={21.6} color="var(--k-text-secondary)" marginTop={0} marginHorizontal={0} marginBottom={18} display="block">
               {t("ai.assistantIntro", { ticket: ticketLabel, name: senderName })}
             </Text>
-            <Text tag="div" fontSize={10.5} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.63} marginBottom={8} display="block">
-              {t("ai.assistantSuggestions")}
-            </Text>
-            <Box display="flex" flexDirection="column" gap={7}>
-              {STARTERS.map((s) => (
-                <Pressable key={s.id} type="button" onClick={() => ask(t(s.labelKey))} hoverStyle={{ borderColor: "var(--k-accent-border)", backgroundColor: "var(--k-accent-faint)" }} display="flex" alignItems="center" gap={10} paddingVertical={10} paddingHorizontal={12} textAlign="left" borderWidth={1} borderColor="var(--k-border)" borderRadius={9} backgroundColor="white" fontSize={13} color="var(--k-text-primary)" lineHeight={18.2} cursor="pointer" borderStyle="solid">
-                  <Box width={26} height={26} borderRadius={6} backgroundColor="var(--k-accent-subtle)" display="flex" alignItems="center" justifyContent="center" flexShrink={0}>
-                    <Icon name={s.icon} size={14} color="var(--k-accent)" />
-                  </Box>
-                  <Text flexGrow={1} flexShrink={1} flexBasis="0%">{t(s.labelKey)}</Text>
-                  <Icon name="right" size={13} color="var(--k-text-tertiary)" />
-                </Pressable>
-              ))}
-            </Box>
+            <PromptStarters
+              title={t("ai.assistantSuggestions")}
+              items={STARTERS.map((st) => ({ id: st.id, icon: st.icon, text: t(st.labelKey) }))}
+              onPick={(id) => {
+                const starter = STARTERS.find((st) => st.id === id);
+                if (starter) ask(t(starter.labelKey));
+              }}
+            />
           </Box>
         ) : (
           turns.map((turn) => turn.role === "u"

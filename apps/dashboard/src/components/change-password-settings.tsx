@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@kairo/client-core/auth";
 import { updatePassword } from "@kairo/client-core/queries";
 import type { AppView } from "@/types";
-import { Box, Button, Field, FieldInput, Icon, Pressable, Text } from "@kairo/ui";
+import { Box, Button, Callout, Field, FieldInput, Icon, PasswordStrength, Pressable, Text } from "@kairo/ui";
 
 interface Props {
   onViewChange: (view: AppView) => void;
@@ -26,6 +26,9 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
   const hasNumber = /[0-9]/.test(password);
   const passwordsMatch = password === confirmPassword && password.length > 0;
   const isValid = hasMinLength && hasUppercase && hasNumber && passwordsMatch;
+  const strengthScore = (password.length === 0
+    ? 0
+    : Math.min(4, Number(hasMinLength) + Number(hasUppercase) + Number(hasNumber) + Number(password.length >= 12))) as 0 | 1 | 2 | 3 | 4;
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -89,9 +92,7 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
           ) : (
             <Box tag="form" onSubmit={handleSubmit} display="flex" flexDirection="column" gap={16}>
               {error && (
-                <Text tag="div" borderRadius={6} backgroundColor="var(--kairo-color-bad-soft)" borderWidth={1} borderColor="var(--kairo-color-bad-line)" paddingVertical={8} paddingHorizontal={12} fontSize={13} color="var(--kairo-color-bad-ink)" display="block" borderStyle="solid">
-                  {error}
-                </Text>
+                <Callout tone="error">{error}</Callout>
               )}
 
               <Field label={t("dashboard:changePassword.newPasswordLabel")}>
@@ -103,24 +104,19 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
               </Field>
 
               {/* Requirements */}
-              <Box display="flex" flexDirection="column" gap={6}>
-                <Text tag="p" fontSize={13} fontWeight={500} color="var(--k-text-secondary)" display="block">
-                  {t("dashboard:changePassword.requirements.title")}
-                </Text>
-                {[
+              <Text tag="p" fontSize={13} fontWeight={500} color="var(--k-text-secondary)" display="block">
+                {t("dashboard:changePassword.requirements.title")}
+              </Text>
+              <PasswordStrength
+                score={strengthScore}
+                scoreLabel={t(`dashboard:changePassword.strength.${strengthScore}`)}
+                requirements={[
                   { met: hasMinLength, label: t("dashboard:changePassword.requirements.minLength") },
                   { met: hasUppercase, label: t("dashboard:changePassword.requirements.uppercase") },
-                  { met: hasNumber,    label: t("dashboard:changePassword.requirements.number") },
-                  { met: passwordsMatch, label: t("dashboard:changePassword.requirements.match") },
-                ].map(({ met, label }) => (
-                  <Text tag="div" key={label} display="flex" alignItems="center" gap={8} fontSize={13}>
-                    {met
-                      ? <Icon name="check" size={14} color="var(--kairo-color-ok)" />
-                      : <Icon name="x" size={14} color="var(--k-text-tertiary)" />}
-                    <Text color={met ? "var(--kairo-color-ok-ink)" : "var(--k-text-tertiary)"}>{label}</Text>
-                  </Text>
-                ))}
-              </Box>
+                  { met: hasNumber, label: t("dashboard:changePassword.requirements.number") },
+                  { met: passwordsMatch, failed: confirmPassword.length > 0 && password !== confirmPassword, label: t("dashboard:changePassword.requirements.match") },
+                ]}
+              />
 
               {/* Actions */}
               <Box display="flex" alignItems="center" gap={12} paddingTop={4}>
