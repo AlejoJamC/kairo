@@ -1,0 +1,843 @@
+{
+  "$description": "Kairo design system core tokens. Light theme. Source: Kairo Triage v0.5 (app) and Kairo public web v0.5.",
+  "color": {
+    "bg": {
+      "$type": "color",
+      "$value": "#FFFFFF"
+    },
+    "surface": {
+      "$type": "color",
+      "$value": "#FFFFFF"
+    },
+    "side": {
+      "$type": "color",
+      "$value": "#F7F7F8"
+    },
+    "sunk": {
+      "$type": "color",
+      "$value": "#FAFAFA"
+    },
+    "hover": {
+      "$type": "color",
+      "$value": "#F2F2F4"
+    },
+    "line": {
+      "$type": "color",
+      "$value": "#ECECEF"
+    },
+    "line-strong": {
+      "$type": "color",
+      "$value": "#DCDCE1"
+    },
+    "text": {
+      "$type": "color",
+      "$value": "#09090B"
+    },
+    "muted": {
+      "$type": "color",
+      "$value": "#52525B"
+    },
+    "faint": {
+      "$type": "color",
+      "$value": "#71717A"
+    },
+    "accent": {
+      "$type": "color",
+      "$value": "#2B5BFF"
+    },
+    "accent-ink": {
+      "$type": "color",
+      "$value": "{color.accent}"
+    },
+    "accent-soft": {
+      "$type": "color",
+      "$value": "rgba(43,91,255,0.08)"
+    },
+    "accent-line": {
+      "$type": "color",
+      "$value": "rgba(43,91,255,0.24)"
+    },
+    "on-accent": {
+      "$type": "color",
+      "$value": "#FFFFFF"
+    },
+    "focus-ring": {
+      "$type": "color",
+      "$value": "rgba(43,91,255,0.45)"
+    },
+    "accent-indigo": {
+      "$type": "color",
+      "$value": "#5B4BFF"
+    },
+    "accent-teal": {
+      "$type": "color",
+      "$value": "#0E8F86"
+    },
+    "p1": {
+      "$type": "color",
+      "$value": "#EF4444"
+    },
+    "p2": {
+      "$type": "color",
+      "$value": "#F59E0B"
+    },
+    "p3": {
+      "$type": "color",
+      "$value": "#A1A1AA"
+    },
+    "ok": {
+      "$type": "color",
+      "$value": "#10B981"
+    },
+    "ok-ink": {
+      "$type": "color",
+      "$value": "#047857"
+    },
+    "ok-solid": {
+      "$type": "color",
+      "$value": "#047857"
+    },
+    "warn": {
+      "$type": "color",
+      "$value": "#F59E0B"
+    },
+    "bad": {
+      "$type": "color",
+      "$value": "#EF4444"
+    },
+    "bad-ink": {
+      "$type": "color",
+      "$value": "#C9262C"
+    },
+    "mood": {
+      "$type": "color",
+      "$value": "#F97316"
+    },
+    "violet": {
+      "$type": "color",
+      "$value": "#7C5CFF"
+    },
+    "teal": {
+      "$type": "color",
+      "$value": "#0EA5A0"
+    },
+    "cat-account": {
+      "$type": "color",
+      "$value": "#3B82F6"
+    },
+    "cat-internal": {
+      "$type": "color",
+      "$value": "#64748B"
+    },
+    "cat-billing": {
+      "$type": "color",
+      "$value": "#D97706"
+    },
+    "note": {
+      "$type": "color",
+      "$value": "#B45309"
+    },
+    "note-ink": {
+      "$type": "color",
+      "$value": "#78350F"
+    },
+    "note-soft": {
+      "$type": "color",
+      "$value": "#FFFBEB"
+    },
+    "note-line": {
+      "$type": "color",
+      "$value": "#FDE68A"
+    },
+    "note-action": {
+      "$type": "color",
+      "$value": "#B45309"
+    },
+    "sla-alert-ink": {
+      "$type": "color",
+      "$value": "#B45309"
+    },
+    "sla-escalate-ink": {
+      "$type": "color",
+      "$value": "#C2410C"
+    },
+    "inverse-bg": {
+      "$type": "color",
+      "$value": "#18181B"
+    },
+    "inverse-text": {
+      "$type": "color",
+      "$value": "#FAFAFA"
+    },
+    "inverse-faint": {
+      "$type": "color",
+      "$value": "#A1A1AA"
+    },
+    "inverse-ok": {
+      "$type": "color",
+      "$value": "#34D399"
+    },
+    "inverse-link": {
+      "$type": "color",
+      "$value": "#9DB2FF"
+    },
+    "scrim": {
+      "$type": "color",
+      "$value": "rgba(9,9,11,0.32)"
+    },
+    "avatar-coral": {
+      "$type": "color",
+      "$value": "#E8604C"
+    },
+    "avatar-blue": {
+      "$type": "color",
+      "$value": "#3B82F6"
+    },
+    "avatar-violet": {
+      "$type": "color",
+      "$value": "#8B5CF6"
+    },
+    "avatar-lilac": {
+      "$type": "color",
+      "$value": "#A06CF0"
+    },
+    "avatar-green": {
+      "$type": "color",
+      "$value": "#3FB37F"
+    },
+    "accent-hover": {
+      "$type": "color",
+      "$value": "#1E48E5"
+    },
+    "glass": {
+      "$type": "color",
+      "$value": "rgba(255,255,255,0.82)"
+    },
+    "bad-soft": {
+      "$type": "color",
+      "$value": "rgba(239,68,68,0.07)"
+    },
+    "bad-line": {
+      "$type": "color",
+      "$value": "rgba(239,68,68,0.24)"
+    }
+  },
+  "font": {
+    "family": {
+      "sans": {
+        "$type": "fontFamily",
+        "$value": [
+          "Inter",
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "sans-serif"
+        ]
+      },
+      "mono": {
+        "$type": "fontFamily",
+        "$value": [
+          "JetBrains Mono",
+          "ui-monospace",
+          "SF Mono",
+          "Menlo",
+          "monospace"
+        ]
+      },
+      "emoji": {
+        "$type": "fontFamily",
+        "$value": [
+          "Apple Color Emoji",
+          "Segoe UI Emoji",
+          "Noto Color Emoji",
+          "sans-serif"
+        ]
+      }
+    }
+  },
+  "typography": {
+    "page-title": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "26px",
+        "fontWeight": 600,
+        "lineHeight": 1.2,
+        "letterSpacing": "-0.02em"
+      }
+    },
+    "kpi": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "24px",
+        "fontWeight": 600,
+        "lineHeight": 1.2,
+        "letterSpacing": "-0.02em"
+      }
+    },
+    "ticket-title": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "22px",
+        "fontWeight": 600,
+        "lineHeight": 1.25,
+        "letterSpacing": "-0.015em"
+      }
+    },
+    "pane-title": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "16px",
+        "fontWeight": 600,
+        "lineHeight": 1.3,
+        "letterSpacing": "-0.01em"
+      }
+    },
+    "section-title": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "15px",
+        "fontWeight": 600,
+        "lineHeight": 1.35
+      }
+    },
+    "message": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "14px",
+        "fontWeight": 400,
+        "lineHeight": 1.65
+      }
+    },
+    "reply": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "13.5px",
+        "fontWeight": 400,
+        "lineHeight": 1.6
+      }
+    },
+    "body": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "13px",
+        "fontWeight": 400,
+        "lineHeight": 1.45
+      }
+    },
+    "body-strong": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "13px",
+        "fontWeight": 500,
+        "lineHeight": 1.45
+      }
+    },
+    "small": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "12.5px",
+        "fontWeight": 400,
+        "lineHeight": 1.5
+      }
+    },
+    "caption": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "12px",
+        "fontWeight": 400,
+        "lineHeight": 1.45
+      }
+    },
+    "mono-id": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.mono}",
+        "fontSize": "11.5px",
+        "fontWeight": 400,
+        "lineHeight": 1.4
+      }
+    },
+    "mono-meta": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.mono}",
+        "fontSize": "11px",
+        "fontWeight": 400,
+        "lineHeight": 1.4
+      }
+    },
+    "label": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.mono}",
+        "fontSize": "10.5px",
+        "fontWeight": 400,
+        "lineHeight": 1.3,
+        "letterSpacing": "0.06em"
+      }
+    },
+    "kbd": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.mono}",
+        "fontSize": "10.5px",
+        "fontWeight": 400,
+        "lineHeight": 1
+      }
+    },
+    "team-badge": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.mono}",
+        "fontSize": "9.5px",
+        "fontWeight": 500,
+        "lineHeight": 1,
+        "letterSpacing": "0.04em"
+      }
+    },
+    "d1": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "80px",
+        "fontWeight": 600,
+        "lineHeight": 1.0,
+        "letterSpacing": "-0.042em"
+      }
+    },
+    "d2": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "54px",
+        "fontWeight": 600,
+        "lineHeight": 1.05,
+        "letterSpacing": "-0.034em"
+      }
+    },
+    "d3": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "36px",
+        "fontWeight": 600,
+        "lineHeight": 1.12,
+        "letterSpacing": "-0.026em"
+      }
+    },
+    "h3w": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "17px",
+        "fontWeight": 600,
+        "lineHeight": 1.3,
+        "letterSpacing": "-0.012em"
+      }
+    },
+    "lead": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "19px",
+        "fontWeight": 400,
+        "lineHeight": 1.55
+      }
+    },
+    "bodyw": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "15px",
+        "fontWeight": 400,
+        "lineHeight": 1.6
+      }
+    },
+    "web-small": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "13px",
+        "fontWeight": 400,
+        "lineHeight": 1.5
+      }
+    },
+    "eyebrow": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.mono}",
+        "fontSize": "11.5px",
+        "fontWeight": 400,
+        "lineHeight": 1.3,
+        "letterSpacing": "0.06em"
+      }
+    }
+  },
+  "spacing": {
+    "2": {
+      "$type": "dimension",
+      "$value": "2px"
+    },
+    "4": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "6": {
+      "$type": "dimension",
+      "$value": "6px"
+    },
+    "8": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "10": {
+      "$type": "dimension",
+      "$value": "10px"
+    },
+    "12": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "14": {
+      "$type": "dimension",
+      "$value": "14px"
+    },
+    "16": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "18": {
+      "$type": "dimension",
+      "$value": "18px"
+    },
+    "20": {
+      "$type": "dimension",
+      "$value": "20px"
+    },
+    "22": {
+      "$type": "dimension",
+      "$value": "22px"
+    },
+    "24": {
+      "$type": "dimension",
+      "$value": "24px"
+    },
+    "28": {
+      "$type": "dimension",
+      "$value": "28px"
+    },
+    "32": {
+      "$type": "dimension",
+      "$value": "32px"
+    },
+    "36": {
+      "$type": "dimension",
+      "$value": "36px"
+    },
+    "44": {
+      "$type": "dimension",
+      "$value": "44px"
+    },
+    "56": {
+      "$type": "dimension",
+      "$value": "56px"
+    },
+    "64": {
+      "$type": "dimension",
+      "$value": "64px"
+    },
+    "72": {
+      "$type": "dimension",
+      "$value": "72px"
+    },
+    "88": {
+      "$type": "dimension",
+      "$value": "88px"
+    },
+    "120": {
+      "$type": "dimension",
+      "$value": "120px"
+    }
+  },
+  "radius": {
+    "xs": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "sm": {
+      "$type": "dimension",
+      "$value": "6px"
+    },
+    "control": {
+      "$type": "dimension",
+      "$value": "7px"
+    },
+    "field": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "row": {
+      "$type": "dimension",
+      "$value": "9px"
+    },
+    "input": {
+      "$type": "dimension",
+      "$value": "10px"
+    },
+    "panel": {
+      "$type": "dimension",
+      "$value": "11px"
+    },
+    "card": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "dialog": {
+      "$type": "dimension",
+      "$value": "14px"
+    },
+    "frame": {
+      "$type": "dimension",
+      "$value": "14px"
+    },
+    "pill": {
+      "$type": "dimension",
+      "$value": "999px"
+    }
+  },
+  "shadow": {
+    "xs": {
+      "$type": "shadow",
+      "$value": {
+        "color": "rgba(9,9,11,0.05)",
+        "offsetX": "0px",
+        "offsetY": "1px",
+        "blur": "2px",
+        "spread": "0px"
+      }
+    },
+    "pop": {
+      "$type": "shadow",
+      "$value": [
+        {
+          "color": "rgba(9,9,11,0.12)",
+          "offsetX": "0px",
+          "offsetY": "12px",
+          "blur": "32px",
+          "spread": "0px"
+        },
+        {
+          "color": "rgba(9,9,11,0.06)",
+          "offsetX": "0px",
+          "offsetY": "2px",
+          "blur": "6px",
+          "spread": "0px"
+        }
+      ]
+    },
+    "knob": {
+      "$type": "shadow",
+      "$value": {
+        "color": "rgba(0,0,0,0.2)",
+        "offsetX": "0px",
+        "offsetY": "1px",
+        "blur": "2px",
+        "spread": "0px"
+      }
+    },
+    "glow": {
+      "$type": "shadow",
+      "$value": {
+        "color": "rgba(43,91,255,0.35)",
+        "offsetX": "0px",
+        "offsetY": "4px",
+        "blur": "12px",
+        "spread": "0px"
+      }
+    },
+    "frame": {
+      "$type": "shadow",
+      "$value": [
+        {
+          "color": "rgba(9,9,11,0.22)",
+          "offsetX": "0px",
+          "offsetY": "32px",
+          "blur": "80px",
+          "spread": "-32px"
+        },
+        {
+          "color": "rgba(9,9,11,0.04)",
+          "offsetX": "0px",
+          "offsetY": "2px",
+          "blur": "6px",
+          "spread": "0px"
+        }
+      ]
+    }
+  },
+  "size": {
+    "kbd": {
+      "$type": "dimension",
+      "$value": "17px",
+      "$description": "Minimum height of a keyboard key."
+    },
+    "chip": {
+      "$type": "dimension",
+      "$value": "24px",
+      "$description": "Standard chip."
+    },
+    "seg": {
+      "$type": "dimension",
+      "$value": "26px",
+      "$description": "Segment inside a segmented control."
+    },
+    "control-sm": {
+      "$type": "dimension",
+      "$value": "28px",
+      "$description": "Icon button, ghost button, view tab, small button."
+    },
+    "control": {
+      "$type": "dimension",
+      "$value": "30px",
+      "$description": "Default button, nav item, filter pill."
+    },
+    "control-lg": {
+      "$type": "dimension",
+      "$value": "34px",
+      "$description": "Form footer buttons, page search."
+    },
+    "field": {
+      "$type": "dimension",
+      "$value": "36px",
+      "$description": "App text field and select."
+    },
+    "tab": {
+      "$type": "dimension",
+      "$value": "42px",
+      "$description": "Underlined context panel tab."
+    },
+    "header": {
+      "$type": "dimension",
+      "$value": "56px",
+      "$description": "Queue and ticket header."
+    },
+    "statusbar": {
+      "$type": "dimension",
+      "$value": "28px",
+      "$description": "App status bar."
+    },
+    "web-md": {
+      "$type": "dimension",
+      "$value": "40px",
+      "$description": "Web md button and web field."
+    },
+    "web-lg": {
+      "$type": "dimension",
+      "$value": "44px",
+      "$description": "Web lg button and lg icon button; minimum web touch target."
+    },
+    "kbd-lg": {
+      "$type": "dimension",
+      "$value": "26px",
+      "$description": "Large keyboard key on the web."
+    },
+    "seg-lg": {
+      "$type": "dimension",
+      "$value": "34px",
+      "$description": "Large segment on the web."
+    },
+    "topnav": {
+      "$type": "dimension",
+      "$value": "60px",
+      "$description": "Public web navigation bar and wizard header."
+    },
+    "auth-header": {
+      "$type": "dimension",
+      "$value": "64px",
+      "$description": "Header of the auth pages."
+    }
+  },
+  "layout": {
+    "sidebar": {
+      "$type": "dimension",
+      "$value": "232px",
+      "$description": "App sidebar, expanded."
+    },
+    "sidebar-collapsed": {
+      "$type": "dimension",
+      "$value": "60px",
+      "$description": "App sidebar, collapsed."
+    },
+    "queue": {
+      "$type": "dimension",
+      "$value": "372px",
+      "$description": "Queue column."
+    },
+    "context": {
+      "$type": "dimension",
+      "$value": "344px",
+      "$description": "Context panel."
+    },
+    "settings-nav": {
+      "$type": "dimension",
+      "$value": "236px",
+      "$description": "Settings sub-navigation."
+    },
+    "reading": {
+      "$type": "dimension",
+      "$value": "780px",
+      "$description": "Max width of the ticket column and composer."
+    },
+    "settings": {
+      "$type": "dimension",
+      "$value": "920px",
+      "$description": "Max width of settings content."
+    },
+    "page": {
+      "$type": "dimension",
+      "$value": "1240px",
+      "$description": "Max width of app data pages."
+    },
+    "breakpoint": {
+      "$type": "dimension",
+      "$value": "980px",
+      "$description": "App panes stack below this width; also the web tablet breakpoint."
+    },
+    "web": {
+      "$type": "dimension",
+      "$value": "1200px",
+      "$description": "Public web container max width."
+    },
+    "web-narrow": {
+      "$type": "dimension",
+      "$value": "960px",
+      "$description": "Narrow public web container."
+    },
+    "auth": {
+      "$type": "dimension",
+      "$value": "400px",
+      "$description": "Auth card column max width."
+    },
+    "web-lg": {
+      "$type": "dimension",
+      "$value": "1080px",
+      "$description": "Public web large breakpoint."
+    },
+    "web-sm": {
+      "$type": "dimension",
+      "$value": "720px",
+      "$description": "Public web mobile breakpoint."
+    }
+  }
+}
