@@ -54,10 +54,16 @@ describe("prompt inputs", () => {
     expect(en.similar_case).toBe("(not available)");
   });
 
+  it("preserves the original body when there is no conversation", () => {
+    const vars = buildReplySuggestionVars({ticket:TICKET,messages:[],client:null,context:EMPTY_CONTEXT,lang:'en'});
+    expect(vars.ticket_body).toBe(TICKET.body_plain);
+    expect(vars.message_history).toBe('(not available)');
+  });
+
   it("fills every placeholder the prompt declares", () => {
     const vars = buildReplySuggestionVars({ ticket: TICKET, messages: [], client: null, context: EMPTY_CONTEXT, lang: "en" });
     expect(Object.keys(vars).sort()).toEqual(
-      ["business_context", "category", "client_profile", "emotion", "kb_articles", "message_history", "priority", "similar_case", "subject", "ticket_type"],
+      ["business_context", "category", "client_profile", "emotion", "kb_articles", "message_history", "priority", "similar_case", "subject", "ticket_body", "ticket_type"],
     );
   });
 
@@ -154,6 +160,7 @@ describe("suggestReply", () => {
       { ticketId: TICKET.id, accountId: "acc", userId: "u" },
       {
         supabase: db,
+        validate: async () => ({value:{support:{type:"choice",choice:"supported",confidence:1,probabilities:{supported:1,unsupported:0,uncertain:0}}},model:"acme/validation",callId:"validation-call"}),
         retrieveApproved: async () => [
           {id:"version-1",source_id:"kb-1",account_id:"acc",source_kind:"article",revision:1,status:"approved",snapshot:{title:"Reset access",content:"Steps"}},
           {id:"version-2",source_id:"kb-2",account_id:"acc",source_kind:"article",revision:1,status:"approved",snapshot:{title:"Other reference",content:"Other steps"}},
@@ -186,6 +193,31 @@ describe("suggestReply", () => {
     expect(proposals[0]).toMatchObject({ model_version: "reported-model", referenced_kb_articles: ["kb-1"], status: "pending" });
   });
 
+  it('blocks unsupported and uncertain drafts even when the cited ID exists', async () => {
+    for (const choice of ['unsupported','uncertain'] as const) {
+      const {db,proposals,decisions}=fakeDb({ticket:TICKET});
+      let checked: unknown;
+      await expect(suggestReply({ticketId:TICKET.id,accountId:'acc',userId:'u'}, {
+        supabase:db, retrieve:async()=>EMPTY_CONTEXT,
+        retrieveApproved:async()=>[{id:'version-1',source_id:'kb-1',account_id:'acc',source_kind:'article',revision:1,status:'approved',snapshot:{content:'Use account recovery.'}}],
+        run:async()=>({data:{suggestion:'Your refund is approved.',confidence:1,detected_language:'en',referenced_kb_articles:['kb-1']},prompt:'p',promptVersion:'1',model:'acme/reply',usage:{promptTokens:1,completionTokens:1},latencyMs:1,llmCallId:'draft'}),
+        validate:async state=>{ checked=state; return {value:{support:{type:'choice',choice,confidence:1,probabilities:{supported:0,unsupported:Number(choice==='unsupported'),uncertain:Number(choice==='uncertain')}}},model:'acme/validation',callId:'check'}; },
+      })).rejects.toThrow('Reply support could not be established');
+      expect(checked).toMatchObject({draft:'Your refund is approved.',citedKnowledge:[{id:'kb-1',content:'Use account recovery.'}],caseContext:{ticket_body:TICKET.body_plain}});
+      expect(proposals).toHaveLength(0);expect(decisions).toHaveLength(0);
+    }
+  });
+
+  it('allows a supported request for missing information without approved knowledge', async () => {
+    const {db,proposals}=fakeDb({ticket:TICKET});
+    await suggestReply({ticketId:TICKET.id,accountId:'acc',userId:'u'}, {
+      supabase:db,retrieve:async()=>EMPTY_CONTEXT,retrieveApproved:async()=>[],
+      run:async()=>({data:{suggestion:'What error do you see?',confidence:0.5,detected_language:'en',referenced_kb_articles:[]},prompt:'p',promptVersion:'1',model:'acme/reply',usage:{promptTokens:1,completionTokens:1},latencyMs:1,llmCallId:'draft'}),
+      validate:async()=>({value:{support:{type:'choice',choice:'supported',confidence:1,probabilities:{supported:1,unsupported:0,uncertain:0}}},model:'acme/validation',callId:'check'}),
+    });
+    expect(proposals).toHaveLength(1);
+  });
+
   it("lets a provider failure through unchanged so the route can tell retriable from permanent", async () => {
     const { db } = fakeDb({ ticket: TICKET });
     const failure = new ProviderError("overloaded", true);
@@ -193,6 +225,7 @@ describe("suggestReply", () => {
       { ticketId: TICKET.id, accountId: "acc", userId: "u" },
       {
         supabase: db,
+        validate: async () => ({value:{support:{type:"choice",choice:"supported",confidence:1,probabilities:{supported:1,unsupported:0,uncertain:0}}},model:"acme/validation",callId:"validation-call"}),
         retrieveApproved: async () => [
           {id:"version-1",source_id:"kb-1",account_id:"acc",source_kind:"article",revision:1,status:"approved",snapshot:{title:"Reset access",content:"Steps"}},
           {id:"version-2",source_id:"kb-2",account_id:"acc",source_kind:"article",revision:1,status:"approved",snapshot:{title:"Other reference",content:"Other steps"}},

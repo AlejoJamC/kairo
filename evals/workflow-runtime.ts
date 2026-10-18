@@ -11,7 +11,7 @@ export interface WorkflowStep { case: number; dataset: string; step: string; sta
 export interface WorkflowOverrides {
   work?: DecisionWorkDeps;
   knowledge?: Pick<EmailKnowledgeDeps, 'candidate' | 'extract' | 'validate'>;
-  reply?: Pick<SuggestReplyDeps, 'run'>;
+  reply?: Pick<SuggestReplyDeps, 'run' | 'validate'>;
 }
 
 /** Production intelligence and source checks; storage, embedding retrieval and SQL effects are explicit fixtures. */

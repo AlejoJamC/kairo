@@ -12,7 +12,7 @@ import { sourceFingerprint } from './decision-workflow.js';
 
 import { z } from "zod";
 import {
-  runLlmFeature,
+  runLlmFeature, runDecisionFeature, createDecisionProvider, ReplySupportSchema, replySupportQuestions,
   ProviderError,
   stripQuotedThread,
   type LlmFeatureJsonRequest,
@@ -49,7 +49,7 @@ const KB_ARTICLE_MAX_CHARS = 2_000;
 const RESOLVED_CASES_LIMIT = 2;
 
 export const ReplySuggestionSchema = z.object({
-  suggestion: z.string(),
+  suggestion: z.string().trim().min(1),
   confidence: z.number().min(0).max(1),
   detected_language: z.enum(["es", "en"]),
   referenced_kb_articles: z.array(z.string()).optional(),
@@ -138,6 +138,7 @@ export function buildReplySuggestionVars(input: {
   const na = LABELS[input.lang].unavailable;
   return {
     subject: input.ticket.subject ?? na,
+    ticket_body: (input.ticket.body_plain ?? "").slice(0, MESSAGE_BODY_RULE.maxChars) || na,
     business_context: input.businessContext ?? na,
     ticket_type: input.ticket.ticket_type ?? na,
     priority: input.ticket.priority ?? na,
@@ -160,6 +161,7 @@ export interface SuggestReplyDeps {
   resolveSettings?: (accountId: string) => Promise<AccountSettings>;
   retrieve?: typeof retrieveTicketContext;
   retrieveApproved?: typeof approvedWorkflowKnowledge;
+  validate?: (state: unknown) => Promise<{ value: z.infer<typeof ReplySupportSchema>; model: string; callId: string | null }>;
   run?: (request: LlmFeatureJsonRequest<ReplySuggestion>) => Promise<LlmFeatureResult<ReplySuggestion>>;
 }
 
@@ -233,11 +235,12 @@ export async function suggestReply(
   const approved = await (deps.retrieveApproved ?? approvedWorkflowKnowledge)(input.accountId, ticketQueryText(t.subject, t.body_plain), input.ticketId, db);
   const currentReferences = knowledgeReferences(approved);
   const referenceContext = { ...context, kbArticles: approved.map(v => ({ id: v.source_id, title: String(v.snapshot['title'] ?? v.snapshot['learning_type'] ?? ''), content: String(v.snapshot['content'] ?? v.snapshot['summary'] ?? ''), tags: [], similarity: null })) };
+  const vars = buildReplySuggestionVars({ ticket: t, messages, client, context: referenceContext, lang, businessContext: settings.businessContext });
   const result = await (deps.run ?? runLlmFeature)({
     feature: REPLY_SUGGESTION_FEATURE,
     promptId: PROMPT_ID,
     lang,
-    vars: buildReplySuggestionVars({ ticket: t, messages, client, context: referenceContext, lang, businessContext: settings.businessContext }),
+    vars,
     schema: ReplySuggestionSchema,
     confidenceOf: (d) => d.confidence,
     options: { maxTokens: 1500, temperature: 0.4, abortSignal: input.signal },
@@ -251,6 +254,16 @@ export async function suggestReply(
   if (referencedKbArticles.some((id) => !available.has(id))) {
     throw new ProviderError("Reply cites unavailable knowledge", false);
   }
+  const validation = await (deps.validate ?? (async (state: unknown) => {
+    const checked = await runDecisionFeature({ feature: 'reply_support_validation',
+      provider: createDecisionProvider('gateway', 'validation'), state, questions: replySupportQuestions(),
+      context: input, logger: deps.logger ?? recordLlmCall, versions: { state: '1.0.0', questions: '1.0.0' } });
+    return { value: ReplySupportSchema.parse(checked.data.value), model: checked.data.modelVersion, callId: checked.llmCallId };
+  }))({ draft: result.data.suggestion, caseContext: { ...vars, kb_articles: undefined },
+    citedKnowledge: referenceContext.kbArticles.filter(article => referencedKbArticles.includes(article.id)) });
+  const support = ReplySupportSchema.parse(validation.value);
+  if (support.support.choice !== 'supported') throw new ProviderError('Reply support could not be established', false);
+  input.signal?.throwIfAborted();
   const { data: proposalId, error: proposalError } = await db.rpc('save_reply_decision', {
     p_account_id: input.accountId, p_ticket_id: t.id, p_user_id: input.userId, p_revision: t.case_revision ?? 0,
     p_key: `reply:${result.llmCallId ?? randomUUID()}`,
@@ -258,7 +271,7 @@ export async function suggestReply(
       referenced_kb_articles: referencedKbArticles.filter(id => approved.some(v => v.source_kind === 'article' && v.source_id === id)),
       confidence_score: result.data.confidence, model_version: result.model,
       raw_llm_output: { ...result.data, lang, prompt_version: result.promptVersion } },
-    p_result: { sources: currentReferences.filter(source => referencedKbArticles.includes(source.id)),
+    p_result: { validation, sources: currentReferences.filter(source => referencedKbArticles.includes(source.id)),
       retrievedSources: currentReferences, suggestion: result.data.suggestion, model: result.model,
       promptVersion: result.promptVersion, authorization: 'human_review',
       contextFingerprint: sourceFingerprint({ messages, sources: currentReferences }) },

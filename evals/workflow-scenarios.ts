@@ -93,7 +93,10 @@ export function parseWorkflowMemory(input: unknown): WorkflowMemory {
 export async function loadWorkflowMemory(dataset: 'main' | 'coverage'): Promise<WorkflowMemory> {
   try { return parseWorkflowMemory(JSON.parse(await readPrivate(resolve(privateRoot, 'input/workflow-context', `${dataset}.json`)))); }
   catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { cases: [] };
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      try { return parseWorkflowMemory(JSON.parse(await readPrivate(resolve(privateRoot, 'output/evals/enrichment', dataset, 'approved-memory.json')))); }
+      catch (preparedError) { if ((preparedError as NodeJS.ErrnoException).code === 'ENOENT') return { cases: [] }; throw new Error('EVAL_WORKFLOW_MEMORY'); }
+    }
     throw new Error('EVAL_WORKFLOW_MEMORY');
   }
 }

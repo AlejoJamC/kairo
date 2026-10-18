@@ -35,6 +35,7 @@ export const workflowSteps = {
     { step: 'case_context', executor: 'current ticket and available conversation', calls: 0 },
     { step: 'approved_knowledge_retrieval', executor: 'approvedWorkflowKnowledge at request time; explicit memory fixture', calls: 0 },
     { step: 'reply_suggestion', role: 'reply', executor: 'suggestReply; source identifiers checked against retrieved approved versions', calls: 1 },
+    { step: 'reply_support_validation', role: 'validation', executor: 'validate draft claims against case and cited approved knowledge', calls: 1 },
     { step: 'reply_proposal', executor: 'save_reply_decision fixture; permission, case and cited-version rechecks', calls: 0 },
     { step: 'fresh_request', executor: 'one additional suggestion only in the synthetic updated-memory control', calls: 1 },
     { step: 'idempotency', executor: 'replay the save, without repeating generation', calls: 0 },
@@ -67,12 +68,12 @@ export async function validateWorkflowRoutes(routes: ModelRoute[], injectedClien
 export function workflowPlan(mode: WorkflowMode, dataset: string) {
   const roles: Record<WorkflowMode, ModelRole[]> = {
     incoming: ['evidence_analysis', 'classification', 'knowledge_decision', 'knowledge_draft', 'validation'],
-    enrichment: ['knowledge_decision', 'evidence_analysis'], reply: ['reply'],
+    enrichment: ['knowledge_decision', 'evidence_analysis'], reply: ['reply', 'validation'],
   };
-  const maximumCallsPerCase = mode === 'incoming' ? 5 : mode === 'enrichment' ? 2 : 1;
+  const maximumCallsPerCase = mode === 'incoming' ? 5 : 2;
   return { mode, dataset, contract: workflowContracts[mode], routes: roles[mode].map(role => resolveModelRoute(role)),
     steps: workflowSteps[mode], maximumCallsPerCase,
-    additionalCalls: mode === 'reply' ? 'one in the synthetic refreshed-memory control only' : 'none',
+    additionalCalls: mode === 'reply' ? 'two in the synthetic refreshed-memory control only' : 'none',
     selection: dataset === 'synthetic' ? 'invented workflow controls' : 'all corpus positions plus separately reported invented controls; no earlier run required',
     memory: 'optional private input/workflow-context/<dataset>.json; absent context remains missing',
     boundary: 'production intelligence services; persisted input, retrieval, embedding selection, approval and atomic SQL saves are fixtures; no Gmail, database, Inngest, HTTP authorization or outbound actions',
@@ -162,7 +163,7 @@ export async function workflowMain(mode: WorkflowMode, args: string[], deps: Wor
     const scenarios: Scenario[] = [...corpus, ...controls];
     const allowance = scenarios.map(row => ({ dataset: row.dataset, case: row.id,
       maximum: mode === 'enrichment' && (row.member === 'suspended' || row.knowledge?.[row.targetKnowledge ?? 0]?.status !== 'approved') ? 0
-        : plan.maximumCallsPerCase + (row.refresh ? 1 : 0) }));
+        : plan.maximumCallsPerCase + (row.refresh ? 2 : 0) }));
     const requestLimit = budget ?? Math.max(1, allowance.reduce((sum, row) => sum + row.maximum, 0));
     const manifest = { ...plan, network: undefined, requestLimit, allowance, run: saved.name, createdAt: saved.startedAt,
       ...await codeFingerprint(), positions: corpus.map(row => row.id), controls: controls.map(row => row.id) };

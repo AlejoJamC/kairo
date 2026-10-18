@@ -114,7 +114,7 @@ Replace `execute` with `plan` to inspect model roles, steps and maximum calls wi
 
 - **Incoming:** available conversation → evidence → changed-case judgments → conditional knowledge proposals → immutable decision history → replay. Maximum **5 calls per case**. Uses `evidence_analysis`, `classification`, `knowledge_decision`, `knowledge_draft` and `validation` as configured by the application.
 - **Enrichment:** simulated approval → candidate selection → contribution judgment → conditional evidence → guarded application or proposal → replay. Maximum **2 calls per eligible case**; pending/superseded knowledge and denied approval use **0**. Uses `knowledge_decision` and `evidence_analysis`.
-- **Reply:** current conversation and approved sources → draft → guarded proposal save. **1 call per case** to `reply`; the updated-memory control makes **2**, requesting again after a version changes. Replaying persistence makes no model call.
+- **Reply:** original ticket, current conversation and approved sources → draft → semantic support check → guarded proposal save. Maximum **2 calls per case**: one to `reply` and one to `validation`. The updated-memory control makes **4**, requesting again after a version changes. Unsupported or uncertain drafts are not saved. Replaying persistence makes no model call.
 
 Private corpus cases and invented controls are reported separately. Corpus history comes only from explicitly linked, earlier dated messages; no conversation, prior classification, business description or knowledge is fabricated. Existing classification labels do not label relevance or reply quality. Missing workflow labels remain unscored until reviewed.
 

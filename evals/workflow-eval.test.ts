@@ -21,7 +21,7 @@ test('plans list only each workflow roles and do not load sources, create a runt
     const plan = withModelRouting(policy, () => workflowPlan(mode, 'main'));
     expect(plan.routes.map(route => route.role)).toEqual(mode === 'incoming'
       ? ['evidence_analysis','classification','knowledge_decision','knowledge_draft','validation']
-      : mode === 'enrichment' ? ['knowledge_decision','evidence_analysis'] : ['reply']);
+      : mode === 'enrichment' ? ['knowledge_decision','evidence_analysis'] : ['reply','validation']);
   }
   expect(denied).not.toHaveBeenCalled();
 });

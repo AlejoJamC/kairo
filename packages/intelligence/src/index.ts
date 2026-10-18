@@ -158,3 +158,5 @@ export { ReferencedWorkflowAnalysisSchema, workflowEvidenceFragments, resolveWor
 export { buildTicketVerdictQuestions, TicketAnswersSchema } from './classification/decision-questions';
 
 export { configuredEmbeddingDimensions, STORED_EMBEDDING_DIMENSIONS } from './config/providers';
+
+export { ReplySupportSchema, replySupportQuestions } from './knowledge/reply-support';

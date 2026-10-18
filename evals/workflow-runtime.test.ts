@@ -38,7 +38,7 @@ const overrides: WorkflowOverrides = {
     extract: async state => ({ value: { proposals: [{ kind: 'business_fact', title: 'Reported account issue', content: state.source, evidence: [state.source] }] }, model: 'acme/draft', callId: 'acme-draft' }),
     validate: async () => ({ value: [{ novelty: answer('new', ['new','redundant','unknown']), support: answer('supported', ['supported','unsupported','uncertain']), policy: answer('unknown', ['consistent','conflict','unknown']) }], model: 'acme/validation', callId: 'acme-validation' }),
   },
-  reply: { run: (async (request: Row) => {
+  reply: { validate: async () => ({ value: {support: answer('supported', ['supported','unsupported','uncertain'])}, model:'acme/validation', callId:'acme-validation' }), run: (async (request: Row) => {
     replies.push(request);
     const references = String((request['vars'] as Row)['kb_articles']);
     const article = /### \[([^\]]+)\]/.exec(references)?.[1];
