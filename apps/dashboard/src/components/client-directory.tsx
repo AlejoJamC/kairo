@@ -20,7 +20,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { ClientFormModal } from "@/components/client-form-modal";
-import { apiCall } from "@kairo/client-core/api-client";
+import { listClients, deleteClient } from "@kairo/client-core/endpoints";
 import { useAuth } from "@kairo/client-core/auth";
 import { useDraftContacts } from "@/hooks/use-draft-contacts";
 import { mapClientToRow, type ContactRow, type ContactRowStatus } from "@/types/contact-row";
@@ -458,7 +458,7 @@ export function ClientDirectory() {
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const res  = await apiCall("/bff/clients");
+        const res  = await listClients();
         const data = await res.json();
         setClients((data.clients as Record<string, unknown>[]).map(mapRow));
       } catch {
@@ -608,7 +608,7 @@ export function ClientDirectory() {
     if (!window.confirm(t("actions.confirmDelete", { name }))) return;
     setDeleting(clientId);
     try {
-      await apiCall(`/bff/clients/${clientId}`, { method: "DELETE" });
+      await deleteClient(clientId);
       setClients((prev) => prev.filter((c) => c.id !== clientId));
     } catch { /* ignore */ }
     finally { setDeleting(null); }

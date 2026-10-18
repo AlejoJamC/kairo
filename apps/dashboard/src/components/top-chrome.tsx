@@ -18,13 +18,12 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useAuth } from "@kairo/client-core/auth";
-import { apiCall } from "@kairo/client-core/api-client";
-import { createClient } from "@kairo/client-core/supabase";
+import { getNotifications, markNotificationRead, markAllNotificationsRead } from "@kairo/client-core/endpoints";
+import { fetchTicketById } from "@kairo/client-core/queries";
 import { getNumericFlag } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { Avatar, getInitials } from "@/components/ui/avatar";
-import type { Ticket } from "@kairo/types";
 import type { AppView } from "@/types";
 
 // KAI-232 — how often the bell re-fetches /api/v1/notifications, in seconds.
@@ -665,7 +664,7 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
     let cancelled = false;
 
     function load() {
-      apiCall("/api/v1/notifications")
+      getNotifications()
         .then((res) => res.json())
         .then((body: { data: ApiNotification[] }) => {
           if (!cancelled) setNotifs(body.data.map(toNotifItem));
@@ -688,7 +687,7 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
   function markRead(id: string) {
     setNotifs((ns) => ns.map((n) => (n.id === id ? { ...n, unread: false } : n)));
     // Also stamps ticket_note_mentions.read_at server-side for mentions.
-    apiCall(`/api/v1/notifications/${id}/read`, { method: "PATCH" }).catch(() => {});
+    markNotificationRead(id).catch(() => {});
   }
 
   // KAI-232 (design rule F.2): a bulk dismiss clears NOTIFICATIONS only — the
@@ -696,7 +695,7 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
   // this hits /read-all (no mention cascade) instead of N per-id PATCHes.
   function markAllRead() {
     setNotifs((ns) => ns.map((n) => ({ ...n, unread: false })));
-    apiCall("/api/v1/notifications/read-all", { method: "PATCH" }).catch(() => {});
+    markAllNotificationsRead().catch(() => {});
   }
 
   // KAI-232 — mention deep-link: mark read, open triage on that ticket, and
@@ -712,12 +711,8 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
       useTriageStore.getState();
 
     if (!tickets.some((t) => t.id === item.ticketId)) {
-      const { data } = await createClient()
-        .from("tickets")
-        .select("*")
-        .eq("id", item.ticketId)
-        .maybeSingle();
-      if (data) upsertTicket(data as Ticket);
+      const ticket = await fetchTicketById(item.ticketId);
+      if (ticket) upsertTicket(ticket);
     }
 
     onViewChange("triage");

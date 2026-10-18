@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { apiCall } from "@kairo/client-core/api-client";
+import { getTicketMessages, markMentionsRead } from "@kairo/client-core/endpoints";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { NoteCard } from "./note-card";
 import {
@@ -55,7 +55,7 @@ export function NotesPanel({ ticketId, onNewNote }: NotesPanelProps) {
     setLoading(true);
     const startedAt = Date.now();
 
-    apiCall(`/api/v1/tickets/${ticketId}/messages`)
+    getTicketMessages(ticketId)
       .then((res) => (res.ok ? res.json() : { messages: [] }))
       .then((body: { messages?: ThreadMessage[] }) => {
         if (cancelled) return;
@@ -92,10 +92,7 @@ export function NotesPanel({ ticketId, onNewNote }: NotesPanelProps) {
     const timer = setTimeout(() => {
       setNotes((prev) => prev.map((n) => (n.mention_unread ? { ...n, mention_unread: false } : n)));
       // Best-effort: the visual state has already settled either way.
-      apiCall("/api/v1/notes/mentions/read", {
-        method: "PATCH",
-        body: JSON.stringify({ ticket_event_ids: unreadIds }),
-      }).catch(() => {});
+      markMentionsRead(unreadIds).catch(() => {});
     }, MARK_READ_AFTER_MS);
 
     return () => clearTimeout(timer);

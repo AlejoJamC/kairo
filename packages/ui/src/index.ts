@@ -9,4 +9,5 @@ export * from "./scroll-area";
 export * from "./separator";
 export * from "./sheet";
 export * from "./table";
+export * from "./provider";
 export { cn } from "./lib/utils";

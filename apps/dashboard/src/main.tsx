@@ -1,10 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { TamaguiProvider } from '@tamagui/core'
+import { UiProvider } from '@kairo/ui'
 import { initWebTelemetry } from '@kairo/observability/web'
 import { initClientCore } from '@kairo/client-core/config'
 import { createWebPlatform } from '@kairo/client-core/web'
-import tamaguiConfig from '@kairo/ui/tamagui.config'
 import { env } from './env'
 import './index.css'
 import './i18n/config'
@@ -29,9 +28,8 @@ initClientCore({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {/* TamaguiProvider exposes tokens, themes, and styled primitives from @kairo/ui to the entire tree. */}
-    <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+    <UiProvider>
       <App />
-    </TamaguiProvider>
+    </UiProvider>
   </StrictMode>,
 )

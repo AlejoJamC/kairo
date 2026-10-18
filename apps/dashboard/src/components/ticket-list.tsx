@@ -6,9 +6,9 @@ import { useTriageStore, pickPreferredGroupId, type Ticket } from "@kairo/client
 import { TicketCard } from "@/components/ticket-card";
 import { RelatedHistoryDrawer, type RelatedHistoryItem } from "@/components/related-history-drawer";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
-import { isTriageActive, INBOX_FETCH_EXCLUDED_STATUSES_FILTER } from "@kairo/client-core/triage-status";
-import { apiCall } from "@kairo/client-core/api-client";
-import { createClient } from "@kairo/client-core/supabase";
+import { isTriageActive } from "@kairo/client-core/triage-status";
+import { createTicketGroup, assignTicketsToGroup, getSimilarTickets, getRelatedHistory, syncGmail, classifyBatch } from "@kairo/client-core/endpoints";
+import { fetchTicketById, fetchInboxTickets, fetchBatchJobStatus } from "@kairo/client-core/queries";
 import { useAuth } from "@kairo/client-core/auth";
 
 // ---------------------------------------------------------------------------
@@ -132,17 +132,11 @@ function deriveGroupName(subject: string | null | undefined): string {
 }
 
 async function createGroupAndAssign(ticketIds: string[], name: string): Promise<string> {
-  const createRes = await apiCall("/api/v1/ticket-groups", {
-    method: "POST",
-    body: JSON.stringify({ name }),
-  });
+  const createRes = await createTicketGroup(name);
   if (!createRes.ok) throw new Error("Failed to create group");
   const group = (await createRes.json()) as { id: string };
 
-  const assignRes = await apiCall(`/api/v1/ticket-groups/${group.id}/tickets`, {
-    method: "POST",
-    body: JSON.stringify({ ticket_ids: ticketIds }),
-  });
+  const assignRes = await assignTicketsToGroup(group.id, ticketIds);
   if (!assignRes.ok) throw new Error("Failed to assign tickets to group");
 
   return group.id;
@@ -163,10 +157,7 @@ async function assignToGroupOrCreate(
 ): Promise<string> {
   if (preferredGroupId) {
     if (ticketIds.length > 0) {
-      const assignRes = await apiCall(`/api/v1/ticket-groups/${preferredGroupId}/tickets`, {
-        method: "POST",
-        body: JSON.stringify({ ticket_ids: ticketIds }),
-      });
+      const assignRes = await assignTicketsToGroup(preferredGroupId, ticketIds);
       if (!assignRes.ok) throw new Error("Failed to assign tickets to group");
     }
     return preferredGroupId;
@@ -371,7 +362,7 @@ export function TicketList() {
 
     let cancelled = false;
 
-    apiCall(`/api/v1/tickets/${selectedTicketId}/similar`)
+    getSimilarTickets(selectedTicketId)
       .then((res) => (res.ok ? res.json() : null))
       .then((body: { data?: SimilarTicketRow[]; degraded?: boolean } | null) => {
         if (cancelled || !body || body.degraded || !body.data || body.data.length === 0) return;
@@ -419,7 +410,7 @@ export function TicketList() {
     let cancelled = false;
     setRelatedHistoryLoading(true);
 
-    apiCall(`/api/v1/tickets/${selectedTicketId}/related-history`)
+    getRelatedHistory(selectedTicketId)
       .then((res) => (res.ok ? res.json() : null))
       .then((body: { data?: RelatedHistoryItem[] } | null) => {
         if (cancelled) return;
@@ -449,11 +440,8 @@ export function TicketList() {
   async function handleSelectHistoricalTicket(id: string) {
     setHistoryDrawerOpen(false);
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.from("tickets").select("*").eq("id", id).single();
-      if (!error && data) {
-        upsertTicket(data as Ticket);
-      }
+      const ticket = await fetchTicketById(id);
+      if (ticket) upsertTicket(ticket);
     } catch {
       // fall through — selectTicket still runs so at least the id is set
     }
@@ -540,7 +528,7 @@ export function TicketList() {
     setSyncError(null);
 
     try {
-      const res = await apiCall("/bff/gmail/sync", { method: "POST" });
+      const res = await syncGmail();
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         const msg = (body as { error?: string }).error ?? t("ticketList.syncError", "Sync failed");
@@ -551,15 +539,8 @@ export function TicketList() {
       if (data.summary) setSyncResult(data.summary);
 
       // Re-fetch to reflect new tickets
-      const supabase = createClient();
-      const { data: fresh } = await supabase
-        .from("tickets")
-        .select("*")
-        .eq("account_id", accountId!)
-        .not("status", "in", INBOX_FETCH_EXCLUDED_STATUSES_FILTER)
-        .order("priority_score", { ascending: false, nullsFirst: false })
-        .limit(200);
-      if (fresh) setTickets(fresh as Ticket[]);
+      const { data: fresh } = await fetchInboxTickets(accountId);
+      if (fresh) setTickets(fresh);
     } catch {
       setSyncError(t("ticketList.syncError", "Sync failed"));
     } finally {
@@ -579,10 +560,7 @@ export function TicketList() {
 
     try {
       const ids = tickets.map((t) => t.id);
-      const res = await apiCall("/api/v1/tickets/classify-batch", {
-        method: "POST",
-        body: JSON.stringify({ ticket_ids: ids, force_reclassify: false }),
-      });
+      const res = await classifyBatch(ids);
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -622,21 +600,13 @@ export function TicketList() {
   }
 
   async function pollJobStatus(jobId: string): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const supabase = createClient() as any;
     return new Promise((resolve) => {
       let attempts = 0;
       const MAX_ATTEMPTS = 60;
 
       const tick = async () => {
         attempts++;
-        const { data } = await supabase
-          .from("batch_classify_jobs")
-          .select("status, processed, total")
-          .eq("id", jobId)
-          .single();
-
-        const row = data as { status: string; processed: number; total: number } | null;
+        const row = await fetchBatchJobStatus(jobId);
 
         if (row?.status === "completed") {
           setClassifyProgress(`${row.processed} / ${row.total} classified`);

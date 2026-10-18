@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Mail, Plus, Trash2, Star, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
 import { useAuth } from "@kairo/client-core/auth";
-import { apiCall, getLandingUrl } from "@kairo/client-core/api-client";
-import { getPlatform } from "@kairo/client-core/config";
+import { listChannels, deleteChannel, startGmailConnect } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
 
 interface SupportChannel {
@@ -31,9 +30,7 @@ export function ChannelsSettings({ onViewChange }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiCall(`/api/v1/accounts/${accountId}/channels`, {
-        headers: { "x-account-id": accountId },
-      });
+      const res = await listChannels(accountId);
       if (!res.ok) throw new Error(`${res.status}`);
       const data = await res.json();
       setChannels((data.channels ?? []).filter((c: SupportChannel) => c.is_active));
@@ -50,10 +47,7 @@ export function ChannelsSettings({ onViewChange }: Props) {
     if (!accountId) return;
     setDisconnecting(channelId);
     try {
-      await apiCall(`/api/v1/accounts/${accountId}/channels/${channelId}`, {
-        method: "DELETE",
-        headers: { "x-account-id": accountId },
-      });
+      await deleteChannel(accountId, channelId);
       setChannels((prev) => prev.filter((c) => c.id !== channelId));
     } catch {
       setError("Failed to disconnect channel.");
@@ -64,7 +58,7 @@ export function ChannelsSettings({ onViewChange }: Props) {
 
   const handleConnectGmail = () => {
     // Redirect to the existing Gmail OAuth flow in the landing app.
-    getPlatform().navigation.navigate(getLandingUrl("/bff/auth/google"));
+    startGmailConnect();
   };
 
   return (

@@ -3,7 +3,7 @@ import { Paperclip, Send, X, Zap, RefreshCw, Lock, AlertTriangle, ChevronDown } 
 import { useTranslation } from "react-i18next";
 import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { apiCall } from "@kairo/client-core/api-client";
+import { replyToTicket, addTicketNote, setTicketStatus, escalateTicket } from "@kairo/client-core/endpoints";
 import { isFlagEnabled } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { useAccountMembers, filterMembers, type AccountMember } from "@kairo/client-core/hooks/use-account-members";
@@ -362,10 +362,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     setSendSuccess(false);
 
     try {
-      const res = await apiCall(`/api/v1/tickets/${selectedTicketId}/reply`, {
-        method: "POST",
-        body: JSON.stringify({ body: draft, intent: resolveAfter ? "resolve" : "reply" }),
-      });
+      const res = await replyToTicket(selectedTicketId, draft, resolveAfter ? "resolve" : "reply");
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -410,10 +407,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     setSendSuccess(false);
 
     try {
-      const res = await apiCall(`/api/v1/tickets/${selectedTicketId}/notes`, {
-        method: "POST",
-        body: JSON.stringify({ body: draft }),
-      });
+      const res = await addTicketNote(selectedTicketId, draft);
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -440,10 +434,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     if (!selectedTicketId) return;
     const ticketId = selectedTicketId;
     try {
-      const res = await apiCall(`/api/v1/tickets/${ticketId}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
+      const res = await setTicketStatus(ticketId, status);
       if (res.ok) {
         // Deselect-after-delay lives in TicketDetail, not here — this
         // component unmounts the instant status goes read-only.
@@ -483,10 +474,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     if (!selectedTicketId || escalating) return;
     setEscalating(true);
     try {
-      const res = await apiCall(`/api/v1/tickets/${selectedTicketId}/escalate`, {
-        method: "POST",
-        body: JSON.stringify({ reason: escalateReason.trim() || undefined }),
-      });
+      const res = await escalateTicket(selectedTicketId, escalateReason.trim() || undefined);
       if (res.ok) {
         const body = await res.json() as { ticket?: { status?: string } };
         if (body.ticket?.status) updateClassification(selectedTicketId, body.ticket as never);

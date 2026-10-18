@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { apiCall } from '@kairo/client-core/api-client';
+import { reviewDecision, markTicketViewed, getTicketDecisions } from '@kairo/client-core/endpoints';
 import { getPlatform } from '@kairo/client-core/config';
 
 interface Decision {
@@ -30,7 +30,7 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
   async function review(id: string, accept: boolean) {
     setReviewing(id);
     try {
-      const response = await apiCall(`/api/v1/workflow/tickets/${ticketId}/decisions/${id}/review`, { method:'POST', body:JSON.stringify({ accept }) });
+      const response = await reviewDecision(ticketId, id, accept);
       if (!response.ok) throw new Error('Review failed');
       setRefresh(value => value+1);
     } catch { setFailed(true); } finally { setReviewing(null); }
@@ -44,12 +44,12 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
       loading = true;
       try {
         if (viewedTicket.current !== ticketId) {
-          const viewed = await apiCall(`/api/v1/workflow/tickets/${ticketId}/viewed`, { method: 'POST' });
+          const viewed = await markTicketViewed(ticketId);
           if (!viewed.ok) throw new Error('View persistence failed');
           if (!active) return;
           viewedTicket.current = ticketId;
         }
-        const response = await apiCall(`/api/v1/workflow/tickets/${ticketId}`);
+        const response = await getTicketDecisions(ticketId);
         if (!response.ok) throw new Error('Decision retrieval failed');
         const data = await response.json() as { decisions: Decision[] };
         if (active) { setDecisions(data.decisions); setFailed(false); }

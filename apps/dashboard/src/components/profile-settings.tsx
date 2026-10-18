@@ -19,8 +19,8 @@ import {
   AlarmClock,
 } from "lucide-react";
 import { useAuth } from "@kairo/client-core/auth";
-import { createClient } from "@kairo/client-core/supabase";
-import { apiCall } from "@kairo/client-core/api-client";
+import { updateProfileName } from "@kairo/client-core/queries";
+import { getOperationalSlaConfig, saveOperationalSlaConfig } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
 
 interface Props {
@@ -70,11 +70,7 @@ function WorkspaceSection() {
     setSaving(true);
     setMsg(null);
     try {
-      const sb = createClient();
-      const { error } = await sb
-        .from("profiles")
-        .update({ name: name.trim(), company_name: name.trim() })
-        .eq("id", profile!.id);
+      const { error } = await updateProfileName(profile!.id, name);
       if (error) { setMsg({ type: "error", text: t("dashboard:settings.savedError") }); return; }
       await refreshProfile();
       setMsg({ type: "success", text: t("dashboard:settings.savedSuccess") });
@@ -454,7 +450,7 @@ function OperationalSlaSection() {
 
   useEffect(() => {
     let cancelled = false;
-    apiCall("/api/v1/tenants/operational-sla-config")
+    getOperationalSlaConfig()
       .then((res) => res.json())
       .then((body: { config: PrioritySlaRow[] }) => {
         if (!cancelled) setRows(body.config);
@@ -478,10 +474,7 @@ function OperationalSlaSection() {
     setSaving(true);
     setMsg(null);
     try {
-      const res = await apiCall("/api/v1/tenants/operational-sla-config", {
-        method: "PUT",
-        body: JSON.stringify({ config: rows }),
-      });
+      const res = await saveOperationalSlaConfig(rows);
       if (!res.ok) { setMsg({ type: "error", text: t("dashboard:settings.savedError") }); return; }
       setMsg({ type: "success", text: t("dashboard:settings.savedSuccess") });
     } catch {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clock } from "lucide-react";
-import { apiCall } from "@kairo/client-core/api-client";
+import { getKnowledgeDrafts, getKbEvidence, reviewKnowledge } from "@kairo/client-core/endpoints";
 import { useAuth } from "@kairo/client-core/auth";
 import type { AppView } from "@/types";
 
@@ -58,7 +58,7 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiCall("/api/v1/workflow/knowledge");
+      const res = await getKnowledgeDrafts();
       if (res.ok) {
         const json: { articles: Article[] } = await res.json();
         setArticles(json.articles ?? []);
@@ -81,7 +81,7 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
     if (selected?.kind === 'learning') { setEvidence({ steps: [], evidence: selected.evidence ?? [] }); return; }
     if (!selected?.tags?.some(tag => tag.startsWith('source-message:'))) return;
     let active = true;
-    void apiCall(`/api/v1/kb-articles/${selected.id}/evidence`).then(async res => {
+    void getKbEvidence(selected.id).then(async res => {
       if (!res.ok) throw new Error('Evidence unavailable');
       const data = await res.json();
       if (active) setEvidence(data);
@@ -100,10 +100,7 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
     setBusy(true);
     setError(false);
     try {
-      const res = await apiCall(`/api/v1/workflow/knowledge/${article.id}/review`, {
-        method: "POST",
-        body: JSON.stringify({ title, content, kind: article.kind, versionId: article.versionId, decision: publish || article.is_published ? "approved" : "pending_review" }),
-      });
+      const res = await reviewKnowledge(article.id, { title, content, kind: article.kind, versionId: article.versionId, decision: publish || article.is_published ? "approved" : "pending_review" });
       if (!res.ok) throw new Error(String(res.status));
       await load();
       if (publish) setSelectedId(null);
@@ -118,7 +115,7 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
     setBusy(true);
     setError(false);
     try {
-      const res = await apiCall(`/api/v1/workflow/knowledge/${article.id}/review`, { method: "POST", body: JSON.stringify({ kind: article.kind, versionId: article.versionId, decision: "rejected" }) });
+      const res = await reviewKnowledge(article.id, { kind: article.kind, versionId: article.versionId, decision: "rejected" });
       if (!res.ok) throw new Error(String(res.status));
       setArticles((prev) => prev.filter((a) => a.id !== article.id));
       setSelectedId(null);

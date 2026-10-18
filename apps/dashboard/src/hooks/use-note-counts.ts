@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { apiCall } from "@kairo/client-core/api-client";
+import { getNoteCounts } from "@kairo/client-core/endpoints";
 import { getNumericFlag } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { useTriageStore, type NoteCounts } from "@kairo/client-core/stores/triage-store";
@@ -28,7 +28,7 @@ export function useNoteCounts(enabled: boolean) {
     let cancelled = false;
 
     function load() {
-      apiCall("/api/v1/notes/counts")
+      getNoteCounts()
         .then((res) => (res.ok ? res.json() : { data: {} }))
         .then((body: { data?: Record<string, NoteCounts> }) => {
           if (!cancelled) setNoteCounts(body.data ?? {});

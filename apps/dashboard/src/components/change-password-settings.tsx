@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Check, X, Loader2 } from "lucide-react";
 import { useAuth } from "@kairo/client-core/auth";
-import { createClient } from "@kairo/client-core/supabase";
+import { updatePassword } from "@kairo/client-core/queries";
 import type { AppView } from "@/types";
 
 interface Props {
@@ -35,8 +35,7 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
     setError(null);
 
     try {
-      const supabase = createClient();
-      const { error: updateError } = await supabase.auth.updateUser({ password });
+      const { error: updateError } = await updatePassword(password);
 
       if (updateError) {
         setError(updateError.message);

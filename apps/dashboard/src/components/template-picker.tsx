@@ -2,7 +2,7 @@ import * as React from "react";
 import { Search } from "lucide-react";
 import { Popover } from "radix-ui";
 import { useTranslation } from "react-i18next";
-import { apiCall } from "@kairo/client-core/api-client";
+import { listTemplates } from "@kairo/client-core/endpoints";
 
 interface Template {
   id: string;
@@ -73,9 +73,7 @@ export function TemplatePicker({ onSelect, children, previewVars }: TemplatePick
     setLoading(true);
     setError(null);
     try {
-      const res = await apiCall("/api/v1/templates", {
-        headers: { "Accept-Language": i18n.language },
-      });
+      const res = await listTemplates(i18n.language);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as { data: Template[] };
       setTemplates(withDummyFirst(json.data ?? []));

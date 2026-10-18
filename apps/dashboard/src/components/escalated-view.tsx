@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clock } from "lucide-react";
-import { createClient } from "@kairo/client-core/supabase";
-import { useAuth } from "@kairo/client-core/auth";
+import { useStatusTickets } from "@kairo/client-core/hooks/use-status-tickets";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TicketDetail } from "@/components/ticket-detail";
 import { AiAssistant } from "@/components/ai-assistant";
@@ -20,87 +18,14 @@ interface EscalatedViewProps {
 
 export function EscalatedView({ onViewChange: _onViewChange }: EscalatedViewProps) {
   const { t } = useTranslation("dashboard");
-  const { user, accountId } = useAuth();
   const { addTicket, selectTicket, selectedTicketId, tickets: storeTickets } = useTriageStore();
 
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-
-    (async () => {
-      setLoading(true);
-      const supabase = createClient();
-      let query = supabase
-        .from("tickets")
-        .select("*")
-        .in("status", ESCALATED_STATUSES);
-      if (accountId) query = query.eq("account_id", accountId);
-      const { data, error } = await query
-        .order("updated_at", { ascending: false, nullsFirst: false });
-
-      if (!error && data) setTickets(data as Ticket[]);
-      setLoading(false);
-    })();
-  }, [user, accountId]);
-
-  // ---------------------------------------------------------------------------
-  // Realtime — mirrors ResolvedView: keep this list in sync so a ticket
-  // de-escalated elsewhere disappears from here (and closes its detail pane,
-  // since showDetailPane derives from this local list).
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    if (!user) return;
-
-    const supabase = createClient();
-    const channelName = accountId
-      ? `escalated:tickets:${accountId}`
-      : `escalated:tickets:${user.id}`;
-    const rowFilter = accountId ? `account_id=eq.${accountId}` : undefined;
-
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "tickets",
-          ...(rowFilter ? { filter: rowFilter } : {}),
-        },
-        (payload) => {
-          const row = payload.new as Ticket | undefined;
-          const oldRow = payload.old as Partial<Ticket> | undefined;
-          const isEscalated = (status: string | null | undefined) =>
-            ESCALATED_STATUSES.includes(status as (typeof ESCALATED_STATUSES)[number]);
-
-          if (payload.eventType === "DELETE" || (row && !isEscalated(row.status))) {
-            const removedId = row?.id ?? oldRow?.id;
-            if (removedId) setTickets((prev) => prev.filter((t) => t.id !== removedId));
-            return;
-          }
-
-          if (row && isEscalated(row.status)) {
-            setTickets((prev) => {
-              const next = prev.some((t) => t.id === row.id)
-                ? prev.map((t) => (t.id === row.id ? { ...t, ...row } : t))
-                : [...prev, row];
-              return next.sort((a, b) => {
-                const da = a.updated_at ? new Date(a.updated_at).getTime() : -Infinity;
-                const db = b.updated_at ? new Date(b.updated_at).getTime() : -Infinity;
-                return db - da;
-              });
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, accountId]);
+  const { tickets, loading } = useStatusTickets({
+    channelPrefix: "escalated",
+    statuses: ESCALATED_STATUSES,
+    orderBy: "updated_at",
+    ascending: false,
+  });
 
   /**
    * Open a ticket's thread in the detail pane without leaving this view. We add

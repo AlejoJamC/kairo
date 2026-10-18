@@ -11,8 +11,7 @@ import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
 import { TeamOnlyChip } from "./triage/note-primitives";
 import { Avatar, getInitials } from "./ui/avatar";
-import { getLandingUrl } from "@kairo/client-core/api-client";
-import { getPlatform } from "@kairo/client-core/config";
+import { startGmailConnect } from "@kairo/client-core/endpoints";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
 
@@ -313,7 +312,7 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
               && message.send_error?.code === "INSUFFICIENT_SCOPE" && (
               <button
                 type="button"
-                onClick={() => { getPlatform().navigation.navigate(getLandingUrl("/bff/auth/google")); }}
+                onClick={() => { startGmailConnect(); }}
                 style={{
                   fontSize: 10,
                   fontWeight: 600,

@@ -1,4 +1,4 @@
-import { apiCall } from "@kairo/client-core/api-client";
+import { askAssistant } from "@kairo/client-core/endpoints";
 import { getPlatform } from "@kairo/client-core/config";
 import { z } from "zod";
 import { useEffect, useRef, useState } from "react";
@@ -393,9 +393,7 @@ export function AssistantPanel() {
       : { role: 'assistant' as const, content: turn.answer.prose.map((block) => block.type === 'p' ? block.text : block.items.join('\n')).join('\n') });
     setTurns((previous) => [...previous, { id: uid, role: 'u', text }]);
     try {
-      const response = await apiCall(`/api/v1/tickets/${selectedTicketId}/assistant`, {
-        method: 'POST', body: JSON.stringify({ messages: [...history.slice(-18), { role: 'user', content: text }] }), signal: abort.signal,
-      });
+      const response = await askAssistant(selectedTicketId, [...history.slice(-18), { role: 'user', content: text }], abort.signal);
       if (!response.ok) throw new Error('Assistant request failed');
       const result = AssistantResponseSchema.parse(await response.json());
       if (abort.signal.aborted) return;

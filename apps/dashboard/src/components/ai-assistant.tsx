@@ -4,7 +4,7 @@ import {
   CheckCircle2, Loader2, BookOpen, MessageSquarePlus,
 } from "lucide-react";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { apiCall } from "@kairo/client-core/api-client";
+import { getRelatedHistory, getKnowledgeContext, requestEscalationReasons, escalateTicket, getClientProfile } from "@kairo/client-core/endpoints";
 import type { ClientProfile } from "@kairo/client-core/stores/triage-store";
 import {
   ClientProfileCard,
@@ -267,7 +267,7 @@ function SimilarTab({ ticketId, lang }: { ticketId: string | null; lang: string 
   useEffect(() => {
     if (!ticketId) { setCases([]); setExpandedCase(null); return; }
     setCases([]); setExpandedCase(null); setLoading(true);
-    apiCall(`/api/v1/tickets/${ticketId}/related-history`)
+    getRelatedHistory(ticketId)
       .then(async (res) => {
         if (!res.ok) return;
         const json: { data: SimilarCase[] } = await res.json();
@@ -365,7 +365,7 @@ function ArticlesTab({ ticketId }: { ticketId: string | null }) {
   useEffect(() => {
     if (!ticketId) { setArticles([]); return; }
     setArticles([]); setLoading(true);
-    apiCall(`/api/v1/tickets/${ticketId}/knowledge-context`)
+    getKnowledgeContext(ticketId)
       .then(async (res) => {
         if (!res.ok) return;
         const json: { kbArticles: KbArticle[] } = await res.json();
@@ -462,7 +462,7 @@ function EscalateTab({
   useEffect(() => {
     if (!ticketId) { setEscalation(null); setEscalatedAt(null); setEditMode(false); return; }
     setEscalation(null); setEscalatedAt(null); setEditMode(false); setReasonsLoading(true);
-    apiCall(`/api/v1/tickets/${ticketId}/escalation-reasons`, { method: "POST" })
+    requestEscalationReasons(ticketId)
       .then(async (res) => { if (!res.ok) return; setEscalation(await res.json()); })
       .catch(() => {})
       .finally(() => setReasonsLoading(false));
@@ -472,10 +472,7 @@ function EscalateTab({
     if (!ticketId || escalating) return;
     setEscalating(true);
     try {
-      await apiCall(`/api/v1/tickets/${ticketId}/escalate`, {
-        method: "POST",
-        body: JSON.stringify({ reason: escReason || undefined }),
-      });
+      await escalateTicket(ticketId, escReason || undefined);
     } catch { /* fire-and-forget */ }
     finally {
       const ts = new Date().toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" });
@@ -659,7 +656,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
     if (!selectedTicketId) { setClientProfile(null); return; }
     setClientProfile(null);
     setProfileLoading(true);
-    apiCall(`/api/v1/tickets/${selectedTicketId}/client-profile`)
+    getClientProfile(selectedTicketId)
       .then(async (res) => {
         if (!res.ok) return;
         setClientProfile(await res.json() as ClientProfile);

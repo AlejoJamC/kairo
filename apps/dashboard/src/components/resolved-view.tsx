@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clock } from "lucide-react";
-import { createClient } from "@kairo/client-core/supabase";
-import { useAuth } from "@kairo/client-core/auth";
+import { useStatusTickets } from "@kairo/client-core/hooks/use-status-tickets";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TicketDetail } from "@/components/ticket-detail";
 import { AiAssistant } from "@/components/ai-assistant";
@@ -21,87 +19,14 @@ interface ResolvedViewProps {
 
 export function ResolvedView({ onViewChange: _onViewChange }: ResolvedViewProps) {
   const { t } = useTranslation("dashboard");
-  const { user, accountId } = useAuth();
   const { addTicket, selectTicket, selectedTicketId, tickets: storeTickets } = useTriageStore();
 
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-
-    (async () => {
-      setLoading(true);
-      const supabase = createClient();
-      let query = supabase
-        .from("tickets")
-        .select("*")
-        .in("status", RESOLVED_STATUSES);
-      if (accountId) query = query.eq("account_id", accountId);
-      const { data, error } = await query
-        .order("resolved_at", { ascending: false, nullsFirst: false });
-
-      if (!error && data) setTickets(data as Ticket[]);
-      setLoading(false);
-    })();
-  }, [user, accountId]);
-
-  // ---------------------------------------------------------------------------
-  // Realtime — mirrors AwaitingCustomerView: keep this list in sync so a ticket
-  // reopened elsewhere disappears from here (and closes its detail pane, since
-  // showDetailPane derives from this local list).
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    if (!user) return;
-
-    const supabase = createClient();
-    const channelName = accountId
-      ? `resolved:tickets:${accountId}`
-      : `resolved:tickets:${user.id}`;
-    const rowFilter = accountId ? `account_id=eq.${accountId}` : undefined;
-
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "tickets",
-          ...(rowFilter ? { filter: rowFilter } : {}),
-        },
-        (payload) => {
-          const row = payload.new as Ticket | undefined;
-          const oldRow = payload.old as Partial<Ticket> | undefined;
-          const isResolved = (status: string | null | undefined) =>
-            RESOLVED_STATUSES.includes(status as (typeof RESOLVED_STATUSES)[number]);
-
-          if (payload.eventType === "DELETE" || (row && !isResolved(row.status))) {
-            const removedId = row?.id ?? oldRow?.id;
-            if (removedId) setTickets((prev) => prev.filter((t) => t.id !== removedId));
-            return;
-          }
-
-          if (row && isResolved(row.status)) {
-            setTickets((prev) => {
-              const next = prev.some((t) => t.id === row.id)
-                ? prev.map((t) => (t.id === row.id ? { ...t, ...row } : t))
-                : [...prev, row];
-              return next.sort((a, b) => {
-                const da = a.resolved_at ? new Date(a.resolved_at).getTime() : -Infinity;
-                const db = b.resolved_at ? new Date(b.resolved_at).getTime() : -Infinity;
-                return db - da;
-              });
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, accountId]);
+  const { tickets, loading } = useStatusTickets({
+    channelPrefix: "resolved",
+    statuses: RESOLVED_STATUSES,
+    orderBy: "resolved_at",
+    ascending: false,
+  });
 
   /**
    * Open a ticket's thread in the detail pane without leaving this view. We add

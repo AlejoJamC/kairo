@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Plus, Trash2, Loader2 } from "lucide-react";
 import { Input } from "@kairo/ui";
-import { apiCall } from "@kairo/client-core/api-client";
+import { saveClient } from "@kairo/client-core/endpoints";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
 
 interface Props {
@@ -128,10 +128,7 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
 
     try {
       const isEdit = client !== null;
-      const res = await apiCall(
-        isEdit ? `/bff/clients/${client!.id}` : "/bff/clients",
-        { method: isEdit ? "PATCH" : "POST", body: JSON.stringify(payload) }
-      );
+      const res = await saveClient(isEdit ? client!.id : null, payload);
 
       const data = await res.json();
 

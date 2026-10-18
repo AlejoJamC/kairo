@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { apiCall } from "@kairo/client-core/api-client";
+import { getSidebarCounts } from "@kairo/client-core/endpoints";
 import { getNumericFlag } from "@/lib/feature-flags";
 import {
   TRIAGE_COUNTED_STATUSES,
@@ -42,7 +42,7 @@ export function useSidebarCounts(): SidebarCounts | null {
 
     const fetchCounts = async () => {
       try {
-        const resp = await apiCall("/api/v1/sidebar/counts");
+        const resp = await getSidebarCounts();
         if (!resp.ok || cancelled) return;
         const data = (await resp.json()) as SidebarCounts;
         if (!cancelled) setCounts(data);

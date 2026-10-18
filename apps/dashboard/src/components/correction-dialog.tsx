@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Dialog } from "radix-ui";
 import { X, Loader2 } from "lucide-react";
-import { apiCall } from "@kairo/client-core/api-client";
+import { correctClassification } from "@kairo/client-core/endpoints";
 import { TICKET_PRIORITIES, TICKET_TYPES, TICKET_CATEGORIES, TICKET_TONES, type Ticket } from "@kairo/types";
 
 // ---------------------------------------------------------------------------
@@ -92,10 +92,7 @@ export function CorrectionDialog({
     setError(null);
 
     try {
-      const res = await apiCall(`/api/v1/tickets/${ticket.id}/correct-classification`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
+      const res = await correctClassification(ticket.id, body);
 
       if (!res.ok) {
         setError(t("correction.errorGeneric"));

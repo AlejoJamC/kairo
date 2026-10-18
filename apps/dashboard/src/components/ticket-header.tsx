@@ -7,7 +7,7 @@ import { Chip } from "@/components/ui/chip";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { CorrectionDialog } from "@/components/correction-dialog";
 import type { CorrectionFields } from "@/components/correction-dialog";
-import { apiCall } from "@kairo/client-core/api-client";
+import { assignTicket } from "@kairo/client-core/endpoints";
 
 // VITE_FF_ENABLE_ASSIGN_TO_ME — OFF unless exactly "true"; safe unset.
 function isFlagEnabled(value: string | undefined): boolean {
@@ -97,7 +97,7 @@ export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
     if (assigning || isAssigned) return;
     setAssigning(true);
     try {
-      const res = await apiCall(`/api/v1/tickets/${ticket.id}/assign`, { method: "PATCH" });
+      const res = await assignTicket(ticket.id);
       if (res.ok) {
         const body = await res.json() as { ticket?: Partial<Ticket> };
         if (body.ticket) updateClassification(ticket.id, body.ticket);

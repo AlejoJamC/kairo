@@ -1,15 +1,14 @@
 import { useEffect } from "react";
-import { createClient } from "@kairo/client-core/supabase";
+import { fetchInboxTickets } from "@kairo/client-core/queries";
 import { useAuth } from "@kairo/client-core/auth";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { useRealtimeTickets } from "@kairo/client-core/hooks/use-realtime-tickets";
 import { useNoteCounts } from "@/hooks/use-note-counts";
-import { apiCall } from "@kairo/client-core/api-client";
+import { getOperationalSlaConfig } from "@kairo/client-core/endpoints";
 import { TicketList } from "./ticket-list";
 import { TicketDetail } from "./ticket-detail";
 import { AiAssistant } from "./ai-assistant";
-import type { Ticket, TicketPriority, PrioritySlaConfig } from "@kairo/types";
-import { INBOX_FETCH_EXCLUDED_STATUSES_FILTER } from "@kairo/client-core/triage-status";
+import type { TicketPriority, PrioritySlaConfig } from "@kairo/types";
 
 export function Inbox() {
   const { user, accountId } = useAuth();
@@ -27,7 +26,7 @@ export function Inbox() {
   // client-side for every ticket, regardless of where its row came from.
   useEffect(() => {
     if (!user) return;
-    apiCall("/api/v1/tenants/operational-sla-config")
+    getOperationalSlaConfig()
       .then((res) => res.json())
       .then((body: { config: (PrioritySlaConfig & { priority: TicketPriority })[] }) => {
         const byPriority = {} as Record<TicketPriority, PrioritySlaConfig>;
@@ -43,31 +42,15 @@ export function Inbox() {
   useEffect(() => {
     if (!user) return;
 
-    const supabase = createClient();
-
     (async () => {
       setScanning(true);
-
-      // ADR-022: tickets are scoped by account_id. When accountId is known, filter
-      // explicitly; otherwise RLS (current_account_id()) still scopes the query.
-      let query = supabase
-        .from("tickets")
-        .select("*")
-        .not("status", "in", INBOX_FETCH_EXCLUDED_STATUSES_FILTER)
-        .order("priority_score", { ascending: false, nullsFirst: false })
-        .limit(200);
-
-      if (accountId) {
-        query = query.eq("account_id", accountId);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await fetchInboxTickets(accountId);
 
       if (error) {
         console.error("[inbox] Failed to fetch tickets:", error.message, error);
         setTickets([]);
       } else {
-        setTickets((data as Ticket[]) ?? []);
+        setTickets(data ?? []);
       }
       setScanning(false);
     })();

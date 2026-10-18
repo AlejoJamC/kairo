@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Clock, X } from "lucide-react";
-import { createClient } from "@kairo/client-core/supabase";
-import { apiCall } from "@kairo/client-core/api-client";
+import { fetchProposals } from "@kairo/client-core/queries";
+import { approveClassification } from "@kairo/client-core/endpoints";
 import { useAuth } from "@kairo/client-core/auth";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TicketDetail } from "@/components/ticket-detail";
@@ -44,14 +44,7 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
 
   const load = useCallback(async () => {
     setLoading(true);
-    const supabase = createClient();
-    const { data, error: queryError } = await supabase
-      .from("ticket_proposals")
-      .select(
-        "id, ticket_id, status, proposed_type, proposed_category, proposed_priority, proposed_sentiment, confidence_score, model_version, created_at, ticket:tickets!inner(*)",
-      )
-      .eq("status", filter)
-      .order("created_at", { ascending: false });
+    const { data, error: queryError } = await fetchProposals(filter);
 
     if (!queryError && data) setProposals(data as unknown as Proposal[]);
     setLoading(false);
@@ -75,10 +68,7 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
     setBusy(true);
     setError(false);
     try {
-      const res = await apiCall(`/api/v1/tickets/${proposal.ticket_id}/classify-approve`, {
-        method: "POST",
-        body: JSON.stringify({ proposal_id: proposal.id, action }),
-      });
+      const res = await approveClassification(proposal.ticket_id, { proposal_id: proposal.id, action });
       if (!res.ok) throw new Error(String(res.status));
       setProposals((prev) => prev.filter((p) => p.id !== proposal.id));
       selectTicket(null);

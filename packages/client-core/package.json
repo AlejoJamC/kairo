@@ -19,7 +19,10 @@
     "./stores/triage-store": "./src/stores/triage-store.ts",
     "./hooks/use-account-members": "./src/hooks/use-account-members.ts",
     "./hooks/use-ticket-thread": "./src/hooks/use-ticket-thread.ts",
-    "./hooks/use-realtime-tickets": "./src/hooks/use-realtime-tickets.ts"
+    "./hooks/use-realtime-tickets": "./src/hooks/use-realtime-tickets.ts",
+    "./endpoints": "./src/endpoints.ts",
+    "./hooks/use-status-tickets": "./src/hooks/use-status-tickets.ts",
+    "./queries": "./src/queries.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
