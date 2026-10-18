@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { createClient } from "@kairo/client-core/supabase";
-import { getPlatform } from "@kairo/client-core/config";
-import { mapDraftContactToRow, type ContactRow } from "@/types/contact-row";
-import type { Database } from "@/types/supabase";
+import { createClient } from "../supabase";
+import { getPlatform } from "../config";
+import { mapDraftContactToRow, type ContactRow } from "../contact-row";
+import type { Database } from "@kairo/types";
 
 // ---------------------------------------------------------------------------
 // useDraftContacts — polling hook for draft_contact rows (KAI-227)

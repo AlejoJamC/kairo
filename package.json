@@ -19,7 +19,7 @@
     "observability:provision": "bun scripts/observability/langfuse-dashboards.ts && bun scripts/observability/hyperdx-dashboard.ts",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "test": "SKIP_LLM_INTEGRATION=1 bun test apps/api packages/intelligence scripts/eval skills && turbo run test --filter=@kairo/dashboard --filter=@kairo/client-core --filter=@kairo/tokens --filter=@kairo/ui",
+    "test": "SKIP_LLM_INTEGRATION=1 bun test apps/api packages/intelligence scripts/eval scripts/ui skills && turbo run test --filter=@kairo/dashboard --filter=@kairo/client-core --filter=@kairo/tokens --filter=@kairo/ui",
     "test:gateway": "RUN_GATEWAY_INTEGRATION=1 bun --env-file=.env.local test apps/api/src/lib/ticket-assistant.gateway.integration.test.ts",
     "test:gateway:contracts": "bun --env-file=.env.local scripts/eval/run_gateway_smoke.ts",
     "clean": "turbo run clean",
@@ -30,7 +30,9 @@
     "eval:matrix": "bun scripts/eval/run_matrix_eval.ts",
     "eval:layered": "bun scripts/eval/run_layered_eval.ts",
     "eval:attribute": "bun scripts/eval/attribute_layers.ts",
-    "ui:metrics": "bun scripts/ui-metrics.ts"
+    "ui:metrics": "bun scripts/ui-metrics.ts",
+    "ui:boundaries": "bun scripts/ui/check-boundaries.ts",
+    "ui:catalog": "bun scripts/ui/catalog.ts"
   },
   "workspaces": [
     "apps/*",

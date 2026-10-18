@@ -3,8 +3,8 @@ import { useTranslation } from "react-i18next";
 import { ClientFormModal } from "@/components/client-form-modal";
 import { listClients, deleteClient } from "@kairo/client-core/endpoints";
 import { useAuth } from "@kairo/client-core/auth";
-import { useDraftContacts } from "@/hooks/use-draft-contacts";
-import { mapClientToRow, type ContactRow, type ContactRowStatus } from "@/types/contact-row";
+import { useDraftContacts } from "@kairo/client-core/hooks/use-draft-contacts";
+import { mapClientToRow, type ContactRow, type ContactRowStatus } from "@kairo/client-core/contact-row";
 import {
   confirmDraft,
   rejectDraft,

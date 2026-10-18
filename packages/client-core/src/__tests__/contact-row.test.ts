@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { mapDraftContactToRow, mapClientToRow } from "@/types/contact-row";
-import type { Database } from "@/types/supabase";
-import type { Client } from "@/types";
+import { mapDraftContactToRow, mapClientToRow, type ClientRowSource } from "../contact-row";
+import type { Database } from "@kairo/types";
 
 type DraftRow = Database["public"]["Tables"]["draft_contact"]["Row"];
 
@@ -33,7 +32,7 @@ const baseDraft: DraftRow = {
   updated_at:      "2026-05-01T12:00:00Z",
 };
 
-const baseClient: Client = {
+const baseClient: ClientRowSource & Record<string, unknown> = {
   id:               "client-uuid-1",
   internalId:       "CLI-001",
   legalId:          "TAX-123",

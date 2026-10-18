@@ -1,0 +1,238 @@
+{
+  "src/App.tsx": {
+    "no-restricted-syntax": {
+      "count": 8
+    }
+  },
+  "src/components/ai-assistant.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 63
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 5
+    },
+    "react-refresh/only-export-components": {
+      "count": 1
+    }
+  },
+  "src/components/ai-review-view.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 23
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/components/awaiting-customer-view.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 21
+    },
+    "react-hooks/purity": {
+      "count": 2
+    }
+  },
+  "src/components/change-password-settings.tsx": {
+    "no-restricted-syntax": {
+      "count": 20
+    }
+  },
+  "src/components/channels-settings.tsx": {
+    "no-restricted-syntax": {
+      "count": 22
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/components/client-directory.tsx": {
+    "no-restricted-syntax": {
+      "count": 134
+    }
+  },
+  "src/components/client-form-modal.tsx": {
+    "no-restricted-syntax": {
+      "count": 8
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/components/correction-dialog.tsx": {
+    "no-restricted-syntax": {
+      "count": 9
+    }
+  },
+  "src/components/escalated-view.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "src/components/inbox.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/knowledge-view.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 25
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 2
+    }
+  },
+  "src/components/language-switcher.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/profile-settings.tsx": {
+    "no-restricted-syntax": {
+      "count": 127
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/components/related-history-drawer.tsx": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "src/components/reply-bar.tsx": {
+    "no-restricted-syntax": {
+      "count": 52
+    },
+    "react-hooks/immutability": {
+      "count": 1
+    },
+    "react-hooks/preserve-manual-memoization": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 2
+    }
+  },
+  "src/components/resolved-view.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "src/components/sidebar.tsx": {
+    "no-restricted-syntax": {
+      "count": 10
+    }
+  },
+  "src/components/template-picker.tsx": {
+    "no-restricted-syntax": {
+      "count": 15
+    }
+  },
+  "src/components/ticket-card.tsx": {
+    "no-restricted-syntax": {
+      "count": 31
+    },
+    "react-hooks/purity": {
+      "count": 2
+    }
+  },
+  "src/components/ticket-decisions.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/components/ticket-detail.tsx": {
+    "no-restricted-syntax": {
+      "count": 48
+    }
+  },
+  "src/components/ticket-header.tsx": {
+    "no-restricted-syntax": {
+      "count": 10
+    }
+  },
+  "src/components/ticket-list.tsx": {
+    "no-restricted-syntax": {
+      "count": 40
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 3
+    }
+  },
+  "src/components/top-chrome.tsx": {
+    "no-restricted-syntax": {
+      "count": 80
+    }
+  },
+  "src/components/triage/AssistantPanel.tsx": {
+    "no-restricted-syntax": {
+      "count": 75
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 2
+    }
+  },
+  "src/components/triage/ClientProfileCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 25
+    }
+  },
+  "src/components/triage/NotesPanel.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/components/triage/mention-dropdown.tsx": {
+    "no-restricted-syntax": {
+      "count": 24
+    }
+  },
+  "src/components/triage/note-body.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/triage/note-card.tsx": {
+    "no-restricted-syntax": {
+      "count": 12
+    }
+  },
+  "src/components/triage/note-primitives.tsx": {
+    "no-restricted-syntax": {
+      "count": 8
+    }
+  },
+  "src/components/user-menu.tsx": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/test/render-with-providers.tsx": {
+    "react-refresh/only-export-components": {
+      "count": 1
+    }
+  }
+}

@@ -21,13 +21,16 @@ const nextConfig: NextConfig = {
   // locally when API_ORIGIN is unset — dev already proxies via Vite.
   async rewrites() {
     const apiOrigin = process.env.API_ORIGIN;
-    if (!apiOrigin) return [];
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${apiOrigin}/api/:path*`,
-      },
-    ];
+    return {
+      beforeFiles: [],
+      afterFiles: apiOrigin
+        ? [{ source: "/api/:path*", destination: `${apiOrigin}/api/:path*` }]
+        : [],
+      // The dashboard is a single-page app served from public/dashboard: any
+      // path under it that is not a built file is a client-side route (the
+      // session check in proxy.ts still runs first).
+      fallback: [{ source: "/dashboard/:path*", destination: "/dashboard/index.html" }],
+    };
   },
 };
 

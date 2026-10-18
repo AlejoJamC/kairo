@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router'
 import { UiProvider } from '@kairo/ui'
 import { initWebTelemetry } from '@kairo/observability/web'
 import { initClientCore } from '@kairo/client-core/config'
@@ -30,7 +31,9 @@ initClientCore({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <UiProvider>
-      <App />
+      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+        <App />
+      </BrowserRouter>
     </UiProvider>
   </StrictMode>,
 )

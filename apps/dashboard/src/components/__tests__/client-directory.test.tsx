@@ -88,7 +88,7 @@ vi.mock("@kairo/client-core/api-client", () => ({
 // Mock useDraftContacts hook
 const retryDraftsMock = vi.fn();
 const useDraftContactsMock = vi.fn();
-vi.mock("@/hooks/use-draft-contacts", () => ({
+vi.mock("@kairo/client-core/hooks/use-draft-contacts", () => ({
   useDraftContacts: (...args: unknown[]) => useDraftContactsMock(...args),
 }));
 

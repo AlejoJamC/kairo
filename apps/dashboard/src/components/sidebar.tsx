@@ -7,7 +7,9 @@ import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { useAuth } from "@kairo/client-core/auth";
-import { useSidebarCounts, VIEW_TO_STATUS } from "@/hooks/useSidebarCounts";
+import { useSidebarCounts } from "@kairo/client-core/hooks/use-sidebar-counts";
+import { VIEW_TO_STATUS } from "@/lib/sidebar-view-status";
+import { SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS } from "@/lib/poll-intervals";
 import type { AppView } from "@/types";
 import { Icon, Tooltip, type IconName } from "@kairo/ui";
 
@@ -91,7 +93,7 @@ interface SidebarProps {
 export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
   const { t } = useTranslation(["dashboard"]);
   const { isAdmin } = useAuth();
-  const counts = useSidebarCounts();
+  const counts = useSidebarCounts(SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS);
 
   const mainNavItems: NavItem[] = [
     { icon: "triage",         label: t("dashboard:sidebar.triage"),         view: "triage" },

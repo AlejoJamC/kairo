@@ -22,7 +22,11 @@
     "./hooks/use-realtime-tickets": "./src/hooks/use-realtime-tickets.ts",
     "./endpoints": "./src/endpoints.ts",
     "./hooks/use-status-tickets": "./src/hooks/use-status-tickets.ts",
-    "./queries": "./src/queries.ts"
+    "./queries": "./src/queries.ts",
+    "./contact-row": "./src/contact-row.ts",
+    "./hooks/use-draft-contacts": "./src/hooks/use-draft-contacts.ts",
+    "./hooks/use-note-counts": "./src/hooks/use-note-counts.ts",
+    "./hooks/use-sidebar-counts": "./src/hooks/use-sidebar-counts.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

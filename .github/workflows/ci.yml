@@ -28,5 +28,17 @@ jobs:
       - name: Test client packages and dashboard
         run: bunx turbo run test --filter=@kairo/dashboard --filter=@kairo/client-core --filter=@kairo/tokens --filter=@kairo/ui
 
+      - name: Lint dashboard
+        run: bun run --cwd apps/dashboard lint
+
+      - name: Package boundaries
+        run: bun run ui:boundaries
+
+      - name: UI scripts
+        run: bun test scripts/ui
+
+      - name: UI catalog is current
+        run: bun run ui:catalog -- --check
+
       - name: UI metrics
         run: bun run ui:metrics

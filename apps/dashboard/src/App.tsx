@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Navigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { AuthProvider, useAuth } from "@kairo/client-core/auth";
 import { getPlatform } from "@kairo/client-core/config";
@@ -15,6 +16,8 @@ import { AiReviewView } from "@/components/ai-review-view";
 import { KnowledgeView } from "@/components/knowledge-view";
 import { ChannelsSettings } from "@/components/channels-settings";
 import type { AppView } from "@/types";
+import { useActiveView } from "@/hooks/useActiveView";
+import { pathForView } from "@/routes";
 import { Spinner } from "@kairo/ui";
 
 const COMING_SOON_VIEWS: AppView[] = ["in-progress"];
@@ -52,7 +55,7 @@ function AppContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => getPlatform().storage.getItem("sidebar-collapsed") === "true"
   );
-  const [activeView, setActiveView] = useState<AppView>("triage");
+  const [routedView, setActiveView] = useActiveView();
 
   const handleToggle = () => {
     setSidebarCollapsed((c) => {
@@ -61,6 +64,9 @@ function AppContent() {
       return next;
     });
   };
+
+  if (routedView === null) return <Navigate to={pathForView("triage")} replace />;
+  const activeView = routedView;
 
   if (loading) {
     return (

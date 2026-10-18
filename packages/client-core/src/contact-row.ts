@@ -1,8 +1,7 @@
-import type { Client } from "@/types";
-import type { Database } from "@/types/supabase";
+import type { Database } from "@kairo/types";
 
 // ---------------------------------------------------------------------------
-// Unified contact model for the client directory UI (KAI-227)
+// Unified contact model for the client directory (KAI-227)
 // Normalizes draft_contact (Supabase) + clients (BFF API) into a single shape.
 // ---------------------------------------------------------------------------
 
@@ -75,7 +74,20 @@ export function mapDraftContactToRow(row: DraftContactRow): ContactRow {
   };
 }
 
-export function mapClientToRow(client: Client): ContactRow {
+/** The fields of a client the unified row needs; the dashboard's Client satisfies it. */
+export interface ClientRowSource {
+  id: string;
+  name: string;
+  authorizedEmails: string[];
+  telephone: string | null;
+  ticketCount: number;
+  lastContactAt: string | null;
+  plan: string | null;
+  slaLevel: string | null;
+  csatAvg: number | null;
+}
+
+export function mapClientToRow(client: ClientRowSource): ContactRow {
   return {
     id: `client:${client.id}`,
     source: "client",

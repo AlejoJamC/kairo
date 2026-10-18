@@ -85,6 +85,18 @@ Kairo — AI support cockpit for support teams. Monorepo: dashboard (Vite+React1
 - For file-based specifications, move the existing specification from `specs/pending/` to `specs/done/` and add a brief implementation summary only when the work and required validation are complete.
 - Keep long-running task progress concise and free of customer or evaluation data. Do not introduce a separate agent instruction file to persist progress.
 
+## Frontend architecture
+
+One component library and one set of design values serve every client (web dashboard, landing, kelan, mobile, desktop shell). Read `skills/kairo-ui/SKILL.md` before any UI work.
+
+- **Layers.** `packages/tokens` holds the design values; `packages/ui` holds the components and their specifications (`packages/ui/spec`); `packages/client-core` holds data, session and platform ports; `apps/*` hold screens. `packages/ui` never imports `client-core`, data libraries or apps; `client-core` has no UI; apps never import each other. `bun run ui:boundaries` enforces it.
+- **Find before writing.** `packages/ui/CATALOG.md` lists every specified piece and whether it exists. Use the export. If the piece is specified but missing, build it in `packages/ui` from its spec, with tests, before using it. Never define a local version of a specified piece inside an app.
+- **The approved design is final.** A state or detail marked "Not defined in the approved design." or "Not designed" is not invented in code or in specs; ask.
+- **Screens compose; they do not style.** No inline `style`, no color or hex literals, no Tailwind classes, no hand-written CSS color variables and no `@tamagui/*` imports in apps. Values come from `@kairo/tokens`; icons from `Icon`; overlays, forms and feedback from the library.
+- **Views never touch the platform or the backend.** No `fetch`, `localStorage`, `window.location`, `navigator.clipboard` or Supabase in a view: use `@kairo/client-core` endpoints, queries, hooks and the platform ports.
+- **Enforcement.** ESLint runs against a baseline (`apps/dashboard/eslint-suppressions.json`) that may only shrink: never add to it, and run `eslint --prune-suppressions` after fixing violations. An editor hook lints each dashboard file right after it is written. CI runs typecheck, tests, lint, boundaries, the catalog check and `ui:metrics`.
+- **Reference.** `bun run ui:metrics` reports the remaining gap against the specification; `bun run ui:catalog` regenerates the catalog after a piece or its spec changes.
+
 ## Feature documentation
 
 - READMEs describe the domain and its current usage: purpose, commands, configuration and outputs. Keep them concise and understandable without conversation history.

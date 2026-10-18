@@ -3,7 +3,9 @@ import { fetchInboxTickets } from "@kairo/client-core/queries";
 import { useAuth } from "@kairo/client-core/auth";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { useRealtimeTickets } from "@kairo/client-core/hooks/use-realtime-tickets";
-import { useNoteCounts } from "@/hooks/use-note-counts";
+import { useNoteCounts } from "@kairo/client-core/hooks/use-note-counts";
+import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
+import { NOTE_COUNTS_POLL_INTERVAL_SECONDS } from "@/lib/poll-intervals";
 import { getOperationalSlaConfig } from "@kairo/client-core/endpoints";
 import { TicketList } from "./ticket-list";
 import { TicketDetail } from "./ticket-detail";
@@ -18,7 +20,7 @@ export function Inbox() {
 
   // KAI-232 — per-ticket note counters for the queue chip, the ticket header
   // and the Notes tab badge. Owned here, next to the ticket fetch.
-  useNoteCounts(!!user);
+  useNoteCounts(INTERNAL_NOTES_ENABLED && !!user, NOTE_COUNTS_POLL_INTERVAL_SECONDS);
 
   // KAI-168 — fetch the account's operational SLA config once per session.
   // Tickets themselves are fetched directly from Supabase below (not via the

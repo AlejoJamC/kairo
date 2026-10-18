@@ -38,6 +38,15 @@
             "command": "f=$(jq -r '.tool_response.filePath // .tool_input.file_path // \"\"'); case \"$f\" in *.claude/*) python3 -c 'import sys,re,json\ntry: t=open(sys.argv[1],encoding=\"utf-8\",errors=\"ignore\").read()\nexcept Exception: raise SystemExit\nif re.search(\"[\\u00c1\\u00c9\\u00cd\\u00d3\\u00da\\u00d1\\u00e1\\u00e9\\u00ed\\u00f3\\u00fa\\u00f1\\u00bf\\u00a1]\", t): print(\"{\\\"decision\\\": \\\"block\\\", \\\"reason\\\": \\\"Spanish text written into .claude/ - everything there must be English. Rewrite it in English before continuing.\\\"}\")\n' \"$f\";; esac"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 '/Users/alejojamc/repos/kairo/.codex/hooks/lint-edited-file.py'"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

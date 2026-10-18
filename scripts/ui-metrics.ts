@@ -83,15 +83,15 @@ const tokenSources = [
   ...walk(join(ROOT, "apps")).concat(walk(join(ROOT, "packages"))).filter(
     (f) => f.endsWith(".css") && !f.includes("/packages/tokens/") && cssLiteralDefinitions(read(f)) >= 3,
   ),
-  ...["packages/ui/tamagui.config.ts", "packages/ui/src/triage-tokens.ts"]
+  ...["packages/ui/tamagui.config.ts"]
     .map((f) => join(ROOT, f))
     .filter((f) => existsSync(f) && count(read(f).replace(/#(fff|ffffff|000|000000)\b/gi, ""), HEX) > 0),
 ].map((f) => relative(ROOT, f));
 
 // Modules exported by packages/ui against the specification files, with the
 // names the specification uses for pieces whose code name differs.
-const SPEC_ALIAS: Record<string, string> = { "dropdown-menu": "menu", input: "field", sheet: "drawer" };
-const NOT_COMPONENTS = new Set(["triage-tokens", "provider"]);
+const SPEC_ALIAS: Record<string, string> = {};
+const NOT_COMPONENTS = new Set(["provider"]);
 const uiIndex = join(ROOT, "packages/ui/src/index.ts");
 const uiModules = existsSync(uiIndex)
   ? [...read(uiIndex).matchAll(/export \* from ["']\.\/([a-z-]+)["']/g)].map((m) => m[1])
