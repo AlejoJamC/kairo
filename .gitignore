@@ -160,6 +160,10 @@ vite.config.ts.timestamp-*
 *.png
 *.gif
 
+# Documentation assets are committed (README banner, screenshots)
+!docs/assets/
+!docs/assets/*
+
 # JetBrains IDEs
 .idea/
 

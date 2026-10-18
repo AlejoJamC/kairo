@@ -1,110 +1,104 @@
-# Kairo
+<p align="center">
+  <img src="docs/assets/banner.png" alt="Kairo — the support inbox that triages itself" width="100%">
+</p>
 
-Kairo is a bet that support triage is a trust problem, not a tooling problem. Support teams today choose between two bad defaults: a person reads every ticket, or a bot answers all of them. Kairo takes the position a good lead would take with a promising new hire: it decides what it can, delegates what it shouldn't, and gets better at telling the two apart. Every incoming message is read and classified on arrival — what it's about, how urgent it is, who should own it. When Kairo has a track record of being right on that kind of ticket, it acts without waiting: routes it, sets the priority, moves it along. When it doesn't, it puts the decision in front of a person and learns from what they do. Nobody configures that threshold; it comes from the system's own history with each client, expanding where corrections stop and contracting where they resume. What a support team gets is not a smarter queue to manage but a queue that already knows its own order: whoever opens it sees at a glance what to take first, what can wait, and what Kairo has already handled. It's built for companies that want AI to carry real responsibility in support without handing it the keys on day one — trust that is earned per client, per ticket, and revoked just as easily.
+**AI support triage for the support inbox.** Every message is classified on arrival; the AI acts alone only where it has earned the right to, and hands the decision to a person when it hasn't.
 
-🇨🇴 [Versión en español](docs/README.es.md)
+[Website](https://kairo.alejojamc.com) · [What works today](docs/what-is-kairo.md) · [Español](docs/README.es.md)
 
-## Stack
+<p align="center">
+  <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-2B5BFF?style=flat-square">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-2B5BFF?style=flat-square">
+  <img alt="Status" src="https://img.shields.io/badge/status-alpha-09090B?style=flat-square">
+</p>
 
-| Layer | Tech |
+## What it does
+
+- **Classifies every message on arrival** — type, priority, urgency and tone — before anyone opens the inbox.
+- **Orders the queue** by ticket type, customer plan, mood, waiting time and recurrence, so the first screen is the work order.
+- **Earns its autonomy per customer.** A ticket type is auto-approved only after measured accuracy, and a correction takes that right away again.
+
+## How a message becomes a ticket
+
+```mermaid
+flowchart LR
+  A[Incoming message] --> B{Filter rules}
+  B -->|spam, automated, bulk| X[Skipped · reason stored]
+  B -->|relevant| C[AI classification]
+  C --> D{Autonomy earned<br/>for this type?}
+  D -->|yes| E[Acts · type, priority, position]
+  D -->|no| F[A person decides]
+  F --> G[Correction recorded]
+  G --> D
+```
+
+## Status
+
+| State | What it covers |
 |---|---|
-| Monorepo | Turborepo + Bun |
-| WebApp | Vite + React 19 |
-| API | Bun + Hono + Inngest |
-| Landing | Next.js 15 |
-| Admin (Kelan) | Next.js 15 |
-| Database | Supabase (Postgres + Auth) |
-| AI | JEV (classification decisions) + Claude API / Ollama (text) |
-| Email | Gmail API |
-| Deploy | Vercel (webapp/landing/kelan) + Railway (api) |
-| Language | TypeScript (strict) |
+| **Working today** | Gmail ingestion · classification · priority queue · replies in-thread · internal notes · escalations · response-time targets |
+| **Built, off by default** | Knowledge proposals · ticket assistant · second model · contact drafts · acknowledgement email |
+| **Not built** | Channels beyond Gmail · billing · auto-resolution |
 
-## Structure
+What works, what is switched off, and where the marketing site promises more than the product does: **[docs/what-is-kairo.md](docs/what-is-kairo.md)**.
 
-```
-kairo/
-├── apps/
-│   ├── api/       # Bun + Hono — backend API + Inngest functions (port 3001)
-│   ├── dashboard/ # Vite + React — support dashboard (port 5173)
-│   ├── landing/   # Next.js — marketing site (port 3000)
-│   ├── kelan/     # Next.js — admin panel (internal, port 3002)
-│   └── mobile/    # Expo — mobile app
-├── packages/
-│   ├── env/            # centralized env validation (@t3-oss/env-core)
-│   ├── types/          # shared TypeScript interfaces
-│   ├── i18n/           # shared translations (EN/ES)
-│   ├── ui/             # shared ShadCN components
-│   ├── feature-flags/  # static + runtime feature flags
-│   ├── identity/       # email/phone normalization, contact dedup
-│   ├── claude_design/  # Pencil design token package
-│   └── intelligence/   # decision provider (JEV) and text providers (Ollama / Anthropic)
-│       └── prompts/    # versioned LLM prompts, per-language subdirs
-├── supabase/
-│   └── migrations/     # shared DB migrations (Postgres via Supabase)
-└── kairo-internal/
-    └── architecture/   # 25 Architecture Decision Records
-```
+## Quickstart
 
-## Getting Started
+Requires Bun 1.3+, a Supabase project, Google OAuth credentials, and an AI Gateway key (or local Ollama).
 
 ```bash
 bun install
-bun run dev
+cp .env.example .env.local   # fill in the values
+bun run dev                  # api :3001 · dashboard :5173 · landing :3000 · kelan :3002
+bun run dev:inngest          # Inngest dev server for the pipeline (separate terminal)
 ```
-
-- API → http://localhost:3001
-- WebApp → http://localhost:5173
-- Landing → http://localhost:3000
-- Kelan (admin) → http://localhost:3002
-
-## Commands
 
 ```bash
-bun run build   # build all apps
-bun run lint    # lint all packages
-bun run clean   # clean build artifacts
-bun test        # run tests
+bun test        # unit and integration tests
+bun run build   # turbo build across the monorepo
 ```
 
-## Environment Variables
+Every variable is validated at startup by [`@kairo/env`](packages/env/index.ts); see [`.env.example`](.env.example) for the full list.
 
-Kairo uses [`@kairo/env`](packages/env/index.ts) — a centralized, type-safe env layer built on [`@t3-oss/env-core`](https://env.t3.gg). Every variable is validated with Zod at startup. Raw `process.env` and `import.meta.env` access is **not allowed** anywhere in the codebase.
+## Architecture
 
-### Single root `.env.local`
+```
+apps/
+  api/          Bun + Hono · REST v1 + Inngest pipeline (tiers, polling, retries)
+  dashboard/    Vite + React 19 · the cockpit
+  landing/      Next.js 15 · marketing site, auth, onboarding wizard
+  kelan/        Next.js 15 · internal admin
+  mobile/       Expo · scaffold only
+packages/       shared libraries; the AI layer is intelligence/ (AI SDK, model roles, prompts)
+supabase/
+  migrations/   schema, RLS, append-only history
+```
 
-All variables — shared and app-specific — live in one file at the monorepo root:
+## Evals
+
+The part worth reading: a bench of hand-labelled emails scored against the same pipeline production runs, per field rather than pass/fail. Several design decisions in this repo — trusting the mail server's spam verdict, splitting buyers from sellers, auto-approving only `support` at first — came out of these numbers.
 
 ```bash
-cp .env.example .env.local   # fill in real values, never commit
+bun run eval:pipeline   # emails through the classifier → CSV
+bun run eval:metrics    # F1, calibration and tone inflation per label
 ```
 
-Each app reads from that single file:
+The corpora are private and are not in this repository.
 
-| App | How it reads root `.env.local` |
+## Docs
+
+| Document | What it covers |
 |---|---|
-| `apps/api` | `bun run --env-file ../../.env.local` — loaded directly by Bun at startup |
-| `apps/dashboard` | Vite `envDir: "../../"` points it at the monorepo root |
-| `apps/landing` | `next.config.ts` calls `loadEnvConfig("../../")` before webpack compiles, so `NEXT_PUBLIC_*` vars get inlined into the client bundle |
-| `apps/kelan` | `next.config.ts` calls `loadEnvConfig("../../")` — same pattern as landing |
+| [what-is-kairo.md](docs/what-is-kairo.md) | What the product does today, plainly |
+| [que-es-kairo.md](docs/que-es-kairo.md) | The same, in Spanish |
+| [ai-engineering/](docs/ai-engineering/) | Capability map, skills and tools |
+| [observability.md](docs/observability.md) | Langfuse + ClickStack |
+| [versioning.md](docs/versioning.md) | How rules and prompts are versioned |
 
-The `.env.example` is grouped into three sections — `SHARED`, `LANDING`, and `WEBAPP` — with comments explaining each variable.
+## Contributing
 
-### Where variables are validated
+Open an issue before a large change. Commits use [Conventional Commits](https://www.conventionalcommits.org/); user-facing strings need both English and Spanish.
 
-| Package / App | File | Variables it owns |
-|---|---|---|
-| `packages/env` | `index.ts` | Shared backend variables: Supabase, AI/LLM, pipeline (concurrency, timeouts), Inngest, server-side feature flags |
-| `apps/dashboard` | `src/env.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LANDING_URL` |
-| `apps/landing` | `env.ts` | All `NEXT_PUBLIC_*` vars + `GOOGLE_CLIENT_SECRET`, `INNGEST_EVENT_KEY` |
-| `apps/kelan` | `env.ts` | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_KELAN_URL` |
+## License
 
-Never access `process.env` or `import.meta.env` directly — always import from the nearest `env.ts`:
-
-```ts
-// ✅ correct
-import { env } from "@/env";
-const url = env.NEXT_PUBLIC_SUPABASE_URL;
-
-// ❌ wrong — no validation, no types
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-```
+[Apache-2.0](LICENSE).

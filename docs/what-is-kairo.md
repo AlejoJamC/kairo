@@ -8,7 +8,7 @@
 
 ## In one paragraph
 
-Kairo is a workspace for customer support teams whose support arrives by email. You connect a company Gmail inbox, and Kairo reads every incoming email, drops the junk, and turns the rest into **tickets**. For each ticket it decides what the email is (a customer request, a sales lead, internal mail, something else), how important and how urgent it is, and what mood the sender is in. It then ranks the whole queue so that whoever opens it sees at a glance what to handle first. Agents reply to customers from inside Kairo (the reply goes out from the company's own Gmail, in the same email thread), leave private notes for colleagues, escalate hard cases, and correct Kairo when it gets a call wrong. The core idea is **trust earned step by step**: the AI proposes, a person decides, and the AI only acts alone where it has proven reliable. Today that autonomy is deliberately small.
+Kairo is a workspace for customer support teams whose support arrives by email. You connect a company Gmail inbox, and Kairo reads every incoming email, drops the junk, and turns the rest into **tickets**. For each ticket it decides what the email is (a customer request, a sales lead, internal mail, something else), how important and how urgent it is, and what mood the sender is in. It then ranks the whole queue so that whoever opens it sees at a glance what to handle first. Agents reply to customers from inside Kairo (the reply goes out from the company's own Gmail, in the same email thread), leave private notes for colleagues, escalate hard cases, and correct Kairo when it gets a call wrong. What the team resolves can also become reusable knowledge, but only after a person publishes it. The core idea is **trust earned step by step**: the AI proposes, a person decides, and the AI only acts alone where it has proven reliable. Today that autonomy is deliberately small.
 
 ---
 
@@ -36,7 +36,7 @@ Gmail is the only channel today. The owner grants Kairo access to the Gmail inbo
 
 Right after connecting, Kairo runs a staged first pass so the team gets value quickly:
 
-1. **Fast first ticket.** The most recent email is classified immediately, so the cockpit is not empty.
+1. **The 30 most recent emails** are classified one after another, newest first, so the cockpit is not empty.
 2. **The last two weeks** are classified in the background.
 3. **Older mail, up to about three months back**, is processed later, in batches.
 
@@ -58,7 +58,7 @@ This is the heart of the product. Each incoming email goes through the steps bel
 
 Before any AI is involved, a set of fixed rules decides whether the email belongs in the queue. The rules are applied in a set order:
 
-- **Spam.** If the receiving mail server already marked the email as spam, Kairo believes it. This is instant, free, and on Kairo's internal tests it was as accurate as the AI models, and far faster.
+- **Spam.** If the receiving mail server already marked the email as spam, Kairo believes it. This is instant, free, and on Kairo's internal tests it was as accurate as the AI models, and far faster. Such an email never becomes a ticket.
 - **Replies and urgent subjects always get through.** A reply inside an existing conversation is never dropped by the rules below.
 - **Automated senders, system notifications, auto-generated mail and Gmail's promotional tabs** are kept out of the queue.
 
@@ -87,7 +87,8 @@ Kairo then combines those two answers with **where the email came from** (outsid
 | **Prospect** | Someone who wants to become a customer (a quote request, an invitation to bid) |
 | **Internal** | The company's own housekeeping |
 | **Other** | Vendor offers, advertising, event invitations |
-| **Spam** | Only ever set by the spam rule in step 1, never by the AI |
+
+Spam is not a ticket type. It is decided before any of this, by the rule in step 1, and a spam email never becomes a ticket at all.
 
 Kairo decides the type this way, and does not ask the AI to guess it directly, for a reason. When the AI was asked directly, it mixed up two separate questions and gave inconsistent answers. It confused buyers with sellers most of all. A fixed table gives the same answer every time, and anyone can check it.
 
@@ -104,14 +105,19 @@ The AI also returns:
 
 ### Step 4 — A second opinion (optional)
 
-Kairo can be set up to ask a **second, different AI model** the same questions. If the two disagree on the ticket type, Kairo does not let either answer stand on its own. The ticket goes to a person.
+Kairo can be set up to ask a **second, different AI model** the same questions. Where that setup is used, the second model does two things, and both are switched off by default:
+
+- On every new classification it gives its own answer, which is recorded next to Kairo's but never applied.
+- For a mailbox the team chooses, it can go one step further: when it **agrees** with the type Kairo already chose, a classification that would otherwise wait for a person can stand on its own. It never changes the type, and outside the first scan the company must also have earned auto-approval for that type. This is the only exception to the rule that, during the first scan, only Support stands on its own.
+
+When the two models **disagree** on the ticket type, Kairo does not let either answer stand on its own. The ticket goes to a person.
 
 ### Step 5 — Does the decision stand, or wait for a person?
 
 Every classification is stored as a **proposal** with one of two outcomes: *approved automatically* or *waiting for a person*. The rules today are deliberately cautious:
 
 - During the first inbox scan, only **Support** emails are approved automatically, because Kairo's internal tests showed that call to be right well over 90% of the time. Every other type waits for a person. Here the risky mistake is hiding a real customer request, so Kairo doesn't take that risk.
-- For all other mail, a type can only be approved automatically once the company has **earned** it. The type must reach a measured accuracy (90% by default) over a minimum number of cases (30 by default), and Kairo must know what the company does. The rules for this are in place, but the automatic measurement that would switch it on is not running yet. **In practice, those classifications currently wait for a person.**
+- For all other mail, a type can only be approved automatically once the company has **earned** it. The type must reach a measured accuracy (90% by default) over a minimum number of cases (30 by default), and Kairo must know what the company does. The measurement that awards this is built, but it is switched off by default, so **in practice those classifications currently wait for a person.**
 - If the two AI models disagreed, the ticket always waits for a person.
 
 ### Languages
@@ -138,7 +144,7 @@ Each ticket gets a **priority score** between 0 and 1 that combines four things:
 | Sender's mood | 20% | Aggressive and frustrated rank above neutral and positive |
 | Time waiting | 15% | Grows over 48 hours |
 
-Customers who have written five or more times in the last 30 days get an extra boost. Each company can adjust these weights.
+Customers who have written five or more times in the last 30 days get an extra boost. These weights are the same for every company today; tuning them per company is not built yet.
 
 The queue is sorted by this score, then by P1/P2/P3, then oldest first.
 
@@ -158,10 +164,12 @@ There is also a separate, older response-time level that comes from a **customer
 - **Awaiting reply:** tickets where an agent answered and the customer hasn't replied yet.
 - **Escalated:** cases that were escalated and need priority attention.
 - **Resolved:** closed tickets, read-only.
+- **AI Classification:** what Kairo proposed for each ticket, split into what still needs a person and what Kairo approved on its own. Confirming or rejecting is how a team teaches Kairo when it may act alone.
+- **Knowledge:** proposed business facts and articles, as drafts, which the team edits, publishes or discards.
 - **Clients:** the customer directory.
 - **Settings.**
 
-The sidebar shows a live count for each view.
+The sidebar shows a live count next to the ticket views.
 
 ### What each ticket card shows
 
@@ -173,14 +181,20 @@ Priority, the time left against the response-time target (or how overdue it is),
 - **Reply.** The agent writes a reply and sends it. It goes out from the company's Gmail **inside the original email conversation**, wrapped in a branded email design. Kairo shows whether it is sending, sent or failed. If the Gmail connection has expired, it asks the agent to reconnect, and the text is never lost.
 - **Send & resolve.** Replies and closes the ticket in one step, using a "resolved" email design.
 - **Quick actions:** acknowledge (take the ticket), resolve, escalate (with an optional reason).
+- **Owner.** New tickets are assigned automatically, rotating among the team so the work is shared; with a single member, they always go to that person. The header shows who owns the ticket.
 - **Reply templates.** Ready-made text snippets for common answers, with placeholders such as the customer's name.
 - **"Wrong classification?"** The agent can correct the type, priority, category or mood, with an optional note. The correction is saved alongside what the AI originally said, and the ticket shows a "Corrected" badge. These corrections are how Kairo measures its own accuracy for each company.
 - **Side panel** (tabs that can be switched on or off):
   - **Client:** who the customer is, their plan, how many tickets they have sent in total and this month, whether they are a returning customer, recent tickets and their record against response-time targets.
   - **Similar:** past resolved cases that look like this one, with how they were resolved. One click puts a past resolution into the reply.
-  - **Articles:** related knowledge-base articles, which can also be put into the reply.
+  - **Articles:** related knowledge articles, which can also be put into the reply.
   - **Escalate:** reasons Kairo suggests for escalating (response-time target at risk, enterprise customer waiting too long, repeated frustration, a repeated technical error, a similar case that needed a higher level before), with a suggested level.
   - **Notes:** the ticket's internal notes.
+  - **Assistant:** a chat about the ticket. Real only when it is switched on; see below.
+
+### The decision record
+
+When the knowledge flow is switched on (off by default), a small panel inside the ticket lists every decision the AI made about it and what it used as evidence, and lets a person accept or reject a proposed change to the knowledge that ticket relies on. Without that flow the panel is empty.
 
 ### Internal notes and @mentions
 
@@ -222,7 +236,7 @@ Every outgoing email carries a ticket reference in the subject, so replies threa
 ## Customers and contacts
 
 - **Client directory:** companies with an internal ID, legal ID, phone, plan, contractual response-time level, the email addresses allowed to write on their behalf, and contact people. You can create, edit and delete them.
-- **Auto-detected contacts:** Kairo can propose new contacts it finds in incoming email, as *drafts* for a person to confirm or reject. It leaves out the company's own addresses and people only copied on mass emails. This detection is built but **switched off by default**, and the confirm, reject and edit actions on drafts are not finished yet.
+- **Auto-detected contacts:** Kairo can propose new contacts it finds in incoming email, as *drafts* for a person to confirm, reject or edit. It leaves out the company's own addresses and people only copied on mass emails. This detection is built but **switched off by default**; when it is on, the drafts show up in the client directory.
 - Email addresses and phone numbers are cleaned up to a standard format, so the same person isn't counted twice.
 
 ---
@@ -231,7 +245,7 @@ Every outgoing email carries a ticket reference in the subject, so replies threa
 
 - **Many companies on one platform.** Each company's data is fully separated from every other company's at the database level.
 - **Roles:** owner, admin, supervisor, agent. Today all four can perform every day-to-day ticket action; only a permanent close is reserved for the system. The permission rules are set up so they can be tightened later with a small change.
-- **Invitations:** owners and admins can invite people by link. The invite page works, but there is no invite button in the dashboard yet.
+- **Invitations:** owners and admins can invite people by link, and the invite page works. There is no working way to send one from inside the dashboard yet: the Team screen is an illustration, and its invite button and member list are fixed examples.
 - **Plans** in the product's own records: Starter (default), Pro and Enterprise, each with a seat limit. There is **no billing or payment** in the product yet.
 
 ---
@@ -240,7 +254,7 @@ Every outgoing email carries a ticket reference in the subject, so replies threa
 
 The team behind Kairo can watch it closely. Every AI call (what was asked, the answer, how long it took, the cost, which ticket and company it belonged to) and every automatic decision (routing, ticket type, auto-approval) is recorded in two monitoring tools, with ready-made dashboards. Today these tools run on the team's own machines rather than as a hosted production service.
 
-The team also keeps an **internal evaluation bench**: it runs a hand-labelled set of real emails through the same steps production uses and measures how often Kairo gets each field right. Many of the design choices above, such as trusting the spam filter, splitting buyers from sellers and only auto-approving Support at first, came straight from those measurements.
+The team also keeps an **internal evaluation bench**: it runs hand-labelled sets of real emails through the same steps production uses — separately for the first scan, the two-week pass and the older mail — and measures how often Kairo gets each field right. Many of the design choices above, such as trusting the spam filter, splitting buyers from sellers and only auto-approving Support at first, came straight from those measurements.
 
 ---
 
@@ -249,7 +263,7 @@ The team also keeps an **internal evaluation bench**: it runs a hand-labelled se
 - **Public website:** home page, pricing page, privacy policy, terms of service, login, sign-up and the setup wizard, in English and Spanish.
 - **Internal admin console (Kelan):** a separate tool for the Kairo team, not for customers. Today it has a secure login restricted to authorised staff. Its dashboard is a placeholder.
 - **Mobile app:** a placeholder screen only.
-- **Languages in the dashboard:** English and Spanish, following the browser's language.
+- **Languages in the dashboard:** English and Spanish, with a switch in the sidebar. A new browser starts in its own language.
 
 ---
 
@@ -266,7 +280,8 @@ The team also keeps an **internal evaluation bench**: it runs a hand-labelled se
 9. **Importance and urgency are different things**, and each is measured on its own.
 10. **Replies stay in the customer's email conversation**, sent from the company's own address.
 11. **Internal notes never reach the customer**, and mentions only notify inside the app.
-12. **Risky features ship switched off** and are turned on per environment once they are ready.
+12. **Knowledge has to be published by a person.** What Kairo derives from the team's own support is a draft until someone approves it, and only approved knowledge is used again.
+13. **Risky features ship switched off** and are turned on per environment once they are ready.
 
 ---
 
@@ -276,8 +291,11 @@ The team also keeps an **internal evaluation bench**: it runs a hand-labelled se
 - **Auto-detected contacts** from incoming email.
 - **Automatic in-app alerts** when a ticket crosses its escalation point for response time.
 - The live **"detection" step** in the setup wizard.
-- On the dashboard, each of these can be switched on or off: the side-panel tabs (client, similar, articles, escalate, assistant), **ticket grouping**, **"Assign to me"**, and the entire **internal notes** feature.
-- The **second AI model** for a second opinion.
+- The **ticket assistant** in the side panel: a real AI conversation about the ticket, which needs two switches (one on the server and one in the dashboard) before it appears.
+- **Turning support into knowledge:** articles proposed from resolved tickets, business facts proposed from incoming mail, the **business profile** Kairo writes from the first scan's emails for a person to approve, and the **decision record** panel inside a ticket.
+- The measurement that **awards auto-approval** per ticket type.
+- The **second AI model**, both as a silent second opinion on each new ticket and as the option that lets it confirm a classification for one chosen mailbox.
+- On the dashboard, the side-panel tabs (client, similar, articles, escalate, assistant), **ticket grouping**, **"Assign to me"** and the entire **internal notes** feature can each be switched on or off.
 
 ---
 
@@ -285,13 +303,13 @@ The team also keeps an **internal evaluation bench**: it runs a hand-labelled se
 
 These parts of the product are designs or simulations, not working features:
 
-- **The AI assistant chat** in the side panel. Its answers are scripted examples; it does not call an AI yet.
-- **AI-drafted replies.** The system can generate a suggested reply from similar cases and the knowledge base, but the dashboard doesn't request or show them yet. Today the agent can only insert a past resolution or an article.
+- **The detection step in the wizard today.** The live version is built but switched off; what a new account gets is an animation with fixed figures (234 tickets, 89 conversations, 47 customers and a fixed set of categories), not the real scan.
+- **The assistant's four starter buttons.** The assistant itself is real when switched on, but its suggestion chips still return fixed sample answers.
+- **AI-drafted replies.** The system can generate a suggested reply from the ticket, similar cases and the knowledge base, but the dashboard doesn't request or show them yet. Today the agent can only insert a past resolution or an article.
 - In **Settings**, the team list, the connected-tools list and the *Triage Engine* section (tiers, auto-resolution threshold, custom categories) are illustrations: changing them has no effect. *Knowledge Base*, *Billing* and *API & Webhooks* are marked "under construction". Two-factor login is "coming soon". What does work in Settings: the workspace name, response-time targets by priority, the Gmail connection and password management.
 - The **"In progress"** view is a placeholder.
 - The **triage toggles in the setup wizard** (auto-classify, draft replies, auto-resolve spam, prioritise paid plans) are not saved. Only the organisation name is.
-- The **company description** that the AI relies on has no screen yet. It is set directly in the system.
-- There is **no screen to review** the classifications that are "waiting for a person". Today people review them by correcting tickets.
+- The **company description** the AI relies on still has no screen to type it by hand. It can be set directly in the system, or, with the knowledge flow switched on, come from the business profile Kairo proposes and a person approves.
 - The **Kelan dashboard** and the **mobile app**.
 
 ---
@@ -313,11 +331,13 @@ The website describes where Kairo is heading, not only what it does today. For a
 
 - **Account / workspace:** one company using Kairo, with its own users, inboxes and data.
 - **Ticket:** a customer matter created from one or more emails in the same conversation.
-- **Ticket type:** support, prospect, internal, other or spam.
+- **Ticket type:** support, prospect, internal or other. Spam is filtered before a ticket exists.
 - **Priority (P1–P3):** how serious a case is.
 - **Urgency:** how much time is left to act.
 - **Priority score:** the 0–1 number used to order the queue.
-- **Proposal:** the AI's classification, either approved automatically or waiting for a person.
+- **Proposal:** what the AI suggests for a ticket, either a classification or a piece of knowledge, either approved automatically or waiting for a person.
+- **Knowledge:** a business fact or an article, proposed by Kairo, that a person has to approve before it is used again.
+- **Business profile:** the short description of what a company does, which the AI needs to classify; it can be written by hand or proposed by Kairo and approved.
 - **Escalation:** handing a case up for priority attention.
 - **Internal note:** a comment only the team can see.
 - **Response-time target (SLA):** the maximum time allowed for the first reply, set per priority.
