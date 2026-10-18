@@ -27,7 +27,7 @@ const analyze = async (request: Row) => {
   const sources = JSON.parse(String((request['vars'] as Row)['sources'])) as Row[];
   const source = sources.find(row => row['authority'] === 'approved_knowledge');
   return { data: { observations: source ? [{ dimension: 'solution', statement: 'Use the supplied procedure.', status: 'supported',
-    citations: [{ sourceId: source['id'], quote: source['text'] }] }] : [], missing: [], waitingOn: null, resumeWhen: null },
+    ...(request['promptId'] === 'knowledge-impact' ? { evidenceIds: [source['id']] } : { citations: [{ sourceId: source['id'], quote: source['text'] }] }) }] : [], missing: [], waitingOn: null, resumeWhen: null },
     model: 'acme/evidence', promptVersion: '1.0.0', llmCallId: 'acme-analysis' };
 };
 const overrides: WorkflowOverrides = {

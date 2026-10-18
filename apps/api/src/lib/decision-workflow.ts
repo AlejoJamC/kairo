@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import {
   buildTicketVerdictQuestions, TicketAnswersSchema, knowledgeImpactQuestions, attentionRecommendation, createDecisionProvider, ProviderError, runDecisionFeature,
-  workflowAnswersSchema, workflowQuestions, WORKFLOW_VERSION, runLlmFeature, WorkflowAnalysisSchema, groundWorkflowAnalysis, supportedNextAction, type WorkflowSource,
+  workflowAnswersSchema, workflowQuestions, WORKFLOW_VERSION, runLlmFeature, ReferencedWorkflowAnalysisSchema, workflowEvidenceFragments, resolveWorkflowEvidence, WorkflowAnalysisSchema, groundWorkflowAnalysis, supportedNextAction, type WorkflowSource,
   generateEmbedding, resolveModelRoute, workflowLanguageSchema,
 } from '@kairo/intelligence';
 import { computeTicketOperationalSla, buildConfigByPriority } from '@kairo/types';
@@ -90,12 +90,17 @@ async function ticketContext(work: DecisionWork, db = supabase, deps: DecisionWo
 }
 
 async function analyzeContext(ctx: Awaited<ReturnType<typeof ticketContext>>, work: DecisionWork, promptId: string, deps: DecisionWorkDeps) {
-  const result = await (deps.analyze ?? runLlmFeature)({ feature: `${work.contract}_evidence`, promptId, modelRole: 'evidence_analysis',
-    lang: ctx.language, schema: WorkflowAnalysisSchema,
-    vars: { context: JSON.stringify(ctx.state), sources: JSON.stringify(ctx.sources) },
+  const referenced = work.contract === 'knowledge_impact';
+  const context = referenced ? {
+    case: { subject: ctx.ticket.subject, body: ctx.ticket.body_plain, status: ctx.ticket.status, messages: ctx.history },
+    businessContext: ctx.state.businessContext, approvedKnowledge: ctx.state.approvedKnowledge,
+  } : ctx.state;
+  const result = await (deps.analyze ?? runLlmFeature)<z.infer<typeof WorkflowAnalysisSchema> | z.infer<typeof ReferencedWorkflowAnalysisSchema>>({ feature: `${work.contract}_evidence`, promptId, modelRole: 'evidence_analysis',
+    lang: ctx.language, schema: referenced ? ReferencedWorkflowAnalysisSchema : WorkflowAnalysisSchema,
+    vars: { context: JSON.stringify(context), sources: JSON.stringify(referenced ? workflowEvidenceFragments(ctx.sources) : ctx.sources) },
     // Sized to the schema's maximum answer (20 quoted observations), not to a typical one.
     options: { maxTokens: 8192, temperature: 0 }, context: { accountId: work.account_id, ticketId: ctx.ticket.id }, logger: recordLlmCall });
-  return { ...groundWorkflowAnalysis(result.data, ctx.sources), model: result.model, promptVersion: result.promptVersion, callId: result.llmCallId };
+  return { ...(referenced ? resolveWorkflowEvidence(ReferencedWorkflowAnalysisSchema.parse(result.data), ctx.sources) : groundWorkflowAnalysis(WorkflowAnalysisSchema.parse(result.data), ctx.sources)), model: result.model, promptVersion: result.promptVersion, callId: result.llmCallId };
 }
 
 /**
@@ -150,6 +155,9 @@ export async function processDecisionWork(work: DecisionWork, db = supabase, dep
     const contribution = !['none','unknown'].includes(answer.contribution.choice);
     const analysis = contribution ? await analyzeContext({ ...ctx, state: { ...ctx.state, approvedKnowledge: knowledgeReferences([version]) }, sources: ctx.sources.filter(source => source.authority !== 'approved_knowledge').concat({ id: version.id, text: String(version.snapshot['content'] ?? version.snapshot['summary'] ?? ''), authority: 'approved_knowledge' }) }, work, 'knowledge-impact', deps) : null;
     const useful = contribution && !!analysis?.observations.some(row => row.citations.some(citation => citation.sourceId === version.id));
+    if (analysis && !useful && (analysis.observations.length > 0 || analysis.missing.some(item => item.startsWith('unsupported_')))) {
+      throw new ProviderError('Knowledge contribution lacks valid approved source references', true);
+    }
     const { data: status, error: persistError } = await db.rpc('record_ticket_enrichment', {
       p_account_id: work.account_id, p_ticket_id: ctx.ticket.id, p_revision: ctx.ticket.case_revision,
       p_version_id: version.id, p_key: key, p_useful: useful,

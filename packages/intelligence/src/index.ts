@@ -153,7 +153,7 @@ export { SOURCE_REFERENCE_VERSION, sourceFragments, ReferencedKnowledgeDraftSche
 
 export { knowledgeImpactQuestions, workflowContract, workflowQuestions, workflowLanguageSchema, workflowAnswersSchema, attentionRecommendation, WORKFLOW_VERSION } from './classification/workflow-contract';
 
-export { WorkflowAnalysisSchema, groundWorkflowAnalysis, supportedNextAction, type WorkflowAnalysis, type WorkflowSource } from './classification/workflow-analysis';
+export { ReferencedWorkflowAnalysisSchema, workflowEvidenceFragments, resolveWorkflowEvidence, WorkflowAnalysisSchema, groundWorkflowAnalysis, supportedNextAction, type WorkflowAnalysis, type WorkflowSource } from './classification/workflow-analysis';
 
 export { buildTicketVerdictQuestions, TicketAnswersSchema } from './classification/decision-questions';
 
