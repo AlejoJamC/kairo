@@ -2,8 +2,8 @@ import React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { TicketDecisions } from './ticket-decisions';
-import { apiCall } from '@/lib/api-client';
-vi.mock('@/lib/api-client', () => ({ apiCall:vi.fn() }));
+import { apiCall } from '@kairo/client-core/api-client';
+vi.mock('@kairo/client-core/api-client', () => ({ apiCall:vi.fn() }));
 vi.mock('react-i18next', () => ({ useTranslation:() => ({ t:(key:string) => key }) }));
 const decision = { id:'decision',contract:'knowledge_impact',status:'pending_human_review',created_at:'2026-01-01T00:00:00Z',message_id:'message',
   result:{ contribution:'solution',authorization:'human_review',execution:'not_executed',analysis:{ observations:[{ dimension:'solution',statement:'A recovery procedure is available.',status:'supported',citations:[{sourceId:'version',quote:'Use account recovery.'}]}],missing:['The account reference is missing.'],waitingOn:null,resumeWhen:null },sources:[{id:'article',version:'version',content:'Use account recovery.'}] } };

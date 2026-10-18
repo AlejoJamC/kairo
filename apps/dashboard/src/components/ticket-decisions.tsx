@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { apiCall } from '@/lib/api-client';
+import { apiCall } from '@kairo/client-core/api-client';
+import { getPlatform } from '@kairo/client-core/config';
 
 interface Decision {
   id: string; contract: string; status: string; created_at: string; message_id: string | null;
@@ -55,8 +56,8 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
       } catch { if (active) setFailed(true); } finally { loading = false; }
     };
     void load();
-    window.addEventListener('focus', load);
-    return () => { active = false; window.removeEventListener('focus', load); };
+    const unsubscribeFocus = getPlatform().appFocus.subscribe((visible) => { if (visible) void load(); });
+    return () => { active = false; unsubscribeFocus(); };
   }, [ticketId, refresh]);
   const label = (value: string) => t(`decisionWorkflow.values.${value}`, { defaultValue: t('decisionWorkflow.unavailable') });
   return <details style={{ border: '1px solid var(--k-border)', borderRadius: 6, padding: 10 }}>

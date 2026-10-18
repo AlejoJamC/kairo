@@ -1,15 +1,15 @@
 import { useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/contexts/auth-context";
-import { useTriageStore } from "@/stores/triage-store";
-import { useRealtimeTickets } from "@/hooks/use-realtime-tickets";
+import { createClient } from "@kairo/client-core/supabase";
+import { useAuth } from "@kairo/client-core/auth";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { useRealtimeTickets } from "@kairo/client-core/hooks/use-realtime-tickets";
 import { useNoteCounts } from "@/hooks/use-note-counts";
-import { apiCall } from "@/lib/api-client";
+import { apiCall } from "@kairo/client-core/api-client";
 import { TicketList } from "./ticket-list";
 import { TicketDetail } from "./ticket-detail";
 import { AiAssistant } from "./ai-assistant";
 import type { Ticket, TicketPriority, PrioritySlaConfig } from "@kairo/types";
-import { INBOX_FETCH_EXCLUDED_STATUSES_FILTER } from "@/lib/triage-status";
+import { INBOX_FETCH_EXCLUDED_STATUSES_FILTER } from "@kairo/client-core/triage-status";
 
 export function Inbox() {
   const { user, accountId } = useAuth();

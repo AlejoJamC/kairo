@@ -4,7 +4,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReplyBar } from "./reply-bar";
-import { useTriageStore } from "@/stores/triage-store";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { renderWithProviders } from "@/test/render-with-providers";
 
 const apiCallMock = vi.fn();
@@ -22,13 +22,13 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/lib/api-client", () => ({
+vi.mock("@kairo/client-core/api-client", () => ({
   apiCall: (...args: unknown[]) => apiCallMock(...args),
 }));
 
 // KAI-232: ReplyBar reads the current user to exclude self from the @mention
 // dropdown. These tests render it outside an AuthProvider.
-vi.mock("@/contexts/auth-context", () => ({
+vi.mock("@kairo/client-core/auth", () => ({
   useAuth: () => ({ user: { id: "user-1" } }),
 }));
 

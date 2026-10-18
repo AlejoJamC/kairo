@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Phone, Copy, Check } from "lucide-react";
-import { useTriageStore } from "@/stores/triage-store";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { getPlatform } from "@kairo/client-core/config";
 import { getInitials } from "@/components/ui/avatar";
 
 const initials = (name: string | null) => getInitials(name);
@@ -64,7 +65,7 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
 
   function handleCopyPhone() {
     if (!phone) return;
-    navigator.clipboard.writeText(phone).then(() => {
+    getPlatform().clipboard.writeText(phone).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });

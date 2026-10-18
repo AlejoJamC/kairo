@@ -2,22 +2,22 @@ import * as React from "react";
 import { Paperclip, Send, X, Zap, RefreshCw, Lock, AlertTriangle, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
-import { useTriageStore } from "@/stores/triage-store";
-import { apiCall } from "@/lib/api-client";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { apiCall } from "@kairo/client-core/api-client";
 import { isFlagEnabled } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
-import { useAccountMembers, filterMembers, type AccountMember } from "@/hooks/use-account-members";
+import { useAccountMembers, filterMembers, type AccountMember } from "@kairo/client-core/hooks/use-account-members";
 import {
   findActiveMentionQuery,
   insertMentionToken,
   extractMentionUserIds,
   removeMentionToken,
-} from "@/lib/note-mentions";
+} from "@kairo/client-core/note-mentions";
 import { MentionDropdown } from "./triage/mention-dropdown";
 import { TeamOnlyChip } from "./triage/note-primitives";
 import { Avatar } from "./ui/avatar";
-import { useAuth } from "@/contexts/auth-context";
-import type { ThreadMessage } from "@/hooks/use-ticket-thread";
+import { useAuth } from "@kairo/client-core/auth";
+import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import type { TicketStatus } from "@kairo/types";
 
 // KAI-232 — how many member suggestions the @mention dropdown shows at once.

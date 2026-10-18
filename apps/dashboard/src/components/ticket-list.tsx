@@ -2,14 +2,14 @@ import { useRef, useState, useEffect, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import { MoreHorizontal, RefreshCw } from "lucide-react";
-import { useTriageStore, pickPreferredGroupId, type Ticket } from "@/stores/triage-store";
+import { useTriageStore, pickPreferredGroupId, type Ticket } from "@kairo/client-core/stores/triage-store";
 import { TicketCard } from "@/components/ticket-card";
 import { RelatedHistoryDrawer, type RelatedHistoryItem } from "@/components/related-history-drawer";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
-import { isTriageActive, INBOX_FETCH_EXCLUDED_STATUSES_FILTER } from "@/lib/triage-status";
-import { apiCall } from "@/lib/api-client";
-import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/contexts/auth-context";
+import { isTriageActive, INBOX_FETCH_EXCLUDED_STATUSES_FILTER } from "@kairo/client-core/triage-status";
+import { apiCall } from "@kairo/client-core/api-client";
+import { createClient } from "@kairo/client-core/supabase";
+import { useAuth } from "@kairo/client-core/auth";
 
 // ---------------------------------------------------------------------------
 // Skeleton placeholder

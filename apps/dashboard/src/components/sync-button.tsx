@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { apiCall } from '@/lib/api-client';
+import { apiCall } from '@kairo/client-core/api-client';
 
 interface SyncButtonProps {
   onSyncComplete?: () => void;

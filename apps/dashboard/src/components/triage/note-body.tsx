@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import { parseNoteBody } from "@/lib/note-mentions";
-import type { NoteMention } from "@/hooks/use-ticket-thread";
+import { parseNoteBody } from "@kairo/client-core/note-mentions";
+import type { NoteMention } from "@kairo/client-core/hooks/use-ticket-thread";
 
 // ---------------------------------------------------------------------------
 // KAI-232 — renders an internal-note body with `@[user:<uuid>]` tokens drawn

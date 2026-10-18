@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@kairo/client-core/supabase";
+import { getPlatform } from "@kairo/client-core/config";
 import { mapDraftContactToRow, type ContactRow } from "@/types/contact-row";
 import type { Database } from "@/types/supabase";
 
@@ -92,21 +93,20 @@ export function useDraftContacts(accountId: string | null): UseDraftContactsResu
       }
     };
 
-    const handleVisibility = () => {
-      if (document.hidden) {
+    const unsubscribeFocus = getPlatform().appFocus.subscribe((visible) => {
+      if (!visible) {
         clearTimeout(timerRef.current!);
       } else if (!stoppedRef.current) {
         poll();
       }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
+    });
 
     poll();
 
     return () => {
       stoppedRef.current = true;
       clearTimeout(timerRef.current!);
-      document.removeEventListener("visibilitychange", handleVisibility);
+      unsubscribeFocus();
     };
   }, [accountId, retryKey]);
 

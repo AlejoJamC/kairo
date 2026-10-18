@@ -1,5 +1,6 @@
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "./supabase";
 import { normalizeEmail, normalizePhone } from "@kairo/identity";
+import type { Json } from "@kairo/types";
 
 const DEFAULT_COUNTRY = "CO" as const; // TODO: source from accounts.default_country when added
 
@@ -65,7 +66,7 @@ export async function editDraft(draftId: string, patch: EditPatch) {
   }
 
   const supabase = createClient();
-  const { data, error } = await supabase.rpc("edit_draft_contact", { p_draft_id: draftId, p_patch: normalized as Record<string, unknown> });
+  const { data, error } = await supabase.rpc("edit_draft_contact", { p_draft_id: draftId, p_patch: normalized as Record<string, Json> });
   if (error) {
     // 23505 (duplicate key) → caller should display merge suggestion
     if (error.code === "23505" || /duplicate/i.test(error.message)) {

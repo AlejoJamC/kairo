@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/contexts/auth-context";
-import { useTriageStore } from "@/stores/triage-store";
+import { createClient } from "../supabase";
+import { useAuth } from "../auth";
+import { useTriageStore } from "../stores/triage-store";
 import type { Ticket } from "@kairo/types";
 
 export function useRealtimeTickets() {

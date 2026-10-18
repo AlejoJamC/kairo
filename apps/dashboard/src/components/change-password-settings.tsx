@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Check, X, Loader2 } from "lucide-react";
-import { useAuth } from "@/contexts/auth-context";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@kairo/client-core/auth";
+import { createClient } from "@kairo/client-core/supabase";
 import type { AppView } from "@/types";
 
 interface Props {

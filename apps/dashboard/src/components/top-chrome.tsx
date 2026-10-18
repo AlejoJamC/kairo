@@ -17,12 +17,12 @@ import {
   Check,
   ChevronDown,
 } from "lucide-react";
-import { useAuth } from "@/contexts/auth-context";
-import { apiCall } from "@/lib/api-client";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@kairo/client-core/auth";
+import { apiCall } from "@kairo/client-core/api-client";
+import { createClient } from "@kairo/client-core/supabase";
 import { getNumericFlag } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
-import { useTriageStore } from "@/stores/triage-store";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { Avatar, getInitials } from "@/components/ui/avatar";
 import type { Ticket } from "@kairo/types";
 import type { AppView } from "@/types";

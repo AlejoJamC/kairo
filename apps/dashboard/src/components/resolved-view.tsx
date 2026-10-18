@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clock } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/contexts/auth-context";
-import { useTriageStore } from "@/stores/triage-store";
+import { createClient } from "@kairo/client-core/supabase";
+import { useAuth } from "@kairo/client-core/auth";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TicketDetail } from "@/components/ticket-detail";
 import { AiAssistant } from "@/components/ai-assistant";
 import { TicketCard } from "@/components/ticket-card";

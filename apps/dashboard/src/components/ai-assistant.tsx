@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next";
 import {
   CheckCircle2, Loader2, BookOpen, MessageSquarePlus,
 } from "lucide-react";
-import { useTriageStore } from "@/stores/triage-store";
-import { apiCall } from "@/lib/api-client";
-import type { ClientProfile } from "@/stores/triage-store";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { apiCall } from "@kairo/client-core/api-client";
+import type { ClientProfile } from "@kairo/client-core/stores/triage-store";
 import {
   ClientProfileCard,
   ClientProfileSkeleton,

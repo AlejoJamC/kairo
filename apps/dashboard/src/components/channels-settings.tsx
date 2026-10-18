@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Mail, Plus, Trash2, Star, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
-import { useAuth } from "@/contexts/auth-context";
-import { apiCall, getLandingUrl } from "@/lib/api-client";
+import { useAuth } from "@kairo/client-core/auth";
+import { apiCall, getLandingUrl } from "@kairo/client-core/api-client";
+import { getPlatform } from "@kairo/client-core/config";
 import type { AppView } from "@/types";
 
 interface SupportChannel {
@@ -63,7 +64,7 @@ export function ChannelsSettings({ onViewChange }: Props) {
 
   const handleConnectGmail = () => {
     // Redirect to the existing Gmail OAuth flow in the landing app.
-    window.location.href = getLandingUrl("/bff/auth/google");
+    getPlatform().navigation.navigate(getLandingUrl("/bff/auth/google"));
   };
 
   return (

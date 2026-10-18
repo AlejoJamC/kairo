@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { apiCall } from "@/lib/api-client";
-import { useTriageStore } from "@/stores/triage-store";
+import { apiCall } from "@kairo/client-core/api-client";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { NoteCard } from "./note-card";
 import {
   NotesHeader,
@@ -10,7 +10,7 @@ import {
   EmptyBlock,
   TeamOnlyChip,
 } from "./note-primitives";
-import type { ThreadMessage } from "@/hooks/use-ticket-thread";
+import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 
 // ---------------------------------------------------------------------------
 // KAI-232 / ADR-025 §7.2 — right-panel "Notes" tab.

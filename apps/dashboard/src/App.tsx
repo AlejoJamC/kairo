@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AuthProvider, useAuth } from "@/contexts/auth-context";
+import { AuthProvider, useAuth } from "@kairo/client-core/auth";
+import { getPlatform } from "@kairo/client-core/config";
 import { TopChrome } from "@/components/top-chrome";
 import { Sidebar } from "@/components/sidebar";
 import { Inbox } from "@/components/inbox";
@@ -48,14 +49,14 @@ function ComingSoon({ view }: { view: AppView }) {
 function AppContent() {
   const { loading } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => localStorage.getItem("sidebar-collapsed") === "true"
+    () => getPlatform().storage.getItem("sidebar-collapsed") === "true"
   );
   const [activeView, setActiveView] = useState<AppView>("triage");
 
   const handleToggle = () => {
     setSidebarCollapsed((c) => {
       const next = !c;
-      localStorage.setItem("sidebar-collapsed", String(next));
+      getPlatform().storage.setItem("sidebar-collapsed", String(next));
       return next;
     });
   };

@@ -5,7 +5,8 @@
   "main": "expo-router/entry",
   "scripts": {
     "build": "echo 'Use EAS Build for mobile'",
-    "clean": "rm -rf .expo"
+    "clean": "rm -rf .expo",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@kairo/observability": "workspace:*",

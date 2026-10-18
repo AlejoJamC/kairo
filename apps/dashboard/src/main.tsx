@@ -2,6 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { TamaguiProvider } from '@tamagui/core'
 import { initWebTelemetry } from '@kairo/observability/web'
+import { initClientCore } from '@kairo/client-core/config'
+import { createWebPlatform } from '@kairo/client-core/web'
 import tamaguiConfig from '@kairo/ui/tamagui.config'
 import { env } from './env'
 import './index.css'
@@ -14,6 +16,15 @@ initWebTelemetry({
   serviceName: env.VITE_OTEL_SERVICE_NAME,
   otlpEndpoint: env.VITE_OTEL_EXPORTER_OTLP_ENDPOINT,
   ingestionApiKey: env.VITE_HYPERDX_INGESTION_API_KEY,
+})
+
+initClientCore({
+  apiBaseUrl: env.VITE_API_BASE_URL,
+  bffBaseUrl: env.VITE_BFF_BASE_URL,
+  landingUrl: env.VITE_LANDING_URL,
+  supabaseUrl: env.VITE_SUPABASE_URL,
+  supabaseAnonKey: env.VITE_SUPABASE_ANON_KEY,
+  platform: createWebPlatform(),
 })
 
 createRoot(document.getElementById('root')!).render(

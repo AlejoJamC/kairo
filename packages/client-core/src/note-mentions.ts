@@ -1,4 +1,4 @@
-import type { NoteMention } from "@/hooks/use-ticket-thread";
+import type { NoteMention } from "./hooks/use-ticket-thread";
 
 // ---------------------------------------------------------------------------
 // KAI-232 / ADR-025 §3 — client-side rendering of mention tokens.

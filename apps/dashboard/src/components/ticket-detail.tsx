@@ -4,14 +4,15 @@ import { Mail, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
 import { TicketHeader } from "./ticket-header";
-import { isTriageActive, isTicketReadOnly } from "@/lib/triage-status";
-import { useTriageStore } from "@/stores/triage-store";
-import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
+import { isTriageActive, isTicketReadOnly } from "@kairo/client-core/triage-status";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { useTicketThread, type ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
 import { TeamOnlyChip } from "./triage/note-primitives";
 import { Avatar, getInitials } from "./ui/avatar";
-import { getLandingUrl } from "@/lib/api-client";
+import { getLandingUrl } from "@kairo/client-core/api-client";
+import { getPlatform } from "@kairo/client-core/config";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
 
@@ -312,7 +313,7 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
               && message.send_error?.code === "INSUFFICIENT_SCOPE" && (
               <button
                 type="button"
-                onClick={() => { window.location.href = getLandingUrl("/bff/auth/google"); }}
+                onClick={() => { getPlatform().navigation.navigate(getLandingUrl("/bff/auth/google")); }}
                 style={{
                   fontSize: 10,
                   fontWeight: 600,

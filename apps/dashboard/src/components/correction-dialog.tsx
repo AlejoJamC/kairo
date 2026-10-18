@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Dialog } from "radix-ui";
 import { X, Loader2 } from "lucide-react";
-import { apiCall } from "@/lib/api-client";
+import { apiCall } from "@kairo/client-core/api-client";
 import { TICKET_PRIORITIES, TICKET_TYPES, TICKET_CATEGORIES, TICKET_TONES, type Ticket } from "@kairo/types";
 
 // ---------------------------------------------------------------------------

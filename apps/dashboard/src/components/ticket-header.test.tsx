@@ -22,7 +22,7 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/stores/triage-store", () => ({
+vi.mock("@kairo/client-core/stores/triage-store", () => ({
   useTriageStore: () => ({
     applyCorrection: vi.fn(),
     correctedTicketIds: new Set<string>(),
@@ -30,7 +30,7 @@ vi.mock("@/stores/triage-store", () => ({
   }),
 }));
 
-vi.mock("@/lib/api-client", () => ({
+vi.mock("@kairo/client-core/api-client", () => ({
   apiCall: vi.fn(() => Promise.resolve({ ok: false })),
 }));
 

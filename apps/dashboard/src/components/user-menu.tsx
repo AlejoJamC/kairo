@@ -2,7 +2,7 @@
 // Light-theme restyle (KAI-156); supports collapsed mode (icon only).
 
 import { LogOut } from "lucide-react";
-import { useAuth } from "@/contexts/auth-context";
+import { useAuth } from "@kairo/client-core/auth";
 import { getInitials } from "@/components/ui/avatar";
 
 interface UserMenuProps {

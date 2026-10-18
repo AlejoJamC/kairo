@@ -16,7 +16,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { UserMenu } from "@/components/user-menu";
-import { useAuth } from "@/contexts/auth-context";
+import { useAuth } from "@kairo/client-core/auth";
 import {
   Tooltip,
   TooltipContent,

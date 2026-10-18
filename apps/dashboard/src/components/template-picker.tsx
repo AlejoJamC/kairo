@@ -2,7 +2,7 @@ import * as React from "react";
 import { Search } from "lucide-react";
 import { Popover } from "radix-ui";
 import { useTranslation } from "react-i18next";
-import { apiCall } from "@/lib/api-client";
+import { apiCall } from "@kairo/client-core/api-client";
 
 interface Template {
   id: string;

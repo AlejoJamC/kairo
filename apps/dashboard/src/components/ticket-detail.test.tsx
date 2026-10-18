@@ -78,7 +78,7 @@ const mockOperationalSlaConfig = {
 
 const mockSelectTicket = vi.fn();
 
-vi.mock("@/stores/triage-store", () => {
+vi.mock("@kairo/client-core/stores/triage-store", () => {
   // Mirrors zustand's real selector API — PrioritySlaBar calls this with a
   // selector (`useTriageStore((s) => s.operationalSlaConfig)`) while
   // TicketDetail calls it with no args, so the mock must support both.
@@ -112,7 +112,7 @@ let mockThreadResult: { messages: typeof mockMessages | []; loading: boolean; er
   error: null,
 };
 
-vi.mock("@/hooks/use-ticket-thread", () => ({
+vi.mock("@kairo/client-core/hooks/use-ticket-thread", () => ({
   useTicketThread: () => mockThreadResult,
 }));
 

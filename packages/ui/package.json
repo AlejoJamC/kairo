@@ -14,7 +14,8 @@
     "./tamagui.config": "./tamagui.config.ts"
   },
   "scripts": {
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit && tsc --noEmit -p tsconfig.native.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.native.json"
   },
   "dependencies": {
     "@kairo/types": "workspace:*",

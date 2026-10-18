@@ -9,7 +9,7 @@ const createClientMock = vi.fn(() => ({
   rpc: rpcMock,
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
+vi.mock("../supabase", () => ({
   createClient: () => createClientMock(),
 }));
 
@@ -41,7 +41,7 @@ import {
   unrejectDraft,
   editDraft,
   bulkConfirmByOrganization,
-} from "@/lib/draft-actions";
+} from "../draft-actions";
 
 // ---------------------------------------------------------------------------
 // Helpers

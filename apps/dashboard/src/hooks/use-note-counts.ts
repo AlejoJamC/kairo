@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { apiCall } from "@/lib/api-client";
+import { apiCall } from "@kairo/client-core/api-client";
 import { getNumericFlag } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
-import { useTriageStore, type NoteCounts } from "@/stores/triage-store";
+import { useTriageStore, type NoteCounts } from "@kairo/client-core/stores/triage-store";
 
 // ---------------------------------------------------------------------------
 // KAI-232 — keeps the per-ticket internal-note counters in the triage store.

@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Avatar } from "@/components/ui/avatar";
-import type { AccountMember } from "@/hooks/use-account-members";
+import type { AccountMember } from "@kairo/client-core/hooks/use-account-members";
 
 // ---------------------------------------------------------------------------
 // KAI-232 · design spec C2–C6 — the @mention picker, anchored above the note

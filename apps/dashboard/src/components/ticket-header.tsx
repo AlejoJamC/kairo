@@ -2,12 +2,12 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Lock } from "lucide-react";
 import type { Ticket } from "@kairo/types";
-import { useTriageStore } from "@/stores/triage-store";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { Chip } from "@/components/ui/chip";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { CorrectionDialog } from "@/components/correction-dialog";
 import type { CorrectionFields } from "@/components/correction-dialog";
-import { apiCall } from "@/lib/api-client";
+import { apiCall } from "@kairo/client-core/api-client";
 
 // VITE_FF_ENABLE_ASSIGN_TO_ME — OFF unless exactly "true"; safe unset.
 function isFlagEnabled(value: string | undefined): boolean {

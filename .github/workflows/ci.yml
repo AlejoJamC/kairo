@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck all workspaces
+        run: bunx turbo run typecheck
+
+      - name: Test client packages and dashboard
+        run: bunx turbo run test --filter=@kairo/dashboard --filter=@kairo/client-core
+
+      - name: UI metrics
+        run: bun run ui:metrics

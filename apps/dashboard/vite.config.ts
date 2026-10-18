@@ -5,7 +5,9 @@ import { tamaguiPlugin } from '@tamagui/vite-plugin'
 import path from 'path'
 
 export default defineConfig({
-  base: '/dashboard/',
+  // The web build is served under /dashboard/ by the landing app; other hosts
+  // (desktop shell, standalone hosting) override it with DASHBOARD_BASE_PATH.
+  base: process.env.DASHBOARD_BASE_PATH ?? '/dashboard/',
   envDir: '../../',
   plugins: [
     react(),

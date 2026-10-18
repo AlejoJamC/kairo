@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { apiCall } from "@/lib/api-client";
+import { apiCall } from "../api-client";
 
 export type DeliveryStatus = "queued" | "sending" | "sent" | "failed";
 

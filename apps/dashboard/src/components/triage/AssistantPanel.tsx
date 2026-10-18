@@ -1,4 +1,5 @@
-import { apiCall } from "@/lib/api-client";
+import { apiCall } from "@kairo/client-core/api-client";
+import { getPlatform } from "@kairo/client-core/config";
 import { z } from "zod";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -8,7 +9,7 @@ import {
   Ticket as TicketIcon, User, ArrowUp, Square, AtSign,
   Activity, PenLine, Layers, type LucideIcon,
 } from "lucide-react";
-import { useTriageStore } from "@/stores/triage-store";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface Step { label: string; detail: string }
@@ -163,7 +164,7 @@ function DraftCard({ d, onInsert, inserted }: { d: Draft; onInsert: () => void; 
       <div style={{ padding: "8px 10px", borderTop: "1px solid var(--k-border-subtle)", display: "flex", gap: 6 }}>
         <button
           type="button"
-          onClick={() => { navigator.clipboard?.writeText(d.body).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1400); }}
+          onClick={() => { getPlatform().clipboard.writeText(d.body).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1400); }}
           style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, padding: "5px 9px", border: "1px solid var(--k-border)", borderRadius: 6, color: copied ? "var(--k-success)" : "var(--k-text-secondary)", background: "white", cursor: "pointer" }}
         >
           {copied ? <Check style={{ width: 12, height: 12 }} /> : <Copy style={{ width: 12, height: 12 }} />}

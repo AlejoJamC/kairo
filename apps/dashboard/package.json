@@ -14,16 +14,17 @@
     "clean": "rm -rf dist node_modules/.tmp"
   },
   "dependencies": {
+    "@kairo/client-core": "workspace:*",
     "@kairo/env": "workspace:*",
     "@kairo/feature-flags": "workspace:*",
     "@kairo/identity": "workspace:*",
     "@kairo/observability": "workspace:*",
     "@kairo/types": "workspace:*",
     "@kairo/ui": "workspace:*",
-    "@tamagui/core": "^1.144.3",
     "@supabase/supabase-js": "^2.105.3",
     "@t3-oss/env-core": "^0.13.11",
     "@tailwindcss/vite": "^4.2.4",
+    "@tamagui/core": "^1.144.3",
     "@tanstack/react-virtual": "^3.13.24",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clock } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/contexts/auth-context";
-import { useTriageStore } from "@/stores/triage-store";
+import { createClient } from "@kairo/client-core/supabase";
+import { useAuth } from "@kairo/client-core/auth";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TicketDetail } from "@/components/ticket-detail";
 import { AiAssistant } from "@/components/ai-assistant";
 import { TicketCard } from "@/components/ticket-card";
 import type { AppView } from "@/types";
 import type { Ticket } from "@kairo/types";
-import { ESCALATED_STATUSES } from "@/lib/triage-status";
+import { ESCALATED_STATUSES } from "@kairo/client-core/triage-status";
 
 // Own bucket in triage-status.ts (STATUS_BUCKET), counted by the Escalado
 // badge and not by Triage — mirrors ResolvedView's setup one status down.

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { getLandingUrl } from "@/lib/api-client";
+import { createClient } from "./supabase";
+import { getLandingUrl } from "./api-client";
+import { getPlatform } from "./config";
 import type { User } from "@supabase/supabase-js";
 
 export interface UserProfile {
@@ -25,27 +26,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Extract hash tokens ONCE at module level — survives StrictMode double-mount.
-// The hash is read and cleared before any React effect runs.
-const initialHashTokens: {
-  access_token: string;
-  refresh_token: string;
-} | null = (() => {
-  const hash = window.location.hash.substring(1);
-  if (!hash) return null;
-
-  const params = new URLSearchParams(hash);
-  const access_token = params.get("access_token");
-  const refresh_token = params.get("refresh_token");
-
-  if (access_token && refresh_token) {
-    // Clean hash from URL immediately
-    history.replaceState(null, "", window.location.pathname);
-    return { access_token, refresh_token };
-  }
-  return null;
-})();
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -77,10 +57,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // If no existing session, but we have hash tokens from a redirect
-        if (initialHashTokens) {
+        const handoffTokens = getPlatform().authHandoff.takeHandoffTokens();
+        if (handoffTokens) {
           const { data, error } = await supabase.auth.setSession({
-            access_token: initialHashTokens.access_token,
-            refresh_token: initialHashTokens.refresh_token,
+            access_token: handoffTokens.access_token,
+            refresh_token: handoffTokens.refresh_token,
           });
 
           if (!error && data.session && !cancelled) {
@@ -93,12 +74,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Neither existing session nor valid hash tokens
         if (!cancelled) {
           setLoading(false);
-          window.location.href = getLandingUrl("/wizard/");
+          getPlatform().navigation.navigate(getLandingUrl("/wizard/"));
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setLoading(false);
-          window.location.href = getLandingUrl("/wizard/");
+          getPlatform().navigation.navigate(getLandingUrl("/wizard/"));
         }
       }
     };
@@ -117,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (event === "SIGNED_OUT") {
         setUser(null);
         setProfile(null);
-        window.location.href = getLandingUrl("/wizard/");
+        getPlatform().navigation.navigate(getLandingUrl("/wizard/"));
       }
     });
 
@@ -174,7 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setProfile(null);
     setAccountId(null);
-    window.location.href = getLandingUrl("/");
+    getPlatform().navigation.navigate(getLandingUrl("/"));
   };
 
   return (

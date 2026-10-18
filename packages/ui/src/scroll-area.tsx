@@ -20,6 +20,7 @@ const ScrollAreaViewport = styled(Stack, {
   name: 'ScrollAreaViewport',
   width: '100%',
   height: '100%',
+  // @ts-ignore — overflowY is valid web CSS outside Tamagui's typed style props
   overflowY: 'auto',
   // @ts-ignore — 'inherit' is valid CSS but outside Tamagui's typed radius scale
   borderRadius: 'inherit',

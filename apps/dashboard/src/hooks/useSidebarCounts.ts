@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { apiCall } from "@/lib/api-client";
+import { apiCall } from "@kairo/client-core/api-client";
 import { getNumericFlag } from "@/lib/feature-flags";
 import {
   TRIAGE_COUNTED_STATUSES,
   AWAITING_STATUSES,
   SIDEBAR_RESOLVED_STATUSES,
   ESCALATED_STATUSES,
-} from "@/lib/triage-status";
+} from "@kairo/client-core/triage-status";
 import type { TicketStatus } from "@kairo/types";
 import type { AppView } from "@/types";
 

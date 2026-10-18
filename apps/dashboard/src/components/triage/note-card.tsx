@@ -3,7 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "@/components/ui/avatar";
 import { NoteBody } from "./note-body";
-import type { ThreadMessage } from "@/hooks/use-ticket-thread";
+import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 
 // ---------------------------------------------------------------------------
 // KAI-232 · design spec B3/B4 — a single internal note in the Notes tab.

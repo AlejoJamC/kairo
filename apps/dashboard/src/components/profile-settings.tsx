@@ -18,9 +18,9 @@ import {
   MoreHorizontal,
   AlarmClock,
 } from "lucide-react";
-import { useAuth } from "@/contexts/auth-context";
-import { createClient } from "@/lib/supabase/client";
-import { apiCall } from "@/lib/api-client";
+import { useAuth } from "@kairo/client-core/auth";
+import { createClient } from "@kairo/client-core/supabase";
+import { apiCall } from "@kairo/client-core/api-client";
 import type { AppView } from "@/types";
 
 interface Props {

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022"],
+    "customConditions": ["react-native"],
+    "noEmit": true
+  },
+  "include": ["src/index.native.ts", "src/**/*.native.ts", "src/**/*.native.tsx"]
+}

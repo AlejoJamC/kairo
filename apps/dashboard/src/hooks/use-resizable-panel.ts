@@ -1,3 +1,4 @@
+import { getPlatform } from "@kairo/client-core/config";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
@@ -43,7 +44,7 @@ interface ResizablePanel {
 
 function readStored(min: number): number {
   try {
-    const saved = Number(localStorage.getItem(STORAGE_KEY));
+    const saved = Number(getPlatform().storage.getItem(STORAGE_KEY));
     return Number.isFinite(saved) && saved >= min ? saved : min;
   } catch {
     return min;
@@ -52,7 +53,7 @@ function readStored(min: number): number {
 
 function persist(width: number): void {
   try {
-    localStorage.setItem(STORAGE_KEY, String(Math.round(width)));
+    getPlatform().storage.setItem(STORAGE_KEY, String(Math.round(width)));
   } catch {
     /* storage unavailable — width simply won't survive reload */
   }

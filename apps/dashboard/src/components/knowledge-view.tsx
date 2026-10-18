@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clock } from "lucide-react";
-import { apiCall } from "@/lib/api-client";
-import { useAuth } from "@/contexts/auth-context";
+import { apiCall } from "@kairo/client-core/api-client";
+import { useAuth } from "@kairo/client-core/auth";
 import type { AppView } from "@/types";
 
 type ArticleFilter = "draft" | "published";

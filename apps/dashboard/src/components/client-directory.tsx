@@ -20,8 +20,8 @@ import {
   Pencil,
 } from "lucide-react";
 import { ClientFormModal } from "@/components/client-form-modal";
-import { apiCall } from "@/lib/api-client";
-import { useAuth } from "@/contexts/auth-context";
+import { apiCall } from "@kairo/client-core/api-client";
+import { useAuth } from "@kairo/client-core/auth";
 import { useDraftContacts } from "@/hooks/use-draft-contacts";
 import { mapClientToRow, type ContactRow, type ContactRowStatus } from "@/types/contact-row";
 import {
@@ -31,7 +31,7 @@ import {
   editDraft,
   bulkConfirmByOrganization,
   type EditPatch,
-} from "@/lib/draft-actions";
+} from "@kairo/client-core/draft-actions";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
 
 // ---------------------------------------------------------------------------

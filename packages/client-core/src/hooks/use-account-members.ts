@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiCall } from "@/lib/api-client";
+import { apiCall } from "../api-client";
 
 // ---------------------------------------------------------------------------
 // KAI-232 — active members of the caller's account, for the @mention dropdown.

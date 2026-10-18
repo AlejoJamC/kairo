@@ -8,7 +8,7 @@ import { useTicketThread, type ThreadMessage } from "./use-ticket-thread";
 
 const apiCallMock = vi.fn();
 
-vi.mock("@/lib/api-client", () => ({
+vi.mock("../api-client", () => ({
   apiCall: (...args: unknown[]) => apiCallMock(...args),
 }));
 
