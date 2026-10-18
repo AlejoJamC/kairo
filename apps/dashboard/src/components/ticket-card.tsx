@@ -6,6 +6,8 @@ import { computeTicketOperationalSla } from "@kairo/types";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
+import { normalizeTicketType } from "@/lib/ticket-labels";
+import { CategoryChip, PriorityGlyph } from "@kairo/ui";
 
 const NO_NOTE_COUNTS = { notes: 0, unread_mentions: 0 } as const;
 
@@ -38,55 +40,6 @@ const EMOTION_LABEL_KEY = {
   neutral:    "ticketCard.emotionNeutral",
   positive:   "ticketCard.emotionPositive",
 } as const satisfies Record<string, string>;
-
-// ---------------------------------------------------------------------------
-// Priority badge
-// ---------------------------------------------------------------------------
-
-const PRIORITY_STYLE: Record<string, React.CSSProperties> = {
-  P1: { background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", border: "1px solid var(--kairo-color-bad-line)" },
-  P2: { background: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)", color: "var(--kairo-color-sla-escalate-ink)", border: "1px solid color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" },
-  P3: { background: "var(--kairo-color-note-soft)", color: "var(--kairo-color-note)", border: "1px solid var(--kairo-color-note-line)" },
-  P4: { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "1px solid var(--kairo-color-line)" },
-};
-
-function PriorityBadge({ priority }: { priority: string | null | undefined }) {
-  if (!priority) return null;
-  const p = priority.toUpperCase();
-  const style = PRIORITY_STYLE[p] ?? { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "1px solid var(--kairo-color-line)" };
-  return (
-    <span
-      style={{
-        ...style,
-        fontSize: 10,
-        fontWeight: 600,
-        padding: "2px 6px",
-        borderRadius: 4,
-        letterSpacing: "0.02em",
-      }}
-    >
-      {p}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Type badge
-// ---------------------------------------------------------------------------
-
-function typeBadgeStyle(type: string | null | undefined): React.CSSProperties {
-  const t = (type ?? "").toLowerCase();
-  if (t === "lead" || t === "prospect") return { background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok-ink)" };
-  if (t === "spam") return { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)" };
-  return { background: "var(--kairo-color-accent-soft)", color: "var(--kairo-color-accent)" };
-}
-
-function typeLabel(type: string | null | undefined): string {
-  const t = (type ?? "").toLowerCase();
-  if (t === "lead" || t === "prospect") return "LEAD";
-  if (t === "spam") return "SPAM";
-  return "SOPORTE";
-}
 
 // ---------------------------------------------------------------------------
 // SLA badge
@@ -376,7 +329,7 @@ export function TicketCard({
             KAI-{ticket.ticket_number}
           </span>
         )}
-        <PriorityBadge priority={ticket.priority} />
+        <PriorityGlyph priority={ticket.priority} size={12} />
         {/* KAI-232 — internal notes on this ticket (amber chip) and a blue dot
             when one of them holds an unread mention of you (spec A1). Counts
             come from the store, computed server-side per request. */}
@@ -413,17 +366,12 @@ export function TicketCard({
           />
         )}
         {ticket.ticket_type && (
-          <span
-            style={{
-              ...typeBadgeStyle(ticket.ticket_type),
-              fontSize: 10,
-              fontFamily: "var(--k-font-mono)",
-              padding: "2px 6px",
-              borderRadius: 4,
-            }}
-          >
-            {typeLabel(ticket.ticket_type)}
-          </span>
+          <CategoryChip
+            scale="ticketType"
+            value={normalizeTicketType(ticket.ticket_type)}
+            label={t(`ticketTypes.${normalizeTicketType(ticket.ticket_type)}`)}
+            size="sm"
+          />
         )}
         {isCorrected && (
           <span

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Avatar } from "@/components/ui/avatar";
+import { Avatar } from "@kairo/ui";
 import type { AccountMember } from "@kairo/client-core/hooks/use-account-members";
 
 // ---------------------------------------------------------------------------

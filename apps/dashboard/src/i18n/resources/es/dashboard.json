@@ -677,5 +677,19 @@
     "reject": "Descartar este aporte",
     "classificationProposal": "Cambio de clasificación propuesto",
     "unsupported": "Evidencia sin respaldo: {{dimension}}"
+  },
+  "ticketTypes": {
+    "support": "soporte",
+    "prospect": "prospecto",
+    "spam": "spam",
+    "internal": "interno",
+    "other": "otro"
+  },
+  "ticketCategories": {
+    "technical": "técnica",
+    "billing": "facturación",
+    "account": "cuenta",
+    "general": "general",
+    "not_applicable": "n/a"
   }
 }

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Phone, Copy, Check } from "lucide-react";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { getPlatform } from "@kairo/client-core/config";
-import { getInitials } from "@/components/ui/avatar";
+import { getInitials } from "@kairo/ui";
 
 const initials = (name: string | null) => getInitials(name);
 

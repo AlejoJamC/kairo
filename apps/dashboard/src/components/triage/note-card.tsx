@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Avatar } from "@/components/ui/avatar";
+import { Avatar } from "@kairo/ui";
 import { NoteBody } from "./note-body";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 

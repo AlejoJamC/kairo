@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Lock } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Chip } from "@/components/ui/chip";
+import { Chip } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // KAI-232 — small shared pieces of the internal-notes surface. Kept here (not

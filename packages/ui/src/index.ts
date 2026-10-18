@@ -9,4 +9,8 @@ export * from "./separator";
 export * from "./sheet";
 export * from "./table";
 export * from "./provider";
+export * from "./priority-glyph";
+export * from "./chip";
+export * from "./category-chip";
+export * from "./avatar";
 export { cn } from "./lib/utils";

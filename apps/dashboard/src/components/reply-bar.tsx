@@ -15,7 +15,7 @@ import {
 } from "@kairo/client-core/note-mentions";
 import { MentionDropdown } from "./triage/mention-dropdown";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar } from "./ui/avatar";
+import { Avatar } from "@kairo/ui";
 import { useAuth } from "@kairo/client-core/auth";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import type { TicketStatus } from "@kairo/types";

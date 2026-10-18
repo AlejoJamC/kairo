@@ -10,7 +10,7 @@ import { useTicketThread, type ThreadMessage } from "@kairo/client-core/hooks/us
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, getInitials } from "./ui/avatar";
+import { Avatar } from "@kairo/ui";
 import { startGmailConnect } from "@kairo/client-core/endpoints";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
@@ -97,28 +97,7 @@ function PrioritySlaBar({ ticket }: { ticket: Ticket }) {
 // ---------------------------------------------------------------------------
 
 function SenderAvatar({ name, email }: { name: string | null; email: string | null }) {
-  const initials = getInitials(name, email);
-  return (
-    <div
-      style={{
-        width: 36,
-        height: 36,
-        borderRadius: "50%",
-        background: "var(--k-accent-subtle)",
-        border: "1.5px solid var(--kairo-color-accent-line)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 13,
-        fontWeight: 600,
-        color: "var(--k-accent)",
-        flexShrink: 0,
-        letterSpacing: "0.02em",
-      }}
-    >
-      {initials}
-    </div>
-  );
+  return <Avatar soft size={36} name={name} email={email} />;
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Lock } from "lucide-react";
 import type { Ticket } from "@kairo/types";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { Chip } from "@/components/ui/chip";
+import { CategoryChip, Chip, PriorityGlyph } from "@kairo/ui";
+import { normalizeTicketCategory, normalizeTicketType } from "@/lib/ticket-labels";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { CorrectionDialog } from "@/components/correction-dialog";
 import type { CorrectionFields } from "@/components/correction-dialog";
@@ -15,50 +16,6 @@ function isFlagEnabled(value: string | undefined): boolean {
 }
 
 const assignToMeEnabled = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ASSIGN_TO_ME);
-
-// ---------------------------------------------------------------------------
-// Priority badge
-// ---------------------------------------------------------------------------
-
-const PRIORITY_STYLE: Record<string, React.CSSProperties> = {
-  P1: { background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", border: "1px solid var(--kairo-color-bad-line)" },
-  P2: { background: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)", color: "var(--kairo-color-sla-escalate-ink)", border: "1px solid color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" },
-  P3: { background: "var(--kairo-color-note-soft)", color: "var(--kairo-color-note)", border: "1px solid var(--kairo-color-note-line)" },
-  P4: { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "1px solid var(--kairo-color-line)" },
-};
-
-function PriorityBadge({ priority }: { priority: string | null | undefined }) {
-  if (!priority) return null;
-  const p = priority.toUpperCase();
-  const style = PRIORITY_STYLE[p] ?? { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "1px solid var(--kairo-color-line)" };
-  return (
-    <span style={{ ...style, fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 999 }}>
-      {p}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Type badge
-// ---------------------------------------------------------------------------
-
-function TypeBadge({ type }: { type: string | null | undefined }) {
-  if (!type) return null;
-  const t = type.toLowerCase();
-  let style: React.CSSProperties;
-  if (t === "lead" || t === "prospect")
-    style = { background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok-ink)", border: "1px solid color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" };
-  else if (t === "spam")
-    style = { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "1px solid var(--kairo-color-line)" };
-  else
-    style = { background: "var(--kairo-color-accent-soft)", color: "var(--kairo-color-accent)", border: "1px solid var(--kairo-color-accent-line)" };
-
-  return (
-    <span style={{ ...style, fontSize: 11, fontWeight: 500, padding: "2px 7px", borderRadius: 999 }}>
-      {type}
-    </span>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // TicketHeader
@@ -74,6 +31,7 @@ interface TicketHeaderProps {
 
 export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
   const { t } = useTranslation("dashboard");
+  const categoryKey = normalizeTicketCategory(ticket.category);
   const { applyCorrection, correctedTicketIds, updateClassification } = useTriageStore();
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [assigning, setAssigning] = useState(false);
@@ -149,21 +107,16 @@ export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
       {/* Classification badges */}
       {(ticket.priority || ticket.ticket_type || ticket.category) && (
         <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-          <PriorityBadge priority={ticket.priority} />
-          <TypeBadge type={ticket.ticket_type} />
-          {ticket.category && (
-            <span
-              style={{
-                fontSize: 11,
-                padding: "2px 7px",
-                borderRadius: 999,
-                background: "var(--kairo-color-hover)",
-                color: "var(--kairo-color-muted)",
-                border: "1px solid var(--kairo-color-line)",
-              }}
-            >
-              {ticket.category}
-            </span>
+          <PriorityGlyph priority={ticket.priority} />
+          {ticket.ticket_type && (
+            <CategoryChip
+              scale="ticketType"
+              value={normalizeTicketType(ticket.ticket_type)}
+              label={t(`ticketTypes.${normalizeTicketType(ticket.ticket_type)}`)}
+            />
+          )}
+          {categoryKey && (
+            <CategoryChip scale="category" value={categoryKey} label={t(`ticketCategories.${categoryKey}`)} />
           )}
           {/* KAI-232 spec A1 — how many internal notes this ticket carries. */}
           {INTERNAL_NOTES_ENABLED && noteCount > 0 && (

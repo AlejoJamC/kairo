@@ -677,5 +677,19 @@
     "reject": "Discard this contribution",
     "classificationProposal": "Proposed classification change",
     "unsupported": "Unsupported evidence: {{dimension}}"
+  },
+  "ticketTypes": {
+    "support": "support",
+    "prospect": "prospect",
+    "spam": "spam",
+    "internal": "internal",
+    "other": "other"
+  },
+  "ticketCategories": {
+    "technical": "technical",
+    "billing": "billing",
+    "account": "account",
+    "general": "general",
+    "not_applicable": "n/a"
   }
 }

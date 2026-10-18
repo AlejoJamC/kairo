@@ -23,7 +23,7 @@ import { fetchTicketById } from "@kairo/client-core/queries";
 import { getNumericFlag } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { Avatar, getInitials } from "@/components/ui/avatar";
+import { Avatar, getInitials } from "@kairo/ui";
 import type { AppView } from "@/types";
 
 // KAI-232 — how often the bell re-fetches /api/v1/notifications, in seconds.

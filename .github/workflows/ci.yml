@@ -26,7 +26,7 @@ jobs:
         run: bunx turbo run typecheck
 
       - name: Test client packages and dashboard
-        run: bunx turbo run test --filter=@kairo/dashboard --filter=@kairo/client-core --filter=@kairo/tokens
+        run: bunx turbo run test --filter=@kairo/dashboard --filter=@kairo/client-core --filter=@kairo/tokens --filter=@kairo/ui
 
       - name: UI metrics
         run: bun run ui:metrics

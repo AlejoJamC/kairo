@@ -3,7 +3,7 @@
 
 import { LogOut } from "lucide-react";
 import { useAuth } from "@kairo/client-core/auth";
-import { getInitials } from "@/components/ui/avatar";
+import { Avatar } from "@kairo/ui";
 
 interface UserMenuProps {
   collapsed?: boolean;
@@ -15,29 +15,11 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
   if (!profile) return null;
 
   const displayName = profile.name || profile.email;
-  const initials = getInitials(profile.name, profile.email);
 
   if (collapsed) {
     return (
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <div
-          title={displayName ?? ""}
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: "50%",
-            background: "linear-gradient(135deg, var(--kairo-color-accent) 0%, var(--kairo-color-accent-indigo) 100%)",
-            color: "white",
-            fontSize: 11,
-            fontWeight: 600,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            userSelect: "none",
-          }}
-        >
-          {initials}
-        </div>
+      <div title={displayName ?? ""} style={{ display: "flex", justifyContent: "center" }}>
+        <Avatar name={profile.name} email={profile.email} size={28} />
       </div>
     );
   }
@@ -54,26 +36,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
         border: "1px solid var(--k-border)",
       }}
     >
-      {/* Avatar */}
-      <div
-        style={{
-          width: 24,
-          height: 24,
-          borderRadius: "50%",
-          background: "linear-gradient(135deg, var(--kairo-color-accent) 0%, var(--kairo-color-accent-indigo) 100%)",
-          color: "white",
-          fontSize: 10,
-          fontWeight: 600,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          marginLeft: 4,
-          userSelect: "none",
-        }}
-      >
-        {initials}
-      </div>
+      <Avatar name={profile.name} email={profile.email} size={24} marginLeft={4} />
 
       {/* Name + status */}
       <div style={{ flex: 1, minWidth: 0 }}>
