@@ -44,7 +44,7 @@ function AuthErrorContent() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: '#f9fafb',
+      background: 'var(--kairo-color-sunk)',
     }}>
       <div style={{
         width: '100%',
@@ -59,21 +59,21 @@ function AuthErrorContent() {
         </div>
 
         <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-          <AlertCircle size={22} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} />
-          <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: '#111827' }}>
+          <AlertCircle size={22} color="var(--kairo-color-bad)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: 'var(--kairo-color-text)' }}>
             {content.title}
           </h1>
         </div>
 
-        <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.6, margin: '0 0 24px' }}>
+        <p style={{ fontSize: 14, color: 'var(--kairo-color-faint)', lineHeight: 1.6, margin: '0 0 24px' }}>
           {content.body}
         </p>
 
         {/* Show raw description only for generic errors in non-production */}
         {description && type === 'oauth_error' && (
           <p style={{
-            fontSize: 12, color: '#9ca3af', fontFamily: 'monospace',
-            background: '#f3f4f6', borderRadius: 6, padding: '8px 12px',
+            fontSize: 12, color: 'var(--kairo-color-faint)', fontFamily: 'monospace',
+            background: 'var(--kairo-color-hover)', borderRadius: 6, padding: '8px 12px',
             marginBottom: 20, wordBreak: 'break-word',
           }}>
             {decodeURIComponent(description)}
@@ -88,7 +88,7 @@ function AuthErrorContent() {
               textAlign: 'center',
               padding: '10px 0',
               borderRadius: 8,
-              background: '#111827',
+              background: 'var(--kairo-color-text)',
               color: 'white',
               fontSize: 14,
               fontWeight: 600,
@@ -106,8 +106,8 @@ function AuthErrorContent() {
 export default function AuthErrorPage() {
   return (
     <Suspense fallback={
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb' }}>
-        <p style={{ color: '#6b7280', fontSize: 14 }}>Loading…</p>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--kairo-color-sunk)' }}>
+        <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14 }}>Loading…</p>
       </div>
     }>
       <AuthErrorContent />

@@ -165,7 +165,7 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16, padding: 24 }}>
           {error && (
-            <div style={{ borderRadius: 6, background: "#FEF2F2", border: "1px solid #FECACA", padding: "8px 12px", fontSize: 13, color: "#991B1B" }}>
+            <div style={{ borderRadius: 6, background: "var(--kairo-color-bad-soft)", border: "1px solid var(--kairo-color-bad-line)", padding: "8px 12px", fontSize: 13, color: "var(--kairo-color-bad-ink)" }}>
               {error}
             </div>
           )}

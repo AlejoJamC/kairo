@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Users, ArrowUp, Lock } from "lucide-react";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
-import { getEmotionTokens } from "@kairo/ui";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
@@ -11,24 +10,28 @@ import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 const NO_NOTE_COUNTS = { notes: 0, unread_mentions: 0 } as const;
 
 // ---------------------------------------------------------------------------
-// Sentiment helpers — sourced from @kairo/ui triage-tokens
-// aggressive(🤬red) → frustrated(😩orange) → neutral(😐blue) → positive(😊green)
+// Sentiment helpers — stripe colors come from the sentiment scale of
+// @kairo/tokens; the emoji is the indicator the design specifies.
 // ---------------------------------------------------------------------------
 
 const STRIPE_COLOR: Record<string, string> = {
-  aggressive: "#EF4444",
-  frustrated: "#F97316",
-  neutral:    "#60A5FA",
-  positive:   "#10B981",
+  aggressive: "var(--kairo-sentiment-aggressive)",
+  frustrated: "var(--kairo-sentiment-frustrated)",
+  neutral:    "var(--kairo-sentiment-neutral)",
+  positive:   "var(--kairo-sentiment-positive)",
+};
+
+const EMOTION_EMOJI: Record<string, string> = {
+  aggressive: "🤬",
+  frustrated: "😩",
+  neutral:    "😐",
+  positive:   "😊",
 };
 
 function stripeColor(sentiment: string | null | undefined): string {
-  return STRIPE_COLOR[(sentiment ?? "").toLowerCase()] ?? "#D4D4D8";
+  return STRIPE_COLOR[(sentiment ?? "").toLowerCase()] ?? "var(--kairo-color-line-strong)";
 }
 
-// getEmotionTokens (@kairo/ui) hardcodes its ariaLabel in English (used by
-// other, non-i18n consumers of that package) — translate it here instead of
-// showing that raw string as the tooltip/aria-label for this ticket list.
 const EMOTION_LABEL_KEY = {
   aggressive: "ticketCard.emotionAggressive",
   frustrated: "ticketCard.emotionFrustrated",
@@ -41,16 +44,16 @@ const EMOTION_LABEL_KEY = {
 // ---------------------------------------------------------------------------
 
 const PRIORITY_STYLE: Record<string, React.CSSProperties> = {
-  P1: { background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" },
-  P2: { background: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA" },
-  P3: { background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" },
-  P4: { background: "#F4F4F5", color: "#71717A", border: "1px solid #E4E4E7" },
+  P1: { background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", border: "1px solid var(--kairo-color-bad-line)" },
+  P2: { background: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)", color: "var(--kairo-color-sla-escalate-ink)", border: "1px solid color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" },
+  P3: { background: "var(--kairo-color-note-soft)", color: "var(--kairo-color-note)", border: "1px solid var(--kairo-color-note-line)" },
+  P4: { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "1px solid var(--kairo-color-line)" },
 };
 
 function PriorityBadge({ priority }: { priority: string | null | undefined }) {
   if (!priority) return null;
   const p = priority.toUpperCase();
-  const style = PRIORITY_STYLE[p] ?? { background: "#F4F4F5", color: "#71717A", border: "1px solid #E4E4E7" };
+  const style = PRIORITY_STYLE[p] ?? { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "1px solid var(--kairo-color-line)" };
   return (
     <span
       style={{
@@ -73,9 +76,9 @@ function PriorityBadge({ priority }: { priority: string | null | undefined }) {
 
 function typeBadgeStyle(type: string | null | undefined): React.CSSProperties {
   const t = (type ?? "").toLowerCase();
-  if (t === "lead" || t === "prospect") return { background: "#ECFDF5", color: "#047857" };
-  if (t === "spam") return { background: "#F4F4F5", color: "#71717A" };
-  return { background: "#EEF2FF", color: "#2B5BFF" };
+  if (t === "lead" || t === "prospect") return { background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok-ink)" };
+  if (t === "spam") return { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)" };
+  return { background: "var(--kairo-color-accent-soft)", color: "var(--kairo-color-accent)" };
 }
 
 function typeLabel(type: string | null | undefined): string {
@@ -123,8 +126,8 @@ function SlaBadge({ slaDate }: SlaBadgeProps) {
         fontWeight: 600,
         padding: "2px 6px",
         borderRadius: 4,
-        background: label.breached ? "#FEF2F2" : "#F4F4F5",
-        color: label.breached ? "#DC2626" : "#71717A",
+        background: label.breached ? "var(--kairo-color-bad-soft)" : "var(--kairo-color-hover)",
+        color: label.breached ? "var(--kairo-color-bad-ink)" : "var(--kairo-color-faint)",
         whiteSpace: "nowrap",
         flexShrink: 0,
       }}
@@ -146,9 +149,9 @@ function SlaBadge({ slaDate }: SlaBadgeProps) {
 // ---------------------------------------------------------------------------
 
 const PRIORITY_SLA_STYLE: Record<"ok" | "at_risk" | "breached", React.CSSProperties> = {
-  ok:       { background: "#ECFDF5", color: "#047857" },
-  at_risk:  { background: "#FFF7ED", color: "#C2410C" },
-  breached: { background: "#FEF2F2", color: "#DC2626" },
+  ok:       { background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok-ink)" },
+  at_risk:  { background: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)", color: "var(--kairo-color-sla-escalate-ink)" },
+  breached: { background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)" },
 };
 
 function PrioritySlaBadge({ ticket }: { ticket: Ticket }) {
@@ -279,9 +282,9 @@ export function TicketCard({
 
   const isSpam = (ticket.ticket_type ?? "").toLowerCase() === "spam";
   const relativeTime = useRelativeTime(ticket.received_at ?? ticket.created_at);
-  const emotion = getEmotionTokens(ticket.sentiment);
+  const emoji = EMOTION_EMOJI[(ticket.sentiment ?? "").toLowerCase()] ?? "";
   const emotionKey = (ticket.sentiment ?? "").toLowerCase() as keyof typeof EMOTION_LABEL_KEY;
-  const emotionLabel = EMOTION_LABEL_KEY[emotionKey] ? t(EMOTION_LABEL_KEY[emotionKey]) : emotion.ariaLabel;
+  const emotionLabel = EMOTION_LABEL_KEY[emotionKey] ? t(EMOTION_LABEL_KEY[emotionKey]) : "";
 
   return (
     <button
@@ -429,8 +432,8 @@ export function TicketCard({
               fontWeight: 600,
               padding: "2px 6px",
               borderRadius: 4,
-              background: "#FEF3C7",
-              color: "#B45309",
+              background: "var(--kairo-color-note-soft)",
+              color: "var(--kairo-color-note)",
             }}
           >
             {t("correction.correctedBadge")}
@@ -474,13 +477,13 @@ export function TicketCard({
           color: "var(--k-text-secondary)",
         }}
       >
-        {emotion.emoji && (
+        {emoji && (
           <span
             style={{ fontSize: 13, flexShrink: 0, lineHeight: 1 }}
             aria-label={emotionLabel}
             title={emotionLabel}
           >
-            {emotion.emoji}
+            {emoji}
           </span>
         )}
         <span

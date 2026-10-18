@@ -158,10 +158,10 @@ export default function HomePage() {
   const l = t.landing;
 
   const tiers = [
-    { lbl: "TIER 0", name: l.tier0Name, desc: l.tier0Desc, kpi: "~40%", color: "#71717A" },
-    { lbl: "TIER 1", name: l.tier1Name, desc: l.tier1Desc, kpi: "< 5s", color: "#EF4444" },
-    { lbl: "TIER 2", name: l.tier2Name, desc: l.tier2Desc, kpi: "< 60s", color: "#F59E0B" },
-    { lbl: "TIER 3", name: l.tier3Name, desc: l.tier3Desc, kpi: "< 1h", color: "#10B981" },
+    { lbl: "TIER 0", name: l.tier0Name, desc: l.tier0Desc, kpi: "~40%", color: "var(--kairo-color-faint)" },
+    { lbl: "TIER 1", name: l.tier1Name, desc: l.tier1Desc, kpi: "< 5s", color: "var(--kairo-color-bad)" },
+    { lbl: "TIER 2", name: l.tier2Name, desc: l.tier2Desc, kpi: "< 60s", color: "var(--kairo-color-warn)" },
+    { lbl: "TIER 3", name: l.tier3Name, desc: l.tier3Desc, kpi: "< 1h", color: "var(--kairo-color-ok)" },
   ];
 
   const differentiators = [
@@ -302,7 +302,7 @@ export default function HomePage() {
                     width: 16,
                     height: 16,
                     borderRadius: 999,
-                    background: i < 2 ? "#10B981" : "var(--surface-2)",
+                    background: i < 2 ? "var(--kairo-color-ok)" : "var(--surface-2)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -448,7 +448,7 @@ export default function HomePage() {
                   width: 36,
                   height: 36,
                   borderRadius: 999,
-                  background: "linear-gradient(135deg,#FCA5A5,#F472B6)",
+                  background: "linear-gradient(135deg,var(--kairo-color-bad-line),#F472B6)",
                   color: "white",
                   display: "flex",
                   alignItems: "center",
@@ -540,7 +540,7 @@ export default function HomePage() {
                   }}
                 >
                   <span style={{ color: "var(--text-tertiary)" }}>{String(id)}</span>
-                  <span style={{ color: "#10B981" }}>{Number(score).toFixed(2)}</span>
+                  <span style={{ color: "var(--kairo-color-ok)" }}>{Number(score).toFixed(2)}</span>
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{String(subject)}</div>
               </div>
@@ -576,7 +576,7 @@ export default function HomePage() {
                 fontFamily: "var(--font-mono)",
                 background: "var(--accent-subtle)",
                 color: "var(--accent)",
-                border: "1px solid #DBE3FF",
+                border: "1px solid var(--kairo-color-accent-line)",
               }}
             >
               <Sparkles size={10} color="var(--accent)" />
@@ -588,7 +588,7 @@ export default function HomePage() {
                 marginLeft: "auto",
                 fontFamily: "var(--font-mono)",
                 fontSize: 11,
-                color: "#10B981",
+                color: "var(--kairo-color-ok)",
               }}
             >
               {l.s4Conf}

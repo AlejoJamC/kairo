@@ -817,11 +817,11 @@ export function TicketList() {
       {groupSuccessCount !== null && (
         <div style={{
           borderBottom: "1px solid var(--k-border-subtle)",
-          background: "#ECFDF5",
+          background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)",
           padding: "5px 14px",
           fontSize: 11,
           fontFamily: "var(--k-font-mono)",
-          color: "#065F46",
+          color: "var(--kairo-color-ok-ink)",
         }}>
           {t("ticketList.groupSuccess", { count: groupSuccessCount })}
         </div>
@@ -831,11 +831,11 @@ export function TicketList() {
       {groupError && (
         <div style={{
           borderBottom: "1px solid var(--k-border-subtle)",
-          background: "#FEF2F2",
+          background: "var(--kairo-color-bad-soft)",
           padding: "5px 14px",
           fontSize: 11,
           fontFamily: "var(--k-font-mono)",
-          color: "#991B1B",
+          color: "var(--kairo-color-bad-ink)",
         }}>
           {groupError}
         </div>
@@ -896,11 +896,11 @@ export function TicketList() {
       {syncResult && (
         <div style={{
           borderBottom: "1px solid var(--k-border-subtle)",
-          background: "#ECFDF5",
+          background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)",
           padding: "5px 14px",
           fontSize: 11,
           fontFamily: "var(--k-font-mono)",
-          color: "#065F46",
+          color: "var(--kairo-color-ok-ink)",
         }}>
           {t("ticketList.syncSuccess", "{{created}} nuevos · {{skipped}} omitidos", {
             created: syncResult.created,
@@ -911,11 +911,11 @@ export function TicketList() {
       {syncError && (
         <div style={{
           borderBottom: "1px solid var(--k-border-subtle)",
-          background: "#FEF2F2",
+          background: "var(--kairo-color-bad-soft)",
           padding: "5px 14px",
           fontSize: 11,
           fontFamily: "var(--k-font-mono)",
-          color: "#991B1B",
+          color: "var(--kairo-color-bad-ink)",
         }}>
           {syncError}
         </div>

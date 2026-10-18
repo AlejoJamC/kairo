@@ -73,14 +73,19 @@ const duplicatedComponents = [...definitions.entries()]
   .filter(([, files]) => files.size > 1)
   .map(([name, files]) => ({ name, files: [...files] }));
 
+// A hand-written token source defines color values itself instead of
+// reading them from packages/tokens: CSS custom properties holding color
+// literals, or the Tamagui config holding hex colors other than white/black.
+const COLOR_LITERAL = /#[0-9a-fA-F]{3,8}\b|rgba?\(|oklch\(|hsla?\(/;
+const cssLiteralDefinitions = (text: string) =>
+  text.split("\n").filter((line) => /^\s*--[a-z0-9-]+\s*:/.test(line) && COLOR_LITERAL.test(line)).length;
 const tokenSources = [
   ...walk(join(ROOT, "apps")).concat(walk(join(ROOT, "packages"))).filter(
-    (f) =>
-      f.endsWith(".css") &&
-      !f.includes("/packages/tokens/") &&
-      count(read(f), /^\s*--[a-z0-9-]+\s*:/gm) >= 10,
+    (f) => f.endsWith(".css") && !f.includes("/packages/tokens/") && cssLiteralDefinitions(read(f)) >= 3,
   ),
-  ...["packages/ui/tamagui.config.ts", "packages/ui/src/triage-tokens.ts"].map((f) => join(ROOT, f)).filter(existsSync),
+  ...["packages/ui/tamagui.config.ts", "packages/ui/src/triage-tokens.ts"]
+    .map((f) => join(ROOT, f))
+    .filter((f) => existsSync(f) && count(read(f).replace(/#(fff|ffffff|000|000000)\b/gi, ""), HEX) > 0),
 ].map((f) => relative(ROOT, f));
 
 // Modules exported by packages/ui against the specification files, with the

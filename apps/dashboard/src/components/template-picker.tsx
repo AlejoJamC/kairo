@@ -148,7 +148,7 @@ export function TemplatePicker({ onSelect, children, previewVars }: TemplatePick
                 </p>
               )}
               {error && (
-                <p style={{ padding: "16px 12px", textAlign: "center", fontSize: 12, color: "#EF4444" }}>{error}</p>
+                <p style={{ padding: "16px 12px", textAlign: "center", fontSize: 12, color: "var(--kairo-color-bad)" }}>{error}</p>
               )}
               {!loading && !error && Object.keys(grouped).length === 0 && (
                 <p style={{ padding: "16px 12px", textAlign: "center", fontSize: 12, color: "var(--k-text-tertiary)" }}>

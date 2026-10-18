@@ -5,35 +5,35 @@
   --animate-fade-in: fade-in 0.3s ease-out;
   --animate-slide-up: slide-up 0.3s ease-out;
 
-  /* Kairo design tokens */
-  --color-background: #ffffff;
-  --color-surface: #fafafa;
-  --color-surface-2: #f4f4f5;
-  --color-border: #e4e4e7;
-  --color-border-subtle: #f0f0f1;
+  /* Kairo design tokens: aliases of the generated @kairo/tokens properties. Change packages/tokens/src, not these. */
+  --color-background: var(--kairo-color-bg);
+  --color-surface: var(--kairo-color-sunk);
+  --color-surface-2: var(--kairo-color-hover);
+  --color-border: var(--kairo-color-line);
+  --color-border-subtle: var(--kairo-color-line);
 
-  --color-text-primary: #09090b;
-  --color-text-secondary: #52525b;
-  --color-text-tertiary: #a1a1aa;
+  --color-text-primary: var(--kairo-color-text);
+  --color-text-secondary: var(--kairo-color-muted);
+  --color-text-tertiary: var(--kairo-color-faint);
 
-  --color-accent: #2b5bff;
-  --color-accent-hover: #1e48e5;
-  --color-accent-subtle: #eef2ff;
+  --color-accent: var(--kairo-color-accent);
+  --color-accent-hover: var(--kairo-color-accent-hover);
+  --color-accent-subtle: var(--kairo-color-accent-soft);
 
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
+  --color-success: var(--kairo-color-ok);
+  --color-warning: var(--kairo-color-warn);
+  --color-danger: var(--kairo-color-bad);
 
-  --font-display: "Inter Display", "Inter", system-ui, -apple-system, sans-serif;
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+  --font-display: var(--kairo-font-family-sans);
+  --font-sans: var(--kairo-font-family-sans);
+  --font-mono: var(--kairo-font-family-mono);
 
   --radius-card: 12px;
   --radius-inner: 8px;
   --radius-input: 6px;
 
-  --shadow-card: 0 1px 2px rgba(9, 9, 11, 0.04);
-  --shadow-popover: 0 4px 16px rgba(9, 9, 11, 0.08), 0 1px 2px rgba(9, 9, 11, 0.04);
+  --shadow-card: var(--kairo-shadow-xs);
+  --shadow-popover: var(--kairo-shadow-pop);
 }
 
 /* Aliases so inline styles keep using var(--accent) etc. */

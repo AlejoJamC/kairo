@@ -134,8 +134,8 @@ function toNotifItem(row: ApiNotification): NotifItem {
     unread: !row.read_at,
     who: isEscalation ? "Sistema" : row.title,
     actor: isEscalation ? "!" : "S",
-    actorBg: isEscalation ? "#FEE2E2" : "#09090B",
-    actorColor: isEscalation ? "#B91C1C" : "white",
+    actorBg: isEscalation ? "var(--kairo-color-bad-soft)" : "var(--kairo-color-text)",
+    actorColor: isEscalation ? "var(--kairo-color-bad-ink)" : "white",
     title: isEscalation ? "generó una escalación de ANS" : "",
     target: null,
     preview: row.body,
@@ -146,14 +146,14 @@ function toNotifItem(row: ApiNotification): NotifItem {
 }
 
 const NOTIF_DOT_COLOR: Record<NotifItem["kind"], string> = {
-  escalation: "#EF4444",
+  escalation: "var(--kairo-color-bad)",
   mention:    "var(--k-accent)",
-  assigned:   "#F59E0B",
+  assigned:   "var(--kairo-color-warn)",
   ai:         "var(--k-accent)",
-  reply:      "#10B981",
+  reply:      "var(--kairo-color-ok)",
   report:     "var(--k-text-tertiary)",
   system:     "var(--k-text-tertiary)",
-  sla_escalation: "#EF4444",
+  sla_escalation: "var(--kairo-color-bad)",
 };
 
 function NotifDot({ kind }: { kind: NotifItem["kind"] }) {
@@ -270,7 +270,7 @@ function NotificationsPopover({ items, onMarkAll, onSelect }: NotifPopoverProps)
         background: T.surface, display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <span style={{ fontSize: 11, fontFamily: T.mono, color: T.textTertiary, display: "flex", alignItems: "center", gap: 5 }}>
-          <span className="animate-pulse" style={{ width: 5, height: 5, borderRadius: 999, background: "#10B981", display: "inline-block" }}/>
+          <span className="animate-pulse" style={{ width: 5, height: 5, borderRadius: 999, background: "var(--kairo-color-ok)", display: "inline-block" }}/>
           {t("dashboard:topChrome.notifications.liveStream")}
         </span>
         <button style={{ fontSize: 12, color: T.accent, fontWeight: 500, background: "none", border: "none", cursor: "pointer" }}>
@@ -385,10 +385,10 @@ type UserStatus = "online" | "busy" | "away" | "offline";
 
 // Dots are semantic colors — not translated
 const STATUS_DOTS: Record<UserStatus, string> = {
-  online:  "#10B981",
-  busy:    "#EF4444",
-  away:    "#F59E0B",
-  offline: "#A1A1AA",
+  online:  "var(--kairo-color-ok)",
+  busy:    "var(--kairo-color-bad)",
+  away:    "var(--kairo-color-warn)",
+  offline: "var(--kairo-color-faint)",
 };
 
 type Theme = "light" | "auto" | "dark";
@@ -446,7 +446,7 @@ function ProfilePopover({
           <div style={{ position: "relative", flexShrink: 0 }}>
             <div style={{
               width: 40, height: 40, borderRadius: 999,
-              background: "linear-gradient(135deg, var(--k-accent) 0%, #6E8BFF 100%)",
+              background: "linear-gradient(135deg, var(--k-accent) 0%, var(--kairo-color-accent-indigo) 100%)",
               color: "white", fontSize: 13, fontWeight: 600,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
@@ -498,7 +498,7 @@ function ProfilePopover({
           border: `1px solid ${T.border}`, background: T.bg,
         }}>
           <div style={{
-            width: 22, height: 22, borderRadius: 5, background: "#09090B", color: "white",
+            width: 22, height: 22, borderRadius: 5, background: "var(--kairo-color-text)", color: "white",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 10, fontWeight: 600, flexShrink: 0,
           }}>K</div>
@@ -627,14 +627,14 @@ function SignOutButton({ onSignOut, initials }: { onSignOut: () => void; initial
       style={{
         width: "100%", display: "flex", alignItems: "center", gap: 10,
         padding: "7px 10px", borderRadius: 5,
-        color: "#B91C1C", fontSize: 13, textAlign: "left",
-        background: hov ? "#FEF2F2" : "transparent",
+        color: "var(--kairo-color-bad-ink)", fontSize: 13, textAlign: "left",
+        background: hov ? "var(--kairo-color-bad-soft)" : "transparent",
         border: "none", cursor: "pointer",
       }}
     >
-      <LogOut size={14} color="#B91C1C"/>
+      <LogOut size={14} color="var(--kairo-color-bad-ink)"/>
       <span style={{ flex: 1 }}>{t("dashboard:topChrome.account.signOut")}</span>
-      <span style={{ fontFamily: T.mono, fontSize: 10, color: "#B91C1C", opacity: 0.6 }}>{initials}</span>
+      <span style={{ fontFamily: T.mono, fontSize: 10, color: "var(--kairo-color-bad-ink)", opacity: 0.6 }}>{initials}</span>
     </button>
   );
 }
@@ -755,7 +755,7 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
             <span style={{
               position: "absolute", top: 2, right: 2,
               minWidth: 14, height: 14, padding: "0 3px",
-              borderRadius: 999, background: "#EF4444", color: "white",
+              borderRadius: 999, background: "var(--kairo-color-bad)", color: "white",
               fontSize: 9, fontFamily: T.mono, fontWeight: 600,
               display: "flex", alignItems: "center", justifyContent: "center",
               border: `2px solid ${T.bg}`, boxSizing: "content-box",
@@ -798,7 +798,7 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
           <div style={{ position: "relative" }}>
             <div style={{
               width: 28, height: 28, borderRadius: 999,
-              background: "linear-gradient(135deg, var(--k-accent) 0%, #6E8BFF 100%)",
+              background: "linear-gradient(135deg, var(--k-accent) 0%, var(--kairo-color-accent-indigo) 100%)",
               color: "white", fontSize: 11, fontWeight: 600,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
@@ -864,7 +864,7 @@ export function TopChrome({ collapsed, onToggle, onViewChange }: TopChromeProps)
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{
-            width: 28, height: 28, borderRadius: 6, background: "#2B5BFF",
+            width: 28, height: 28, borderRadius: 6, background: "var(--kairo-color-accent)",
             display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}>
             <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">

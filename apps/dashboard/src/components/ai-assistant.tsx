@@ -95,13 +95,13 @@ interface KbArticle {
 // ---------------------------------------------------------------------------
 
 const SEVERITY_CHIP: Record<string, { bg: string; color: string; border: string }> = {
-  high:   { bg: "#FEE2E2", color: "#DC2626", border: "#FECACA" },
-  medium: { bg: "#FFEDD5", color: "#C2410C", border: "#FED7AA" },
-  low:    { bg: "#FEF9C3", color: "#B45309", border: "#FEF08A" },
+  high:   { bg: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", border: "var(--kairo-color-bad-line)" },
+  medium: { bg: "color-mix(in srgb, var(--kairo-color-mood) 12%, transparent)", color: "var(--kairo-color-sla-escalate-ink)", border: "color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" },
+  low:    { bg: "var(--kairo-color-note-soft)", color: "var(--kairo-color-note)", border: "var(--kairo-color-note-line)" },
 };
 
 const SEVERITY_BORDER: Record<string, string> = {
-  high: "#EF4444", medium: "#FB923C", low: "#FBBF24", none: "var(--k-border)",
+  high: "var(--kairo-color-bad)", medium: "var(--kairo-color-mood)", low: "var(--kairo-color-warn)", none: "var(--k-border)",
 };
 
 function topSeverity(reasons: EscalationReason[]): string {
@@ -157,8 +157,8 @@ function ClientTab({ loading }: { loading: boolean }) {
 
   const PLAN_STYLE: Record<string, { bg: string; color: string; border: string }> = {
     enterprise: { bg: "#F3F0FF", color: "#6D28D9", border: "#DDD6FE" },
-    pro:        { bg: "#EEF2FF", color: "#2B5BFF", border: "#C7D2FE" },
-    starter:    { bg: "#ECFDF5", color: "#047857", border: "#A7F3D0" },
+    pro:        { bg: "var(--kairo-color-accent-soft)", color: "var(--kairo-color-accent)", border: "var(--kairo-color-accent-line)" },
+    starter:    { bg: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok-ink)", border: "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" },
     unknown:    { bg: "var(--k-surface-2)", color: "var(--k-text-tertiary)", border: "var(--k-border)" },
   };
 
@@ -306,7 +306,7 @@ function SimilarTab({ ticketId, lang }: { ticketId: string | null; lang: string 
               {t("ai.ticketNumber", { number: c.ticket_number })}
             </span>
             {formatSim(c.similarity) && (
-              <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 11, color: "#10B981", flexShrink: 0 }}>
+              <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 11, color: "var(--kairo-color-ok)", flexShrink: 0 }}>
                 {formatSim(c.similarity)} sim
               </span>
             )}
@@ -501,7 +501,7 @@ function EscalateTab({
 
       {/* Escalation reasons */}
       <div style={{ borderRadius: 8, border: "1px solid var(--k-border)", borderLeft: `3px solid ${SEVERITY_BORDER[sev]}`, padding: 12 }}>
-        <p style={{ fontSize: 12, fontWeight: 500, color: sev === "none" ? "var(--k-text-secondary)" : "#DC2626", margin: "0 0 8px" }}>
+        <p style={{ fontSize: 12, fontWeight: 500, color: sev === "none" ? "var(--k-text-secondary)" : "var(--kairo-color-bad-ink)", margin: "0 0 8px" }}>
           {t("ai.escalationSuggested")}
         </p>
         {reasonsLoading ? (
@@ -516,7 +516,7 @@ function EscalateTab({
         ) : (
           <>
             {conf > 0.80 && (
-              <p style={{ fontSize: 10, fontWeight: 600, color: "#10B981", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 8px" }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: "var(--kairo-color-ok)", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 8px" }}>
                 {t("ai.highConfidence")}
               </p>
             )}
@@ -536,7 +536,7 @@ function EscalateTab({
 
       {/* Escalation packet */}
       {escalatedAt ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#10B981", fontWeight: 500 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--kairo-color-ok)", fontWeight: 500 }}>
           <CheckCircle2 style={{ width: 13, height: 13 }} />
           <span>{t("ai.escalatedSuccess")} {escalatedAt}</span>
         </div>

@@ -117,8 +117,8 @@ export default function LoginPage() {
               style={{
                 marginBottom: 20,
                 padding: '10px 12px',
-                background: '#FEF2F2',
-                border: '1px solid #FECACA',
+                background: 'var(--kairo-color-bad-soft)',
+                border: '1px solid var(--kairo-color-bad-line)',
                 borderRadius: 'var(--radius-input)',
                 display: 'flex',
                 alignItems: 'flex-start',
@@ -128,7 +128,7 @@ export default function LoginPage() {
               <AlertCircle
                 style={{ width: 14, height: 14, color: 'var(--danger)', marginTop: 1, flexShrink: 0 }}
               />
-              <p style={{ fontSize: 13, color: '#B91C1C', margin: 0, lineHeight: 1.4 }}>{error}</p>
+              <p style={{ fontSize: 13, color: 'var(--kairo-color-bad-ink)', margin: 0, lineHeight: 1.4 }}>{error}</p>
             </div>
           )}
 
@@ -314,7 +314,7 @@ export default function LoginPage() {
                 width: 40,
                 height: 40,
                 borderRadius: 999,
-                background: 'linear-gradient(135deg,#FCA5A5,#F472B6)',
+                background: 'linear-gradient(135deg,var(--kairo-color-bad-line),#F472B6)',
                 color: 'white',
                 display: 'flex',
                 alignItems: 'center',

@@ -32,13 +32,13 @@ export function getInitials(name?: string | null, email?: string | null): string
 // generating arbitrary hues. Mirrors the design mock's gradient set.
 const GRADIENTS = [
   "linear-gradient(135deg,#BFDBFE,#3B82F6)",
-  "linear-gradient(135deg,#A7F3D0,#10B981)",
-  "linear-gradient(135deg,#FDE68A,#F59E0B)",
+  "linear-gradient(135deg,color-mix(in srgb, var(--kairo-color-ok) 24%, transparent),var(--kairo-color-ok))",
+  "linear-gradient(135deg,var(--kairo-color-note-line),var(--kairo-color-warn))",
   "linear-gradient(135deg,#C4B5FD,#8B5CF6)",
   "linear-gradient(135deg,#FBCFE8,#EC4899)",
-  "linear-gradient(135deg,#FDE68A,#FB923C)",
-  "linear-gradient(135deg,#FFB199,#FF6E7F)",
-  "linear-gradient(135deg,#C7D2FE,#6366F1)",
+  "linear-gradient(135deg,var(--kairo-color-note-line),var(--kairo-color-mood))",
+  "linear-gradient(135deg,#FFB199,var(--kairo-color-bad))",
+  "linear-gradient(135deg,var(--kairo-color-accent-line),#6366F1)",
 ] as const;
 
 /** Stable index from an identity string — same person, same color, always. */

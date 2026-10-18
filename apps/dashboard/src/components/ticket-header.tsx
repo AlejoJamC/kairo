@@ -21,16 +21,16 @@ const assignToMeEnabled = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ASSIGN_TO
 // ---------------------------------------------------------------------------
 
 const PRIORITY_STYLE: Record<string, React.CSSProperties> = {
-  P1: { background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" },
-  P2: { background: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA" },
-  P3: { background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" },
-  P4: { background: "#F4F4F5", color: "#71717A", border: "1px solid #E4E4E7" },
+  P1: { background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", border: "1px solid var(--kairo-color-bad-line)" },
+  P2: { background: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)", color: "var(--kairo-color-sla-escalate-ink)", border: "1px solid color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" },
+  P3: { background: "var(--kairo-color-note-soft)", color: "var(--kairo-color-note)", border: "1px solid var(--kairo-color-note-line)" },
+  P4: { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "1px solid var(--kairo-color-line)" },
 };
 
 function PriorityBadge({ priority }: { priority: string | null | undefined }) {
   if (!priority) return null;
   const p = priority.toUpperCase();
-  const style = PRIORITY_STYLE[p] ?? { background: "#F4F4F5", color: "#71717A", border: "1px solid #E4E4E7" };
+  const style = PRIORITY_STYLE[p] ?? { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "1px solid var(--kairo-color-line)" };
   return (
     <span style={{ ...style, fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 999 }}>
       {p}
@@ -47,11 +47,11 @@ function TypeBadge({ type }: { type: string | null | undefined }) {
   const t = type.toLowerCase();
   let style: React.CSSProperties;
   if (t === "lead" || t === "prospect")
-    style = { background: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0" };
+    style = { background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok-ink)", border: "1px solid color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" };
   else if (t === "spam")
-    style = { background: "#F4F4F5", color: "#71717A", border: "1px solid #E4E4E7" };
+    style = { background: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "1px solid var(--kairo-color-line)" };
   else
-    style = { background: "#EEF2FF", color: "#2B5BFF", border: "1px solid #C7D2FE" };
+    style = { background: "var(--kairo-color-accent-soft)", color: "var(--kairo-color-accent)", border: "1px solid var(--kairo-color-accent-line)" };
 
   return (
     <span style={{ ...style, fontSize: 11, fontWeight: 500, padding: "2px 7px", borderRadius: 999 }}>
@@ -157,9 +157,9 @@ export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
                 fontSize: 11,
                 padding: "2px 7px",
                 borderRadius: 999,
-                background: "#F4F4F5",
-                color: "#52525B",
-                border: "1px solid #E4E4E7",
+                background: "var(--kairo-color-hover)",
+                color: "var(--kairo-color-muted)",
+                border: "1px solid var(--kairo-color-line)",
               }}
             >
               {ticket.category}
@@ -184,8 +184,8 @@ export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
                 fontWeight: 600,
                 padding: "2px 7px",
                 borderRadius: 999,
-                background: "#FEF3C7",
-                color: "#B45309",
+                background: "var(--kairo-color-note-soft)",
+                color: "var(--kairo-color-note)",
               }}
             >
               {t("correction.correctedBadge")}
@@ -255,10 +255,10 @@ export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
             padding: "5px 12px",
             borderRadius: 6,
             border: isAssigned
-              ? "1px solid #A7F3D0"
+              ? "1px solid color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)"
               : "1px solid var(--k-accent)",
-            background: isAssigned ? "#ECFDF5" : "var(--k-accent)",
-            color: isAssigned ? "#047857" : "white",
+            background: isAssigned ? "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" : "var(--k-accent)",
+            color: isAssigned ? "var(--kairo-color-ok-ink)" : "white",
             cursor: assigning || isAssigned ? "default" : "pointer",
             flexShrink: 0,
             transition: "background 0.1s ease, color 0.1s ease",

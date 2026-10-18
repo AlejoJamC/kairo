@@ -209,7 +209,7 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
               {t("aiReviewView.reject")}
             </button>
             {error && (
-              <span style={{ fontSize: 13, color: "var(--k-danger, #b42318)" }}>{t("aiReviewView.error")}</span>
+              <span style={{ fontSize: 13, color: "var(--k-danger, var(--kairo-color-bad-ink))" }}>{t("aiReviewView.error")}</span>
             )}
           </div>
         </div>

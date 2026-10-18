@@ -79,8 +79,8 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
         <div className="k-card">
           {success ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "32px 0", textAlign: "center" }}>
-              <div style={{ width: 48, height: 48, borderRadius: 999, background: "#ECFDF5", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Check style={{ width: 22, height: 22, color: "#10B981" }} />
+              <div style={{ width: 48, height: 48, borderRadius: 999, background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Check style={{ width: 22, height: 22, color: "var(--kairo-color-ok)" }} />
               </div>
               <p style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>
                 {t("dashboard:changePassword.successMessage")}
@@ -92,7 +92,7 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
           ) : (
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {error && (
-                <div style={{ borderRadius: 6, background: "#FEF2F2", border: "1px solid #FECACA", padding: "8px 12px", fontSize: 13, color: "#991B1B" }}>
+                <div style={{ borderRadius: 6, background: "var(--kairo-color-bad-soft)", border: "1px solid var(--kairo-color-bad-line)", padding: "8px 12px", fontSize: 13, color: "var(--kairo-color-bad-ink)" }}>
                   {error}
                 </div>
               )}
@@ -132,9 +132,9 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
                 ].map(({ met, label }) => (
                   <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
                     {met
-                      ? <Check style={{ width: 14, height: 14, color: "#10B981", flexShrink: 0 }} />
+                      ? <Check style={{ width: 14, height: 14, color: "var(--kairo-color-ok)", flexShrink: 0 }} />
                       : <X style={{ width: 14, height: 14, color: "var(--k-text-tertiary)", flexShrink: 0 }} />}
-                    <span style={{ color: met ? "#065F46" : "var(--k-text-tertiary)" }}>{label}</span>
+                    <span style={{ color: met ? "var(--kairo-color-ok-ink)" : "var(--k-text-tertiary)" }}>{label}</span>
                   </div>
                 ))}
               </div>

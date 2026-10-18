@@ -39,9 +39,9 @@ import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
 // ---------------------------------------------------------------------------
 
 const PLAN_DOT: Record<string, string> = {
-  Enterprise: "#2B5BFF",
-  Pro:        "#2B5BFF",
-  Starter:    "#A1A1AA",
+  Enterprise: "var(--kairo-color-accent)",
+  Pro:        "var(--kairo-color-accent)",
+  Starter:    "var(--kairo-color-faint)",
 };
 
 const PLAN_LABEL: Record<string, string> = {
@@ -51,14 +51,14 @@ const PLAN_LABEL: Record<string, string> = {
 };
 
 const AVATAR_GRADIENTS = [
-  "linear-gradient(135deg,#FCA5A5,#F472B6)",
+  "linear-gradient(135deg,var(--kairo-color-bad-line),#F472B6)",
   "linear-gradient(135deg,#93C5FD,#60A5FA)",
-  "linear-gradient(135deg,#FDE68A,#F59E0B)",
-  "linear-gradient(135deg,#86EFAC,#10B981)",
+  "linear-gradient(135deg,var(--kairo-color-note-line),var(--kairo-color-warn))",
+  "linear-gradient(135deg,color-mix(in srgb, var(--kairo-color-ok) 24%, transparent),var(--kairo-color-ok))",
   "linear-gradient(135deg,#C4B5FD,#A855F7)",
-  "linear-gradient(135deg,#FCD5CE,#F87171)",
-  "linear-gradient(135deg,#FECDD3,#EC4899)",
-  "linear-gradient(135deg,#FCA5A5,#EF4444)",
+  "linear-gradient(135deg,#FCD5CE,var(--kairo-color-bad))",
+  "linear-gradient(135deg,var(--kairo-color-bad-line),#EC4899)",
+  "linear-gradient(135deg,var(--kairo-color-bad-line),var(--kairo-color-bad))",
 ];
 
 function avatarGradient(name: string) {
@@ -113,9 +113,9 @@ type BadgeVariant = "proposed" | "confirmed" | "rejected" | "external";
 
 const BADGE_STYLE: Record<BadgeVariant, { bg: string; color: string; border: string }> = {
   proposed:  { bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE" },
-  confirmed: { bg: "#F0FDF4", color: "#16A34A", border: "#BBF7D0" },
-  rejected:  { bg: "#F4F4F5", color: "#71717A", border: "#E4E4E7" },
-  external:  { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" },
+  confirmed: { bg: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok)", border: "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" },
+  rejected:  { bg: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "var(--kairo-color-line)" },
+  external:  { bg: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)", color: "var(--kairo-color-sla-escalate-ink)", border: "color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" },
 };
 
 function StatusBadge({ status }: { status: ContactRowStatus }) {
@@ -163,7 +163,7 @@ function KpiStrip({ clients }: { clients: Client[] }) {
     { label: "MRR TOTAL",        value: "—",                          delta: null,         accent: undefined },
     { label: "ACTIVOS",          value: `${active} / ${clients.length}`, delta: null,      accent: undefined },
     { label: "CSAT PROMEDIO",    value: csatAvg,                      delta: null,         accent: undefined },
-    { label: "RIESGO DE CHURN",  value: String(churnRisk),            delta: churnRisk > 0 ? `↑${churnRisk}` : null, accent: churnRisk > 0 ? "#EF4444" : undefined },
+    { label: "RIESGO DE CHURN",  value: String(churnRisk),            delta: churnRisk > 0 ? `↑${churnRisk}` : null, accent: churnRisk > 0 ? "var(--kairo-color-bad)" : undefined },
   ];
 
   return (
@@ -183,7 +183,7 @@ function KpiStrip({ clients }: { clients: Client[] }) {
               {s.value}
             </span>
             {s.delta && (
-              <span style={{ fontSize: 12, color: s.accent ?? "#10B981", fontFamily: "var(--k-font-mono)" }}>
+              <span style={{ fontSize: 12, color: s.accent ?? "var(--kairo-color-ok)", fontFamily: "var(--k-font-mono)" }}>
                 {s.delta}
               </span>
             )}
@@ -200,7 +200,7 @@ function KpiStrip({ clients }: { clients: Client[] }) {
 
 function CsatCell({ value }: { value: number | null }) {
   if (value == null) return <span style={{ color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)" }}>—</span>;
-  const color = value >= 4.7 ? "#10B981" : value >= 4.0 ? "#F59E0B" : "#EF4444";
+  const color = value >= 4.7 ? "var(--kairo-color-ok)" : value >= 4.0 ? "var(--kairo-color-warn)" : "var(--kairo-color-bad)";
   const Icon  = value >= 4.7 ? SmilePlus : value >= 4.0 ? Meh : Frown;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -291,7 +291,7 @@ function ContactCard({
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         {!isDraft && row.plan ? (
           <>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: PLAN_DOT[row.plan] ?? "#A1A1AA" }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: PLAN_DOT[row.plan] ?? "var(--kairo-color-faint)" }} />
             <span>{PLAN_LABEL[row.plan] ?? row.plan}</span>
           </>
         ) : (
@@ -322,8 +322,8 @@ function ContactCard({
             style={{
               display: "flex", alignItems: "center", gap: 4,
               padding: "3px 8px", borderRadius: 5,
-              background: "#F0FDF4", border: "1px solid #BBF7D0",
-              cursor: "pointer", color: "#16A34A", fontSize: 11, fontWeight: 600,
+              background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)",
+              cursor: "pointer", color: "var(--kairo-color-ok)", fontSize: 11, fontWeight: 600,
               opacity: hover ? 1 : 0, transition: "opacity 0.1s",
             }}
           >
@@ -361,8 +361,8 @@ function ContactCard({
                 <button
                   onClick={(e) => { setMenuOpen(false); onDelete?.(e); }}
                   disabled={deleting}
-                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "#DC2626" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#FEF2F2")}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--kairo-color-bad-ink)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--kairo-color-bad-soft)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
                 >
                   {deleting
@@ -693,14 +693,14 @@ export function ClientDirectory() {
         {draftsError && (
           <div style={{
             marginTop: 12, padding: "10px 14px", borderRadius: 8, fontSize: 13,
-            background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA",
+            background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", border: "1px solid var(--kairo-color-bad-line)",
             display: "flex", alignItems: "center", gap: 8,
           }}>
             <AlertCircle style={{ width: 14, height: 14, flexShrink: 0 }} />
             <span style={{ flex: 1 }}>{t("errorMessage")}</span>
             <button
               onClick={retryDrafts}
-              style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, background: "none", border: "none", cursor: "pointer", color: "#DC2626", fontWeight: 500 }}
+              style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, background: "none", border: "none", cursor: "pointer", color: "var(--kairo-color-bad-ink)", fontWeight: 500 }}
             >
               <RefreshCw style={{ width: 12, height: 12 }} />
               {t("retry")}
@@ -748,7 +748,7 @@ export function ClientDirectory() {
                 onClick={() => setBulkModalOpen(true)}
                 style={{
                   padding: "5px 12px", borderRadius: 6, fontSize: 13, cursor: "pointer",
-                  background: "#16A34A", color: "white", border: "none", fontWeight: 500,
+                  background: "var(--kairo-color-ok)", color: "white", border: "none", fontWeight: 500,
                 }}
               >
                 {t("actions.bulkConfirmButton", { org: orgFilter })}
@@ -766,9 +766,9 @@ export function ClientDirectory() {
               onClick={() => setPlanFilter(planFilter === key ? "all" : key)}
               style={{
                 padding: "5px 12px", borderRadius: 999, fontSize: 13, cursor: "pointer",
-                background: planFilter === key ? "#2B5BFF" : "white",
+                background: planFilter === key ? "var(--kairo-color-accent)" : "white",
                 color: planFilter === key ? "white" : "var(--k-text-secondary)",
-                border: `1px solid ${planFilter === key ? "#2B5BFF" : "var(--k-border)"}`,
+                border: `1px solid ${planFilter === key ? "var(--kairo-color-accent)" : "var(--k-border)"}`,
               }}
             >
               {label}
@@ -930,7 +930,7 @@ export function ClientDirectory() {
                 disabled={bulkConfirming}
                 style={{
                   padding: "7px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer",
-                  background: "#16A34A", color: "white", border: "none", fontWeight: 500,
+                  background: "var(--kairo-color-ok)", color: "white", border: "none", fontWeight: 500,
                   display: "flex", alignItems: "center", gap: 6,
                 }}
               >
@@ -1216,7 +1216,7 @@ function ContactDetailDrawer({
               {actionError && (
                 <div style={{
                   marginBottom: 10, padding: "8px 12px", borderRadius: 6, fontSize: 12,
-                  background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA",
+                  background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", border: "1px solid var(--kairo-color-bad-line)",
                 }}>
                   {actionError}
                 </div>
@@ -1232,7 +1232,7 @@ function ContactDetailDrawer({
                       style={{
                         flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                         padding: "9px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                        background: "#16A34A", color: "white", border: "none",
+                        background: "var(--kairo-color-ok)", color: "white", border: "none",
                       }}
                     >
                       {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <Check style={{ width: 13, height: 13 }} />}
@@ -1244,7 +1244,7 @@ function ContactDetailDrawer({
                       style={{
                         flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                         padding: "9px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                        background: "white", color: "#DC2626", border: "1px solid #FECACA",
+                        background: "white", color: "var(--kairo-color-bad-ink)", border: "1px solid var(--kairo-color-bad-line)",
                       }}
                     >
                       {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <XCircle style={{ width: 13, height: 13 }} />}
@@ -1288,7 +1288,7 @@ function ContactDetailDrawer({
                     </div>
                   ))}
                   {editError && (
-                    <div style={{ fontSize: 12, color: "#DC2626", padding: "6px 10px", background: "#FEF2F2", borderRadius: 6, border: "1px solid #FECACA" }}>
+                    <div style={{ fontSize: 12, color: "var(--kairo-color-bad-ink)", padding: "6px 10px", background: "var(--kairo-color-bad-soft)", borderRadius: 6, border: "1px solid var(--kairo-color-bad-line)" }}>
                       {editError}
                     </div>
                   )}
@@ -1299,7 +1299,7 @@ function ContactDetailDrawer({
                       style={{
                         flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                         padding: "8px 14px", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                        background: "#2B5BFF", color: "white", border: "none",
+                        background: "var(--kairo-color-accent)", color: "white", border: "none",
                       }}
                     >
                       {saving && <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />}
@@ -1332,7 +1332,7 @@ function ContactDetailDrawer({
                       style={{
                         flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                         padding: "9px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                        background: "#16A34A", color: "white", border: "none",
+                        background: "var(--kairo-color-ok)", color: "white", border: "none",
                       }}
                     >
                       {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <Check style={{ width: 13, height: 13 }} />}
@@ -1344,7 +1344,7 @@ function ContactDetailDrawer({
                       style={{
                         flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                         padding: "9px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                        background: "white", color: "#DC2626", border: "1px solid #FECACA",
+                        background: "white", color: "var(--kairo-color-bad-ink)", border: "1px solid var(--kairo-color-bad-line)",
                       }}
                     >
                       {actionBusy ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> : <XCircle style={{ width: 13, height: 13 }} />}

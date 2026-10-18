@@ -16,7 +16,7 @@ function SlaBadge({ slaDate, breached }: { slaDate: string | null | undefined; b
 
   if (breached) {
     return (
-      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4, background: "#FEF2F2", color: "#DC2626", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4, background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", textTransform: "uppercase", letterSpacing: "0.03em" }}>
         {t("ticketCard.slaBreached")}
       </span>
     );
@@ -26,7 +26,7 @@ function SlaBadge({ slaDate, breached }: { slaDate: string | null | undefined; b
   const diff = new Date(slaDate).getTime() - Date.now();
   if (diff <= 0) {
     return (
-      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4, background: "#FEF2F2", color: "#DC2626", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4, background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", textTransform: "uppercase", letterSpacing: "0.03em" }}>
         {t("ticketCard.slaBreached")}
       </span>
     );
@@ -167,7 +167,7 @@ export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCu
                         <SlaBadge slaDate={ticket.sla_due_at} breached={ticket.sla_breached ?? false} />
                       )}
                       {ticket.sla_breached && (
-                        <AlertTriangle style={{ width: 13, height: 13, color: "#EF4444", flexShrink: 0 }} />
+                        <AlertTriangle style={{ width: 13, height: 13, color: "var(--kairo-color-bad)", flexShrink: 0 }} />
                       )}
                     </div>
                     <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>

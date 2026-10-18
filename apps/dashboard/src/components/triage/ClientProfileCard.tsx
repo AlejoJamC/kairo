@@ -124,7 +124,7 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
           <Phone style={{ width: 11, height: 11, color: "var(--k-text-tertiary)", flexShrink: 0 }} />
           <span style={{ flex: 1, textAlign: "left", fontFamily: "var(--k-font-mono)" }}>{phone}</span>
           {copied
-            ? <Check style={{ width: 11, height: 11, color: "#10B981", flexShrink: 0 }} />
+            ? <Check style={{ width: 11, height: 11, color: "var(--kairo-color-ok)", flexShrink: 0 }} />
             : <Copy  style={{ width: 11, height: 11, color: "var(--k-text-tertiary)", flexShrink: 0 }} />}
         </button>
       )}
@@ -141,8 +141,8 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
             fontWeight: 500,
             padding: "6px 8px",
             borderRadius: 6,
-            background: clientProfile.slaBreachedCount > 0 ? "#FEF2F2" : "var(--k-surface-2)",
-            color: clientProfile.slaBreachedCount > 0 ? "#DC2626" : "var(--k-text-secondary)",
+            background: clientProfile.slaBreachedCount > 0 ? "var(--kairo-color-bad-soft)" : "var(--k-surface-2)",
+            color: clientProfile.slaBreachedCount > 0 ? "var(--kairo-color-bad-ink)" : "var(--k-text-secondary)",
           }}
         >
           {t("clientProfile.slaHistory", {
@@ -176,8 +176,8 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
 
 const DRAFT_BADGE_STYLE: Record<"proposed" | "confirmed" | "rejected", { bg: string; color: string; border: string }> = {
   proposed:  { bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE" },
-  confirmed: { bg: "#F0FDF4", color: "#16A34A", border: "#BBF7D0" },
-  rejected:  { bg: "#F4F4F5", color: "#71717A", border: "#E4E4E7" },
+  confirmed: { bg: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok)", border: "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" },
+  rejected:  { bg: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "var(--kairo-color-line)" },
 };
 
 function DraftStatusBadge({ status }: { status: "proposed" | "confirmed" | "rejected" }) {

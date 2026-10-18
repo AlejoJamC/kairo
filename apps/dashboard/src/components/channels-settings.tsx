@@ -83,9 +83,9 @@ export function ChannelsSettings({ onViewChange }: Props) {
 
       {/* Error */}
       {error && (
-        <div style={{ display: "flex", gap: 8, alignItems: "center", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 8, padding: "10px 14px", marginBottom: 20 }}>
-          <AlertCircle size={15} color="#EF4444" />
-          <p style={{ fontSize: 13, color: "#B91C1C", margin: 0 }}>{error}</p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", background: "var(--kairo-color-bad-soft)", border: "1px solid var(--kairo-color-bad-line)", borderRadius: 8, padding: "10px 14px", marginBottom: 20 }}>
+          <AlertCircle size={15} color="var(--kairo-color-bad)" />
+          <p style={{ fontSize: 13, color: "var(--kairo-color-bad-ink)", margin: 0 }}>{error}</p>
         </div>
       )}
 
@@ -124,8 +124,8 @@ export function ChannelsSettings({ onViewChange }: Props) {
                     {ch.email_address}
                   </span>
                   {ch.is_primary && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#F59E0B", fontWeight: 500 }}>
-                      <Star size={10} fill="#F59E0B" /> Primary
+                    <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "var(--kairo-color-warn)", fontWeight: 500 }}>
+                      <Star size={10} fill="var(--kairo-color-warn)" /> Primary
                     </span>
                   )}
                 </div>

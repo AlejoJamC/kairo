@@ -39,9 +39,9 @@ const HIGHLIGHT_DURATION_MS = 2000;
 const CENTER_PANEL_MIN_WIDTH = 520;
 
 const PRIORITY_SLA_BAR_COLOR: Record<"ok" | "at_risk" | "breached", string> = {
-  ok: "#10B981",
-  at_risk: "#F97316",
-  breached: "#EF4444",
+  ok: "var(--kairo-color-ok)",
+  at_risk: "var(--kairo-color-mood)",
+  breached: "var(--kairo-color-bad)",
 };
 
 // "Xd Xh Xm" — always shows the largest unit down to minutes so nothing
@@ -105,7 +105,7 @@ function SenderAvatar({ name, email }: { name: string | null; email: string | nu
         height: 36,
         borderRadius: "50%",
         background: "var(--k-accent-subtle)",
-        border: "1.5px solid #C7D2FE",
+        border: "1.5px solid var(--kairo-color-accent-line)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -264,7 +264,7 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
                   fontWeight: 600,
                   color: "var(--k-accent)",
                   background: "var(--k-accent-subtle)",
-                  border: "1px solid #C7D2FE",
+                  border: "1px solid var(--kairo-color-accent-line)",
                   borderRadius: 4,
                   padding: "1px 5px",
                   flexShrink: 0,
@@ -278,9 +278,9 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: "#6B7280",
-                  background: "#F3F4F6",
-                  border: "1px solid #E5E7EB",
+                  color: "var(--kairo-color-faint)",
+                  background: "var(--kairo-color-hover)",
+                  border: "1px solid var(--kairo-color-line)",
                   borderRadius: 4,
                   padding: "1px 5px",
                   flexShrink: 0,
@@ -294,9 +294,9 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: message.delivery_status === "failed" ? "#B91C1C" : "#92400E",
-                  background: message.delivery_status === "failed" ? "#FEF2F2" : "#FFFBEB",
-                  border: `1px solid ${message.delivery_status === "failed" ? "#FECACA" : "#FDE68A"}`,
+                  color: message.delivery_status === "failed" ? "var(--kairo-color-bad-ink)" : "var(--kairo-color-note-ink)",
+                  background: message.delivery_status === "failed" ? "var(--kairo-color-bad-soft)" : "var(--kairo-color-note-soft)",
+                  border: `1px solid ${message.delivery_status === "failed" ? "var(--kairo-color-bad-line)" : "var(--kairo-color-note-line)"}`,
                   borderRadius: 4,
                   padding: "1px 5px",
                   flexShrink: 0,
@@ -349,7 +349,7 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
       <div
         style={{
           background: isOutbound ? "var(--k-accent-subtle)" : "white",
-          border: `1px solid ${isOutbound ? "#C7D2FE" : "var(--k-border)"}`,
+          border: `1px solid ${isOutbound ? "var(--kairo-color-accent-line)" : "var(--k-border)"}`,
           borderRadius: 10,
           overflow: "hidden",
           padding: "14px 16px",
@@ -540,7 +540,7 @@ export function TicketDetail() {
               padding: "8px 10px",
               background: "var(--k-accent-subtle)",
               borderRadius: 6,
-              border: "1px solid #DBE3FF",
+              border: "1px solid var(--kairo-color-accent-line)",
             }}
           >
             <Sparkles

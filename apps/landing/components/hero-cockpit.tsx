@@ -42,15 +42,15 @@ const SIMILAR = [
 ];
 
 const sentimentColor = (s: string) =>
-  s === "urgent" ? "#EF4444" : s === "neutral" ? "#F59E0B" : "#10B981";
+  s === "urgent" ? "var(--kairo-color-bad)" : s === "neutral" ? "var(--kairo-color-warn)" : "var(--kairo-color-ok)";
 
 const planColor = (p: string) =>
-  p === "free" ? "#A1A1AA" : p === "scale" ? "#F59E0B" : "#2B5BFF";
+  p === "free" ? "var(--kairo-color-faint)" : p === "scale" ? "var(--kairo-color-warn)" : "var(--kairo-color-accent)";
 
 const pBg = (p: string) =>
-  p === "p1" ? "#FEF2F2" : p === "p2" ? "#FFFBEB" : "#ECFDF5";
+  p === "p1" ? "var(--kairo-color-bad-soft)" : p === "p2" ? "var(--kairo-color-note-soft)" : "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)";
 const pColor = (p: string) =>
-  p === "p1" ? "#B91C1C" : p === "p2" ? "#B45309" : "#047857";
+  p === "p1" ? "var(--kairo-color-bad-ink)" : p === "p2" ? "var(--kairo-color-note)" : "var(--kairo-color-ok-ink)";
 
 export function HeroCockpit() {
   return (
@@ -77,7 +77,7 @@ export function HeroCockpit() {
         }}
       >
         <div style={{ display: "flex", gap: 6 }}>
-          {["#FCA5A5", "#FCD34D", "#86EFAC"].map((c) => (
+          {["var(--kairo-color-bad-line)", "var(--kairo-color-note-line)", "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)"].map((c) => (
             <span key={c} style={{ width: 10, height: 10, borderRadius: 999, background: c }} />
           ))}
         </div>
@@ -200,7 +200,7 @@ export function HeroCockpit() {
                   {item.p.toUpperCase()}
                 </span>
                 {item.lead && (
-                  <span style={{ padding: "1px 5px", borderRadius: 3, background: "#ECFDF5", color: "#047857" }}>
+                  <span style={{ padding: "1px 5px", borderRadius: 3, background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok-ink)" }}>
                     LEAD
                   </span>
                 )}
@@ -271,9 +271,9 @@ export function HeroCockpit() {
                 fontSize: 11,
                 fontWeight: 500,
                 fontFamily: "var(--font-mono)",
-                background: "#FEF2F2",
-                color: "#B91C1C",
-                border: "1px solid #FECACA",
+                background: "var(--kairo-color-bad-soft)",
+                color: "var(--kairo-color-bad-ink)",
+                border: "1px solid var(--kairo-color-bad-line)",
               }}
             >
               P1
@@ -316,9 +316,9 @@ export function HeroCockpit() {
                 fontSize: 11,
               }}
             >
-              <Sparkles size={11} color="#2B5BFF" />
+              <Sparkles size={11} color="var(--kairo-color-accent)" />
               <span style={{ color: "var(--text-secondary)" }}>
-                <span style={{ color: "#2B5BFF", fontWeight: 500 }}>Triage</span> clasificó como{" "}
+                <span style={{ color: "var(--kairo-color-accent)", fontWeight: 500 }}>Triage</span> clasificó como{" "}
                 <strong>Facturación · Urgente</strong>
               </span>
               <span
@@ -366,8 +366,8 @@ export function HeroCockpit() {
               Vi en el panel que mi última factura tiene dos cargos por{" "}
               <span
                 style={{
-                  background: "#FEF2F2",
-                  color: "#B91C1C",
+                  background: "var(--kairo-color-bad-soft)",
+                  color: "var(--kairo-color-bad-ink)",
                   padding: "0 3px",
                   borderRadius: 2,
                 }}
@@ -393,7 +393,7 @@ export function HeroCockpit() {
                   top: 0,
                   bottom: 0,
                   width: 2,
-                  background: "linear-gradient(180deg,#2B5BFF,#6E8BFF)",
+                  background: "linear-gradient(180deg,var(--kairo-color-accent),var(--kairo-color-accent-indigo))",
                 }}
               />
               <div
@@ -448,7 +448,7 @@ export function HeroCockpit() {
                 width: 32,
                 height: 32,
                 borderRadius: 999,
-                background: "linear-gradient(135deg,#FCA5A5,#F472B6)",
+                background: "linear-gradient(135deg,var(--kairo-color-bad-line),#F472B6)",
                 color: "white",
                 display: "flex",
                 alignItems: "center",
@@ -509,7 +509,7 @@ export function HeroCockpit() {
               }}
             >
               <span style={{ color: "var(--text-secondary)" }}>{id}</span>
-              <span style={{ color: "#10B981" }}>{score}</span>
+              <span style={{ color: "var(--kairo-color-ok)" }}>{score}</span>
             </div>
           ))}
         </div>
@@ -537,7 +537,7 @@ export function HeroCockpit() {
             width: 22,
             height: 22,
             borderRadius: 5,
-            background: "linear-gradient(135deg,#2B5BFF,#6E8BFF)",
+            background: "linear-gradient(135deg,var(--kairo-color-accent),var(--kairo-color-accent-indigo))",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -548,7 +548,7 @@ export function HeroCockpit() {
         </span>
         <div>
           <div style={{ fontWeight: 500 }}>
-            Triage clasificó como <span style={{ color: "#2B5BFF" }}>Facturación · Urgente</span>
+            Triage clasificó como <span style={{ color: "var(--kairo-color-accent)" }}>Facturación · Urgente</span>
           </div>
           <div
             style={{

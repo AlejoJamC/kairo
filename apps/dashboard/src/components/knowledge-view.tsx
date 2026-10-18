@@ -276,7 +276,7 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
             <button type="button" disabled={busy} style={buttonStyle(false)} onClick={() => void discard(selected)}>
               {selected.is_published ? t("knowledgeView.delete") : t("knowledgeView.discard")}
             </button>
-            {error && <span style={{ fontSize: 13, color: "var(--k-danger, #b42318)" }}>{t("knowledgeView.error")}</span>}
+            {error && <span style={{ fontSize: 13, color: "var(--k-danger, var(--kairo-color-bad-ink))" }}>{t("knowledgeView.error")}</span>}
           </div>
         </div>
       )}

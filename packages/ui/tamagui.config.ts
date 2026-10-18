@@ -1,15 +1,11 @@
 import { createFont, createTamagui, createTokens, createTheme } from '@tamagui/core'
+import { tokens as designTokens } from '@kairo/tokens'
 
 // ---------------------------------------------------------------------------
-// KAIRO DESIGN TOKENS (KAI-153)
+// Kairo design tokens
 //
-// Token names and structure mirror packages/claude_design/tokens.css (read-only
-// source of truth). All values are reconciled against that file — no placeholders
-// remain. Gradient and multi-stop shadow values are exported as raw string
-// constants below (not in createTokens) because Tamagui's token system does not
-// have first-class gradient or multi-value box-shadow types.
-//
-// DO NOT edit packages/claude_design/* — it is read-only.
+// Every value comes from @kairo/tokens (generated from packages/tokens/src).
+// Do not write color, font or shadow literals here: change the token sources.
 // ---------------------------------------------------------------------------
 
 // ─── Color tokens ──────────────────────────────────────────────────────────
@@ -17,29 +13,30 @@ import { createFont, createTamagui, createTokens, createTheme } from '@tamagui/c
 const tokens = createTokens({
   color: {
     // Backgrounds & surfaces
-    background:    '#ffffff',
-    surface:       '#fafafa',
-    surface2:      '#f4f4f5',
+    background:    designTokens['color.bg'],
+    surface:       designTokens['color.sunk'],
+    surface2:      designTokens['color.hover'],
     // Borders
-    border:        '#e4e4e7',
-    borderSubtle:  '#f0f0f1',
+    border:        designTokens['color.line'],
+    borderSubtle:  designTokens['color.line'],
     // Text scale
-    textPrimary:   '#09090b',
-    textSecondary: '#52525b',
-    textTertiary:  '#a1a1aa',
-    // Accent — tokens.css: --accent / --accent-hover / --accent-subtle
-    accent:        '#2B5BFF',
-    accentHover:   '#1E48E5',
-    accentSubtle:  '#EEF2FF',
+    textPrimary:   designTokens['color.text'],
+    textSecondary: designTokens['color.muted'],
+    textTertiary:  designTokens['color.faint'],
+    // Accent
+    accent:        designTokens['color.accent'],
+    accentHover:   designTokens['color.accent-hover'],
+    accentSubtle:  designTokens['color.accent-soft'],
     // Semantic status
-    success:       '#10b981',
-    warning:       '#f59e0b',
-    danger:        '#ef4444',
+    success:       designTokens['color.ok'],
+    warning:       designTokens['color.warn'],
+    danger:        designTokens['color.bad'],
     // Utility
     white:         '#ffffff',
     black:         '#000000',
     transparent:   'rgba(0,0,0,0)',
   },
+
 
   // ─── Spacing ────────────────────────────────────────────────────────────
   // 4-point grid. Covers design-spec values 4/8/12/16/24/32/48/64px.
@@ -98,7 +95,7 @@ const tokens = createTokens({
 // Size scale maps to the design type spec (hero 72 / h2 48 / h3 20 / body 16 / small 12).
 
 const displayFont = createFont({
-  family: '"Inter Display", "Inter", system-ui, -apple-system, sans-serif',
+  family: designTokens['font.family.sans'],
   size: {
     1:    12,   // small / fig-ref
     2:    13,   // kbd / ticket-id
@@ -138,7 +135,7 @@ const displayFont = createFont({
 })
 
 const bodyFont = createFont({
-  family: '"Inter", system-ui, -apple-system, sans-serif',
+  family: designTokens['font.family.sans'],
   size: {
     1:    12,
     2:    13,
@@ -169,7 +166,7 @@ const bodyFont = createFont({
 })
 
 const monoFont = createFont({
-  family: '"JetBrains Mono", "SF Mono", ui-monospace, monospace',
+  family: designTokens['font.family.mono'],
   size: {
     1:    11,
     2:    12,
@@ -213,30 +210,12 @@ const lightTheme = createTheme({
   danger:            tokens.color.danger,
 })
 
-const darkTheme = createTheme({
-  background:        '#09090b',
-  backgroundHover:   '#111113',
-  backgroundPress:   '#1c1c1e',
-  color:             '#fafafa',
-  colorSecondary:    '#a1a1aa',
-  colorTertiary:     '#71717a',
-  borderColor:       '#27272a',
-  borderColorSubtle: '#18181b',
-  primary:           tokens.color.accent,
-  primaryHover:      tokens.color.accentHover,
-  primarySubtle:     '#1c1c2e',
-  success:           tokens.color.success,
-  warning:           tokens.color.warning,
-  danger:            tokens.color.danger,
-})
-
 // ─── Final config ────────────────────────────────────────────────────────────
 
 const tamaguiConfig = createTamagui({
   tokens,
   themes: {
     light: lightTheme,
-    dark:  darkTheme,
   },
   fonts: {
     display: displayFont,
@@ -278,21 +257,11 @@ declare module '@tamagui/core' {
 export default tamaguiConfig
 
 // ---------------------------------------------------------------------------
-// Non-token design constants (KAI-153)
-//
-// These values exist in tokens.css but cannot be represented as Tamagui tokens:
-//   • gradients are not a first-class token type
-//   • multi-stop box-shadow strings are not a first-class token type
-//
-// Use these constants directly in CSS-in-JS / inline styles on web, or
-// platform-split them in individual components for React Native.
+// Values Tamagui cannot hold as tokens (gradients, composite shadows), derived
+// from the same sources so web code can use them directly.
 // ---------------------------------------------------------------------------
 
-/** --ai-glow: linear-gradient(135deg, #2B5BFF 0%, #6E8BFF 100%) */
-export const aiGlow = 'linear-gradient(135deg, #2B5BFF 0%, #6E8BFF 100%)' as const
+export const aiGlow =
+  `linear-gradient(135deg, ${designTokens['color.accent']} 0%, ${designTokens['color.accent-indigo']} 100%)` as const
 
-/** --shadow-card: 0 1px 2px rgba(9, 9, 11, 0.04) */
-export const shadowCard = '0 1px 2px rgba(9, 9, 11, 0.04)' as const
-
-/** --shadow-popover: 0 4px 16px rgba(9, 9, 11, 0.08), 0 1px 2px rgba(9, 9, 11, 0.04) */
-export const shadowPopover = '0 4px 16px rgba(9, 9, 11, 0.08), 0 1px 2px rgba(9, 9, 11, 0.04)' as const
+export const shadowCard = designTokens['shadow.xs']

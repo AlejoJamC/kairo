@@ -127,7 +127,7 @@ function WorkspaceSection() {
       </div>
 
       {msg && (
-        <div style={{ ...styles.msgBanner, background: msg.type === "success" ? "#ECFDF5" : "#FEF2F2", color: msg.type === "success" ? "#065F46" : "#991B1B", border: `1px solid ${msg.type === "success" ? "#A7F3D0" : "#FECACA"}`, marginBottom: 16 }}>
+        <div style={{ ...styles.msgBanner, background: msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" : "var(--kairo-color-bad-soft)", color: msg.type === "success" ? "var(--kairo-color-ok-ink)" : "var(--kairo-color-bad-ink)", border: `1px solid ${msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" : "var(--kairo-color-bad-line)"}`, marginBottom: 16 }}>
           {msg.type === "success" ? <Check size={14} /> : <AlertCircle size={14} />}
           {msg.text}
         </div>
@@ -147,7 +147,7 @@ function WorkspaceSection() {
 // ── Team ──────────────────────────────────────────────────────────────────────
 
 const TEAM_MEMBERS = [
-  { name: "Valentina Castro", email: "valentina@empresa.io", role: "Owner", status: "online", initials: "VC", gradient: "linear-gradient(135deg,#FFB199,#FF6E7F)" },
+  { name: "Valentina Castro", email: "valentina@empresa.io", role: "Owner", status: "online", initials: "VC", gradient: "linear-gradient(135deg,#FFB199,var(--kairo-color-bad))" },
   { name: "Mateo Ríos", email: "mateo@empresa.io", role: "Admin", status: "online", initials: "MR", gradient: "linear-gradient(135deg,#93C5FD,#60A5FA)" },
   { name: "Lucía Bermúdez", email: "lucia@empresa.io", role: "Agente", status: "away", initials: "LB", gradient: "linear-gradient(135deg,#C4B5FD,#A855F7)" },
 ];
@@ -183,7 +183,7 @@ function TeamSection() {
                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: m.gradient, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: 12 }}>
                   {m.initials}
                 </div>
-                <span style={{ position: "absolute", bottom: -1, right: -1, width: 9, height: 9, borderRadius: "50%", background: m.status === "online" ? "#10B981" : "#F59E0B", border: "2px solid var(--k-bg)" }} />
+                <span style={{ position: "absolute", bottom: -1, right: -1, width: 9, height: 9, borderRadius: "50%", background: m.status === "online" ? "var(--kairo-color-ok)" : "var(--kairo-color-warn)", border: "2px solid var(--k-bg)" }} />
               </div>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{m.name}</div>
@@ -236,10 +236,10 @@ function IntegrationsSection({ onViewChange }: { onViewChange: (view: AppView) =
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>
                 {int.name}
                 {int.status === "connected" && (
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", flexShrink: 0 }} />
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--kairo-color-ok)", flexShrink: 0 }} />
                 )}
                 {int.status === "beta" && (
-                  <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 5px", borderRadius: 4, background: "rgba(43,91,255,.12)", color: "#2B5BFF" }}>BETA</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 5px", borderRadius: 4, background: "rgba(43,91,255,.12)", color: "var(--kairo-color-accent)" }}>BETA</span>
                 )}
               </div>
               <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>{int.meta}</div>
@@ -284,7 +284,7 @@ function IntegrationsSection({ onViewChange }: { onViewChange: (view: AppView) =
 
 // ── Triage Engine ─────────────────────────────────────────────────────────────
 
-const TIER_COLORS = ["#71717A", "#EF4444", "#F59E0B", "#10B981"];
+const TIER_COLORS = ["var(--kairo-color-faint)", "var(--kairo-color-bad)", "var(--kairo-color-warn)", "var(--kairo-color-ok)"];
 
 // Default category keys — stored in i18n so they switch language automatically
 const DEFAULT_CATEGORY_KEYS = ["billing", "apiBugs", "configuration", "sales", "product", "onboarding", "account"] as const;
@@ -295,7 +295,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
       onClick={onChange}
       style={{
         width: 36, height: 20, borderRadius: 10, padding: 2,
-        background: on ? "#2B5BFF" : "var(--k-border)",
+        background: on ? "var(--kairo-color-accent)" : "var(--k-border)",
         border: "none", cursor: "pointer", flexShrink: 0,
         display: "flex", alignItems: "center",
         justifyContent: on ? "flex-end" : "flex-start",
@@ -558,7 +558,7 @@ function OperationalSlaSection() {
       })}
 
       {msg && (
-        <div style={{ ...styles.msgBanner, background: msg.type === "success" ? "#ECFDF5" : "#FEF2F2", color: msg.type === "success" ? "#065F46" : "#991B1B", border: `1px solid ${msg.type === "success" ? "#A7F3D0" : "#FECACA"}`, marginBottom: 16 }}>
+        <div style={{ ...styles.msgBanner, background: msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" : "var(--kairo-color-bad-soft)", color: msg.type === "success" ? "var(--kairo-color-ok-ink)" : "var(--kairo-color-bad-ink)", border: `1px solid ${msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" : "var(--kairo-color-bad-line)"}`, marginBottom: 16 }}>
           {msg.type === "success" ? <Check size={14} /> : <AlertCircle size={14} />}
           {msg.text}
         </div>
@@ -690,7 +690,7 @@ const styles = {
     width: 56,
     height: 56,
     borderRadius: 12,
-    background: "#09090B",
+    background: "var(--kairo-color-text)",
     color: "white",
     display: "flex",
     alignItems: "center",

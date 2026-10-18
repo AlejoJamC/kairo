@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "@kairo/tokens/tokens.css";
 import "./globals.css";
 import { InstrumentationClient } from "./_instrumentation-client";
 import { LanguageProvider } from "@/lib/i18n";

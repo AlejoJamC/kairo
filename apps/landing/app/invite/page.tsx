@@ -135,7 +135,7 @@ function InvitePageInner() {
 
   // ── Shared layout wrapper ────────────────────────────────────────────────
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--kairo-color-sunk)' }}>
       <div style={{ width: '100%', maxWidth: 440, background: 'white', borderRadius: 12, padding: '40px 36px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
         <div style={{ marginBottom: 28 }}>
           <KairoLogo size={26} href="/" />
@@ -149,7 +149,7 @@ function InvitePageInner() {
   if (state.status === 'loading') {
     return (
       <Wrapper>
-        <p style={{ color: '#6b7280', fontSize: 14 }}>Loading invitation…</p>
+        <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14 }}>Loading invitation…</p>
       </Wrapper>
     );
   }
@@ -159,7 +159,7 @@ function InvitePageInner() {
     return (
       <Wrapper>
         <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Invitation not found</h1>
-        <p style={{ color: '#6b7280', fontSize: 14 }}>{state.message}</p>
+        <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14 }}>{state.message}</p>
       </Wrapper>
     );
   }
@@ -169,7 +169,7 @@ function InvitePageInner() {
     return (
       <Wrapper>
         <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Welcome aboard 🎉</h1>
-        <p style={{ color: '#6b7280', fontSize: 14 }}>Redirecting to your dashboard…</p>
+        <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14 }}>Redirecting to your dashboard…</p>
       </Wrapper>
     );
   }
@@ -182,7 +182,7 @@ function InvitePageInner() {
   return (
     <Wrapper>
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>You've been invited</h1>
-      <p style={{ color: '#6b7280', fontSize: 14, marginBottom: 24 }}>
+      <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14, marginBottom: 24 }}>
         Join <strong>{invitation.account_name}</strong> as{' '}
         <strong>{ROLE_LABELS[invitation.role] ?? invitation.role}</strong>.
       </p>
@@ -190,7 +190,7 @@ function InvitePageInner() {
       <form onSubmit={handleAccept} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Email — read-only, pre-filled from invitation */}
         <div>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4, color: '#374151' }}>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4, color: 'var(--kairo-color-muted)' }}>
             Email
           </label>
           <input
@@ -198,15 +198,15 @@ function InvitePageInner() {
             value={invitation.email}
             readOnly
             style={{
-              width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #e5e7eb',
-              fontSize: 14, background: '#f9fafb', color: '#6b7280', boxSizing: 'border-box',
+              width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--kairo-color-line)',
+              fontSize: 14, background: 'var(--kairo-color-sunk)', color: 'var(--kairo-color-faint)', boxSizing: 'border-box',
             }}
           />
         </div>
 
         {/* Password */}
         <div>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4, color: '#374151' }}>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4, color: 'var(--kairo-color-muted)' }}>
             {invitation.email_exists ? 'Password' : 'Choose a password'}
           </label>
           <input
@@ -218,14 +218,14 @@ function InvitePageInner() {
             placeholder="Minimum 8 characters"
             disabled={isSubmitting}
             style={{
-              width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db',
+              width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--kairo-color-line-strong)',
               fontSize: 14, boxSizing: 'border-box', outline: 'none',
             }}
           />
         </div>
 
         {error && (
-          <p style={{ color: '#ef4444', fontSize: 13, margin: 0 }}>{error}</p>
+          <p style={{ color: 'var(--kairo-color-bad)', fontSize: 13, margin: 0 }}>{error}</p>
         )}
 
         <button
@@ -233,7 +233,7 @@ function InvitePageInner() {
           disabled={isSubmitting || !password}
           style={{
             padding: '10px 0', borderRadius: 8, border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer',
-            background: isSubmitting ? '#9ca3af' : '#111827', color: 'white',
+            background: isSubmitting ? 'var(--kairo-color-faint)' : 'var(--kairo-color-text)', color: 'white',
             fontSize: 14, fontWeight: 600, marginTop: 4,
           }}
         >
@@ -241,7 +241,7 @@ function InvitePageInner() {
         </button>
       </form>
 
-      <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 20, textAlign: 'center' }}>
+      <p style={{ fontSize: 12, color: 'var(--kairo-color-faint)', marginTop: 20, textAlign: 'center' }}>
         Invitation expires {new Date(invitation.expires_at).toLocaleDateString()}.
       </p>
     </Wrapper>
@@ -251,9 +251,9 @@ function InvitePageInner() {
 export default function InvitePage() {
   return (
     <Suspense fallback={
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--kairo-color-sunk)' }}>
         <div style={{ width: '100%', maxWidth: 440, background: 'white', borderRadius: 12, padding: '40px 36px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-          <p style={{ color: '#6b7280', fontSize: 14 }}>Loading invitation…</p>
+          <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14 }}>Loading invitation…</p>
         </div>
       </div>
     }>

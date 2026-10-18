@@ -47,71 +47,37 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: var(--kairo-color-bg);
+  --foreground: var(--kairo-color-text);
+  --card: var(--kairo-color-surface);
+  --card-foreground: var(--kairo-color-text);
+  --popover: var(--kairo-color-surface);
+  --popover-foreground: var(--kairo-color-text);
+  --primary: var(--kairo-color-text);
+  --primary-foreground: var(--kairo-color-bg);
+  --secondary: var(--kairo-color-hover);
+  --secondary-foreground: var(--kairo-color-text);
+  --muted: var(--kairo-color-hover);
+  --muted-foreground: var(--kairo-color-muted);
+  --accent: var(--kairo-color-hover);
+  --accent-foreground: var(--kairo-color-text);
+  --destructive: var(--kairo-color-bad);
+  --border: var(--kairo-color-line);
+  --input: var(--kairo-color-line-strong);
+  --ring: var(--kairo-color-focus-ring);
+  --chart-1: var(--kairo-color-accent);
+  --chart-2: var(--kairo-color-ok);
+  --chart-3: var(--kairo-color-warn);
+  --chart-4: var(--kairo-color-bad);
+  --chart-5: var(--kairo-color-violet);
+  --sidebar: var(--kairo-color-side);
+  --sidebar-foreground: var(--kairo-color-text);
+  --sidebar-primary: var(--kairo-color-accent);
+  --sidebar-primary-foreground: var(--kairo-color-on-accent);
+  --sidebar-accent: var(--kairo-color-hover);
+  --sidebar-accent-foreground: var(--kairo-color-text);
+  --sidebar-border: var(--kairo-color-line);
+  --sidebar-ring: var(--kairo-color-focus-ring);
 }
 
 @layer base {
@@ -124,49 +90,45 @@
 }
 
 /* ─── Kairo design tokens ───────────────────────────────────────────────────
-   Mirrors packages/claude_design/prototype v0.1/tokens.css (read-only).
-   Prefixed --k-* to avoid conflicts with shadcn's --background/--border vars
-   during the migration period. Used by the cockpit shell (top chrome, sidebar).
+   --k-* are aliases of the generated @kairo/tokens custom properties
+   (--kairo-*), kept while the views still reference them. Do not add values
+   here: change packages/tokens/src instead.
    ─────────────────────────────────────────────────────────────────────────── */
 :root {
-  --k-bg:             #FFFFFF;
-  --k-surface:        #FAFAFA;
-  --k-surface-2:      #F4F4F5;
-  --k-border:         #E4E4E7;
-  --k-border-subtle:  #F0F0F1;
-  --k-text-primary:   #09090B;
-  --k-text-secondary: #52525B;
-  --k-text-tertiary:  #A1A1AA;
-  --k-accent:         #2B5BFF;
-  --k-accent-hover:   #1E48E5;
-  --k-accent-subtle:  #EEF2FF;
-  --k-accent-2:       #6E8BFF;
-  --k-accent-border:  #C7D3FF;
-  --k-accent-faint:   #FAFBFF;
+  --k-bg:             var(--kairo-color-bg);
+  --k-surface:        var(--kairo-color-sunk);
+  --k-surface-2:      var(--kairo-color-hover);
+  --k-border:         var(--kairo-color-line);
+  --k-border-subtle:  var(--kairo-color-line);
+  --k-text-primary:   var(--kairo-color-text);
+  --k-text-secondary: var(--kairo-color-muted);
+  --k-text-tertiary:  var(--kairo-color-faint);
+  --k-accent:         var(--kairo-color-accent);
+  --k-accent-hover:   var(--kairo-color-accent-hover);
+  --k-accent-subtle:  var(--kairo-color-accent-soft);
+  --k-accent-2:       var(--kairo-color-accent-indigo);
+  --k-accent-border:  var(--kairo-color-accent-line);
+  --k-accent-faint:   var(--kairo-color-accent-soft);
   --k-gradient-ai:    linear-gradient(135deg, var(--k-accent), var(--k-accent-2));
-  --k-success:        #10B981;
-  --k-shadow-card:    0 1px 2px rgba(9, 9, 11, 0.04);
-  --k-shadow-popover: 0 4px 16px rgba(9, 9, 11, 0.08), 0 1px 2px rgba(9, 9, 11, 0.04);
-  --k-font-mono:      "JetBrains Mono", "SF Mono", ui-monospace, monospace;
-  --k-font-display:   "Inter Display", "Inter", system-ui, sans-serif;
+  --k-success:        var(--kairo-color-ok);
+  --k-shadow-card:    var(--kairo-shadow-xs);
+  --k-shadow-popover: var(--kairo-shadow-pop);
+  --k-font-mono:      var(--kairo-font-family-mono);
+  --k-font-display:   var(--kairo-font-family-sans);
 
-  /* Internal notes — amber "team only" family (KAI-232 / ADR-025).
-     Same amber the escalation card already used; promoted to tokens so the
-     note surfaces stop hardcoding hexes inline. */
-  --k-note-bg:           #FFFBEB;
-  --k-note-bg-strong:    #FEF3C7;
-  --k-note-bg-tint:      #FFFDF7;
-  --k-note-border:       #FDE68A;
-  --k-note-border-hover: #FCD34D;
-  --k-note-rail:         #F59E0B;
-  --k-note-label:        #B45309;
-  --k-note-text:         #92400E;
-  --k-note-text-strong:  #78350F;
+  --k-note-bg:           var(--kairo-color-note-soft);
+  --k-note-bg-strong:    var(--kairo-color-note-soft);
+  --k-note-bg-tint:      var(--kairo-color-note-soft);
+  --k-note-border:       var(--kairo-color-note-line);
+  --k-note-border-hover: var(--kairo-color-note-line);
+  --k-note-rail:         var(--kairo-color-warn);
+  --k-note-label:        var(--kairo-color-note);
+  --k-note-text:         var(--kairo-color-note-ink);
+  --k-note-text-strong:  var(--kairo-color-note-ink);
 
-  /* Mentions always stay in the accent family, even on amber (KAI-232). */
-  --k-mention-bg:     var(--k-accent-subtle);
-  --k-mention-border: #DBE3FF;
-  --k-mention-solid:  var(--k-accent);
+  --k-mention-bg:     var(--kairo-color-accent-soft);
+  --k-mention-border: var(--kairo-color-accent-line);
+  --k-mention-solid:  var(--kairo-color-accent);
 }
 
 /* ─── Shared form primitives ────────────────────────────────────────────────
@@ -201,7 +163,7 @@
 .k-input::placeholder { color: var(--k-text-tertiary); }
 .k-input:focus {
   border-color: var(--k-accent);
-  box-shadow: 0 0 0 2px rgba(43, 91, 255, 0.15);
+  box-shadow: 0 0 0 2px var(--kairo-color-accent-line);
 }
 .k-input:disabled {
   background: var(--k-surface);
@@ -227,7 +189,7 @@
 }
 .k-select:focus {
   border-color: var(--k-accent);
-  box-shadow: 0 0 0 2px rgba(43, 91, 255, 0.15);
+  box-shadow: 0 0 0 2px var(--kairo-color-accent-line);
 }
 .k-select:disabled {
   background: var(--k-surface);
@@ -255,7 +217,7 @@
 .k-textarea::placeholder { color: var(--k-text-tertiary); }
 .k-textarea:focus {
   border-color: var(--k-accent);
-  box-shadow: 0 0 0 2px rgba(43, 91, 255, 0.15);
+  box-shadow: 0 0 0 2px var(--kairo-color-accent-line);
 }
 .k-textarea:disabled {
   background: var(--k-surface);
@@ -307,7 +269,7 @@
   border: 1px solid var(--k-border);
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 1px 2px rgba(9, 9, 11, 0.04);
+  box-shadow: var(--kairo-shadow-xs);
 }
 
 /* Shimmer skeleton animation */

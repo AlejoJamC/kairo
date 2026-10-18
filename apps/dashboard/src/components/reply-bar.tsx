@@ -52,9 +52,9 @@ const ACTION_CONFIG: Record<
     defaultLabel: "Acknowledge",
     status: "in_progress",
     style: {
-      background: "#EEF2FF",
-      color: "#2B5BFF",
-      border: "1px solid #C7D2FE",
+      background: "var(--kairo-color-accent-soft)",
+      color: "var(--kairo-color-accent)",
+      border: "1px solid var(--kairo-color-accent-line)",
     },
   },
   resolver: {
@@ -62,9 +62,9 @@ const ACTION_CONFIG: Record<
     defaultLabel: "Resolve",
     status: "resolved",
     style: {
-      background: "#ECFDF5",
-      color: "#047857",
-      border: "1px solid #A7F3D0",
+      background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)",
+      color: "var(--kairo-color-ok-ink)",
+      border: "1px solid color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)",
     },
   },
 };
@@ -116,7 +116,7 @@ function SelectedMentionChip({
         gap: 5,
         padding: "2px 5px 2px 3px",
         borderRadius: 999,
-        background: hovered ? "#E0E7FF" : "var(--k-mention-bg)",
+        background: hovered ? "var(--kairo-color-accent-soft)" : "var(--k-mention-bg)",
         border: `1px solid ${hovered ? "var(--k-accent-border)" : "var(--k-mention-border)"}`,
         color: "var(--k-accent)",
         fontSize: 11,
@@ -140,7 +140,7 @@ function SelectedMentionChip({
           padding: 0,
           cursor: "pointer",
           background: hovered ? "var(--k-mention-solid)" : "transparent",
-          color: hovered ? "white" : "#9BB0FF",
+          color: hovered ? "white" : "var(--kairo-color-inverse-link)",
         }}
       >
         <X style={{ width: 8, height: 8 }} strokeWidth={3} />
@@ -573,7 +573,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
 
   // Accent / left stripe based on mode
   const modeAccentGradient = isNote
-    ? "linear-gradient(180deg, #F59E0B, #D97706)"
+    ? "linear-gradient(180deg, var(--kairo-color-warn), var(--kairo-color-cat-billing))"
     : "linear-gradient(180deg, var(--k-accent), var(--k-accent-2))";
 
   // ---------------------------------------------------------------------------
@@ -676,8 +676,8 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             padding: "4px 10px",
             borderRadius: 6,
             border: "none",
-            background: mode === "note" ? "#FFFBEB" : "transparent",
-            color: mode === "note" ? "#92400E" : "var(--k-text-tertiary)",
+            background: mode === "note" ? "var(--kairo-color-note-soft)" : "transparent",
+            color: mode === "note" ? "var(--kairo-color-note-ink)" : "var(--k-text-tertiary)",
             cursor: "pointer",
             boxShadow: mode === "note" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
             transition: "all 0.1s ease",
@@ -751,7 +751,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         <div
           style={{
             marginBottom: 10,
-            border: "1px solid #C7D2FE",
+            border: "1px solid var(--kairo-color-accent-line)",
             borderRadius: 10,
             overflow: "hidden",
             background: "var(--k-accent-subtle)",
@@ -764,7 +764,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
               alignItems: "center",
               justifyContent: "space-between",
               padding: "7px 10px 6px",
-              borderBottom: "1px solid #DBE3FF",
+              borderBottom: "1px solid var(--kairo-color-accent-line)",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -898,12 +898,12 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             height: textareaHeight,
             resize: "none",
             borderRadius: 8,
-            border: isNote ? "1px solid #FDE68A" : "1px solid var(--k-border)",
-            background: isNote ? "#FFFBEB" : "var(--k-surface)",
+            border: isNote ? "1px solid var(--kairo-color-note-line)" : "1px solid var(--k-border)",
+            background: isNote ? "var(--kairo-color-note-soft)" : "var(--k-surface)",
             padding: "10px 12px",
             fontSize: 14,
             lineHeight: 1.6,
-            color: isNote ? "#78350F" : "var(--k-text-primary)",
+            color: isNote ? "var(--kairo-color-note-ink)" : "var(--k-text-primary)",
             outline: "none",
             fontFamily: "inherit",
             boxSizing: "border-box",
@@ -912,15 +912,15 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
           }}
           onFocus={(e) => {
             if (isNote) {
-              e.currentTarget.style.borderColor = "#F59E0B";
-              e.currentTarget.style.boxShadow = "0 0 0 2px #FEF3C7";
+              e.currentTarget.style.borderColor = "var(--kairo-color-warn)";
+              e.currentTarget.style.boxShadow = "0 0 0 2px var(--kairo-color-note-soft)";
             } else {
               e.currentTarget.style.borderColor = "var(--k-accent)";
-              e.currentTarget.style.boxShadow = "0 0 0 2px #EEF2FF";
+              e.currentTarget.style.boxShadow = "0 0 0 2px var(--kairo-color-accent-soft)";
             }
           }}
           onBlur={(e) => {
-            e.currentTarget.style.borderColor = isNote ? "#FDE68A" : "var(--k-border)";
+            e.currentTarget.style.borderColor = isNote ? "var(--kairo-color-note-line)" : "var(--k-border)";
             e.currentTarget.style.boxShadow = "none";
           }}
         />
@@ -934,15 +934,15 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         <div
           style={{
             marginBottom: 8,
-            border: "1px solid #FED7AA",
+            border: "1px solid color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)",
             borderRadius: 8,
-            background: "#FFF7ED",
+            background: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)",
             padding: "10px 12px",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-            <AlertTriangle style={{ width: 12, height: 12, color: "#C2410C", flexShrink: 0 }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#C2410C" }}>
+            <AlertTriangle style={{ width: 12, height: 12, color: "var(--kairo-color-sla-escalate-ink)", flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--kairo-color-sla-escalate-ink)" }}>
               {t("replyBar.escalateTitle", "Escalate ticket")}
             </span>
             <button
@@ -972,7 +972,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
               width: "100%",
               resize: "none",
               borderRadius: 6,
-              border: "1px solid #FED7AA",
+              border: "1px solid color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)",
               background: "white",
               padding: "7px 10px",
               fontSize: 12,
@@ -983,8 +983,8 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
               boxSizing: "border-box",
               marginBottom: 8,
             }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "#F97316"; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = "#FED7AA"; }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = "var(--kairo-color-mood)"; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = "color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)"; }}
           />
           <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
             <button
@@ -1013,7 +1013,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
                 padding: "4px 12px",
                 borderRadius: 6,
                 border: "none",
-                background: escalating ? "var(--k-border)" : "#C2410C",
+                background: escalating ? "var(--k-border)" : "var(--kairo-color-sla-escalate-ink)",
                 color: escalating ? "var(--k-text-tertiary)" : "white",
                 cursor: escalating ? "wait" : "pointer",
                 transition: "background 0.1s ease",
@@ -1065,9 +1065,9 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
                 padding: "4px 11px",
                 borderRadius: 999,
                 cursor: "pointer",
-                background: "#FFF7ED",
-                color: "#C2410C",
-                border: "1px solid #FED7AA",
+                background: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)",
+                color: "var(--kairo-color-sla-escalate-ink)",
+                border: "1px solid color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)",
                 transition: "opacity 0.1s ease",
               }}
             >
@@ -1093,7 +1093,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
               marginRight: "auto",
               fontFamily: "var(--k-font-mono)",
               fontSize: 11,
-              color: draft.length >= NOTE_MAX_LENGTH ? "#EF4444" : "var(--k-note-label)",
+              color: draft.length >= NOTE_MAX_LENGTH ? "var(--kairo-color-bad)" : "var(--k-note-label)",
             }}
           >
             {draft.length} / {NOTE_MAX_LENGTH}
@@ -1114,7 +1114,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
               padding: "6px 14px",
               borderRadius: 6,
               border: "none",
-              background: canSend ? "#F59E0B" : "var(--k-border)",
+              background: canSend ? "var(--kairo-color-warn)" : "var(--k-border)",
               color: canSend ? "white" : "var(--k-text-tertiary)",
               cursor: canSend ? "pointer" : "not-allowed",
               transition: "background 0.1s ease",
@@ -1245,9 +1245,9 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
 
       {/* Status messages */}
       {sendError ? (
-        <p style={{ marginTop: 6, fontSize: 12, color: "#EF4444" }}>{sendError}</p>
+        <p style={{ marginTop: 6, fontSize: 12, color: "var(--kairo-color-bad)" }}>{sendError}</p>
       ) : sendSuccess ? (
-        <p style={{ marginTop: 6, fontSize: 12, color: isNote ? "#D97706" : "#10B981" }}>
+        <p style={{ marginTop: 6, fontSize: 12, color: isNote ? "var(--kairo-color-cat-billing)" : "var(--kairo-color-ok)" }}>
           {isNote ? t("replyBar.noteSuccess", "Note added.") : t("replyBar.sendSuccess")}
         </p>
       ) : (

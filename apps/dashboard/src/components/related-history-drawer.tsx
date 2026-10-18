@@ -128,7 +128,7 @@ export function RelatedHistoryDrawer({ open, loading, items, lang, onClose, onSe
                       {t("relatedHistory.ticketNumber", { number: item.ticket_number })}
                     </span>
                     {simLabel && (
-                      <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 11, color: "#10B981", flexShrink: 0 }}>
+                      <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 11, color: "var(--kairo-color-ok)", flexShrink: 0 }}>
                         {t("ai.similarity")}: {simLabel}
                       </span>
                     )}

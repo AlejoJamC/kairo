@@ -19,7 +19,7 @@ function TooltipContent({
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
         sideOffset={sideOffset}
-        style={{ background: "#18181B", color: "#F4F4F5" }}
+        style={{ background: "var(--kairo-color-inverse-bg)", color: "var(--kairo-color-hover)" }}
         className={cn(
           "z-50 overflow-hidden rounded-md px-2.5 py-1.5 text-xs shadow-md",
           "animate-in fade-in-0 zoom-in-95",
@@ -31,7 +31,7 @@ function TooltipContent({
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow style={{ fill: "#18181B" }} />
+        <TooltipPrimitive.Arrow style={{ fill: "var(--kairo-color-inverse-bg)" }} />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   )

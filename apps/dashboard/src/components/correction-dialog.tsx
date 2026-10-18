@@ -206,7 +206,7 @@ export function CorrectionDialog({
             <div>
               <label className="k-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span>{t("correction.fieldNotes")}</span>
-                <span style={{ color: notes.length > NOTE_MAX ? "#EF4444" : "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)", fontSize: 11 }}>
+                <span style={{ color: notes.length > NOTE_MAX ? "var(--kairo-color-bad)" : "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)", fontSize: 11 }}>
                   {notes.length}/{NOTE_MAX}
                 </span>
               </label>
@@ -222,8 +222,8 @@ export function CorrectionDialog({
             </div>
 
             {/* Error / success */}
-            {error   && <p style={{ fontSize: 12, color: "#EF4444", margin: 0 }}>{error}</p>}
-            {success && <p style={{ fontSize: 12, color: "#10B981", fontWeight: 500, margin: 0 }}>{t("correction.successMsg")}</p>}
+            {error   && <p style={{ fontSize: 12, color: "var(--kairo-color-bad)", margin: 0 }}>{error}</p>}
+            {success && <p style={{ fontSize: 12, color: "var(--kairo-color-ok)", fontWeight: 500, margin: 0 }}>{t("correction.successMsg")}</p>}
 
             {/* Actions */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>

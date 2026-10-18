@@ -47,10 +47,10 @@ export default function AuthHandoffPage() {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 16,
-      background: '#f9fafb',
+      background: 'var(--kairo-color-sunk)',
     }}>
       <KairoLogo size={26} />
-      <p style={{ color: '#6b7280', fontSize: 14 }}>Signing you in…</p>
+      <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14 }}>Signing you in…</p>
     </div>
   );
 }
