@@ -1,110 +1,104 @@
-# Kairo
+<p align="center">
+  <img src="assets/banner.png" alt="Kairo — la bandeja de soporte que se ordena sola" width="100%">
+</p>
 
-Kairo es una apuesta: el triage de soporte es un problema de confianza, no de herramientas. Hoy los equipos de soporte eligen entre dos opciones igual de malas: que una persona lea cada ticket o que un bot los conteste todos. Kairo toma la postura que tomaría un buen líder con un empleado nuevo que promete: resuelve lo que puede, delega lo que no debe y cada vez distingue mejor una cosa de la otra. Cada mensaje que entra se lee y se clasifica al momento: de qué trata, qué tan urgente es, quién debería encargarse. Cuando Kairo ya ha demostrado acertar con ese tipo de ticket, actúa sin esperar a nadie: lo enruta, le asigna prioridad, lo hace avanzar. Cuando no, pone la decisión frente a una persona y aprende de lo que esa persona hace. Ese umbral no lo configura nadie; sale del historial del sistema con cada cliente, y se amplía donde las correcciones dejan de llegar y se reduce donde vuelven a aparecer. Lo que un equipo de soporte obtiene no es una cola más inteligente que administrar, sino una cola que ya conoce su propio orden: quien la abre ve de un vistazo qué tomar primero, qué puede esperar y qué ya resolvió Kairo. Está pensado para empresas que quieren que la IA asuma responsabilidad real en soporte sin entregarle las llaves el primer día: una confianza que se gana cliente por cliente, ticket por ticket, y que se retira con la misma facilidad.
+**Triage de soporte con IA para la bandeja de soporte.** Cada mensaje se clasifica al llegar; la IA actúa sola solo donde se ha ganado el derecho, y le pasa la decisión a una persona cuando no.
 
-🇬🇧 [English version](../README.md)
+[Sitio web](https://kairo.alejojamc.com) · [Qué funciona hoy](que-es-kairo.md) · [English](../README.md)
 
-## Stack
+<p align="center">
+  <img alt="Licencia" src="https://img.shields.io/badge/license-Apache--2.0-2B5BFF?style=flat-square">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-2B5BFF?style=flat-square">
+  <img alt="Estado" src="https://img.shields.io/badge/status-alpha-09090B?style=flat-square">
+</p>
 
-| Capa | Tecnología |
+## Qué hace
+
+- **Clasifica cada mensaje al llegar** — tipo, prioridad, urgencia y tono — antes de que nadie abra la bandeja.
+- **Ordena la cola** por tipo de ticket, plan del cliente, estado de ánimo, tiempo de espera y reincidencia, para que la primera pantalla sea el orden de trabajo.
+- **Se gana la autonomía por cliente.** Un tipo de ticket se aprueba automáticamente solo tras medir su precisión, y una corrección le quita ese derecho otra vez.
+
+## Cómo un mensaje se convierte en ticket
+
+```mermaid
+flowchart LR
+  A[Mensaje entrante] --> B{Reglas de filtro}
+  B -->|spam, automático, masivo| X[Se descarta · motivo guardado]
+  B -->|relevante| C[Clasificación IA]
+  C --> D{¿Autonomía ganada<br/>para este tipo?}
+  D -->|sí| E[Actúa · tipo, prioridad, posición]
+  D -->|no| F[Una persona decide]
+  F --> G[Corrección registrada]
+  G --> D
+```
+
+## Estado
+
+| Estado | Qué incluye |
 |---|---|
-| Monorepo | Turborepo + Bun |
-| WebApp | Vite + React 19 |
-| API | Bun + Hono + Inngest |
-| Landing | Next.js 15 |
-| Admin (Kelan) | Next.js 15 |
-| Base de datos | Supabase (Postgres + Auth) |
-| IA | JEV (decisiones de clasificación) + Claude API / Ollama (texto) |
-| Correo | Gmail API |
-| Deploy | Vercel (webapp/landing/kelan) + Railway (api) |
-| Lenguaje | TypeScript (strict) |
+| **Funciona hoy** | Entrada desde Gmail · clasificación · cola por prioridad · respuestas en el hilo · notas internas · escalamientos · tiempos de respuesta |
+| **Construido, apagado por defecto** | Propuestas de conocimiento · asistente del ticket · segundo modelo · borradores de contactos · correo de acuse |
+| **Sin construir** | Canales distintos de Gmail · facturación · resolución automática |
 
-## Estructura
-
-```
-kairo/
-├── apps/
-│   ├── api/       # Bun + Hono — API backend + funciones Inngest (puerto 3001)
-│   ├── dashboard/ # Vite + React — dashboard de soporte (puerto 5173)
-│   ├── landing/   # Next.js — sitio de marketing (puerto 3000)
-│   ├── kelan/     # Next.js — panel de administración (interno, puerto 3002)
-│   └── mobile/    # Expo — app móvil
-├── packages/
-│   ├── env/            # validación centralizada de variables (@t3-oss/env-core)
-│   ├── types/          # interfaces TypeScript compartidas
-│   ├── i18n/           # traducciones compartidas (EN/ES)
-│   ├── ui/             # componentes ShadCN compartidos
-│   ├── feature-flags/  # feature flags estáticos y de runtime
-│   ├── identity/       # normalización de email/teléfono, dedup de contactos
-│   ├── claude_design/  # paquete de tokens de diseño Pencil
-│   └── intelligence/   # proveedor de decisiones (JEV) y de texto (Ollama / Anthropic)
-│       └── prompts/    # prompts LLM versionados (markdown + frontmatter YAML)
-├── supabase/
-│   └── migrations/     # migraciones de base de datos compartidas (Postgres vía Supabase)
-└── kairo-internal/
-    └── architecture/   # 25 Architecture Decision Records
-```
+Qué funciona, qué está apagado y dónde el sitio de marketing promete más de lo que hace el producto: **[what-is-kairo.md](what-is-kairo.md)**.
 
 ## Primeros pasos
 
+Requiere Bun 1.3+, un proyecto de Supabase, credenciales de Google OAuth y una clave de AI Gateway (u Ollama local).
+
 ```bash
 bun install
-bun run dev
+cp .env.example .env.local   # completa los valores
+bun run dev                  # api :3001 · dashboard :5173 · landing :3000 · kelan :3002
+bun run dev:inngest          # servidor de Inngest para el pipeline (otra terminal)
 ```
-
-- API → http://localhost:3001
-- WebApp → http://localhost:5173
-- Landing → http://localhost:3000
-- Kelan (admin) → http://localhost:3002
-
-## Comandos
 
 ```bash
-bun run build   # compila todas las apps
-bun run lint    # ejecuta el linter en todos los paquetes
-bun run clean   # limpia los artefactos de compilación
-bun test        # corre las pruebas
+bun test        # pruebas unitarias y de integración
+bun run build   # compila todo el monorepo con turbo
 ```
 
-## Variables de entorno
+Cada variable se valida al arrancar con [`@kairo/env`](../packages/env/index.ts); la lista completa está en [`.env.example`](../.env.example).
 
-Kairo usa [`@kairo/env`](../packages/env/index.ts) — una capa centralizada y con tipos seguros construida sobre [`@t3-oss/env-core`](https://env.t3.gg). Cada variable se valida con Zod al arrancar la app. El acceso directo a `process.env` o `import.meta.env` **no está permitido** en ningún lugar del código.
+## Arquitectura
 
-### Un único `.env.local` en la raíz
+```
+apps/
+  api/          Bun + Hono · REST v1 + pipeline Inngest (tiers, sondeo, reintentos)
+  dashboard/    Vite + React 19 · el panel
+  landing/      Next.js 15 · sitio de marketing, auth, asistente de registro
+  kelan/        Next.js 15 · administración interna
+  mobile/       Expo · solo esqueleto
+packages/       librerías compartidas; la capa de IA es intelligence/ (AI SDK, roles de modelo, prompts)
+supabase/
+  migrations/   esquema, RLS, historial append-only
+```
 
-Todas las variables — compartidas y específicas de cada app — viven en un solo archivo en la raíz del monorepo:
+## Evaluaciones
+
+La parte que importa: un banco de correos etiquetados a mano, puntuados contra el mismo pipeline que usa producción, campo por campo y no solo acierto o fallo. Varias decisiones de este repositorio — creerle al veredicto de spam del servidor, separar a quien compra de quien vende, aprobar automáticamente solo `support` al principio — salieron de estos números.
 
 ```bash
-cp .env.example .env.local   # llena los valores reales, nunca lo commitees
+bun run eval:pipeline   # correos por el clasificador → CSV
+bun run eval:metrics    # F1, calibración e inflación de tono por etiqueta
 ```
 
-Cada app lee desde ese único archivo:
+Los corpus son privados y no están en este repositorio.
 
-| App | Cómo lee el `.env.local` raíz |
+## Documentación
+
+| Documento | Qué cubre |
 |---|---|
-| `apps/api` | `bun run --env-file ../../.env.local` — cargado directamente por Bun al arrancar |
-| `apps/dashboard` | Vite tiene `envDir: "../../"` apuntando a la raíz del monorepo |
-| `apps/landing` | `next.config.ts` llama a `loadEnvConfig("../../")` antes de que webpack compile, para que las variables `NEXT_PUBLIC_*` queden embebidas en el bundle del cliente |
-| `apps/kelan` | `next.config.ts` llama a `loadEnvConfig("../../")` — mismo patrón que landing |
+| [what-is-kairo.md](what-is-kairo.md) | Qué hace el producto hoy, en claro |
+| [que-es-kairo.md](que-es-kairo.md) | Lo mismo, en español |
+| [ai-engineering/](ai-engineering/) | Mapa de capacidades, skills y herramientas |
+| [observability.md](observability.md) | Langfuse + ClickStack |
+| [versioning.md](versioning.md) | Cómo se versionan reglas y prompts |
 
-El `.env.example` está agrupado en tres secciones — `SHARED`, `LANDING` y `WEBAPP` — con comentarios que explican cada variable.
+## Contribuir
 
-### Dónde se valida cada variable
+Abre un issue antes de un cambio grande. Los commits usan [Conventional Commits](https://www.conventionalcommits.org/); los textos de interfaz necesitan inglés y español.
 
-| Paquete / App | Archivo | Variables que gestiona |
-|---|---|---|
-| `packages/env` | `index.ts` | Variables de backend compartidas: Supabase, AI/LLM, pipeline (tiempos, concurrencia), Inngest, feature flags de servidor |
-| `apps/dashboard` | `src/env.ts` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LANDING_URL` |
-| `apps/landing` | `env.ts` | Todas las variables `NEXT_PUBLIC_*` + `GOOGLE_CLIENT_SECRET`, `INNGEST_EVENT_KEY` |
-| `apps/kelan` | `env.ts` | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_KELAN_URL` |
+## Licencia
 
-Nunca accedas a `process.env` o `import.meta.env` directamente — siempre importa desde el `env.ts` más cercano:
-
-```ts
-// ✅ correcto
-import { env } from "@/env";
-const url = env.NEXT_PUBLIC_SUPABASE_URL;
-
-// ❌ incorrecto — sin validación, sin tipos
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-```
+[Apache-2.0](../LICENSE).
