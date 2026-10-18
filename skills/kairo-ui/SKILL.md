@@ -31,7 +31,7 @@ UI task progress:
 1. **Find it.** `packages/ui/CATALOG.md` lists every specified piece, block and template and whether it is implemented. Search it before writing any markup.
 2. **Read the spec.** `packages/ui/spec/<components|blocks|templates>/<name>.md` defines purpose, variants, the six states, accessibility and platforms. The approved design is final: a state or detail marked "Not defined in the approved design." or "Not designed" is not invented in code or in the spec. Ask instead.
 3. **Implement the gap in `packages/ui`.** A specified piece with no export is built in the library first, following its spec, with a test for every state and its accessibility contract. Then the screen uses it. Never build a local version inside an app.
-4. **Compose.** No `style` attribute, no color or hex literals, no hand-written CSS custom properties holding colors, no Tailwind classes, no `@tamagui/*` imports in apps. Colors, spacing, radii, shadows and type come from `@kairo/tokens`. Icons come from `Icon`. Overlays come from `Popover`, `Dialog`, `Drawer`, `Menu` and `Tooltip`; forms from `Field` and its controls.
+4. **Compose.** No `style` attribute, no color or hex literals, no hand-written CSS custom properties holding colors, no Tailwind classes, no `@tamagui/*` imports in apps. Colors, spacing, radii, shadows and type come from `@kairo/tokens`. Layout is `Box` (a div with typed style props), `Text` (a span, or any text tag with `tag`), `Pressable` (a button without browser chrome) and `PlainInput` / `PlainTextarea` / `PlainSelect` (controls without design chrome); a specified piece always wins over them. Icons come from `Icon`. Overlays come from `Popover`, `Dialog`, `Drawer`, `Menu` and `Tooltip`; forms from `Field` and its controls.
 5. **Data stays out of views.** A screen never calls `fetch`, `localStorage`, `window.location`, `navigator.clipboard` or Supabase. It uses `@kairo/client-core` (`endpoints`, `queries`, hooks, stores) and the platform ports, so the same screen runs in the browser, in the desktop shell and, where designed, on mobile.
 6. **Platforms.** A component that needs DOM APIs ships a `.native.tsx` sibling; Metro and `tsconfig.native.json` resolve it. Behavior that makes no sense on touch (hover, drag-resize) renders nothing or the platform equivalent there.
 
@@ -60,6 +60,7 @@ bun run ui:metrics
 - `bun run ui:catalog` regenerates the catalog after a piece is added or its spec changes.
 - `bun run ui:metrics` reports the remaining gap: specified pieces without code, inline styles, color literals, duplicated component names.
 - An editor hook lints each dashboard file right after it is written and blocks on new violations.
+- After a visual refactor of the dashboard, capture the screens before and after with the fixture preview and compare them (`apps/dashboard/preview/README.md`).
 
 ## Anti-patterns
 

@@ -14,7 +14,7 @@ import {
 } from "@kairo/client-core/note-mentions";
 import { MentionDropdown } from "./triage/mention-dropdown";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, Icon } from "@kairo/ui";
+import { Avatar, Box, Icon, PlainTextarea, Pressable, type PressableProps, Text } from "@kairo/ui";
 import { useAuth } from "@kairo/client-core/auth";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import type { TicketStatus } from "@kairo/types";
@@ -44,16 +44,18 @@ type TicketAction = "reconocer" | "resolver";
 
 const ACTION_CONFIG: Record<
   TicketAction,
-  { labelKey: string; defaultLabel: string; status: TicketStatus; style: React.CSSProperties }
+  { labelKey: string; defaultLabel: string; status: TicketStatus; style: PressableProps }
 > = {
   reconocer: {
     labelKey: "replyBar.actionReconocer",
     defaultLabel: "Acknowledge",
     status: "in_progress",
     style: {
-      background: "var(--kairo-color-accent-soft)",
+      backgroundColor: "var(--kairo-color-accent-soft)",
       color: "var(--kairo-color-accent)",
-      border: "1px solid var(--kairo-color-accent-line)",
+      borderWidth: 1,
+      borderStyle: "solid",
+      borderColor: "var(--kairo-color-accent-line)",
     },
   },
   resolver: {
@@ -61,9 +63,11 @@ const ACTION_CONFIG: Record<
     defaultLabel: "Resolve",
     status: "resolved",
     style: {
-      background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)",
+      backgroundColor: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)",
       color: "var(--kairo-color-ok-ink)",
-      border: "1px solid color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)",
+      borderWidth: 1,
+      borderStyle: "solid",
+      borderColor: "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)",
     },
   },
 };
@@ -105,46 +109,13 @@ function SelectedMentionChip({
   const label = member.name ?? member.email ?? member.user_id;
 
   return (
-    <span
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      title={member.email ?? undefined}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        padding: "2px 5px 2px 3px",
-        borderRadius: 999,
-        background: hovered ? "var(--kairo-color-accent-soft)" : "var(--k-mention-bg)",
-        border: `1px solid ${hovered ? "var(--k-accent-border)" : "var(--k-mention-border)"}`,
-        color: "var(--k-accent)",
-        fontSize: 11,
-        fontWeight: 500,
-      }}
-    >
+    <Text onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} title={member.email ?? undefined} display="inline-flex" alignItems="center" gap={5} paddingTop={2} paddingRight={5} paddingBottom={2} paddingLeft={3} borderRadius={999} backgroundColor={hovered ? "var(--kairo-color-accent-soft)" : "var(--k-mention-bg)"} borderWidth={1} borderColor={hovered ? "var(--k-accent-border)" : "var(--k-mention-border)"} color="var(--k-accent)" fontSize={11} fontWeight={500} borderStyle="solid">
       <Avatar name={member.name} email={member.email} seed={member.user_id} size={15} />
       @{label}
-      <button
-        type="button"
-        onClick={() => onRemove(member.user_id)}
-        aria-label={t("mention.removeChip", { name: label, defaultValue: "Remove mention of {{name}}" })}
-        style={{
-          width: 13,
-          height: 13,
-          borderRadius: 999,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          border: "none",
-          padding: 0,
-          cursor: "pointer",
-          background: hovered ? "var(--k-mention-solid)" : "transparent",
-          color: hovered ? "white" : "var(--kairo-color-inverse-link)",
-        }}
-      >
+      <Pressable type="button" onClick={() => onRemove(member.user_id)} aria-label={t("mention.removeChip", { name: label, defaultValue: "Remove mention of {{name}}" })} width={13} height={13} borderRadius={999} display="flex" alignItems="center" justifyContent="center" borderWidth={0} padding={0} cursor="pointer" backgroundColor={hovered ? "var(--k-mention-solid)" : "transparent"} color={hovered ? "white" : "var(--kairo-color-inverse-link)"}>
         <Icon name="x" size={8} strokeWidth={3} />
-      </button>
-    </span>
+      </Pressable>
+    </Text>
   );
 }
 
@@ -579,137 +550,38 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <div
-      style={{
-        position: "relative",
-        borderTop: "1px solid var(--k-border)",
-        background: "white",
-        padding: "0 16px 10px",
-        flexShrink: 0,
-      }}
-    >
+    <Box position="relative" borderTopWidth={1} borderTopColor="var(--k-border)" backgroundColor="white" paddingTop={0} paddingHorizontal={16} paddingBottom={10} flexShrink={0} borderStyle="solid">
       {/* Left accent stripe — changes color per mode */}
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 2,
-          background: modeAccentGradient,
-          transition: "background 0.2s ease",
-        }}
-      />
+      <Box position="absolute" left={0} top={0} bottom={0} width={2} backgroundImage={modeAccentGradient} transition="background 0.2s ease" />
 
       {/* Drag handle */}
-      <div
-        onMouseDown={handleDragStart}
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          padding: "6px 0 4px",
-          cursor: "ns-resize",
-          userSelect: "none",
-        }}
-      >
-        <div
-          style={{
-            width: 32,
-            height: 4,
-            borderRadius: 999,
-            background: "var(--k-border)",
-            transition: "background 0.15s ease",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-text-tertiary)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--k-border)"; }}
-        />
-      </div>
+      <Box onMouseDown={handleDragStart} display="flex" justifyContent="center" alignItems="center" paddingTop={6} paddingHorizontal={0} paddingBottom={4} cursor="ns-resize" userSelect="none">
+        <Box hoverStyle={{ backgroundColor: "var(--k-text-tertiary)" }} width={32} height={4} borderRadius={999} backgroundColor="var(--k-border)" transition="background 0.15s ease" />
+      </Box>
 
       {/* ── DIMENSION 1: Mode selector ─────────────────────────────────── */}
       {/* KAI-232: the reply/note switch only exists when internal notes are on. */}
       {INTERNAL_NOTES_ENABLED && (
-      <div
-        style={{
-          display: "flex",
-          gap: 2,
-          marginBottom: 8,
-          background: "var(--k-surface)",
-          borderRadius: 8,
-          padding: 3,
-          border: "1px solid var(--k-border-subtle)",
-          width: "fit-content",
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => { setMode("reply"); setSendError(null); setSendSuccess(false); }}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 11,
-            fontWeight: mode === "reply" ? 600 : 400,
-            padding: "4px 10px",
-            borderRadius: 6,
-            border: "none",
-            background: mode === "reply" ? "white" : "transparent",
-            color: mode === "reply" ? "var(--k-text-primary)" : "var(--k-text-tertiary)",
-            cursor: "pointer",
-            boxShadow: mode === "reply" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-            transition: "all 0.1s ease",
-          }}
-        >
+      <Box display="flex" gap={2} marginBottom={8} backgroundColor="var(--k-surface)" borderRadius={8} padding={3} borderWidth={1} borderColor="var(--k-border-subtle)" width="fit-content" borderStyle="solid">
+        <Pressable type="button" onClick={() => { setMode("reply"); setSendError(null); setSendSuccess(false); }} display="flex" alignItems="center" gap={4} fontSize={11} fontWeight={mode === "reply" ? 600 : 400} paddingVertical={4} paddingHorizontal={10} borderRadius={6} borderWidth={0} backgroundColor={mode === "reply" ? "white" : "transparent"} color={mode === "reply" ? "var(--k-text-primary)" : "var(--k-text-tertiary)"} cursor="pointer" boxShadow={mode === "reply" ? "0 1px 3px rgba(0,0,0,0.08)" : "none"} transition="all 0.1s ease">
           <Icon name="send" size={10} />
           {t("replyBar.modeReply", "Reply")}
-        </button>
-        <button
-          type="button"
-          onClick={() => { setMode("note"); setShowAiBanner(false); setSendError(null); setSendSuccess(false); setShowEscalatePanel(false); }}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 11,
-            fontWeight: mode === "note" ? 600 : 400,
-            padding: "4px 10px",
-            borderRadius: 6,
-            border: "none",
-            background: mode === "note" ? "var(--kairo-color-note-soft)" : "transparent",
-            color: mode === "note" ? "var(--kairo-color-note-ink)" : "var(--k-text-tertiary)",
-            cursor: "pointer",
-            boxShadow: mode === "note" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-            transition: "all 0.1s ease",
-          }}
-        >
+        </Pressable>
+        <Pressable type="button" onClick={() => { setMode("note"); setShowAiBanner(false); setSendError(null); setSendSuccess(false); setShowEscalatePanel(false); }} display="flex" alignItems="center" gap={4} fontSize={11} fontWeight={mode === "note" ? 600 : 400} paddingVertical={4} paddingHorizontal={10} borderRadius={6} borderWidth={0} backgroundColor={mode === "note" ? "var(--kairo-color-note-soft)" : "transparent"} color={mode === "note" ? "var(--kairo-color-note-ink)" : "var(--k-text-tertiary)"} cursor="pointer" boxShadow={mode === "note" ? "0 1px 3px rgba(0,0,0,0.08)" : "none"} transition="all 0.1s ease">
           <Icon name="lock" size={10} />
           {t("replyBar.modeNote", "Internal note")}
-        </button>
-      </div>
+        </Pressable>
+      </Box>
       )}
 
       {/* Tool buttons row */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+      <Box display="flex" gap={4} marginBottom={8}>
         {!isNote && (
           <TemplatePicker onSelect={handleTemplateSelect} previewVars={templatePreviewVars}>
-            <button
-              type="button"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                fontSize: 11,
-                padding: "4px 9px",
-                border: "1px solid var(--k-border)",
-                borderRadius: 999,
-                color: "var(--k-text-secondary)",
-                background: "white",
-                cursor: "pointer",
-              }}
-            >
+            <Pressable type="button" display="flex" alignItems="center" gap={4} fontSize={11} paddingVertical={4} paddingHorizontal={9} borderWidth={1} borderColor="var(--k-border)" borderRadius={999} color="var(--k-text-secondary)" backgroundColor="white" cursor="pointer" borderStyle="solid">
               <Icon name="zap" size={11} />
               {t("ticketDetail.quickReply")}
-            </button>
+            </Pressable>
           </TemplatePicker>
         )}
         {isNote && <TeamOnlyChip />}
@@ -719,143 +591,56 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
           <SelectedMentionChip key={member.user_id} member={member} onRemove={removeMention} />
         ))}
         {isNote && draftMentions.length > 0 && (
-          <span style={{ fontSize: 10.5, color: "var(--k-note-label)", opacity: 0.75, marginLeft: 2 }}>
+          <Text fontSize={10.5} color="var(--k-note-label)" opacity={0.75} marginLeft={2}>
             {t("mention.willNotify", { count: draftMentions.length, defaultValue: "will be notified" })}
-          </span>
+          </Text>
         )}
-        <button
-          type="button"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 11,
-            padding: "4px 9px",
-            border: "1px solid var(--k-border)",
-            borderRadius: 999,
-            color: "var(--k-text-secondary)",
-            background: "white",
-            cursor: "pointer",
-          }}
-        >
+        <Pressable type="button" display="flex" alignItems="center" gap={4} fontSize={11} paddingVertical={4} paddingHorizontal={9} borderWidth={1} borderColor="var(--k-border)" borderRadius={999} color="var(--k-text-secondary)" backgroundColor="white" cursor="pointer" borderStyle="solid">
           <Icon name="clip" size={11} />
           {t("ticketDetail.attach")}
-        </button>
-      </div>
+        </Pressable>
+      </Box>
 
       {/* ── DIMENSION 2: Composer ──────────────────────────────────────── */}
 
       {/* BORRADOR IA card (reply mode only) */}
       {showAiBanner && !isNote ? (
-        <div
-          style={{
-            marginBottom: 10,
-            border: "1px solid var(--kairo-color-accent-line)",
-            borderRadius: 10,
-            overflow: "hidden",
-            background: "var(--k-accent-subtle)",
-          }}
-        >
+        <Box marginBottom={10} borderWidth={1} borderColor="var(--kairo-color-accent-line)" borderRadius={10} overflow="hidden" backgroundColor="var(--k-accent-subtle)" borderStyle="solid">
           {/* Card header */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "7px 10px 6px",
-              borderBottom: "1px solid var(--kairo-color-accent-line)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  padding: "2px 7px",
-                  borderRadius: 999,
-                  background: "var(--k-accent)",
-                  color: "white",
-                  letterSpacing: "0.05em",
-                }}
-              >
+          <Box display="flex" alignItems="center" justifyContent="space-between" paddingTop={7} paddingHorizontal={10} paddingBottom={6} borderBottomWidth={1} borderBottomColor="var(--kairo-color-accent-line)" borderStyle="solid">
+            <Box display="flex" alignItems="center" gap={8}>
+              <Text fontSize={10} fontWeight={700} paddingVertical={2} paddingHorizontal={7} borderRadius={999} backgroundColor="var(--k-accent)" color="white" letterSpacing={0.5}>
                 ✦ {t("replyBar.aiBadge", "AI DRAFT")}
-              </span>
-              <span style={{ fontSize: 11, color: "var(--k-text-tertiary)" }}>
+              </Text>
+              <Text fontSize={11} color="var(--k-text-tertiary)">
                 {t("replyBar.aiDraftSource", "generated from similar cases + KB")}
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <button
-                type="button"
-                onClick={() => {
+              </Text>
+            </Box>
+            <Box display="flex" alignItems="center" gap={4}>
+              <Pressable type="button" onClick={() => {
                   setDraft("");
                   clearSuggestedReply();
                   setShowAiBanner(false);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 3,
-                  fontSize: 11,
-                  color: "var(--k-accent)",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "2px 4px",
-                  borderRadius: 4,
-                }}
-              >
+                }} display="flex" alignItems="center" gap={3} fontSize={11} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer" paddingVertical={2} paddingHorizontal={4} borderRadius={4}>
                 <Icon name="refresh" size={10} />
                 {t("replyBar.regenerate", "Regenerate")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAiBanner(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 2,
-                  color: "var(--k-text-tertiary)",
-                  display: "flex",
-                  alignItems: "center",
-                  borderRadius: 3,
-                }}
-                aria-label={t("replyBar.dismissSuggestion")}
-              >
+              </Pressable>
+              <Pressable type="button" onClick={() => setShowAiBanner(false)} aria-label={t("replyBar.dismissSuggestion")} backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={2} color="var(--k-text-tertiary)" display="flex" alignItems="center" borderRadius={3}>
                 <Icon name="x" size={13} />
-              </button>
-            </div>
-          </div>
+              </Pressable>
+            </Box>
+          </Box>
 
           {/* Editable draft text */}
-          <textarea
-            value={draft}
-            onChange={(e) => {
+          <PlainTextarea value={draft} onChange={(e) => {
               setDraft(e.target.value);
               if (sendError) setSendError(null);
               if (sendSuccess) setSendSuccess(false);
-            }}
-            onKeyDown={handleKeyDown}
-            style={{
-              width: "100%",
-              height: textareaHeight,
-              resize: "none",
-              border: "none",
-              background: "transparent",
-              padding: "10px 12px",
-              fontSize: 13,
-              lineHeight: 1.6,
-              color: "var(--k-text-primary)",
-              outline: "none",
-              fontFamily: "inherit",
-              boxSizing: "border-box",
-            }}
-          />
-        </div>
+            }} onKeyDown={handleKeyDown} width="100%" height={textareaHeight} resize="none" borderWidth={0} backgroundColor="transparent" paddingVertical={10} paddingHorizontal={12} fontSize={13} lineHeight={20.8} color="var(--k-text-primary)" outlineWidth={0} />
+        </Box>
       ) : (
         /* Standard composer textarea */
-        <div style={{ position: "relative" }}>
+        <Box position="relative">
         {mentionOpen && (
           <MentionDropdown
             members={mentionMatches}
@@ -869,47 +654,19 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
             onHover={setMentionIndex}
           />
         )}
-        <textarea
-          ref={textareaRef}
-          placeholder={
+        <PlainTextarea ref={textareaRef} placeholder={
             isNote
               ? t("replyBar.notePlaceholder", "Write a note for your team… use @ to mention")
               : t("ticketDetail.replyPlaceholder")
-          }
-          // Note bodies are capped server-side too (InternalNoteSchema).
-          maxLength={isNote ? NOTE_MAX_LENGTH : undefined}
-          value={draft}
-          onChange={(e) => {
+          } maxLength={isNote ? NOTE_MAX_LENGTH : undefined} value={draft} onChange={(e) => {
             setDraft(e.target.value);
             syncMentionQuery(e.target.value, e.target.selectionStart ?? 0);
             if (sendError) setSendError(null);
             if (sendSuccess) setSendSuccess(false);
-          }}
-          // Caret moves (click / arrow keys) can leave or enter a mention
-          // context without the text changing at all.
-          onSelect={(e) => {
+          }} onSelect={(e) => {
             const el = e.currentTarget;
             syncMentionQuery(el.value, el.selectionStart ?? 0);
-          }}
-          onKeyDown={handleKeyDown}
-          style={{
-            width: "100%",
-            height: textareaHeight,
-            resize: "none",
-            borderRadius: 8,
-            border: isNote ? "1px solid var(--kairo-color-note-line)" : "1px solid var(--k-border)",
-            background: isNote ? "var(--kairo-color-note-soft)" : "var(--k-surface)",
-            padding: "10px 12px",
-            fontSize: 14,
-            lineHeight: 1.6,
-            color: isNote ? "var(--kairo-color-note-ink)" : "var(--k-text-primary)",
-            outline: "none",
-            fontFamily: "inherit",
-            boxSizing: "border-box",
-            marginBottom: 8,
-            transition: "border-color 0.1s ease, background 0.1s ease",
-          }}
-          onFocus={(e) => {
+          }} onKeyDown={handleKeyDown} onFocus={(e) => {
             if (isNote) {
               e.currentTarget.style.borderColor = "var(--kairo-color-warn)";
               e.currentTarget.style.boxShadow = "0 0 0 2px var(--kairo-color-note-soft)";
@@ -917,350 +674,114 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
               e.currentTarget.style.borderColor = "var(--k-accent)";
               e.currentTarget.style.boxShadow = "0 0 0 2px var(--kairo-color-accent-soft)";
             }
-          }}
-          onBlur={(e) => {
+          }} onBlur={(e) => {
             e.currentTarget.style.borderColor = isNote ? "var(--kairo-color-note-line)" : "var(--k-border)";
             e.currentTarget.style.boxShadow = "none";
-          }}
-        />
-        </div>
+          }} width="100%" height={textareaHeight} resize="none" borderRadius={8} borderWidth={1} borderColor={isNote ? "var(--kairo-color-note-line)" : "var(--k-border)"} backgroundColor={isNote ? "var(--kairo-color-note-soft)" : "var(--k-surface)"} paddingVertical={10} paddingHorizontal={12} fontSize={14} lineHeight={22.4} color={isNote ? "var(--kairo-color-note-ink)" : "var(--k-text-primary)"} outlineWidth={0} marginBottom={8} transition="border-color 0.1s ease, background 0.1s ease" borderStyle="solid" />
+        </Box>
       )}
 
       {/* ── DIMENSION 3: Lifecycle actions ────────────────────────────── */}
 
       {/* Escalation inline panel (KAI-221) */}
       {showEscalatePanel && (
-        <div
-          style={{
-            marginBottom: 8,
-            border: "1px solid color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)",
-            borderRadius: 8,
-            background: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)",
-            padding: "10px 12px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-            <Icon name="warning" size={12} color="var(--kairo-color-sla-escalate-ink)" style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--kairo-color-sla-escalate-ink)" }}>
+        <Box marginBottom={8} borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" borderRadius={8} backgroundColor="color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)" paddingVertical={10} paddingHorizontal={12} borderStyle="solid">
+          <Box display="flex" alignItems="center" gap={6} marginBottom={8}>
+            <Icon name="warning" size={12} color="var(--kairo-color-sla-escalate-ink)" />
+            <Text fontSize={12} fontWeight={600} color="var(--kairo-color-sla-escalate-ink)">
               {t("replyBar.escalateTitle", "Escalate ticket")}
-            </span>
-            <button
-              type="button"
-              onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }}
-              style={{
-                marginLeft: "auto",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 2,
-                color: "var(--k-text-tertiary)",
-                display: "flex",
-                alignItems: "center",
-              }}
-              aria-label={t("replyBar.escalateCancel", "Cancel")}
-            >
+            </Text>
+            <Pressable type="button" onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }} aria-label={t("replyBar.escalateCancel", "Cancel")} marginLeft="auto" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={2} color="var(--k-text-tertiary)" display="flex" alignItems="center">
               <Icon name="x" size={12} />
-            </button>
-          </div>
-          <textarea
-            placeholder={t("replyBar.escalateReasonPlaceholder", "Reason for escalation (optional)…")}
-            value={escalateReason}
-            onChange={(e) => setEscalateReason(e.target.value)}
-            rows={2}
-            style={{
-              width: "100%",
-              resize: "none",
-              borderRadius: 6,
-              border: "1px solid color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)",
-              background: "white",
-              padding: "7px 10px",
-              fontSize: 12,
-              lineHeight: 1.55,
-              color: "var(--k-text-primary)",
-              outline: "none",
-              fontFamily: "inherit",
-              boxSizing: "border-box",
-              marginBottom: 8,
-            }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "var(--kairo-color-mood)"; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = "color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)"; }}
-          />
-          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }}
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                padding: "4px 10px",
-                borderRadius: 6,
-                border: "1px solid var(--k-border)",
-                background: "white",
-                color: "var(--k-text-secondary)",
-                cursor: "pointer",
-              }}
-            >
+            </Pressable>
+          </Box>
+          <PlainTextarea placeholder={t("replyBar.escalateReasonPlaceholder", "Reason for escalation (optional)…")} value={escalateReason} onChange={(e) => setEscalateReason(e.target.value)} rows={2} onFocus={(e) => { e.currentTarget.style.borderColor = "var(--kairo-color-mood)"; }} onBlur={(e) => { e.currentTarget.style.borderColor = "color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)"; }} width="100%" resize="none" borderRadius={6} borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" backgroundColor="white" paddingVertical={7} paddingHorizontal={10} fontSize={12} lineHeight={18.6} color="var(--k-text-primary)" outlineWidth={0} marginBottom={8} borderStyle="solid" />
+          <Box display="flex" gap={6} justifyContent="flex-end">
+            <Pressable type="button" onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={10} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" backgroundColor="white" color="var(--k-text-secondary)" cursor="pointer" borderStyle="solid">
               {t("replyBar.escalateCancel", "Cancel")}
-            </button>
-            <button
-              type="button"
-              disabled={escalating}
-              onClick={handleEscalateConfirm}
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                padding: "4px 12px",
-                borderRadius: 6,
-                border: "none",
-                background: escalating ? "var(--k-border)" : "var(--kairo-color-sla-escalate-ink)",
-                color: escalating ? "var(--k-text-tertiary)" : "white",
-                cursor: escalating ? "wait" : "pointer",
-                transition: "background 0.1s ease",
-              }}
-            >
+            </Pressable>
+            <Pressable type="button" disabled={escalating} onClick={handleEscalateConfirm} fontSize={11} fontWeight={600} paddingVertical={4} paddingHorizontal={12} borderRadius={6} borderWidth={0} backgroundColor={escalating ? "var(--k-border)" : "var(--kairo-color-sla-escalate-ink)"} color={escalating ? "var(--k-text-tertiary)" : "white"} cursor={escalating ? "wait" : "pointer"} transition="background 0.1s ease">
               {escalating
                 ? t("replyBar.escalating", "Escalating…")
                 : t("replyBar.escalateConfirm", "Confirm escalation")}
-            </button>
-          </div>
-        </div>
+            </Pressable>
+          </Box>
+        </Box>
       )}
 
       {/* Lifecycle buttons row: Reconocer, Resolver, Escalar */}
       {(visibleActions.length > 0 || canEscalate) && !showEscalatePanel && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        <Box display="flex" gap={6} marginBottom={8}>
           {visibleActions.map((action) => {
             const cfg = ACTION_CONFIG[action];
             const loading = actionLoading === action;
             return (
-              <button
-                key={action}
-                type="button"
-                disabled={!!actionLoading}
-                onClick={() => handleAction(action)}
-                style={{
-                  ...cfg.style,
-                  fontSize: 11,
-                  fontWeight: 500,
-                  padding: "4px 11px",
-                  borderRadius: 999,
-                  cursor: actionLoading ? "wait" : "pointer",
-                  opacity: actionLoading && !loading ? 0.5 : 1,
-                  transition: "opacity 0.1s ease",
-                }}
-              >
+              <Pressable key={action} type="button" disabled={!!actionLoading} onClick={() => handleAction(action)} {...cfg.style} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={11} borderRadius={999} cursor={actionLoading ? "wait" : "pointer"} opacity={actionLoading && !loading ? 0.5 : 1} transition="opacity 0.1s ease">
                 {loading ? "…" : t(cfg.labelKey, cfg.defaultLabel)}
-              </button>
+              </Pressable>
             );
           })}
           {canEscalate && (
-            <button
-              type="button"
-              disabled={showEscalatePanel}
-              onClick={() => setShowEscalatePanel(true)}
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                padding: "4px 11px",
-                borderRadius: 999,
-                cursor: "pointer",
-                background: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)",
-                color: "var(--kairo-color-sla-escalate-ink)",
-                border: "1px solid color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)",
-                transition: "opacity 0.1s ease",
-              }}
-            >
+            <Pressable type="button" disabled={showEscalatePanel} onClick={() => setShowEscalatePanel(true)} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={11} borderRadius={999} cursor="pointer" backgroundColor="color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)" color="var(--kairo-color-sla-escalate-ink)" borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" transition="opacity 0.1s ease" borderStyle="solid">
               {t("replyBar.actionEscalar", "Escalate")}
-            </button>
+            </Pressable>
           )}
-        </div>
+        </Box>
       )}
 
       {/* Send buttons row */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: 8,
-        }}
-      >
+      <Box display="flex" alignItems="center" justifyContent="flex-end" gap={8}>
         {/* KAI-232 rule F.9 — only surfaces near the cap, not while writing. */}
         {isNote && draft.length >= NOTE_COUNTER_THRESHOLD && (
-          <span
-            style={{
-              marginRight: "auto",
-              fontFamily: "var(--k-font-mono)",
-              fontSize: 11,
-              color: draft.length >= NOTE_MAX_LENGTH ? "var(--kairo-color-bad)" : "var(--k-note-label)",
-            }}
-          >
+          <Text marginRight="auto" font="mono" fontSize={11} color={draft.length >= NOTE_MAX_LENGTH ? "var(--kairo-color-bad)" : "var(--k-note-label)"}>
             {draft.length} / {NOTE_MAX_LENGTH}
-          </span>
+          </Text>
         )}
         {isNote ? (
           /* Note mode: single "Add note" button */
-          <button
-            type="button"
-            disabled={!canSend}
-            onClick={handleSendNote}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: 12,
-              fontWeight: 600,
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "none",
-              background: canSend ? "var(--kairo-color-warn)" : "var(--k-border)",
-              color: canSend ? "white" : "var(--k-text-tertiary)",
-              cursor: canSend ? "pointer" : "not-allowed",
-              transition: "background 0.1s ease",
-            }}
-          >
+          <Pressable type="button" disabled={!canSend} onClick={handleSendNote} display="flex" alignItems="center" gap={5} fontSize={12} fontWeight={600} paddingVertical={6} paddingHorizontal={14} borderRadius={6} borderWidth={0} backgroundColor={canSend ? "var(--kairo-color-warn)" : "var(--k-border)"} color={canSend ? "white" : "var(--k-text-tertiary)"} cursor={canSend ? "pointer" : "not-allowed"} transition="background 0.1s ease">
             <Icon name="lock" size={11} />
             {sending ? t("replyBar.sendingNote", "Saving…") : t("replyBar.sendNote", "Add note")}
-          </button>
+          </Pressable>
         ) : (
           /* Reply mode: send split-button — primary "Enviar", dropdown has
              "Enviar y resolver" and "Resolver" (status-only, no email). */
-          <div ref={sendMenuRef} style={{ position: "relative", display: "flex" }}>
-            <button
-              type="button"
-              disabled={!canSend}
-              onClick={() => handleSend(false)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                fontSize: 12,
-                fontWeight: 500,
-                padding: "6px 14px",
-                borderRadius: "6px 0 0 6px",
-                border: "none",
-                background: canSend ? "var(--k-accent)" : "var(--k-border)",
-                color: canSend ? "white" : "var(--k-text-tertiary)",
-                cursor: canSend ? "pointer" : "not-allowed",
-                transition: "background 0.1s ease",
-              }}
-            >
+          <Box ref={sendMenuRef} position="relative" display="flex">
+            <Pressable type="button" disabled={!canSend} onClick={() => handleSend(false)} display="flex" alignItems="center" gap={5} fontSize={12} fontWeight={500} paddingVertical={6} paddingHorizontal={14} borderTopLeftRadius={6} borderTopRightRadius={0} borderBottomRightRadius={0} borderBottomLeftRadius={6} borderWidth={0} backgroundColor={canSend ? "var(--k-accent)" : "var(--k-border)"} color={canSend ? "white" : "var(--k-text-tertiary)"} cursor={canSend ? "pointer" : "not-allowed"} transition="background 0.1s ease">
               <Icon name="send" size={12} />
               {sending ? t("replyBar.sending") : t("ticketDetail.send")}
-            </button>
+            </Pressable>
 
-            <button
-              type="button"
-              disabled={!canSend}
-              onClick={() => setSendMenuOpen((v) => !v)}
-              aria-label={t("replyBar.sendOptionsLabel", "More send options")}
-              aria-expanded={sendMenuOpen}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 26,
-                padding: 0,
-                borderRadius: "0 6px 6px 0",
-                borderLeft: canSend ? "1px solid rgba(255,255,255,0.3)" : "1px solid var(--k-border)",
-                borderTop: "none",
-                borderRight: "none",
-                borderBottom: "none",
-                background: canSend ? "var(--k-accent)" : "var(--k-border)",
-                color: canSend ? "white" : "var(--k-text-tertiary)",
-                cursor: canSend ? "pointer" : "not-allowed",
-                transition: "background 0.1s ease",
-              }}
-            >
+            <Pressable type="button" disabled={!canSend} onClick={() => setSendMenuOpen((v) => !v)} aria-label={t("replyBar.sendOptionsLabel", "More send options")} aria-expanded={sendMenuOpen} display="flex" alignItems="center" justifyContent="center" width={26} padding={0} borderTopLeftRadius={0} borderTopRightRadius={6} borderBottomRightRadius={6} borderBottomLeftRadius={0} borderLeftWidth={1} borderLeftColor={canSend ? "rgba(255,255,255,0.3)" : "var(--k-border)"} borderTopWidth={0} borderRightWidth={0} borderBottomWidth={0} backgroundColor={canSend ? "var(--k-accent)" : "var(--k-border)"} color={canSend ? "white" : "var(--k-text-tertiary)"} cursor={canSend ? "pointer" : "not-allowed"} transition="background 0.1s ease" borderStyle="solid">
               <Icon name="down" size={13} />
-            </button>
+            </Pressable>
 
             {sendMenuOpen && (
-              <div
-                data-testid="send-split-menu"
-                style={{
-                  position: "absolute",
-                  bottom: "calc(100% + 6px)",
-                  right: 0,
-                  minWidth: 180,
-                  background: "white",
-                  border: "1px solid var(--k-border)",
-                  borderRadius: 8,
-                  boxShadow: "0 4px 16px rgba(9,9,11,0.12)",
-                  overflow: "hidden",
-                  zIndex: 20,
-                }}
-              >
-                <button
-                  type="button"
-                  disabled={!canSend}
-                  onClick={() => { setSendMenuOpen(false); handleSend(true); }}
-                  style={{
-                    display: "flex",
-                    width: "100%",
-                    alignItems: "center",
-                    padding: "8px 12px",
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: canSend ? "var(--k-text-primary)" : "var(--k-text-tertiary)",
-                    background: "none",
-                    border: "none",
-                    borderBottom: "1px solid var(--k-border-subtle)",
-                    cursor: canSend ? "pointer" : "not-allowed",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-surface-2)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                >
+              <Box data-testid="send-split-menu" position="absolute" bottom="calc(100% + 6px)" right={0} minWidth={180} backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={8} boxShadow="0 4px 16px rgba(9,9,11,0.12)" overflow="hidden" zIndex={20} borderStyle="solid">
+                <Pressable type="button" disabled={!canSend} onClick={() => { setSendMenuOpen(false); handleSend(true); }} hoverStyle={{ backgroundColor: "var(--k-surface-2)" }} display="flex" width="100%" alignItems="center" paddingVertical={8} paddingHorizontal={12} fontSize={12} fontWeight={500} color={canSend ? "var(--k-text-primary)" : "var(--k-text-tertiary)"} backgroundColor="transparent" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" cursor={canSend ? "pointer" : "not-allowed"} textAlign="left" borderStyle="solid">
                   {t("replyBar.sendAndResolve", "Send & Resolve")}
-                </button>
-                <button
-                  type="button"
-                  disabled={resolving}
-                  onClick={handleResolveOnly}
-                  style={{
-                    display: "flex",
-                    width: "100%",
-                    alignItems: "center",
-                    padding: "8px 12px",
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: resolving ? "var(--k-text-tertiary)" : "var(--k-text-primary)",
-                    background: "none",
-                    border: "none",
-                    cursor: resolving ? "wait" : "pointer",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => { if (!resolving) e.currentTarget.style.background = "var(--k-surface-2)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                >
+                </Pressable>
+                <Pressable type="button" disabled={resolving} onClick={handleResolveOnly} hoverStyle={!resolving ? { backgroundColor: "var(--k-surface-2)" } : undefined} display="flex" width="100%" alignItems="center" paddingVertical={8} paddingHorizontal={12} fontSize={12} fontWeight={500} color={resolving ? "var(--k-text-tertiary)" : "var(--k-text-primary)"} backgroundColor="transparent" borderWidth={0} cursor={resolving ? "wait" : "pointer"} textAlign="left">
                   {resolving ? "…" : t(ACTION_CONFIG.resolver.labelKey, ACTION_CONFIG.resolver.defaultLabel)}
-                </button>
-              </div>
+                </Pressable>
+              </Box>
             )}
-          </div>
+          </Box>
         )}
-      </div>
+      </Box>
 
       {/* Status messages */}
       {sendError ? (
-        <p style={{ marginTop: 6, fontSize: 12, color: "var(--kairo-color-bad)" }}>{sendError}</p>
+        <Text tag="p" marginTop={6} fontSize={12} color="var(--kairo-color-bad)" display="block">{sendError}</Text>
       ) : sendSuccess ? (
-        <p style={{ marginTop: 6, fontSize: 12, color: isNote ? "var(--kairo-color-cat-billing)" : "var(--kairo-color-ok)" }}>
+        <Text tag="p" marginTop={6} fontSize={12} color={isNote ? "var(--kairo-color-cat-billing)" : "var(--kairo-color-ok)"} display="block">
           {isNote ? t("replyBar.noteSuccess", "Note added.") : t("replyBar.sendSuccess")}
-        </p>
+        </Text>
       ) : (
-        <p
-          style={{
-            marginTop: 6,
-            fontSize: 11,
-            fontFamily: "var(--k-font-mono)",
-            color: "var(--k-text-tertiary)",
-          }}
-        >
+        <Text tag="p" marginTop={6} fontSize={11} font="mono" color="var(--k-text-tertiary)" display="block">
           {t("ticketDetail.sendHint")}
-        </p>
+        </Text>
       )}
-    </div>
+    </Box>
   );
 }

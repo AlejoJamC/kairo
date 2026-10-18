@@ -11,15 +11,18 @@ const CSS = `
 @keyframes kairo-ui-pulse { 0%, 100% { opacity: .4 } 50% { opacity: 1 } }
 @keyframes kairo-ui-spin { to { transform: rotate(360deg) } }
 @keyframes kairo-ui-caret { 0%, 100% { opacity: 1 } 50% { opacity: 0 } }
+@keyframes kairo-ui-fade { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
 @keyframes kairo-ui-slide-in { from { transform: translateX(100%) } to { transform: none } }
 .kairo-ui-shim { background: linear-gradient(90deg, ${tokens['surface.hover']} 0%, ${tokens['border.default']} 50%, ${tokens['surface.hover']} 100%); background-size: 200% 100%; animation: kairo-ui-shim 1.4s linear infinite }
 .kairo-ui-pulse { animation: kairo-ui-pulse 1.6s ease-in-out infinite }
 .kairo-ui-spin { animation: kairo-ui-spin .8s linear infinite }
 .kairo-ui-caret { animation: kairo-ui-caret 1s steps(2) infinite }
 .kairo-ui-slide { animation: kairo-ui-slide-in 160ms ease-out }
+.kairo-ui-fade { animation: kairo-ui-fade .26s ease both }
 .kairo-ui-knob { transition: transform 150ms }
 @media (prefers-reduced-motion: reduce) {
-  .kairo-ui-shim, .kairo-ui-pulse, .kairo-ui-spin, .kairo-ui-caret, .kairo-ui-slide, .kairo-ui-knob { animation: none !important; transition: none !important }
+  .kairo-ui-shim, .kairo-ui-pulse, .kairo-ui-spin, .kairo-ui-caret, .kairo-ui-slide, .kairo-ui-fade { animation: kairo-ui-fade .26s ease both }
+.kairo-ui-knob { animation: none !important; transition: none !important }
 }
 `
 

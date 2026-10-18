@@ -2,7 +2,7 @@
 // Light-theme restyle (KAI-156); supports collapsed mode (icon only).
 
 import { useAuth } from "@kairo/client-core/auth";
-import { Avatar, Icon } from "@kairo/ui";
+import { Avatar, Box, Icon, Pressable, Text } from "@kairo/ui";
 
 interface UserMenuProps {
   collapsed?: boolean;
@@ -17,70 +17,28 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
 
   if (collapsed) {
     return (
-      <div title={displayName ?? ""} style={{ display: "flex", justifyContent: "center" }}>
+      <Box title={displayName ?? ""} display="flex" justifyContent="center">
         <Avatar name={profile.name} email={profile.email} size={28} />
-      </div>
+      </Box>
     );
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 4px",
-        borderRadius: 6,
-        background: "var(--k-bg)",
-        border: "1px solid var(--k-border)",
-      }}
-    >
+    <Box display="flex" alignItems="center" gap={8} paddingVertical={6} paddingHorizontal={4} borderRadius={6} backgroundColor="var(--k-bg)" borderWidth={1} borderColor="var(--k-border)" borderStyle="solid">
       <Avatar name={profile.name} email={profile.email} size={24} marginLeft={4} />
 
       {/* Name + status */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p
-          style={{
-            fontSize: 12,
-            fontWeight: 500,
-            color: "var(--k-text-primary)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            margin: 0,
-          }}
-        >
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
+        <Text tag="p" fontSize={12} fontWeight={500} color="var(--k-text-primary)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
           {displayName}
-        </p>
+        </Text>
         {/* Gmail connected badge moved to Channels settings (KAI-173) */}
-      </div>
+      </Box>
 
       {/* Sign out */}
-      <button
-        onClick={signOut}
-        title="Sign out"
-        style={{
-          padding: 4,
-          color: "var(--k-text-tertiary)",
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          borderRadius: 4,
-          display: "flex",
-          alignItems: "center",
-          marginRight: 2,
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "var(--k-text-primary)";
-          (e.currentTarget as HTMLButtonElement).style.background = "var(--k-surface-2)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "var(--k-text-tertiary)";
-          (e.currentTarget as HTMLButtonElement).style.background = "none";
-        }}
-      >
+      <Pressable onClick={signOut} title="Sign out" hoverStyle={{ color: "var(--k-text-primary)", backgroundColor: "var(--k-surface-2)" }} padding={4} color="var(--k-text-tertiary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" borderRadius={4} display="flex" alignItems="center" marginRight={2}>
         <Icon name="logout" size={14} />
-      </button>
-    </div>
+      </Pressable>
+    </Box>
   );
 }

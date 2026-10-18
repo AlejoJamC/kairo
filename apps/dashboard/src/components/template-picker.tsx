@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { listTemplates } from "@kairo/client-core/endpoints";
-import { Icon, Popover, PopoverContent, PopoverTrigger } from "@kairo/ui";
+import { Box, Icon, PlainInput, Popover, PopoverContent, PopoverTrigger, Pressable, Text } from "@kairo/ui";
 
 interface Template {
   id: string;
@@ -108,92 +108,68 @@ export function TemplatePicker({ onSelect, children, previewVars }: TemplatePick
       <PopoverTrigger>{children}</PopoverTrigger>
       <PopoverContent label={t("templatePicker.searchPlaceholder")} side="top" align="end" width={320}>
           {/* Search bar */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--k-border-subtle)", padding: "8px 12px" }}>
-            <Icon name="search" size={13} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
-            <input
-              style={{ flex: 1, fontSize: 13, color: "var(--k-text-primary)", outline: "none", background: "none", border: "none" }}
-              placeholder={t("templatePicker.searchPlaceholder")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+          <Box display="flex" alignItems="center" gap={8} borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" paddingVertical={8} paddingHorizontal={12} borderStyle="solid">
+            <Icon name="search" size={13} color="var(--k-text-tertiary)" />
+            <PlainInput placeholder={t("templatePicker.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} flexGrow={1} flexShrink={1} flexBasis="0%" fontSize={13} color="var(--k-text-primary)" outlineWidth={0} backgroundColor="transparent" borderWidth={0} />
+          </Box>
 
           {/* Body */}
-          <div style={{ display: "flex", maxHeight: "18rem" }}>
+          <Box display="flex" maxHeight="18rem">
             {/* List */}
-            <div
-              style={{ minWidth: 0, flex: 1, overflowY: "auto", padding: "4px 0" }}
-              onMouseLeave={() => setHoveredId(null)}
-            >
+            <Box onMouseLeave={() => setHoveredId(null)} minWidth={0} flexGrow={1} flexShrink={1} flexBasis="0%" scroll paddingVertical={4} paddingHorizontal={0}>
               {loading && (
-                <p style={{ padding: "16px 12px", textAlign: "center", fontSize: 12, color: "var(--k-text-tertiary)" }}>
+                <Text tag="p" paddingVertical={16} paddingHorizontal={12} textAlign="center" fontSize={12} color="var(--k-text-tertiary)" display="block">
                   {t("templatePicker.loading")}
-                </p>
+                </Text>
               )}
               {error && (
-                <p style={{ padding: "16px 12px", textAlign: "center", fontSize: 12, color: "var(--kairo-color-bad)" }}>{error}</p>
+                <Text tag="p" paddingVertical={16} paddingHorizontal={12} textAlign="center" fontSize={12} color="var(--kairo-color-bad)" display="block">{error}</Text>
               )}
               {!loading && !error && Object.keys(grouped).length === 0 && (
-                <p style={{ padding: "16px 12px", textAlign: "center", fontSize: 12, color: "var(--k-text-tertiary)" }}>
+                <Text tag="p" paddingVertical={16} paddingHorizontal={12} textAlign="center" fontSize={12} color="var(--k-text-tertiary)" display="block">
                   {t("templatePicker.empty")}
-                </p>
+                </Text>
               )}
               {!loading &&
                 !error &&
                 Object.entries(grouped).map(([category, items]) => (
                   <div key={category}>
-                    <p style={{ padding: "8px 12px 2px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--k-text-tertiary)" }}>
+                    <Text tag="p" paddingTop={8} paddingHorizontal={12} paddingBottom={2} fontSize={10} fontWeight={600} textTransform="uppercase" letterSpacing={0.6} color="var(--k-text-tertiary)" display="block">
                       {category}
-                    </p>
+                    </Text>
                     {items.map((tmpl) => (
-                      <button
-                        key={tmpl.id}
-                        type="button"
-                        style={{
-                          width: "100%",
-                          padding: "6px 12px",
-                          textAlign: "left",
-                          fontSize: 13,
-                          color: "var(--k-text-primary)",
-                          background: hoveredId === tmpl.id ? "var(--k-surface)" : "none",
-                          border: "none",
-                          cursor: "pointer",
-                          outline: "none",
-                        }}
-                        onMouseEnter={() => setHoveredId(tmpl.id)}
-                        onClick={() => {
+                      <Pressable key={tmpl.id} type="button" onMouseEnter={() => setHoveredId(tmpl.id)} onClick={() => {
                           onSelect(tmpl.content);
                           setOpen(false);
-                        }}
-                      >
+                        }} width="100%" paddingVertical={6} paddingHorizontal={12} textAlign="left" fontSize={13} color="var(--k-text-primary)" backgroundColor={hoveredId === tmpl.id ? "var(--k-surface)" : "none"} borderWidth={0} cursor="pointer" outlineWidth={0}>
                         {tmpl.title}
-                      </button>
+                      </Pressable>
                     ))}
                   </div>
                 ))}
-            </div>
+            </Box>
 
             {/* Fixed preview panel */}
-            <div style={{ width: 176, flexShrink: 0, overflowY: "auto", borderLeft: "1px solid var(--k-border-subtle)", background: "var(--k-surface)", padding: 12 }}>
-              <p style={{ marginBottom: 4, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--k-text-tertiary)" }}>
+            <Box width={176} flexShrink={0} scroll borderLeftWidth={1} borderLeftColor="var(--k-border-subtle)" backgroundColor="var(--k-surface)" padding={12} borderStyle="solid">
+              <Text tag="p" marginBottom={4} fontSize={10} fontWeight={600} textTransform="uppercase" letterSpacing={0.6} color="var(--k-text-tertiary)" display="block">
                 {t("templatePicker.preview")}
-              </p>
+              </Text>
               {hovered ? (
                 <>
-                  <p style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.55, color: "var(--k-text-secondary)" }}>
+                  <Text tag="p" whiteSpace="pre-wrap" fontSize={11} lineHeight={17.05} color="var(--k-text-secondary)" display="block">
                     {applyVars(hovered.content, previewVars)}
-                  </p>
+                  </Text>
                   {hasUnresolvedVars(hovered.content, previewVars) && (
-                    <p style={{ marginTop: 8, fontSize: 10, color: "var(--k-text-tertiary)", fontStyle: "italic" }}>
+                    <Text tag="p" marginTop={8} fontSize={10} color="var(--k-text-tertiary)" fontStyle="italic" display="block">
                       {t("templatePicker.varsNote", "Variables restantes se reemplazarán al enviar")}
-                    </p>
+                    </Text>
                   )}
                 </>
               ) : (
-                <p style={{ fontSize: 11, color: "var(--k-text-tertiary)" }}>{t("templatePicker.previewEmpty")}</p>
+                <Text tag="p" fontSize={11} color="var(--k-text-tertiary)" display="block">{t("templatePicker.previewEmpty")}</Text>
               )}
-            </div>
-          </div>
+            </Box>
+          </Box>
 
       </PopoverContent>
     </Popover>

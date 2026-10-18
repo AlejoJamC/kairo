@@ -1,4 +1,4 @@
-import { createElement, type CSSProperties } from 'react'
+import { createElement } from 'react'
 import { tokens } from '@kairo/tokens'
 import { iconNodes, SPARK_PATH, type IconName } from './icon-data'
 
@@ -17,10 +17,13 @@ type IconProps = {
   fill?: string
   /** Makes the icon meaningful: role="img" with this accessible name. */
   label?: string
-  style?: CSSProperties
+  marginTop?: number
+  marginBottom?: number
+  marginLeft?: number
+  marginRight?: number
 }
 
-function Icon({ name, size = 14, color = 'currentColor', strokeWidth, fill, label, style }: IconProps) {
+function Icon({ name, size = 14, color = 'currentColor', strokeWidth, fill, label, marginTop, marginBottom, marginLeft, marginRight }: IconProps) {
   const common = {
     width: size,
     height: size,
@@ -29,7 +32,7 @@ function Icon({ name, size = 14, color = 'currentColor', strokeWidth, fill, labe
     'aria-label': label,
     'aria-hidden': label ? undefined : true,
     focusable: false,
-    style: { flexShrink: 0, ...style },
+    style: { flexShrink: 0, marginTop, marginBottom, marginLeft, marginRight },
   }
 
   if (name === 'spark') {

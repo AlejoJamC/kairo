@@ -15,7 +15,7 @@ const control = {
   borderColor: tokens['border.default'],
   borderRadius: px(tokens['radius.field']),
   color: tokens['text.primary'],
-  placeholderTextColor: tokens['text.tertiary'] as never,
+  paddingHorizontal: 11,
   width: '100%',
   outlineWidth: 0,
   hoverStyle: { borderColor: tokens['border.strong'] },
@@ -24,14 +24,14 @@ const control = {
 
 const variants = {
   size: {
-    app: { height: px(tokens['size.field']), paddingHorizontal: 11, fontSize: 13 },
-    web: { height: 40, paddingVertical: 8, paddingHorizontal: 11, fontSize: 14 },
+    app: { height: px(tokens['size.field']), fontSize: 13 },
+    web: { height: 40, paddingVertical: 8, fontSize: 14 },
   },
   invalid: { true: { borderColor: tokens['color.bad-line'] } },
   readOnly: { true: { backgroundColor: tokens['surface.hover'], color: tokens['text.secondary'] } },
 } as const
 
-const FieldInput = styled(TamaguiInput, {
+const InputFrame = styled(TamaguiInput, {
   name: 'FieldInput',
   unstyled: true,
   ...control,
@@ -39,7 +39,7 @@ const FieldInput = styled(TamaguiInput, {
   defaultVariants: { size: 'app' },
 })
 
-const FieldTextarea = styled(TamaguiTextArea, {
+const TextareaFrame = styled(TamaguiTextArea, {
   name: 'FieldTextarea',
   unstyled: true,
   ...control,
@@ -49,8 +49,8 @@ const FieldTextarea = styled(TamaguiTextArea, {
   variants: {
     ...variants,
     size: {
-      app: { paddingHorizontal: 11, fontSize: 13, height: undefined },
-      web: { paddingHorizontal: 11, fontSize: 14, height: undefined },
+      app: { fontSize: 13, height: undefined },
+      web: { fontSize: 14, height: undefined },
     },
   },
   defaultVariants: { size: 'app' },
@@ -64,6 +64,16 @@ const SelectFrame = styled(Stack, {
   variants,
   defaultVariants: { size: 'app' },
 })
+
+const PLACEHOLDER = tokens['text.tertiary'] as never
+
+function FieldInput(props: GetProps<typeof InputFrame>) {
+  return <InputFrame placeholderTextColor={PLACEHOLDER} {...props} />
+}
+
+function FieldTextarea(props: GetProps<typeof TextareaFrame>) {
+  return <TextareaFrame placeholderTextColor={PLACEHOLDER} {...props} />
+}
 
 type FieldSelectProps = Omit<GetProps<typeof SelectFrame>, 'children' | 'onChange' | 'value'> & {
   value?: string

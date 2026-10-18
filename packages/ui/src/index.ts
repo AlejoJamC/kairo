@@ -17,4 +17,6 @@ export * from "./dialog";
 export * from "./drawer";
 export * from "./menu";
 export * from "./field";
+export * from "./layout";
+export * from "./plain";
 export * from "./resizer";

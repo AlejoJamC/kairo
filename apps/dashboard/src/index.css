@@ -1,91 +1,4 @@
-@import "tailwindcss";
-
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-}
-
-:root {
-  --radius: 0.625rem;
-  --background: var(--kairo-color-bg);
-  --foreground: var(--kairo-color-text);
-  --card: var(--kairo-color-surface);
-  --card-foreground: var(--kairo-color-text);
-  --popover: var(--kairo-color-surface);
-  --popover-foreground: var(--kairo-color-text);
-  --primary: var(--kairo-color-text);
-  --primary-foreground: var(--kairo-color-bg);
-  --secondary: var(--kairo-color-hover);
-  --secondary-foreground: var(--kairo-color-text);
-  --muted: var(--kairo-color-hover);
-  --muted-foreground: var(--kairo-color-muted);
-  --accent: var(--kairo-color-hover);
-  --accent-foreground: var(--kairo-color-text);
-  --destructive: var(--kairo-color-bad);
-  --border: var(--kairo-color-line);
-  --input: var(--kairo-color-line-strong);
-  --ring: var(--kairo-color-focus-ring);
-  --chart-1: var(--kairo-color-accent);
-  --chart-2: var(--kairo-color-ok);
-  --chart-3: var(--kairo-color-warn);
-  --chart-4: var(--kairo-color-bad);
-  --chart-5: var(--kairo-color-violet);
-  --sidebar: var(--kairo-color-side);
-  --sidebar-foreground: var(--kairo-color-text);
-  --sidebar-primary: var(--kairo-color-accent);
-  --sidebar-primary-foreground: var(--kairo-color-on-accent);
-  --sidebar-accent: var(--kairo-color-hover);
-  --sidebar-accent-foreground: var(--kairo-color-text);
-  --sidebar-border: var(--kairo-color-line);
-  --sidebar-ring: var(--kairo-color-focus-ring);
-}
-
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
+@import "./reset.css";
 
 /* ─── Kairo design tokens ───────────────────────────────────────────────────
    --k-* are aliases of the generated @kairo/tokens custom properties
@@ -262,13 +175,6 @@
 .k-btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Section card (border-radius 12px, shadow-card per spec) */
-.k-card {
-  background: white;
-  border: 1px solid var(--k-border);
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: var(--kairo-shadow-xs);
-}
 
 /* Transient highlight for a thread message jumped to from the Notes tab or a
    mention notification (KAI-232 · spec B5): outline + amber halo over 1.6s. */
@@ -285,8 +191,6 @@
 }
 
 /* KAI-249 — Assistant chat copilot animations (mirror Kairo Assistant.html) */
-@keyframes kai-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.kai-fade { animation: kai-fade-in 0.26s ease both; }
 
 /* KAI-227 — new draft row enters the directory: slide from the right + fade in */
 @keyframes kairo-row-in {

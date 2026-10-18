@@ -9,7 +9,7 @@ import { useTicketThread, type ThreadMessage } from "@kairo/client-core/hooks/us
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, Icon } from "@kairo/ui";
+import { Avatar, Box, Icon, Pressable, Text } from "@kairo/ui";
 import { startGmailConnect } from "@kairo/client-core/endpoints";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
@@ -74,20 +74,12 @@ function PrioritySlaBar({ ticket }: { ticket: Ticket }) {
   const barWidth = Math.min(100, sla.percentUsed);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div style={{ height: 6, borderRadius: 3, background: "var(--k-border-subtle)", overflow: "hidden" }}>
-        <div
-          style={{
-            height: "100%",
-            width: `${barWidth}%`,
-            background: PRIORITY_SLA_BAR_COLOR[sla.status],
-            borderRadius: 3,
-            transition: "width 0.2s ease",
-          }}
-        />
-      </div>
-      <span style={{ fontSize: 12, color: PRIORITY_SLA_BAR_COLOR[sla.status], fontWeight: 500 }}>{detail}</span>
-    </div>
+    <Box display="flex" flexDirection="column" gap={4}>
+      <Box height={6} borderRadius={3} backgroundColor="var(--k-border-subtle)" overflow="hidden">
+        <Box height="100%" width={`${barWidth}%`} backgroundColor={PRIORITY_SLA_BAR_COLOR[sla.status]} borderRadius={3} transition="width 0.2s ease" />
+      </Box>
+      <Text fontSize={12} color={PRIORITY_SLA_BAR_COLOR[sla.status]} fontWeight={500}>{detail}</Text>
+    </Box>
   );
 }
 
@@ -133,235 +125,98 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
   // Internal note: amber card, full-width, no avatar offset (KAI-232 spec B5)
   if (isInternal) {
     return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 0,
-          borderLeft: "3px solid var(--k-note-rail)",
-          background: "var(--k-note-bg)",
-          border: "1px solid var(--k-note-border)",
-          borderRadius: 12,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 9,
-            padding: "10px 14px",
-            borderBottom: "1px solid var(--k-note-border)",
-          }}
-        >
+      <Box display="flex" flexDirection="column" gap={0} borderLeftWidth={3} borderLeftColor="var(--k-note-rail)" backgroundColor="var(--k-note-bg)" borderWidth={1} borderColor="var(--k-note-border)" borderRadius={12} overflow="hidden" borderStyle="solid">
+        <Box display="flex" alignItems="center" gap={9} paddingVertical={10} paddingHorizontal={14} borderBottomWidth={1} borderBottomColor="var(--k-note-border)" borderStyle="solid">
           <Avatar
             name={message.sender_display_name}
             email={message.sender_external_id}
             seed={message.author_id ?? message.sender_external_id}
             size={22}
           />
-          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--k-note-text-strong)" }}>
+          <Text fontSize={13} fontWeight={500} color="var(--k-note-text-strong)">
             {message.is_own_note ? t("notes.you", "You") : senderLabel}
-          </span>
+          </Text>
           <TeamOnlyChip />
           {/* Only exists while the jump highlight is running (spec B5). */}
           {jumped && (
-            <span
-              style={{
-                fontFamily: "var(--k-font-mono)",
-                fontSize: 9.5,
-                color: "var(--k-note-label)",
-                background: "rgba(245,158,11,0.16)",
-                padding: "2px 6px",
-                borderRadius: 3,
-                letterSpacing: "0.04em",
-              }}
-            >
+            <Text font="mono" fontSize={9.5} color="var(--k-note-label)" backgroundColor="rgba(245,158,11,0.16)" paddingVertical={2} paddingHorizontal={6} borderRadius={3} letterSpacing={0.38}>
               ↳ {t("notes.jumpedFromNotes", "JUMPED FROM NOTES")}
-            </span>
+            </Text>
           )}
-          <span
-            style={{
-              marginLeft: "auto",
-              fontFamily: "var(--k-font-mono)",
-              fontSize: 10.5,
-              color: "var(--k-note-label)",
-              flexShrink: 0,
-            }}
-          >
+          <Text marginLeft="auto" font="mono" fontSize={10.5} color="var(--k-note-label)" flexShrink={0}>
             {timestamp}
-          </span>
-        </div>
-        <div style={{ padding: "12px 14px" }}>
+          </Text>
+        </Box>
+        <Box paddingVertical={12} paddingHorizontal={14}>
           {/* KAI-232: mention tokens render as chips, never as raw @[user:…]. */}
           <NoteBody
             body={bodyText}
             mentions={message.mentions}
-            style={{ fontSize: 13.5, lineHeight: 1.6, color: "var(--k-note-text-strong)" }}
+            fontSize={13.5} lineHeightRatio={1.6} color="var(--k-note-text-strong)"
           />
-        </div>
-      </div>
+        </Box>
+      </Box>
     );
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        marginLeft: isOutbound ? 48 : 0,
-        marginRight: isOutbound ? 0 : 48,
-      }}
-    >
+    <Box display="flex" flexDirection="column" gap={8} marginLeft={isOutbound ? 48 : 0} marginRight={isOutbound ? 0 : 48}>
       {/* Message header row */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+      <Box display="flex" alignItems="flex-start" gap={10}>
         <SenderAvatar
           name={message.sender_display_name}
           email={message.sender_external_id}
         />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <p
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--k-text-primary)",
-                margin: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
+        <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
+          <Box display="flex" alignItems="center" gap={6} flexWrap="wrap">
+            <Text tag="p" fontSize={13} fontWeight={600} color="var(--k-text-primary)" margin={0} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
               {senderLabel}
-            </p>
+            </Text>
             {message.is_origin && (
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "var(--k-accent)",
-                  background: "var(--k-accent-subtle)",
-                  border: "1px solid var(--kairo-color-accent-line)",
-                  borderRadius: 4,
-                  padding: "1px 5px",
-                  flexShrink: 0,
-                }}
-              >
+              <Text fontSize={10} fontWeight={600} color="var(--k-accent)" backgroundColor="var(--k-accent-subtle)" borderWidth={1} borderColor="var(--kairo-color-accent-line)" borderRadius={4} paddingVertical={1} paddingHorizontal={5} flexShrink={0} borderStyle="solid">
                 {t("ticketDetail.originMessage", "Initial message")}
-              </span>
+              </Text>
             )}
             {isOutbound && (
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "var(--kairo-color-faint)",
-                  background: "var(--kairo-color-hover)",
-                  border: "1px solid var(--kairo-color-line)",
-                  borderRadius: 4,
-                  padding: "1px 5px",
-                  flexShrink: 0,
-                }}
-              >
+              <Text fontSize={10} fontWeight={600} color="var(--kairo-color-faint)" backgroundColor="var(--kairo-color-hover)" borderWidth={1} borderColor="var(--kairo-color-line)" borderRadius={4} paddingVertical={1} paddingHorizontal={5} flexShrink={0} borderStyle="solid">
                 {t("ticketDetail.outbound", "Reply sent")}
-              </span>
+              </Text>
             )}
             {isOutbound && message.delivery_status && message.delivery_status !== "sent" && (
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: message.delivery_status === "failed" ? "var(--kairo-color-bad-ink)" : "var(--kairo-color-note-ink)",
-                  background: message.delivery_status === "failed" ? "var(--kairo-color-bad-soft)" : "var(--kairo-color-note-soft)",
-                  border: `1px solid ${message.delivery_status === "failed" ? "var(--kairo-color-bad-line)" : "var(--kairo-color-note-line)"}`,
-                  borderRadius: 4,
-                  padding: "1px 5px",
-                  flexShrink: 0,
-                }}
-              >
+              <Text fontSize={10} fontWeight={600} color={message.delivery_status === "failed" ? "var(--kairo-color-bad-ink)" : "var(--kairo-color-note-ink)"} backgroundColor={message.delivery_status === "failed" ? "var(--kairo-color-bad-soft)" : "var(--kairo-color-note-soft)"} borderWidth={1} borderColor={message.delivery_status === "failed" ? "var(--kairo-color-bad-line)" : "var(--kairo-color-note-line)"} borderRadius={4} paddingVertical={1} paddingHorizontal={5} flexShrink={0} borderStyle="solid">
                 {message.delivery_status === "failed"
                   ? t("ticketDetail.deliveryFailed", "Failed to send")
                   : t("ticketDetail.deliverySending", "Sending…")}
-              </span>
+              </Text>
             )}
             {isOutbound
               && message.delivery_status === "failed"
               && message.send_error?.code === "INSUFFICIENT_SCOPE" && (
-              <button
-                type="button"
-                onClick={() => { startGmailConnect(); }}
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "var(--k-accent)",
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                  flexShrink: 0,
-                }}
-              >
+              <Pressable type="button" onClick={() => { startGmailConnect(); }} fontSize={10} fontWeight={600} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} padding={0} cursor="pointer" textDecoration="underline" flexShrink={0}>
                 {t("ticketDetail.reconnectGmail", "Reconnect Gmail to retry")}
-              </button>
+              </Pressable>
             )}
-          </div>
-          <p
-            style={{
-              fontSize: 12,
-              color: "var(--k-text-tertiary)",
-              margin: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
+          </Box>
+          <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" margin={0} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
             {senderEmail}
             {timestamp ? (senderEmail ? ` · ${timestamp}` : timestamp) : ""}
-          </p>
-        </div>
-      </div>
+          </Text>
+        </Box>
+      </Box>
 
       {/* Message body */}
-      <div
-        style={{
-          background: isOutbound ? "var(--k-accent-subtle)" : "white",
-          border: `1px solid ${isOutbound ? "var(--kairo-color-accent-line)" : "var(--k-border)"}`,
-          borderRadius: 10,
-          overflow: "hidden",
-          padding: "14px 16px",
-        }}
-      >
+      <Box backgroundColor={isOutbound ? "var(--k-accent-subtle)" : "white"} borderWidth={1} borderColor={isOutbound ? "var(--kairo-color-accent-line)" : "var(--k-border)"} borderRadius={10} overflow="hidden" paddingVertical={14} paddingHorizontal={16} borderStyle="solid">
         {bodyText ? (
-          <pre
-            style={{
-              fontFamily: "inherit",
-              fontSize: 13,
-              lineHeight: 1.65,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              overflowX: "hidden",
-              color: "var(--k-text-primary)",
-              margin: 0,
-            }}
-          >
+          <Text tag="pre" display="block" fontSize={13} lineHeightRatio={1.65} whiteSpace="pre-wrap" wordBreak="break-word" overflowX="hidden" color="var(--k-text-primary)" margin={0}>
             {bodyText}
-          </pre>
+          </Text>
         ) : (
-          <p
-            style={{
-              margin: 0,
-              fontStyle: "italic",
-              color: "var(--k-text-tertiary)",
-              fontSize: 13,
-            }}
-          >
+          <Text tag="p" margin={0} fontStyle="italic" color="var(--k-text-tertiary)" fontSize={13} display="block">
             {t("ticketDetail.noBody", "No email body available.")}
-          </p>
+          </Text>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
@@ -442,23 +297,12 @@ export function TicketDetail() {
 
   if (!ticket) {
     return (
-      <div
-        style={{
-          flex: 1,
-          minWidth: CENTER_PANEL_MIN_WIDTH,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "var(--k-surface)",
-          gap: 8,
-        }}
-      >
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={CENTER_PANEL_MIN_WIDTH} display="flex" flexDirection="column" alignItems="center" justifyContent="center" backgroundColor="var(--k-surface)" gap={8}>
         <Icon name="mail" size={40} color="var(--k-border)" />
-        <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>
+        <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" display="block">
           {t("ticketDetail.selectPrompt", "Select a ticket to view details")}
-        </p>
-      </div>
+        </Text>
+      </Box>
     );
   }
 
@@ -467,103 +311,42 @@ export function TicketDetail() {
     : null;
 
   return (
-    <div
-      style={{
-        flex: 1,
-        minWidth: CENTER_PANEL_MIN_WIDTH,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        background: "var(--k-surface)",
-      }}
-    >
+    <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={CENTER_PANEL_MIN_WIDTH} display="flex" flexDirection="column" overflow="hidden" backgroundColor="var(--k-surface)">
       <TicketHeader ticket={ticket} readOnly={isReadOnly} />
 
       {/* Scrollable body */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: "auto",
-          padding: "20px 28px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-        }}
-      >
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll paddingVertical={20} paddingHorizontal={28} display="flex" flexDirection="column" gap={14}>
         {/* Subject h1 */}
-        <h1
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: "var(--k-text-primary)",
-            margin: 0,
-            lineHeight: 1.3,
-            letterSpacing: "-0.02em",
-          }}
-        >
+        <Text tag="h1" fontSize={18} fontWeight={700} color="var(--k-text-primary)" margin={0} lineHeight={23.4} letterSpacing={-0.36} display="block">
           {ticket.subject ?? t("ticketDetail.noSubject", "(Sin asunto)")}
-        </h1>
+        </Text>
 
         <PrioritySlaBar ticket={ticket} />
         <TicketDecisions ticketId={ticket.id} />
 
         {/* AI reasoning banner */}
         {ticket.ai_reasoning && (
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              alignItems: "flex-start",
-              padding: "8px 10px",
-              background: "var(--k-accent-subtle)",
-              borderRadius: 6,
-              border: "1px solid var(--kairo-color-accent-line)",
-            }}
-          >
-            <Icon name="spark" size={13} color="var(--k-accent)" style={{ flexShrink: 0, marginTop: 1 }} />
-            <div style={{ fontSize: 12, color: "var(--k-text-secondary)", flex: 1, lineHeight: 1.5 }}>
-              <span style={{ color: "var(--k-accent)", fontWeight: 500 }}>
+          <Box display="flex" gap={8} alignItems="flex-start" paddingVertical={8} paddingHorizontal={10} backgroundColor="var(--k-accent-subtle)" borderRadius={6} borderWidth={1} borderColor="var(--kairo-color-accent-line)" borderStyle="solid">
+            <Icon name="spark" size={13} color="var(--k-accent)" marginTop={1} />
+            <Text tag="div" fontSize={12} color="var(--k-text-secondary)" flexGrow={1} flexShrink={1} flexBasis="0%" lineHeight={18} display="block">
+              <Text color="var(--k-accent)" fontWeight={500}>
                 Triage Intelligence
-              </span>{" "}
+              </Text>{" "}
               {ticket.ai_reasoning}
-            </div>
-          </div>
+            </Text>
+          </Box>
         )}
 
         {/* Thread: render message cards if available, fallback to legacy body_plain */}
         {threadLoading ? (
           /* Skeleton while loading */
-          <div
-            style={{
-              background: "white",
-              border: "1px solid var(--k-border)",
-              borderRadius: 12,
-              padding: "18px 20px",
-              opacity: 0.5,
-            }}
-          >
-            <div
-              style={{
-                height: 14,
-                background: "var(--k-border)",
-                borderRadius: 4,
-                marginBottom: 8,
-                width: "60%",
-              }}
-            />
-            <div
-              style={{
-                height: 14,
-                background: "var(--k-border)",
-                borderRadius: 4,
-                width: "90%",
-              }}
-            />
-          </div>
+          <Box backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={12} paddingVertical={18} paddingHorizontal={20} opacity={0.5} borderStyle="solid">
+            <Box height={14} backgroundColor="var(--k-border)" borderRadius={4} marginBottom={8} width="60%" />
+            <Box height={14} backgroundColor="var(--k-border)" borderRadius={4} width="90%" />
+          </Box>
         ) : messages.length > 0 ? (
           /* Thread view — N message cards in chronological order */
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <Box display="flex" flexDirection="column" gap={16}>
             {messages.map((msg) => (
               <div
                 key={msg.id}
@@ -579,112 +362,52 @@ export function TicketDetail() {
                 <MessageCard message={msg} jumped={highlightedMessageId === msg.id} />
               </div>
             ))}
-          </div>
+          </Box>
         ) : (
           /* Fallback — pre-backfill safety net: render legacy body_plain */
           <>
             {/* Sender row (legacy) */}
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+            <Box display="flex" alignItems="flex-start" gap={10}>
               <SenderAvatar name={ticket.from_name} email={ticket.from_email} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "var(--k-text-primary)",
-                    margin: "0 0 2px",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
+              <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
+                <Text tag="p" fontSize={13} fontWeight={600} color="var(--k-text-primary)" marginTop={0} marginHorizontal={0} marginBottom={2} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
                   {ticket.from_name ?? ticket.from_email ?? t("ticketDetail.unknownSender", "Unknown sender")}
-                </p>
-                <p
-                  style={{
-                    fontSize: 12,
-                    color: "var(--k-text-tertiary)",
-                    margin: 0,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
+                </Text>
+                <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" margin={0} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
                   {ticket.from_email && ticket.from_name ? `<${ticket.from_email}>` : ""}
                   {receivedDate ? ` · ${receivedDate}` : ""}
-                </p>
-              </div>
-            </div>
+                </Text>
+              </Box>
+            </Box>
 
             {/* Email body card (legacy) */}
-            <div
-              style={{
-                background: "white",
-                border: "1px solid var(--k-border)",
-                borderRadius: 12,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  padding: "18px 20px 22px",
-                  fontSize: 14,
-                  color: "var(--k-text-primary)",
-                  lineHeight: 1.65,
-                }}
-              >
+            <Box backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={12} overflow="hidden" borderStyle="solid">
+              <Text tag="div" paddingTop={18} paddingHorizontal={20} paddingBottom={22} fontSize={14} color="var(--k-text-primary)" lineHeight={23.1} display="block">
                 {ticket.body_plain ? (
-                  <pre
-                    style={{
-                      fontFamily: "inherit",
-                      fontSize: 14,
-                      lineHeight: 1.65,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                      overflowX: "hidden",
-                      color: "var(--k-text-primary)",
-                      margin: 0,
-                    }}
-                  >
+                  <Text tag="pre" display="block" fontSize={14} lineHeightRatio={1.65} whiteSpace="pre-wrap" wordBreak="break-word" overflowX="hidden" color="var(--k-text-primary)" margin={0}>
                     {ticket.body_plain}
-                  </pre>
+                  </Text>
                 ) : ticket.snippet ? (
-                  <p style={{ margin: 0, lineHeight: 1.65 }}>{ticket.snippet}</p>
+                  <Text tag="p" margin={0} lineHeightRatio={1.65} display="block">{ticket.snippet}</Text>
                 ) : (
-                  <p
-                    style={{
-                      margin: 0,
-                      fontStyle: "italic",
-                      color: "var(--k-text-tertiary)",
-                    }}
-                  >
+                  <Text tag="p" margin={0} fontStyle="italic" color="var(--k-text-tertiary)" display="block">
                     {t("ticketDetail.noBody", "No email body available.")}
-                  </p>
+                  </Text>
                 )}
-              </div>
-            </div>
+              </Text>
+            </Box>
           </>
         )}
-      </div>
+      </Box>
 
       {/* Fixed bottom reply bar — hidden for read-only historical tickets */}
       {isReadOnly ? (
-        <div
-          style={{
-            borderTop: "1px solid var(--k-border)",
-            padding: "10px 16px",
-            fontSize: 12,
-            color: "var(--k-text-tertiary)",
-            background: "var(--k-surface)",
-            textAlign: "center",
-            flexShrink: 0,
-          }}
-        >
+        <Text tag="div" borderTopWidth={1} borderTopColor="var(--k-border)" paddingVertical={10} paddingHorizontal={16} fontSize={12} color="var(--k-text-tertiary)" backgroundColor="var(--k-surface)" textAlign="center" flexShrink={0} display="block" borderStyle="solid">
           {t("ticketDetail.readOnlyBanner")}
-        </div>
+        </Text>
       ) : (
         <ReplyBar onReplyQueued={appendOptimisticMessage} />
       )}
-    </div>
+    </Box>
   );
 }

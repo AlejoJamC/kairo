@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@kairo/client-core/auth";
 import { updatePassword } from "@kairo/client-core/queries";
 import type { AppView } from "@/types";
-import { Button, Field, FieldInput, Icon } from "@kairo/ui";
+import { Box, Button, Field, FieldInput, Icon, Pressable, Text } from "@kairo/ui";
 
 interface Props {
   onViewChange: (view: AppView) => void;
@@ -52,49 +52,46 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
   };
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", background: "var(--k-surface)", padding: 32 }}>
-      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+    <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll backgroundColor="var(--k-surface)" padding={32}>
+      <Box maxWidth={640} marginVertical={0} marginHorizontal="auto">
 
         {/* Back + title */}
-        <div style={{ marginBottom: 28 }}>
-          <button
-            onClick={() => onViewChange("settings")}
-            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer", marginBottom: 12, padding: 0 }}
-          >
+        <Box marginBottom={28}>
+          <Pressable onClick={() => onViewChange("settings")} display="flex" alignItems="center" gap={6} fontSize={13} color="var(--k-text-tertiary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" marginBottom={12} padding={0}>
             <Icon name="back" size={14} />
             {t("dashboard:changePassword.backToSettings")}
-          </button>
-          <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--k-text-primary)", fontFamily: "var(--k-font-display)", margin: 0 }}>
+          </Pressable>
+          <Text tag="h1" fontSize={22} fontWeight={600} letterSpacing={-0.22} color="var(--k-text-primary)" font="display" margin={0} display="block">
             {hasPassword
               ? t("dashboard:changePassword.changeTitle")
               : t("dashboard:changePassword.setTitle")}
-          </h1>
-          <p style={{ marginTop: 4, fontSize: 13, color: "var(--k-text-tertiary)" }}>
+          </Text>
+          <Text tag="p" marginTop={4} fontSize={13} color="var(--k-text-tertiary)" display="block">
             {hasPassword
               ? t("dashboard:changePassword.changeSubtitle")
               : t("dashboard:changePassword.setSubtitle")}
-          </p>
-        </div>
+          </Text>
+        </Box>
 
-        <div className="k-card">
+        <Box padding={24} borderWidth={1} borderStyle="solid" borderColor="var(--k-border)" borderRadius={12} backgroundColor="white" boxShadow="var(--kairo-shadow-xs)">
           {success ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "32px 0", textAlign: "center" }}>
-              <div style={{ width: 48, height: 48, borderRadius: 999, background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Text tag="div" display="flex" flexDirection="column" alignItems="center" gap={12} paddingVertical={32} paddingHorizontal={0} textAlign="center">
+              <Box width={48} height={48} borderRadius={999} backgroundColor="color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" display="flex" alignItems="center" justifyContent="center">
                 <Icon name="check" size={22} color="var(--kairo-color-ok)" />
-              </div>
-              <p style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>
+              </Box>
+              <Text tag="p" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">
                 {t("dashboard:changePassword.successMessage")}
-              </p>
-              <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>
+              </Text>
+              <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" display="block">
                 {t("dashboard:changePassword.redirecting")}
-              </p>
-            </div>
+              </Text>
+            </Text>
           ) : (
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Box tag="form" onSubmit={handleSubmit} display="flex" flexDirection="column" gap={16}>
               {error && (
-                <div style={{ borderRadius: 6, background: "var(--kairo-color-bad-soft)", border: "1px solid var(--kairo-color-bad-line)", padding: "8px 12px", fontSize: 13, color: "var(--kairo-color-bad-ink)" }}>
+                <Text tag="div" borderRadius={6} backgroundColor="var(--kairo-color-bad-soft)" borderWidth={1} borderColor="var(--kairo-color-bad-line)" paddingVertical={8} paddingHorizontal={12} fontSize={13} color="var(--kairo-color-bad-ink)" display="block" borderStyle="solid">
                   {error}
-                </div>
+                </Text>
               )}
 
               <Field label={t("dashboard:changePassword.newPasswordLabel")}>
@@ -106,27 +103,27 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
               </Field>
 
               {/* Requirements */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-secondary)" }}>
+              <Box display="flex" flexDirection="column" gap={6}>
+                <Text tag="p" fontSize={13} fontWeight={500} color="var(--k-text-secondary)" display="block">
                   {t("dashboard:changePassword.requirements.title")}
-                </p>
+                </Text>
                 {[
                   { met: hasMinLength, label: t("dashboard:changePassword.requirements.minLength") },
                   { met: hasUppercase, label: t("dashboard:changePassword.requirements.uppercase") },
                   { met: hasNumber,    label: t("dashboard:changePassword.requirements.number") },
                   { met: passwordsMatch, label: t("dashboard:changePassword.requirements.match") },
                 ].map(({ met, label }) => (
-                  <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                  <Text tag="div" key={label} display="flex" alignItems="center" gap={8} fontSize={13}>
                     {met
-                      ? <Icon name="check" size={14} color="var(--kairo-color-ok)" style={{ flexShrink: 0 }} />
-                      : <Icon name="x" size={14} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />}
-                    <span style={{ color: met ? "var(--kairo-color-ok-ink)" : "var(--k-text-tertiary)" }}>{label}</span>
-                  </div>
+                      ? <Icon name="check" size={14} color="var(--kairo-color-ok)" />
+                      : <Icon name="x" size={14} color="var(--k-text-tertiary)" />}
+                    <Text color={met ? "var(--kairo-color-ok-ink)" : "var(--k-text-tertiary)"}>{label}</Text>
+                  </Text>
                 ))}
-              </div>
+              </Box>
 
               {/* Actions */}
-              <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 4 }}>
+              <Box display="flex" alignItems="center" gap={12} paddingTop={4}>
                 <Button
                   variant="primary"
                   loading={saving}
@@ -136,19 +133,15 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
                 >
                   {hasPassword ? t("dashboard:changePassword.updateButton") : t("dashboard:changePassword.setButton")}
                 </Button>
-                <button
-                  type="button"
-                  onClick={() => onViewChange("settings")}
-                  style={{ fontSize: 13, color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer" }}
-                >
+                <Pressable type="button" onClick={() => onViewChange("settings")} fontSize={13} color="var(--k-text-tertiary)" backgroundColor="transparent" borderWidth={0} cursor="pointer">
                   {t("common:cancel")}
-                </button>
-              </div>
-            </form>
+                </Pressable>
+              </Box>
+            </Box>
           )}
-        </div>
+        </Box>
 
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

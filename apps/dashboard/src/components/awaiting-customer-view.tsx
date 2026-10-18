@@ -4,47 +4,9 @@ import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { TicketDetail } from "@/components/ticket-detail";
 import { AiAssistant } from "@/components/ai-assistant";
 import type { AppView } from "@/types";
+import { SlaBadge } from "@/components/sla-badge";
 import type { Ticket } from "@kairo/types";
-import { Button, EmptyState, Icon, Spinner } from "@kairo/ui";
-
-// ---------------------------------------------------------------------------
-// SLA badge
-// ---------------------------------------------------------------------------
-
-function SlaBadge({ slaDate, breached }: { slaDate: string | null | undefined; breached: boolean }) {
-  const { t } = useTranslation("dashboard");
-
-  if (breached) {
-    return (
-      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4, background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-        {t("ticketCard.slaBreached")}
-      </span>
-    );
-  }
-  if (!slaDate) return null;
-
-  const diff = new Date(slaDate).getTime() - Date.now();
-  if (diff <= 0) {
-    return (
-      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4, background: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-        {t("ticketCard.slaBreached")}
-      </span>
-    );
-  }
-
-  const totalMins = Math.floor(diff / 60_000);
-  const hrs = Math.floor(totalMins / 60);
-  const mins = totalMins % 60;
-  const label = hrs > 0
-    ? t("ticketCard.slaHours_other", { count: hrs, minutes: mins })
-    : t("ticketCard.slaMinutes_other", { count: totalMins });
-
-  return (
-    <span style={{ fontSize: 10, fontWeight: 500, padding: "2px 6px", borderRadius: 4, background: "var(--k-surface-2)", color: "var(--k-text-tertiary)" }}>
-      {label}
-    </span>
-  );
-}
+import { Box, Button, EmptyState, Icon, Spinner, Text } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // AwaitingCustomerView
@@ -98,36 +60,23 @@ export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCu
   // ---------------------------------------------------------------------------
 
   const listPane = (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        background: "var(--k-surface)",
-        // Full width when no ticket selected; fixed width (like inbox) when detail pane is open
-        width: showDetailPane ? 360 : undefined,
-        minWidth: showDetailPane ? 360 : undefined,
-        flex: showDetailPane ? undefined : 1,
-        borderRight: showDetailPane ? "1px solid var(--k-border)" : undefined,
-        flexShrink: 0,
-      }}
-    >
+    <Box display="flex" flexDirection="column" overflow="hidden" backgroundColor="var(--k-surface)" width={showDetailPane ? 360 : undefined} minWidth={showDetailPane ? 360 : undefined} flex={showDetailPane ? undefined : 1} borderRightWidth={showDetailPane ? 1 : 0} borderRightColor="var(--k-border)" flexShrink={0} borderStyle="solid">
       {/* Header */}
-      <div style={{ borderBottom: "1px solid var(--k-border)", background: "white", padding: "16px 24px", flexShrink: 0 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 600, color: "var(--k-text-primary)", letterSpacing: "-0.01em", fontFamily: "var(--k-font-display)", margin: 0 }}>
+      <Box borderBottomWidth={1} borderBottomColor="var(--k-border)" backgroundColor="white" paddingVertical={16} paddingHorizontal={24} flexShrink={0} borderStyle="solid">
+        <Text tag="h1" fontSize={18} fontWeight={600} color="var(--k-text-primary)" letterSpacing={-0.18} font="display" margin={0} display="block">
           {t("awaitingView.title")}
-        </h1>
-        <p style={{ marginTop: 2, fontSize: 13, color: "var(--k-text-tertiary)" }}>
+        </Text>
+        <Text tag="p" marginTop={2} fontSize={13} color="var(--k-text-tertiary)" display="block">
           {t("awaitingView.subtitle")}
-        </p>
-      </div>
+        </Text>
+      </Box>
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll paddingVertical={20} paddingHorizontal={24}>
         {loading && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
+          <Box display="flex" alignItems="center" justifyContent="center" paddingTop={64}>
             <Spinner size="lg" />
-          </div>
+          </Box>
         )}
 
         {!loading && tickets.length === 0 && (
@@ -135,56 +84,41 @@ export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCu
         )}
 
         {!loading && tickets.length > 0 && (
-          <ul style={{ display: "flex", flexDirection: "column", gap: 8, listStyle: "none", margin: 0, padding: 0 }}>
+          <Box tag="ul" display="flex" flexDirection="column" gap={8} listStyle="none" margin={0} padding={0}>
             {tickets.map((ticket) => {
               const isSelected = ticket.id === selectedTicketId;
               return (
-                <li
-                  key={ticket.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 16,
-                    borderRadius: 10,
-                    border: isSelected ? "1px solid var(--k-accent)" : "1px solid var(--k-border)",
-                    background: isSelected ? "var(--k-accent-subtle)" : "white",
-                    padding: "12px 16px",
-                    boxShadow: "0 1px 2px rgba(9,9,11,0.04)",
-                    cursor: "pointer",
-                    transition: "border-color 0.1s ease, background 0.1s ease",
-                  }}
-                  onClick={() => openThread(ticket)}
-                >
+                <Box tag="li" key={ticket.id} onClick={() => openThread(ticket)} display="flex" alignItems="center" gap={16} borderRadius={10} borderWidth={1} borderColor={isSelected ? "var(--k-accent)" : "var(--k-border)"} backgroundColor={isSelected ? "var(--k-accent-subtle)" : "white"} paddingVertical={12} paddingHorizontal={16} boxShadow="0 1px 2px rgba(9,9,11,0.04)" cursor="pointer" transition="border-color 0.1s ease, background 0.1s ease" borderStyle="solid">
                   {/* Left: number + subject + client */}
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                      <span style={{ fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", flexShrink: 0 }}>
+                  <Box minWidth={0} flexGrow={1} flexShrink={1} flexBasis="0%">
+                    <Box display="flex" alignItems="center" gap={6} marginBottom={2}>
+                      <Text fontSize={11} font="mono" color="var(--k-text-tertiary)" flexShrink={0}>
                         {t("awaitingView.ticketNumber", { number: ticket.ticket_number })}
-                      </span>
+                      </Text>
                       {(ticket.sla_breached || ticket.sla_due_at) && (
                         <SlaBadge slaDate={ticket.sla_due_at} breached={ticket.sla_breached ?? false} />
                       )}
                       {ticket.sla_breached && (
-                        <Icon name="warning" size={13} color="var(--kairo-color-bad)" style={{ flexShrink: 0 }} />
+                        <Icon name="warning" size={13} color="var(--kairo-color-bad)" />
                       )}
-                    </div>
-                    <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+                    </Box>
+                    <Text tag="p" fontSize={13} fontWeight={500} color="var(--k-text-primary)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
                       {ticket.subject}
-                    </p>
-                    <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+                    </Text>
+                    <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
                       {ticket.from_name ?? ticket.from_email}
-                    </p>
-                  </div>
+                    </Text>
+                  </Box>
 
                   {/* Center: last reply time */}
-                  <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-                    <span style={{ fontSize: 10, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <Box flexShrink={0} display="flex" flexDirection="column" alignItems="flex-end" gap={2}>
+                    <Text fontSize={10} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.5}>
                       {t("awaitingView.lastReply")}
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: "var(--k-text-secondary)" }}>
+                    </Text>
+                    <Text fontSize={12} fontWeight={500} color="var(--k-text-secondary)">
                       {relativeTime(ticket.last_response_at)}
-                    </span>
-                  </div>
+                    </Text>
+                  </Box>
 
                   {/* Action */}
                   <Button
@@ -193,13 +127,13 @@ export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCu
                   >
                     {t("awaitingView.followUp")}
                   </Button>
-                </li>
+                </Box>
               );
             })}
-          </ul>
+          </Box>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 
   if (!showDetailPane) {

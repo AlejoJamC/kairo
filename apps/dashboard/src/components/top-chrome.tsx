@@ -10,7 +10,7 @@ import { fetchTicketById } from "@kairo/client-core/queries";
 import { getNumericFlag } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { Avatar, EmptyState, Icon, Kbd, KbdGroup, Menu, MenuItem, Popover, PopoverContent, PopoverTrigger, getInitials } from "@kairo/ui";
+import { Avatar, Box, EmptyState, Icon, Kbd, KbdGroup, Menu, MenuItem, Popover, PopoverContent, PopoverTrigger, Pressable, PulseDot, Text, getInitials } from "@kairo/ui";
 import type { AppView } from "@/types";
 
 // KAI-232 — how often the bell re-fetches /api/v1/notifications, in seconds.
@@ -145,11 +145,7 @@ const NOTIF_DOT_COLOR: Record<NotifItem["kind"], string> = {
 
 function NotifDot({ kind }: { kind: NotifItem["kind"] }) {
   return (
-    <span style={{
-      width: 6, height: 6, borderRadius: 999,
-      background: NOTIF_DOT_COLOR[kind],
-      flexShrink: 0, display: "inline-block",
-    }}/>
+    <Text width={6} height={6} borderRadius={999} backgroundColor={NOTIF_DOT_COLOR[kind]} flexShrink={0} inlineBlock />
   );
 }
 
@@ -185,80 +181,57 @@ function NotificationsPopover({ items, onMarkAll, onSelect }: NotifPopoverProps)
   ];
 
   return (
-    <div style={{ width: 380, overflow: "hidden", borderRadius: 11 }}>
+    <Box width={380} overflow="hidden" borderRadius={11}>
       {/* Header */}
-      <div style={{ padding: "12px 14px 8px", borderBottom: `1px solid ${T.borderSubtle}` }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em", color: T.textPrimary }}>
+      <Box paddingTop={12} paddingHorizontal={14} paddingBottom={8} borderBottomWidth={1} borderBottomColor={T.borderSubtle} borderStyle="solid">
+        <Box display="flex" alignItems="center" justifyContent="space-between" marginBottom={8}>
+          <Box display="flex" alignItems="baseline" gap={8}>
+            <Text fontSize={15} fontWeight={600} letterSpacing={-0.15} color={T.textPrimary}>
               {t("dashboard:topChrome.notifications.title")}
-            </span>
-            <span style={{ fontSize: 11, fontFamily: T.mono, color: T.textTertiary }}>
+            </Text>
+            <Text fontSize={11} font="mono" color={T.textTertiary}>
               {t("dashboard:topChrome.notifications.unreadCount", { count: unread })}
-            </span>
-          </div>
-          <button
-            onClick={onMarkAll}
-            style={{
-              fontSize: 11, padding: "4px 8px", borderRadius: 4,
-              color: T.textSecondary, fontFamily: T.mono,
-              border: `1px solid ${T.border}`, background: T.bg, cursor: "pointer",
-            }}
-          >
+            </Text>
+          </Box>
+          <Pressable onClick={onMarkAll} fontSize={11} paddingVertical={4} paddingHorizontal={8} borderRadius={4} color={T.textSecondary} font="mono" borderWidth={1} borderColor={T.border} backgroundColor={T.bg} cursor="pointer" borderStyle="solid">
             {t("dashboard:topChrome.notifications.markRead")}
-          </button>
-        </div>
+          </Pressable>
+        </Box>
         {/* Tabs */}
-        <div style={{ display: "flex", gap: 4 }}>
+        <Box display="flex" gap={4}>
           {TABS.map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setTab(id as typeof tab)}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 5,
-                fontSize: 11, padding: "4px 8px", borderRadius: 4,
-                background: tab === id ? T.surface2 : "transparent",
-                color: tab === id ? T.textPrimary : T.textTertiary,
-                fontFamily: T.mono, border: "none", cursor: "pointer",
-              }}
-            >
+            <Pressable key={id} onClick={() => setTab(id as typeof tab)} display="inline-flex" alignItems="center" gap={5} fontSize={11} paddingVertical={4} paddingHorizontal={8} borderRadius={4} backgroundColor={tab === id ? T.surface2 : "transparent"} color={tab === id ? T.textPrimary : T.textTertiary} font="mono" borderWidth={0} cursor="pointer">
               {label}
               {/* Unread mentions pending on this tab (spec D1). */}
               {id === "menciones" && unreadMentions > 0 && (
-                <span style={{
-                  width: 5, height: 5, borderRadius: 999,
-                  background: "var(--k-mention-solid)",
-                }}/>
+                <Text width={5} height={5} borderRadius={999} backgroundColor="var(--k-mention-solid)" />
               )}
-            </button>
+            </Pressable>
           ))}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* List */}
-      <div style={{ maxHeight: 420, overflowY: "auto" }}>
+      <Box maxHeight={420} scroll>
         {filtered.length === 0 && (
           <EmptyState title={t("dashboard:topChrome.notifications.empty")} paddingVertical={40} />
         )}
         {filtered.map((n) => (
           <NotifRow key={n.id} n={n} onSelect={onSelect} />
         ))}
-      </div>
+      </Box>
 
       {/* Footer */}
-      <div style={{
-        padding: "8px 14px", borderTop: `1px solid ${T.borderSubtle}`,
-        background: T.surface, display: "flex", alignItems: "center", justifyContent: "space-between",
-      }}>
-        <span style={{ fontSize: 11, fontFamily: T.mono, color: T.textTertiary, display: "flex", alignItems: "center", gap: 5 }}>
-          <span className="animate-pulse" style={{ width: 5, height: 5, borderRadius: 999, background: "var(--kairo-color-ok)", display: "inline-block" }}/>
+      <Box paddingVertical={8} paddingHorizontal={14} borderTopWidth={1} borderTopColor={T.borderSubtle} backgroundColor={T.surface} display="flex" alignItems="center" justifyContent="space-between" borderStyle="solid">
+        <Text fontSize={11} font="mono" color={T.textTertiary} display="flex" alignItems="center" gap={5}>
+          <PulseDot width={5} height={5} backgroundColor="var(--kairo-color-ok)" />
           {t("dashboard:topChrome.notifications.liveStream")}
-        </span>
-        <button style={{ fontSize: 12, color: T.accent, fontWeight: 500, background: "none", border: "none", cursor: "pointer" }}>
+        </Text>
+        <Pressable fontSize={12} color={T.accent} fontWeight={500} backgroundColor="transparent" borderWidth={0} cursor="pointer">
           {t("dashboard:topChrome.notifications.viewAll")}
-        </button>
-      </div>
-    </div>
+        </Pressable>
+      </Box>
+    </Box>
   );
 }
 
@@ -274,13 +247,7 @@ function NotifRow({ n, onSelect }: { n: NotifItem; onSelect: (item: NotifItem) =
   // Only mention rows lead somewhere today (KAI-232); the rest stay inert.
   const clickable = isMention && !!n.ticketId;
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onClick={clickable ? () => onSelect(n) : undefined}
-      role={clickable ? "button" : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      onKeyDown={
+    <Box onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onClick={clickable ? () => onSelect(n) : undefined} role={clickable ? "button" : undefined} tabIndex={clickable ? 0 : undefined} onKeyDown={
         clickable
           ? (e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -289,73 +256,44 @@ function NotifRow({ n, onSelect }: { n: NotifItem; onSelect: (item: NotifItem) =
               }
             }
           : undefined
-      }
-      style={{
-        padding: "11px 14px", borderBottom: `1px solid ${T.borderSubtle}`,
-        background: hovered ? T.surface2 : n.unread ? "#FAFBFF" : T.bg,
-        display: "flex", gap: 10, cursor: clickable ? "pointer" : "default", position: "relative",
-      }}
-    >
+      } paddingVertical={11} paddingHorizontal={14} borderBottomWidth={1} borderBottomColor={T.borderSubtle} backgroundColor={hovered ? T.surface2 : n.unread ? "#FAFBFF" : T.bg} display="flex" gap={10} cursor={clickable ? "pointer" : "default"} position="relative" borderStyle="solid">
       {n.unread && (
-        <span style={{
-          position: "absolute", left: 5, top: 16,
-          width: 4, height: 4, borderRadius: 999, background: T.accent,
-        }}/>
+        <Text position="absolute" left={5} top={16} width={4} height={4} borderRadius={999} backgroundColor={T.accent} />
       )}
       {/* Actor avatar — mentions show the teammate; system kinds keep a glyph. */}
       {isMention ? (
         <Avatar name={n.who} seed={n.who} size={28} />
       ) : (
-        <div style={{
-          width: 28, height: 28, borderRadius: 999, background: n.actorBg,
-          color: n.actorColor ?? "white", flexShrink: 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 11, fontWeight: 600,
-        }}>
+        <Text tag="div" width={28} height={28} borderRadius={999} backgroundColor={n.actorBg} color={n.actorColor ?? "white"} flexShrink={0} display="flex" alignItems="center" justifyContent="center" fontSize={11} fontWeight={600}>
           {n.actor}
-        </div>
+        </Text>
       )}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
+        <Box display="flex" alignItems="center" gap={6} marginBottom={2}>
           <NotifDot kind={n.kind}/>
-          <span style={{ fontSize: 12, color: T.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-            <strong style={{ fontWeight: n.unread ? 600 : 500 }}>{firstName(n.who)}</strong>
-            <span style={{ color: T.textSecondary }}>
+          <Text fontSize={12} color={T.textPrimary} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" flexGrow={1} flexShrink={1} flexBasis="0%">
+            <Text tag="strong" fontWeight={n.unread ? 600 : 500}>{firstName(n.who)}</Text>
+            <Text color={T.textSecondary}>
               {isMention ? ` ${t("dashboard:notes.mentionedYouIn")}` : ` ${n.title}`}
-            </span>
+            </Text>
             {n.target && (
-              <span style={{ fontFamily: T.mono, color: T.accent, marginLeft: 4 }}>{n.target}</span>
+              <Text font="mono" color={T.accent} marginLeft={4}>{n.target}</Text>
             )}
-          </span>
-          <span style={{ fontSize: 10, fontFamily: T.mono, color: T.textTertiary, flexShrink: 0 }}>{n.time}</span>
-        </div>
+          </Text>
+          <Text fontSize={10} font="mono" color={T.textTertiary} flexShrink={0}>{n.time}</Text>
+        </Box>
         {/* A mention excerpt is quoted in the note's own amber, so it reads as
             internal at a glance (KAI-232 spec D1). */}
-        <div style={{
-          fontSize: 12,
-          color: isMention ? "var(--k-note-text)" : T.textSecondary,
-          lineHeight: 1.45,
-          overflow: "hidden", display: "-webkit-box",
-          WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-          ...(isMention ? {
-            padding: "4px 7px",
-            borderRadius: 5,
-            background: "var(--k-note-bg)",
-            border: "1px solid var(--k-note-border)",
-          } : null),
-        } as React.CSSProperties}>
+        <Text tag="div" fontSize={12} color={isMention ? "var(--k-note-text)" : T.textSecondary} lineHeightRatio={1.45} lineClamp={2} {...(isMention ? { paddingVertical: 4, paddingHorizontal: 7, borderRadius: 5, backgroundColor: "var(--k-note-bg)", borderWidth: 1, borderStyle: "solid" as const, borderColor: "var(--k-note-border)" } : null)}>
           {n.preview}
-        </div>
+        </Text>
         {clickable && hovered && (
-          <div style={{
-            marginTop: 6, display: "flex", alignItems: "center", gap: 5,
-            fontFamily: T.mono, fontSize: 10, color: T.accent,
-          }}>
+          <Text tag="div" marginTop={6} display="flex" alignItems="center" gap={5} font="mono" fontSize={10} color={T.accent}>
             → {t("dashboard:notes.openAtNote")}
-          </div>
+          </Text>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
@@ -416,82 +354,59 @@ function ProfilePopover({
   ];
 
   return (
-    <div style={{ width: 300, overflow: "hidden", borderRadius: 11 }}>
+    <Box width={300} overflow="hidden" borderRadius={11}>
       {/* User card */}
-      <div style={{ padding: 14, borderBottom: `1px solid ${T.borderSubtle}` }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <div style={{ position: "relative", flexShrink: 0 }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 999,
-              background: "linear-gradient(135deg, var(--k-accent) 0%, var(--kairo-color-accent-indigo) 100%)",
-              color: "white", fontSize: 13, fontWeight: 600,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
+      <Box padding={14} borderBottomWidth={1} borderBottomColor={T.borderSubtle} borderStyle="solid">
+        <Box display="flex" gap={12} alignItems="center">
+          <Box position="relative" flexShrink={0}>
+            <Text tag="div" width={40} height={40} borderRadius={999} backgroundImage="linear-gradient(135deg, var(--k-accent) 0%, var(--kairo-color-accent-indigo) 100%)" color="white" fontSize={13} fontWeight={600} display="flex" alignItems="center" justifyContent="center">
               {initials}
-            </div>
-            <div style={{
-              position: "absolute", bottom: -1, right: -1,
-              width: 12, height: 12, borderRadius: 999,
-              background: cur.dot, border: `2px solid ${T.bg}`,
-            }}/>
-          </div>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: T.textPrimary }}>{displayName}</div>
-            <div style={{ fontSize: 12, color: T.textTertiary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            </Text>
+            <Box position="absolute" bottom={-1} right={-1} width={12} height={12} borderRadius={999} backgroundColor={cur.dot} borderWidth={2} borderColor={T.bg} borderStyle="solid" />
+          </Box>
+          <Box minWidth={0} flexGrow={1} flexShrink={1} flexBasis="0%">
+            <Text tag="div" fontSize={13} fontWeight={500} color={T.textPrimary} display="block">{displayName}</Text>
+            <Text tag="div" fontSize={12} color={T.textTertiary} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
               {email}
-            </div>
-            <div style={{
-              display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4,
-              padding: "1px 6px", borderRadius: 4, background: T.accentSubtle,
-            }}>
+            </Text>
+            <Box display="inline-flex" alignItems="center" gap={4} marginTop={4} paddingVertical={1} paddingHorizontal={6} borderRadius={4} backgroundColor={T.accentSubtle}>
               <Icon name="spark" size={9} color={T.accent} />
-              <span style={{ fontSize: 10, fontFamily: T.mono, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <Text fontSize={10} font="mono" color={T.accent} textTransform="uppercase" letterSpacing={0.5}>
                 {t("dashboard:topChrome.account.roleBadge")}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+              </Text>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
 
       {/* Status selector */}
-      <div style={{ padding: "10px 8px", borderBottom: `1px solid ${T.borderSubtle}` }}>
-        <div style={{ padding: "0 6px 6px", fontSize: 10, fontFamily: T.mono, color: T.textTertiary, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+      <Box paddingVertical={10} paddingHorizontal={8} borderBottomWidth={1} borderBottomColor={T.borderSubtle} borderStyle="solid">
+        <Text tag="div" paddingTop={0} paddingHorizontal={6} paddingBottom={6} fontSize={10} font="mono" color={T.textTertiary} textTransform="uppercase" letterSpacing={0.5} display="block">
           {t("dashboard:topChrome.account.statusSection")}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+        </Text>
+        <Box grid gridTemplateColumns="1fr 1fr" gap={2}>
           {STATUS_OPTIONS.map((s) => (
             <StatusOptionButton key={s.id} s={s} active={status === s.id} onClick={() => setStatus(s.id)}/>
           ))}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* Workspace */}
-      <div style={{ padding: 10, borderBottom: `1px solid ${T.borderSubtle}` }}>
-        <div style={{ padding: "0 4px 6px", fontSize: 10, fontFamily: T.mono, color: T.textTertiary, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+      <Box padding={10} borderBottomWidth={1} borderBottomColor={T.borderSubtle} borderStyle="solid">
+        <Text tag="div" paddingTop={0} paddingHorizontal={4} paddingBottom={6} fontSize={10} font="mono" color={T.textTertiary} textTransform="uppercase" letterSpacing={0.5} display="block">
           {t("dashboard:topChrome.account.workspaceSection")}
-        </div>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, padding: 8, borderRadius: 6,
-          border: `1px solid ${T.border}`, background: T.bg,
-        }}>
-          <div style={{
-            width: 22, height: 22, borderRadius: 5, background: "var(--kairo-color-text)", color: "white",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, fontWeight: 600, flexShrink: 0,
-          }}>K</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 500, color: T.textPrimary }}>{t("dashboard:topChrome.account.workspaceName")}</div>
-            <div style={{ fontSize: 10, color: T.textTertiary, fontFamily: T.mono }}>{t("dashboard:topChrome.account.workspacePlan")}</div>
-          </div>
-          <button style={{
-            fontSize: 10, fontFamily: T.mono, color: T.textTertiary,
-            padding: "2px 6px", border: `1px solid ${T.border}`,
-            borderRadius: 4, background: "transparent", cursor: "pointer",
-          }}>
+        </Text>
+        <Box display="flex" alignItems="center" gap={8} padding={8} borderRadius={6} borderWidth={1} borderColor={T.border} backgroundColor={T.bg} borderStyle="solid">
+          <Text tag="div" width={22} height={22} borderRadius={5} backgroundColor="var(--kairo-color-text)" color="white" display="flex" alignItems="center" justifyContent="center" fontSize={10} fontWeight={600} flexShrink={0}>K</Text>
+          <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
+            <Text tag="div" fontSize={12} fontWeight={500} color={T.textPrimary} display="block">{t("dashboard:topChrome.account.workspaceName")}</Text>
+            <Text tag="div" fontSize={10} color={T.textTertiary} font="mono" display="block">{t("dashboard:topChrome.account.workspacePlan")}</Text>
+          </Box>
+          <Pressable fontSize={10} font="mono" color={T.textTertiary} paddingVertical={2} paddingHorizontal={6} borderWidth={1} borderColor={T.border} borderRadius={4} backgroundColor="transparent" cursor="pointer" borderStyle="solid">
             {t("dashboard:topChrome.account.workspaceChange")}
-          </button>
-        </div>
-      </div>
+          </Pressable>
+        </Box>
+      </Box>
 
       {/* Menu items */}
       <Menu label={t("dashboard:topChrome.account.title", "Account")}>
@@ -507,44 +422,30 @@ function ProfilePopover({
       </Menu>
 
       {/* Theme toggle */}
-      <div style={{ padding: "6px 10px 10px", borderTop: `1px solid ${T.borderSubtle}` }}>
-        <div style={{ padding: "4px 0 6px", fontSize: 10, fontFamily: T.mono, color: T.textTertiary, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+      <Box paddingTop={6} paddingHorizontal={10} paddingBottom={10} borderTopWidth={1} borderTopColor={T.borderSubtle} borderStyle="solid">
+        <Text tag="div" paddingTop={4} paddingHorizontal={0} paddingBottom={6} fontSize={10} font="mono" color={T.textTertiary} textTransform="uppercase" letterSpacing={0.5} display="block">
           {t("dashboard:topChrome.account.appearanceSection")}
-        </div>
-        <div style={{
-          display: "flex", gap: 2, padding: 2,
-          background: T.surface, borderRadius: 6, border: `1px solid ${T.border}`,
-        }}>
+        </Text>
+        <Box display="flex" gap={2} padding={2} backgroundColor={T.surface} borderRadius={6} borderWidth={1} borderColor={T.border} borderStyle="solid">
           {THEME_OPTIONS.map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setTheme(id)}
-              style={{
-                flex: 1, padding: "5px 0", fontSize: 11, borderRadius: 4,
-                background: theme === id ? T.bg : "transparent",
-                color: theme === id ? T.textPrimary : T.textTertiary,
-                fontFamily: T.mono, fontWeight: theme === id ? 500 : 400,
-                boxShadow: theme === id ? "0 1px 3px rgba(9,9,11,.08)" : "none",
-                border: "none", cursor: "pointer",
-              }}
-            >
+            <Pressable key={id} onClick={() => setTheme(id)} flexGrow={1} flexShrink={1} flexBasis="0%" paddingVertical={5} paddingHorizontal={0} fontSize={11} borderRadius={4} backgroundColor={theme === id ? T.bg : "transparent"} color={theme === id ? T.textPrimary : T.textTertiary} font="mono" fontWeight={theme === id ? 500 : 400} boxShadow={theme === id ? "0 1px 3px rgba(9,9,11,.08)" : "none"} borderWidth={0} cursor="pointer">
               {label}
-            </button>
+            </Pressable>
           ))}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* Sign out */}
-      <Menu label={t("dashboard:topChrome.account.signOut")} style={{ borderTop: `1px solid ${T.borderSubtle}` }}>
+      <Menu label={t("dashboard:topChrome.account.signOut")} borderTopWidth={1} borderStyle="solid" borderTopColor={T.borderSubtle}>
         <MenuItem
           destructive
           icon={<Icon name="logout" size={14} color="var(--kairo-color-bad-ink)" />}
           label={t("dashboard:topChrome.account.signOut")}
-          shortcut={<span style={{ fontFamily: T.mono, fontSize: 10, color: "var(--kairo-color-bad-ink)", opacity: 0.6 }}>{initials}</span>}
+          shortcut={<Text font="mono" fontSize={10} color="var(--kairo-color-bad-ink)" opacity={0.6}>{initials}</Text>}
           onSelect={onSignOut}
         />
       </Menu>
-    </div>
+    </Box>
   );
 }
 
@@ -555,21 +456,11 @@ function StatusOptionButton({
 }: { s: { id: UserStatus; label: string; dot: string }; active: boolean; onClick: () => void }) {
   const [hov, setHov] = useState(false);
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 5,
-        background: active || hov ? T.surface2 : "transparent",
-        fontSize: 12, color: T.textSecondary, textAlign: "left",
-        border: "none", cursor: "pointer",
-      }}
-    >
-      <span style={{ width: 7, height: 7, borderRadius: 999, background: s.dot, flexShrink: 0 }}/>
-      <span style={{ flex: 1 }}>{s.label}</span>
+    <Pressable onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} display="flex" alignItems="center" gap={8} paddingVertical={6} paddingHorizontal={8} borderRadius={5} backgroundColor={active || hov ? T.surface2 : "transparent"} fontSize={12} color={T.textSecondary} textAlign="left" borderWidth={0} cursor="pointer">
+      <Text width={7} height={7} borderRadius={999} backgroundColor={s.dot} flexShrink={0} />
+      <Text flexGrow={1} flexShrink={1} flexBasis="0%">{s.label}</Text>
       {active && <Icon name="check" size={11} color={T.textPrimary} />}
-    </button>
+    </Pressable>
   );
 }
 
@@ -654,44 +545,24 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <Box display="flex" alignItems="center" gap={6}>
       {/* Bell */}
       <Popover open={open === "notif"} onOpenChange={(next) => setOpen(next ? "notif" : null)}>
         <PopoverTrigger>
-        <button
-          aria-label="Notificaciones"
-          style={{
-            padding: 6, borderRadius: 6, border: "none", cursor: "pointer",
-            position: "relative",
-            color: open === "notif" ? T.textPrimary : T.textSecondary,
-            background: open === "notif" ? T.surface2 : "transparent",
-            display: "flex", alignItems: "center",
-          }}
-        >
+        <Pressable aria-label="Notificaciones" padding={6} borderRadius={6} borderWidth={0} cursor="pointer" position="relative" color={open === "notif" ? T.textPrimary : T.textSecondary} backgroundColor={open === "notif" ? T.surface2 : "transparent"} display="flex" alignItems="center">
           <Icon name="bell" size={18} />
           {unread > 0 && (
-            <span style={{
-              position: "absolute", top: 2, right: 2,
-              minWidth: 14, height: 14, padding: "0 3px",
-              borderRadius: 999, background: "var(--kairo-color-bad)", color: "white",
-              fontSize: 9, fontFamily: T.mono, fontWeight: 600,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              border: `2px solid ${T.bg}`, boxSizing: "content-box",
-            }}>
+            <Text boxSizing="content-box" position="absolute" top={2} right={2} minWidth={14} height={14} paddingVertical={0} paddingHorizontal={3} borderRadius={999} backgroundColor="var(--kairo-color-bad)" color="white" fontSize={9} font="mono" fontWeight={600} display="flex" alignItems="center" justifyContent="center" borderWidth={2} borderColor={T.bg} borderStyle="solid">
               {unread}
-            </span>
+            </Text>
           )}
           {/* KAI-232 spec D5 — "there are mentions among them". The red count
               still covers ALL unread notifications; this is not a second
               counter, just a hint about what kind they are. */}
           {unreadMentions > 0 && (
-            <span style={{
-              position: "absolute", bottom: 3, right: 3,
-              width: 7, height: 7, borderRadius: 999,
-              background: "var(--k-mention-solid)", border: `1.5px solid ${T.bg}`,
-            }}/>
+            <Text position="absolute" bottom={3} right={3} width={7} height={7} borderRadius={999} backgroundColor="var(--k-mention-solid)" borderWidth={1.5} borderColor={T.bg} borderStyle="solid" />
           )}
-        </button>
+        </Pressable>
         </PopoverTrigger>
         <PopoverContent label="Notificaciones" align="end">
           <NotificationsPopover
@@ -703,35 +574,18 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
       </Popover>
 
       {/* Avatar + chevron */}
-      <div style={{ paddingLeft: 8, marginLeft: 2, borderLeft: `1px solid ${T.border}` }}>
+      <Box paddingLeft={8} marginLeft={2} borderLeftWidth={1} borderLeftColor={T.border} borderStyle="solid">
       <Popover open={open === "profile"} onOpenChange={(next) => setOpen(next ? "profile" : null)}>
         <PopoverTrigger>
-        <button
-          aria-label="Cuenta"
-          style={{
-            display: "flex", alignItems: "center", gap: 6, padding: 2, borderRadius: 999,
-            background: open === "profile" ? T.surface2 : "transparent",
-            border: open === "profile" ? `1px solid ${T.border}` : "1px solid transparent",
-            cursor: "pointer",
-          }}
-        >
-          <div style={{ position: "relative" }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 999,
-              background: "linear-gradient(135deg, var(--k-accent) 0%, var(--kairo-color-accent-indigo) 100%)",
-              color: "white", fontSize: 11, fontWeight: 600,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
+        <Pressable aria-label="Cuenta" display="flex" alignItems="center" gap={6} padding={2} borderRadius={999} backgroundColor={open === "profile" ? T.surface2 : "transparent"} borderWidth={1} borderStyle="solid" borderColor={open === "profile" ? T.border : "transparent"} cursor="pointer">
+          <Box position="relative">
+            <Text tag="div" width={28} height={28} borderRadius={999} backgroundImage="linear-gradient(135deg, var(--k-accent) 0%, var(--kairo-color-accent-indigo) 100%)" color="white" fontSize={11} fontWeight={600} display="flex" alignItems="center" justifyContent="center">
               {initials}
-            </div>
-            <div style={{
-              position: "absolute", bottom: -1, right: -1,
-              width: 9, height: 9, borderRadius: 999,
-              background: curStatusDot, border: `2px solid ${T.bg}`,
-            }}/>
-          </div>
+            </Text>
+            <Box position="absolute" bottom={-1} right={-1} width={9} height={9} borderRadius={999} backgroundColor={curStatusDot} borderWidth={2} borderColor={T.bg} borderStyle="solid" />
+          </Box>
           <Icon name="down" size={12} color={T.textTertiary} />
-        </button>
+        </Pressable>
         </PopoverTrigger>
         <PopoverContent label="Cuenta" align="end">
           <ProfilePopover
@@ -747,8 +601,8 @@ function HeaderActions({ initials, displayName, email, onViewChange, onSignOut }
           />
         </PopoverContent>
       </Popover>
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
@@ -771,64 +625,35 @@ export function TopChrome({ collapsed, onToggle, onViewChange }: TopChromeProps)
   const email = profile?.email ?? "";
 
   return (
-    <header style={{
-      height: 56, flexShrink: 0,
-      display: "flex", alignItems: "center",
-      padding: "0 16px", gap: 16,
-      background: T.bg, borderBottom: `1px solid ${T.border}`,
-    }}>
+    <Box tag="header" height={56} flexShrink={0} display="flex" alignItems="center" paddingVertical={0} paddingHorizontal={16} gap={16} backgroundColor={T.bg} borderBottomWidth={1} borderBottomColor={T.border} borderStyle="solid">
       {/* Logo + sidebar toggle */}
-      <div style={{
-        width: collapsed ? 40 : 208,
-        display: "flex", alignItems: "center",
-        justifyContent: collapsed ? "center" : "space-between",
-        flexShrink: 0, transition: "width 0.18s ease",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 6, background: "var(--kairo-color-accent)",
-            display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>
+      <Box width={collapsed ? 40 : 208} display="flex" alignItems="center" justifyContent={collapsed ? "center" : "space-between"} flexShrink={0} transition="width 0.18s ease">
+        <Box display="flex" alignItems="center" gap={8}>
+          <Box width={28} height={28} borderRadius={6} backgroundColor="var(--kairo-color-accent)" display="inline-flex" alignItems="center" justifyContent="center" flexShrink={0}>
             <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
               <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/>
             </svg>
-          </div>
+          </Box>
           {!collapsed && (
-            <span style={{
-              fontSize: 15, fontWeight: 600, color: T.textPrimary,
-              fontFamily: T.display, letterSpacing: "-0.01em",
-            }}>
+            <Text fontSize={15} fontWeight={600} color={T.textPrimary} font="display" letterSpacing={-0.15}>
               Kairo
-            </span>
+            </Text>
           )}
-        </div>
-        <button
-          onClick={onToggle}
-          aria-label="Toggle sidebar"
-          style={{
-            padding: 6, color: T.textTertiary,
-            background: "none", border: "none", cursor: "pointer",
-            borderRadius: 6, display: "flex", alignItems: "center",
-          }}
-        >
+        </Box>
+        <Pressable onClick={onToggle} aria-label="Toggle sidebar" padding={6} color={T.textTertiary} backgroundColor="transparent" borderWidth={0} cursor="pointer" borderRadius={6} display="flex" alignItems="center">
           <Icon name="sidebar" size={16} />
-        </button>
-      </div>
+        </Pressable>
+      </Box>
 
       {/* Search */}
-      <div style={{
-        flex: 1, maxWidth: 480, height: 34,
-        border: `1px solid ${T.border}`, borderRadius: 8,
-        display: "flex", alignItems: "center", padding: "0 10px", gap: 8,
-        background: T.surface, color: T.textTertiary, fontSize: 13,
-      }}>
+      <Text tag="div" flexGrow={1} flexShrink={1} flexBasis="0%" maxWidth={480} height={34} borderWidth={1} borderColor={T.border} borderRadius={8} display="flex" alignItems="center" paddingVertical={0} paddingHorizontal={10} gap={8} backgroundColor={T.surface} color={T.textTertiary} fontSize={13} borderStyle="solid">
         <Icon name="search" size={14} />
-        <span style={{ flex: 1 }}>{t("dashboard:topChrome.searchPlaceholder")}</span>
+        <Text flexGrow={1} flexShrink={1} flexBasis="0%">{t("dashboard:topChrome.searchPlaceholder")}</Text>
         <KbdGroup keys={["⌘", "K"]} />
-      </div>
+      </Text>
 
       {/* Right actions */}
-      <div style={{ marginLeft: "auto" }}>
+      <Box marginLeft="auto">
         <HeaderActions
           initials={initials}
           displayName={displayName}
@@ -836,7 +661,7 @@ export function TopChrome({ collapsed, onToggle, onViewChange }: TopChromeProps)
           onViewChange={onViewChange}
           onSignOut={signOut}
         />
-      </div>
-    </header>
+      </Box>
+    </Box>
   );
 }

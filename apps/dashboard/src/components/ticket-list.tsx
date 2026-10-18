@@ -1,241 +1,17 @@
 import { useRef, useState, useEffect, useMemo } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+
 import { useTranslation } from "react-i18next";
-import { useTriageStore, pickPreferredGroupId, type Ticket } from "@kairo/client-core/stores/triage-store";
+import { useTriageStore, pickPreferredGroupId } from "@kairo/client-core/stores/triage-store";
 import { TicketCard } from "@/components/ticket-card";
 import { RelatedHistoryDrawer, type RelatedHistoryItem } from "@/components/related-history-drawer";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
 import { isTriageActive } from "@kairo/client-core/triage-status";
-import { createTicketGroup, assignTicketsToGroup, getSimilarTickets, getRelatedHistory, syncGmail, classifyBatch } from "@kairo/client-core/endpoints";
+import { getSimilarTickets, getRelatedHistory, syncGmail, classifyBatch } from "@kairo/client-core/endpoints";
 import { fetchTicketById, fetchInboxTickets, fetchBatchJobStatus } from "@kairo/client-core/queries";
 import { useAuth } from "@kairo/client-core/auth";
-import { EmptyState, Icon, Skeleton, Spinner } from "@kairo/ui";
+import { Box, EmptyState, Icon, Pressable, PulseDot, Spinner, Text } from "@kairo/ui";
+import { FilterChip, INITIAL_FILTERS, TicketSkeleton, VirtualTicketList, applyFilters, assignToGroupOrCreate, deriveGroupName, type BatchTicketResult, type FilterState, type SimilarTicketRow } from "@/components/ticket-list-parts";
 
-// ---------------------------------------------------------------------------
-// Skeleton placeholder
-// ---------------------------------------------------------------------------
-
-function TicketSkeleton() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, borderBottom: "1px solid var(--k-border-subtle)", padding: "12px 16px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Skeleton height={11} width={128} />
-        <Skeleton height={11} width={32} />
-      </div>
-      <Skeleton height={10} width="100%" />
-      <Skeleton height={8} width="75%" />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Filter state
-// ---------------------------------------------------------------------------
-
-interface FilterState {
-  priority: string | null;
-  type: string | null;
-  category: string | null;
-  status: "classified" | "unclassified" | null;
-}
-
-const INITIAL_FILTERS: FilterState = {
-  priority: null,
-  type: null,
-  category: null,
-  status: null,
-};
-
-function applyFilters(tickets: Ticket[], f: FilterState): Ticket[] {
-  return tickets.filter((t) => {
-    if (!isTriageActive(t.status)) return false;
-    if (f.priority && t.priority !== f.priority) return false;
-    if (f.type && t.ticket_type !== f.type) return false;
-    if (f.category && t.category !== f.category) return false;
-    if (f.status === "classified" && !t.classified_at) return false;
-    if (f.status === "unclassified" && t.classified_at) return false;
-    return true;
-  });
-}
-
-// ---------------------------------------------------------------------------
-// FilterChip — small toggle button
-// ---------------------------------------------------------------------------
-
-function FilterChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        fontSize: 11,
-        padding: "4px 8px",
-        borderRadius: 4,
-        background: active ? "var(--k-surface-2)" : "transparent",
-        color: active ? "var(--k-text-primary)" : "var(--k-text-tertiary)",
-        fontFamily: "var(--k-font-mono)",
-        cursor: "pointer",
-        border: "none",
-        transition: "background 0.1s ease, color 0.1s ease",
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// BatchTicketResult (mirrors API schema)
-// ---------------------------------------------------------------------------
-
-interface ClassificationResult {
-  type: string;
-  priority: string;
-  category: string;
-  tone: string;
-  reasoning: string;
-  confidence: number;
-}
-
-interface BatchTicketResult {
-  ticket_id: string;
-  status: "success" | "skipped" | "protected" | "failed";
-  reason?: string;
-  classification?: ClassificationResult;
-}
-
-// ---------------------------------------------------------------------------
-// KAI-24 — AI similarity row (raw find_similar_tickets RPC row, keyed
-// ticket_id, not id). Backend already filters by similarity >= 0.85.
-// ---------------------------------------------------------------------------
-
-interface SimilarTicketRow {
-  ticket_id: string;
-  subject: string | null;
-  similarity: number | null;
-  group_id?: string | null;
-}
-
-// KAI-24 — group name is a backend-only field (not shown anywhere in the
-// dashboard UI today), so it isn't run through i18n like user-facing labels.
-function deriveGroupName(subject: string | null | undefined): string {
-  const trimmed = (subject ?? "").trim();
-  if (trimmed) return trimmed.slice(0, 60);
-  return `Grupo ${new Date().toISOString().slice(0, 10)}`;
-}
-
-async function createGroupAndAssign(ticketIds: string[], name: string): Promise<string> {
-  const createRes = await createTicketGroup(name);
-  if (!createRes.ok) throw new Error("Failed to create group");
-  const group = (await createRes.json()) as { id: string };
-
-  const assignRes = await assignTicketsToGroup(group.id, ticketIds);
-  if (!assignRes.ok) throw new Error("Failed to assign tickets to group");
-
-  return group.id;
-}
-
-// KAI-108 — single entry point for both the manual action bar and the AI
-// similarity callout: when one of the tickets being grouped already belongs
-// to a group (preferredGroupId), reuse it instead of creating a new one —
-// this is what was causing duplicate ticket_groups rows on repeated accepts.
-// ticketIds here must already be filtered down to the tickets that actually
-// need assigning (callers skip ids already sitting in preferredGroupId); an
-// empty list with a preferredGroupId is a no-op success (all tickets were
-// already grouped together).
-async function assignToGroupOrCreate(
-  ticketIds: string[],
-  preferredGroupId: string | null,
-  name: string,
-): Promise<string> {
-  if (preferredGroupId) {
-    if (ticketIds.length > 0) {
-      const assignRes = await assignTicketsToGroup(preferredGroupId, ticketIds);
-      if (!assignRes.ok) throw new Error("Failed to assign tickets to group");
-    }
-    return preferredGroupId;
-  }
-  return createGroupAndAssign(ticketIds, name);
-}
-
-// ---------------------------------------------------------------------------
-// Virtualized ticket list — used when filtered count > 50
-// ---------------------------------------------------------------------------
-
-const ITEM_HEIGHT = 100;
-
-function VirtualTicketList({
-  tickets,
-  selectedTicketId,
-  correctedTicketIds,
-  groupCounts,
-  onSelect,
-  selectedTicketIds,
-  onToggleSelect,
-  hasRelatedHistory,
-  onOpenHistory,
-}: {
-  tickets: Ticket[];
-  selectedTicketId: string | null;
-  correctedTicketIds: Set<string>;
-  groupCounts: Map<string, number>;
-  onSelect: (id: string) => void;
-  selectedTicketIds: Set<string>;
-  onToggleSelect?: (id: string) => void;
-  hasRelatedHistory: boolean;
-  onOpenHistory: (id: string) => void;
-}) {
-  const parentRef = useRef<HTMLDivElement>(null);
-
-  const rowVirtualizer = useVirtualizer({
-    count: tickets.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => ITEM_HEIGHT,
-    overscan: 5,
-  });
-
-  return (
-    <div ref={parentRef} className="flex-1 overflow-y-auto" style={{ minHeight: 0, paddingBottom: 8 }}>
-      <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-          const ticket = tickets[virtualRow.index];
-          return (
-            <div
-              key={virtualRow.key}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              <TicketCard
-                ticket={ticket}
-                selected={selectedTicketId === ticket.id}
-                onSelect={onSelect}
-                isCorrected={correctedTicketIds.has(ticket.id)}
-                groupCount={ticket.group_id ? (groupCounts.get(ticket.group_id) ?? 1) : 0}
-                multiSelectMode={selectedTicketIds.size > 0}
-                isChecked={selectedTicketIds.has(ticket.id)}
-                onToggleSelect={onToggleSelect}
-                hasRelatedHistory={selectedTicketId === ticket.id && hasRelatedHistory}
-                onOpenHistory={onOpenHistory}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // TicketList
@@ -637,114 +413,49 @@ export function TicketList() {
   const busy = classifyingAll || syncing;
 
   return (
-    <div style={{ display: "flex", flex: 1, flexDirection: "column", overflow: "hidden", background: "white" }}>
+    <Box display="flex" flexGrow={1} flexShrink={1} flexBasis="0%" flexDirection="column" overflow="hidden" backgroundColor="white">
       {/* Header */}
-      <div style={{ padding: "12px 14px 8px", borderBottom: "1px solid var(--k-border-subtle)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 2 }}>
-            <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--k-text-primary)" }}>
+      <Box paddingTop={12} paddingHorizontal={14} paddingBottom={8} borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" borderStyle="solid">
+        <Box display="flex" alignItems="center" justifyContent="space-between" marginBottom={8}>
+          <Box display="flex" alignItems="baseline" gap={8} marginTop={2}>
+            <Text fontSize={18} fontWeight={600} letterSpacing={-0.18} color="var(--k-text-primary)">
               {t("ticketList.header")}
-            </span>
-            <span style={{ fontSize: 12, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>
+            </Text>
+            <Text fontSize={12} font="mono" color="var(--k-text-tertiary)">
               {activeClassifiedCount}/{activeTickets.length}
-            </span>
-          </div>
+            </Text>
+          </Box>
 
           {/* ⋯ actions dropdown */}
-          <div ref={menuRef} style={{ position: "relative" }}>
-            <button
-              onClick={() => setMenuOpen((v) => !v)}
-              disabled={busy}
-              aria-label={t("ticketList.moreActions", "Más acciones")}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                border: "1px solid var(--k-border)",
-                background: menuOpen ? "var(--k-surface-2)" : "white",
-                cursor: busy ? "not-allowed" : "pointer",
-                opacity: busy ? 0.5 : 1,
-                color: "var(--k-text-secondary)",
-              }}
-            >
+          <Box ref={menuRef} position="relative">
+            <Pressable onClick={() => setMenuOpen((v) => !v)} disabled={busy} aria-label={t("ticketList.moreActions", "Más acciones")} display="flex" alignItems="center" justifyContent="center" width={28} height={28} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" backgroundColor={menuOpen ? "var(--k-surface-2)" : "white"} cursor={busy ? "not-allowed" : "pointer"} opacity={busy ? 0.5 : 1} color="var(--k-text-secondary)" borderStyle="solid">
               {busy
                 ? <Spinner />
                 : <Icon name="more" size={15} />}
-            </button>
+            </Pressable>
 
             {menuOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 4px)",
-                  right: 0,
-                  zIndex: 50,
-                  background: "white",
-                  border: "1px solid var(--k-border)",
-                  borderRadius: 8,
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.10)",
-                  minWidth: 180,
-                  overflow: "hidden",
-                }}
-              >
-                <button
-                  onClick={handleSyncGmail}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    width: "100%",
-                    padding: "9px 14px",
-                    fontSize: 13,
-                    color: "var(--k-text-primary)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-surface)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                >
-                  <Icon name="refresh" size={13} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
+              <Box position="absolute" top="calc(100% + 4px)" right={0} zIndex={50} backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={8} boxShadow="0 4px 12px rgba(0,0,0,0.10)" minWidth={180} overflow="hidden" borderStyle="solid">
+                <Pressable onClick={handleSyncGmail} hoverStyle={{ backgroundColor: "var(--k-surface)" }} display="flex" alignItems="center" gap={8} width="100%" paddingVertical={9} paddingHorizontal={14} fontSize={13} color="var(--k-text-primary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" textAlign="left">
+                  <Icon name="refresh" size={13} color="var(--k-text-tertiary)" />
                   {t("ticketList.syncGmail", "Sincronizar Gmail")}
-                </button>
+                </Pressable>
 
-                <div style={{ height: 1, background: "var(--k-border-subtle)", margin: "0 10px" }} />
+                <Box height={1} backgroundColor="var(--k-border-subtle)" marginVertical={0} marginHorizontal={10} />
 
-                <button
-                  onClick={handleClassifyAll}
-                  disabled={tickets.length === 0}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    width: "100%",
-                    padding: "9px 14px",
-                    fontSize: 13,
-                    color: tickets.length === 0 ? "var(--k-text-tertiary)" : "var(--k-text-primary)",
-                    background: "none",
-                    border: "none",
-                    cursor: tickets.length === 0 ? "not-allowed" : "pointer",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => { if (tickets.length > 0) e.currentTarget.style.background = "var(--k-surface)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                >
-                  <Icon name="refresh" size={13} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
+                <Pressable onClick={handleClassifyAll} disabled={tickets.length === 0} hoverStyle={tickets.length > 0 ? { backgroundColor: "var(--k-surface)" } : undefined} display="flex" alignItems="center" gap={8} width="100%" paddingVertical={9} paddingHorizontal={14} fontSize={13} color={tickets.length === 0 ? "var(--k-text-tertiary)" : "var(--k-text-primary)"} backgroundColor="transparent" borderWidth={0} cursor={tickets.length === 0 ? "not-allowed" : "pointer"} textAlign="left">
+                  <Icon name="refresh" size={13} color="var(--k-text-tertiary)" />
                   {classifyingAll
                     ? (classifyProgress ?? t("ticketList.classifying"))
                     : t("ticketList.classifyAll")}
-                </button>
-              </div>
+                </Pressable>
+              </Box>
             )}
-          </div>
-        </div>
+          </Box>
+        </Box>
 
         {/* Filter chips */}
-        <div style={{ display: "flex", gap: 4 }}>
+        <Box display="flex" gap={4}>
           <FilterChip
             label={t("ticketList.filterAll", "Todos")}
             active={filters.priority === null && filters.type === null}
@@ -758,194 +469,87 @@ export function TicketList() {
               onClick={() => toggleFilter("priority", p)}
             />
           ))}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* KAI-24 — multi-select action bar (behind VITE_FF_ENABLE_TICKET_GROUPING) */}
       {TICKET_GROUPING_ENABLED && selectedTicketIds.size >= 2 && (
-        <div style={{
-          borderBottom: "1px solid var(--k-border-subtle)",
-          background: "var(--k-accent-subtle)",
-          padding: "6px 14px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
-        }}>
-          <span style={{ fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-accent)" }}>
+        <Box borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="var(--k-accent-subtle)" paddingVertical={6} paddingHorizontal={14} display="flex" alignItems="center" justifyContent="space-between" gap={8} borderStyle="solid">
+          <Text fontSize={11} font="mono" color="var(--k-accent)">
             {t("ticketList.selectedCount", { count: selectedTicketIds.size })}
-          </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <button
-              onClick={handleGroupSelected}
-              disabled={grouping}
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                padding: "3px 8px",
-                borderRadius: 4,
-                background: "var(--k-accent)",
-                color: "white",
-                border: "none",
-                cursor: grouping ? "not-allowed" : "pointer",
-                opacity: grouping ? 0.6 : 1,
-              }}
-            >
+          </Text>
+          <Box display="flex" alignItems="center" gap={6}>
+            <Pressable onClick={handleGroupSelected} disabled={grouping} fontSize={11} fontWeight={500} paddingVertical={3} paddingHorizontal={8} borderRadius={4} backgroundColor="var(--k-accent)" color="white" borderWidth={0} cursor={grouping ? "not-allowed" : "pointer"} opacity={grouping ? 0.6 : 1}>
               {grouping ? t("ticketList.grouping", "Agrupando...") : t("ticketList.groupSelected")}
-            </button>
-            <button
-              onClick={clearTicketSelection}
-              disabled={grouping}
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                padding: "3px 8px",
-                borderRadius: 4,
-                background: "transparent",
-                color: "var(--k-text-secondary)",
-                border: "1px solid var(--k-border)",
-                cursor: grouping ? "not-allowed" : "pointer",
-              }}
-            >
+            </Pressable>
+            <Pressable onClick={clearTicketSelection} disabled={grouping} fontSize={11} fontWeight={500} paddingVertical={3} paddingHorizontal={8} borderRadius={4} backgroundColor="transparent" color="var(--k-text-secondary)" borderWidth={1} borderColor="var(--k-border)" cursor={grouping ? "not-allowed" : "pointer"} borderStyle="solid">
               {t("ticketList.cancelSelection")}
-            </button>
-          </div>
-        </div>
+            </Pressable>
+          </Box>
+        </Box>
       )}
 
       {/* KAI-108 — grouping success banner (manual selection or AI-suggested accept) */}
       {groupSuccessCount !== null && (
-        <div style={{
-          borderBottom: "1px solid var(--k-border-subtle)",
-          background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)",
-          padding: "5px 14px",
-          fontSize: 11,
-          fontFamily: "var(--k-font-mono)",
-          color: "var(--kairo-color-ok-ink)",
-        }}>
+        <Text tag="div" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" paddingVertical={5} paddingHorizontal={14} fontSize={11} font="mono" color="var(--kairo-color-ok-ink)" display="block" borderStyle="solid">
           {t("ticketList.groupSuccess", { count: groupSuccessCount })}
-        </div>
+        </Text>
       )}
 
       {/* KAI-24 — grouping error banner (manual selection or AI-suggested) */}
       {groupError && (
-        <div style={{
-          borderBottom: "1px solid var(--k-border-subtle)",
-          background: "var(--kairo-color-bad-soft)",
-          padding: "5px 14px",
-          fontSize: 11,
-          fontFamily: "var(--k-font-mono)",
-          color: "var(--kairo-color-bad-ink)",
-        }}>
+        <Text tag="div" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="var(--kairo-color-bad-soft)" paddingVertical={5} paddingHorizontal={14} fontSize={11} font="mono" color="var(--kairo-color-bad-ink)" display="block" borderStyle="solid">
           {groupError}
-        </div>
+        </Text>
       )}
 
       {/* KAI-24 — AI similarity suggestion callout (behind VITE_FF_ENABLE_TICKET_GROUPING) */}
       {TICKET_GROUPING_ENABLED && similarTickets && similarTickets.length > 0 && (
-        <div style={{
-          borderBottom: "1px solid var(--k-border-subtle)",
-          background: "var(--k-accent-subtle)",
-          padding: "8px 14px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-        }}>
-          <span style={{ fontSize: 12, color: "var(--k-accent)" }}>
+        <Box borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="var(--k-accent-subtle)" paddingVertical={8} paddingHorizontal={14} display="flex" flexDirection="column" gap={6} borderStyle="solid">
+          <Text fontSize={12} color="var(--k-accent)">
             {t("ticketList.similarSuggestion", { count: similarTickets.length })}
-          </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <button
-              onClick={handleAcceptSimilar}
-              disabled={groupingSimilar}
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                padding: "3px 8px",
-                borderRadius: 4,
-                background: "var(--k-accent)",
-                color: "white",
-                border: "none",
-                cursor: groupingSimilar ? "not-allowed" : "pointer",
-                opacity: groupingSimilar ? 0.6 : 1,
-              }}
-            >
+          </Text>
+          <Box display="flex" alignItems="center" gap={6}>
+            <Pressable onClick={handleAcceptSimilar} disabled={groupingSimilar} fontSize={11} fontWeight={500} paddingVertical={3} paddingHorizontal={8} borderRadius={4} backgroundColor="var(--k-accent)" color="white" borderWidth={0} cursor={groupingSimilar ? "not-allowed" : "pointer"} opacity={groupingSimilar ? 0.6 : 1}>
               {groupingSimilar ? t("ticketList.grouping", "Agrupando...") : t("ticketList.similarAccept")}
-            </button>
-            <button
-              onClick={handleDismissSimilar}
-              disabled={groupingSimilar}
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                padding: "3px 8px",
-                borderRadius: 4,
-                background: "transparent",
-                color: "var(--k-text-secondary)",
-                border: "1px solid var(--k-border)",
-                cursor: groupingSimilar ? "not-allowed" : "pointer",
-              }}
-            >
+            </Pressable>
+            <Pressable onClick={handleDismissSimilar} disabled={groupingSimilar} fontSize={11} fontWeight={500} paddingVertical={3} paddingHorizontal={8} borderRadius={4} backgroundColor="transparent" color="var(--k-text-secondary)" borderWidth={1} borderColor="var(--k-border)" cursor={groupingSimilar ? "not-allowed" : "pointer"} borderStyle="solid">
               {t("ticketList.similarDismiss")}
-            </button>
-          </div>
-        </div>
+            </Pressable>
+          </Box>
+        </Box>
       )}
 
       {/* Sync result / error banner */}
       {syncResult && (
-        <div style={{
-          borderBottom: "1px solid var(--k-border-subtle)",
-          background: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)",
-          padding: "5px 14px",
-          fontSize: 11,
-          fontFamily: "var(--k-font-mono)",
-          color: "var(--kairo-color-ok-ink)",
-        }}>
+        <Text tag="div" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" paddingVertical={5} paddingHorizontal={14} fontSize={11} font="mono" color="var(--kairo-color-ok-ink)" display="block" borderStyle="solid">
           {t("ticketList.syncSuccess", "{{created}} nuevos · {{skipped}} omitidos", {
             created: syncResult.created,
             skipped: syncResult.skipped,
           })}
-        </div>
+        </Text>
       )}
       {syncError && (
-        <div style={{
-          borderBottom: "1px solid var(--k-border-subtle)",
-          background: "var(--kairo-color-bad-soft)",
-          padding: "5px 14px",
-          fontSize: 11,
-          fontFamily: "var(--k-font-mono)",
-          color: "var(--kairo-color-bad-ink)",
-        }}>
+        <Text tag="div" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="var(--kairo-color-bad-soft)" paddingVertical={5} paddingHorizontal={14} fontSize={11} font="mono" color="var(--kairo-color-bad-ink)" display="block" borderStyle="solid">
           {syncError}
-        </div>
+        </Text>
       )}
 
       {/* Scanning banner */}
       {isScanning && tickets.length > 0 && (
-        <div style={{
-          borderBottom: "1px solid var(--k-border-subtle)",
-          background: "var(--k-accent-subtle)",
-          padding: "6px 14px",
-          fontSize: 11,
-          fontFamily: "var(--k-font-mono)",
-          color: "var(--k-accent)",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}>
-          <span style={{ width: 5, height: 5, borderRadius: 999, background: "var(--k-accent)", display: "inline-block" }} className="animate-pulse" />
+        <Text tag="div" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="var(--k-accent-subtle)" paddingVertical={6} paddingHorizontal={14} fontSize={11} font="mono" color="var(--k-accent)" display="flex" alignItems="center" gap={6} borderStyle="solid">
+          <PulseDot width={5} height={5} backgroundColor="var(--k-accent)" />
           {t("ticketList.scanning", { count: classifiedCount })}
-        </div>
+        </Text>
       )}
 
       {/* Skeleton while scanning with no tickets */}
       {isScanning && tickets.length === 0 ? (
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: 8 }}>
+        <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll paddingBottom={8}>
           {Array.from({ length: 6 }).map((_, i) => (
             <TicketSkeleton key={i} />
           ))}
-        </div>
+        </Box>
       ) : filtered.length === 0 ? (
         <EmptyState
           flex={1}
@@ -966,7 +570,7 @@ export function TicketList() {
           onOpenHistory={handleOpenHistory}
         />
       ) : (
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: 8 }}>
+        <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll paddingBottom={8}>
           {filtered.map((ticket) => (
             <TicketCard
               key={ticket.id}
@@ -982,7 +586,7 @@ export function TicketList() {
               onOpenHistory={handleOpenHistory}
             />
           ))}
-        </div>
+        </Box>
       )}
 
       <RelatedHistoryDrawer
@@ -993,6 +597,6 @@ export function TicketList() {
         onClose={() => setHistoryDrawerOpen(false)}
         onSelectTicket={handleSelectHistoricalTicket}
       />
-    </div>
+    </Box>
   );
 }

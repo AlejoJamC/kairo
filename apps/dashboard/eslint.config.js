@@ -19,7 +19,7 @@ const viewImportRules = [
 ]
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'preview']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

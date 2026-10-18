@@ -11,7 +11,7 @@ import { useSidebarCounts } from "@kairo/client-core/hooks/use-sidebar-counts";
 import { VIEW_TO_STATUS } from "@/lib/sidebar-view-status";
 import { SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS } from "@/lib/poll-intervals";
 import type { AppView } from "@/types";
-import { Icon, Tooltip, type IconName } from "@kairo/ui";
+import { Box, Icon, Pressable, PulseDot, Text, Tooltip, type IconName } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // NavBadge — count pill / collapsed dot
@@ -44,32 +44,21 @@ function NavBadge({
   if (collapsed) {
     const collapsedLabel = count > 9 ? "9+" : String(count);
     return (
-      <span
-        className={`absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[9px] font-bold text-white leading-none ${
-          flashPulse ? "animate-pulse" : ""
-        }`}
-        style={{ background: "var(--k-accent)" }}
-      >
+      <Text position="absolute" top={-4} right={-4} display="flex" height={16} minWidth={16} alignItems="center" justifyContent="center" borderRadius={999} paddingHorizontal={2} fontSize={9} fontWeight={700} color="white" lineHeightRatio={1} backgroundColor="var(--k-accent)" pulse={flashPulse}>
         {collapsedLabel}
-      </span>
+      </Text>
     );
   }
 
   const label = count > 99 ? "99+" : String(count);
 
   return (
-    <span
-      className="ml-auto flex items-center gap-1 tabular-nums"
-      style={{ fontFamily: "var(--k-font-mono)", fontSize: 11, color: "var(--k-text-tertiary)" }}
-    >
+    <Text marginLeft="auto" display="flex" alignItems="center" gap={4} font="mono" fontSize={11} color="var(--k-text-tertiary)">
       {isActive && (
-        <span
-          className="animate-pulse inline-block rounded-full shrink-0"
-          style={{ width: 5, height: 5, background: "var(--k-accent)" }}
-        />
+        <PulseDot width={5} height={5} backgroundColor="var(--k-accent)" />
       )}
       {label}
-    </span>
+    </Text>
   );
 }
 
@@ -120,43 +109,22 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
     const count = getCount(item.view);
 
     const btn = (
-      <button
-        onClick={() => onViewChange(item.view)}
-        style={{
-          display: "flex",
-          width: "100%",
-          alignItems: "center",
-          gap: 10,
-          padding: collapsed ? "8px" : "7px 10px",
-          borderRadius: 6,
-          cursor: "pointer",
-          marginBottom: 1,
-          background: isActive ? "var(--k-bg)" : "transparent",
-          border: isActive ? "1px solid var(--k-border)" : "1px solid transparent",
-          color: isActive ? "var(--k-text-primary)" : "var(--k-text-secondary)",
-          fontSize: 13,
-          fontWeight: isActive ? 500 : 400,
-          justifyContent: collapsed ? "center" : "flex-start",
-          transition: "background 0.12s ease, color 0.12s ease",
-        }}
-        onMouseEnter={(e) => {
+      <Pressable onClick={() => onViewChange(item.view)} onMouseEnter={(e) => {
           if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "var(--k-surface-2)";
-        }}
-        onMouseLeave={(e) => {
+        }} onMouseLeave={(e) => {
           if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-        }}
-      >
-        <span className="relative shrink-0">
+        }} display="flex" width="100%" alignItems="center" gap={10} paddingTop={collapsed ? 8 : 7} paddingRight={collapsed ? 8 : 10} paddingBottom={collapsed ? 8 : 7} paddingLeft={collapsed ? 8 : 10} borderRadius={6} cursor="pointer" marginBottom={1} backgroundColor={isActive ? "var(--k-bg)" : "transparent"} borderWidth={1} borderColor={isActive ? "var(--k-border)" : "transparent"} color={isActive ? "var(--k-text-primary)" : "var(--k-text-secondary)"} fontSize={13} fontWeight={isActive ? 500 : 400} justifyContent={collapsed ? "center" : "flex-start"} transition="background 0.12s ease, color 0.12s ease" borderStyle="solid">
+        <Box tag="span" position="relative" flexShrink={0}>
           <Icon name={item.icon} size={16} />
           {collapsed && <NavBadge count={count} collapsed isActive={isActive} />}
-        </span>
+        </Box>
         {!collapsed && (
           <>
-            <span style={{ flex: 1, textAlign: "left" }}>{item.label}</span>
+            <Text flexGrow={1} flexShrink={1} flexBasis="0%" textAlign="left">{item.label}</Text>
             <NavBadge count={count} collapsed={false} isActive={isActive} />
           </>
         )}
-      </button>
+      </Pressable>
     );
 
     if (!collapsed) return <div key={item.view}>{btn}</div>;
@@ -170,50 +138,29 @@ export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
 
   return (
     <>
-      <aside
-        style={{
-          width: collapsed ? 56 : 240,
-          flexShrink: 0,
-          borderRight: "1px solid var(--k-border)",
-          background: "var(--k-surface)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          transition: "width 0.18s ease",
-        }}
-      >
+      <Box tag="aside" width={collapsed ? 56 : 240} flexShrink={0} borderRightWidth={1} borderRightColor="var(--k-border)" backgroundColor="var(--k-surface)" display="flex" flexDirection="column" overflow="hidden" transition="width 0.18s ease" borderStyle="solid">
         {/* Nav items */}
-        <nav style={{ padding: 8, flex: 1 }}>
+        <Box tag="nav" padding={8} flexGrow={1} flexShrink={1} flexBasis="0%">
           {mainNavItems.map(renderItem)}
 
           {isAdmin && (
             <>
-              <div
-                style={{
-                  margin: "8px 0",
-                  borderTop: "1px solid var(--k-border)",
-                }}
-              />
+              <Box marginVertical={8} marginHorizontal={0} borderTopWidth={1} borderTopColor="var(--k-border)" borderStyle="solid" />
               {adminNavItems.map(renderItem)}
             </>
           )}
-        </nav>
+        </Box>
 
         {/* Sidebar bottom — language switcher + user menu */}
-        <div
-          style={{
-            borderTop: "1px solid var(--k-border)",
-            padding: collapsed ? "8px" : "8px 12px",
-          }}
-        >
+        <Box borderTopWidth={1} borderTopColor="var(--k-border)" paddingVertical={8} paddingHorizontal={collapsed ? 8 : 12} borderStyle="solid">
           {!collapsed && (
-            <div style={{ marginBottom: 4 }}>
+            <Box marginBottom={4}>
               <LanguageSwitcher />
-            </div>
+            </Box>
           )}
           <UserMenu collapsed={collapsed} />
-        </div>
-      </aside>
+        </Box>
+      </Box>
     </>
   );
 }

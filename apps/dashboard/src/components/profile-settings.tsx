@@ -4,7 +4,7 @@ import { useAuth } from "@kairo/client-core/auth";
 import { updateProfileName } from "@kairo/client-core/queries";
 import { getOperationalSlaConfig, saveOperationalSlaConfig } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
-import { Icon, Spinner, Switch, type IconName } from "@kairo/ui";
+import { Avatar, Box, Icon, PlainInput, PlainSelect, Pressable, Spinner, Switch, Text, type IconName } from "@kairo/ui";
 
 interface Props {
   onViewChange: (view: AppView) => void;
@@ -67,62 +67,57 @@ function WorkspaceSection() {
 
   return (
     <div>
-      <h1 style={styles.pageTitle}>{t("dashboard:settings.workspace.title")}</h1>
+      <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} marginTop={0} marginHorizontal={0} marginBottom={24} font="display" color="var(--k-text-primary)" display="block">{t("dashboard:settings.workspace.title")}</Text>
 
-      <div style={{ ...styles.card, marginBottom: 12 }}>
-        <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 20 }}>
-          <div style={styles.wsLogo}>
+      <Box padding={24} borderWidth={1} borderColor="var(--k-border)" borderRadius={12} backgroundColor="var(--k-bg)" marginBottom={12} borderStyle="solid">
+        <Box display="flex" gap={14} alignItems="center" marginBottom={20}>
+          <Text tag="div" width={56} height={56} borderRadius={12} backgroundColor="var(--kairo-color-text)" color="white" display="flex" alignItems="center" justifyContent="center" fontSize={20} fontWeight={600} flexShrink={0}>
             {(name || "W")[0].toUpperCase()}
-          </div>
-          <div style={{ flex: 1 }}>
-            <label style={styles.label}>{t("dashboard:settings.workspace.nameLabel")}</label>
-            <input
-              style={styles.input}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t("dashboard:settings.companyPlaceholder")}
-            />
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          </Text>
+          <Box flexGrow={1} flexShrink={1} flexBasis="0%">
+            <Text tag="label" display="block" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" marginBottom={6} textTransform="uppercase" letterSpacing={0.48}>{t("dashboard:settings.workspace.nameLabel")}</Text>
+            <PlainInput value={name} onChange={(e) => setName(e.target.value)} placeholder={t("dashboard:settings.companyPlaceholder")} width="100%" height={36} paddingVertical={0} paddingHorizontal={10} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--k-surface)" color="var(--k-text-primary)" fontSize={13} outlineWidth={0} borderStyle="solid" />
+          </Box>
+        </Box>
+        <Box grid gridTemplateColumns="1fr 1fr" gap={16}>
           <div>
-            <label style={styles.label}>{t("dashboard:settings.workspace.urlLabel")}</label>
-            <input style={{ ...styles.input, color: "var(--k-text-tertiary)" }} placeholder={t("dashboard:settings.workspace.urlPlaceholder")} readOnly />
+            <Text tag="label" display="block" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" marginBottom={6} textTransform="uppercase" letterSpacing={0.48}>{t("dashboard:settings.workspace.urlLabel")}</Text>
+            <PlainInput placeholder={t("dashboard:settings.workspace.urlPlaceholder")} readOnly width="100%" height={36} paddingVertical={0} paddingHorizontal={10} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--k-surface)" color="var(--k-text-tertiary)" fontSize={13} outlineWidth={0} borderStyle="solid" />
           </div>
           <div>
-            <label style={styles.label}>{t("dashboard:settings.workspace.timezoneLabel")}</label>
-            <input style={{ ...styles.input, color: "var(--k-text-tertiary)" }} placeholder={t("dashboard:settings.workspace.timezonePlaceholder")} readOnly />
+            <Text tag="label" display="block" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" marginBottom={6} textTransform="uppercase" letterSpacing={0.48}>{t("dashboard:settings.workspace.timezoneLabel")}</Text>
+            <PlainInput placeholder={t("dashboard:settings.workspace.timezonePlaceholder")} readOnly width="100%" height={36} paddingVertical={0} paddingHorizontal={10} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--k-surface)" color="var(--k-text-tertiary)" fontSize={13} outlineWidth={0} borderStyle="solid" />
           </div>
-        </div>
-      </div>
+        </Box>
+      </Box>
 
-      <div style={{ ...styles.card, display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-        <Icon name="globe" size={16} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t("dashboard:settings.workspace.langTitle")}</div>
-          <div style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t("dashboard:settings.workspace.langDesc")}</div>
-        </div>
-        <select style={styles.select}>
+      <Box padding={24} borderWidth={1} borderColor="var(--k-border)" borderRadius={12} backgroundColor="var(--k-bg)" display="flex" alignItems="center" gap={16} marginBottom={24} borderStyle="solid">
+        <Icon name="globe" size={16} color="var(--k-text-tertiary)" />
+        <Box flexGrow={1} flexShrink={1} flexBasis="0%">
+          <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{t("dashboard:settings.workspace.langTitle")}</Text>
+          <Text tag="div" fontSize={13} color="var(--k-text-tertiary)" display="block">{t("dashboard:settings.workspace.langDesc")}</Text>
+        </Box>
+        <PlainSelect paddingVertical={6} paddingHorizontal={10} borderWidth={1} borderColor="var(--k-border)" borderRadius={6} fontSize={13} backgroundColor="var(--k-surface)" color="var(--k-text-primary)" borderStyle="solid">
           <option>{t("dashboard:settings.workspace.langLatam")}</option>
           <option>{t("dashboard:settings.workspace.langSpain")}</option>
           <option>{t("dashboard:settings.workspace.langEnglish")}</option>
-        </select>
-      </div>
+        </PlainSelect>
+      </Box>
 
       {msg && (
-        <div style={{ ...styles.msgBanner, background: msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" : "var(--kairo-color-bad-soft)", color: msg.type === "success" ? "var(--kairo-color-ok-ink)" : "var(--kairo-color-bad-ink)", border: `1px solid ${msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" : "var(--kairo-color-bad-line)"}`, marginBottom: 16 }}>
+        <Text tag="div" display="flex" alignItems="center" gap={8} borderRadius={6} paddingVertical={8} paddingHorizontal={12} fontSize={13} backgroundColor={msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" : "var(--kairo-color-bad-soft)"} color={msg.type === "success" ? "var(--kairo-color-ok-ink)" : "var(--kairo-color-bad-ink)"} borderWidth={1} borderColor={msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" : "var(--kairo-color-bad-line)"} marginBottom={16} borderStyle="solid">
           {msg.type === "success" ? <Icon name="check" size={14} /> : <Icon name="alert" size={14} />}
           {msg.text}
-        </div>
+        </Text>
       )}
 
-      <div style={styles.formFooter}>
-        <button style={styles.btnGhost}>{t("dashboard:settings.discard")}</button>
-        <button style={styles.btnPrimary} onClick={save} disabled={saving}>
+      <Box display="flex" justifyContent="flex-end" gap={8} paddingTop={20} borderTopWidth={1} borderTopColor="var(--k-border)" borderStyle="solid">
+        <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={14} borderRadius={8} backgroundColor="transparent" color="var(--k-text-secondary)" fontSize={13} fontWeight={500} borderWidth={1} borderColor="var(--k-border)" cursor="pointer" borderStyle="solid">{t("dashboard:settings.discard")}</Pressable>
+        <Pressable onClick={save} disabled={saving} display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={16} borderRadius={8} backgroundColor="var(--k-accent)" color="white" fontSize={13} fontWeight={500} borderWidth={0} cursor="pointer">
           {saving && <Spinner />}
           {saving ? t("dashboard:settings.savingState") : t("dashboard:settings.saveChanges")}
-        </button>
-      </div>
+        </Pressable>
+      </Box>
     </div>
   );
 }
@@ -139,50 +134,38 @@ function TeamSection() {
   const { t } = useTranslation(["dashboard"]);
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
-        <h1 style={{ ...styles.pageTitle, margin: 0 }}>{t("dashboard:settings.team.title")}</h1>
-        <button style={styles.btnPrimary}>
+      <Box display="flex" alignItems="baseline" justifyContent="space-between" marginBottom={6}>
+        <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} margin={0} font="display" color="var(--k-text-primary)" display="block">{t("dashboard:settings.team.title")}</Text>
+        <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={16} borderRadius={8} backgroundColor="var(--k-accent)" color="white" fontSize={13} fontWeight={500} borderWidth={0} cursor="pointer">
           <Icon name="plus" size={13} /> {t("dashboard:settings.team.invite")}
-        </button>
-      </div>
-      <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "8px 0 24px" }}>
+        </Pressable>
+      </Box>
+      <Text tag="p" fontSize={14} color="var(--k-text-tertiary)" marginTop={8} marginHorizontal={0} marginBottom={24} display="block">
         {t("dashboard:settings.team.seats", { used: 3, total: 5, plan: "Pro" })}
-      </p>
-      <div style={{ border: "1px solid var(--k-border)", borderRadius: 12, overflow: "hidden" }}>
+      </Text>
+      <Box borderWidth={1} borderColor="var(--k-border)" borderRadius={12} overflow="hidden" borderStyle="solid">
         {TEAM_MEMBERS.map((m, i) => (
-          <div
-            key={m.email}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "2fr 1fr 1fr 30px",
-              padding: "14px 18px",
-              alignItems: "center",
-              borderBottom: i < TEAM_MEMBERS.length - 1 ? "1px solid var(--k-border)" : "none",
-              background: "var(--k-bg)",
-            }}
-          >
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <div style={{ position: "relative" }}>
-                <div style={{ width: 32, height: 32, borderRadius: "50%", background: m.gradient, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: 12 }}>
-                  {m.initials}
-                </div>
-                <span style={{ position: "absolute", bottom: -1, right: -1, width: 9, height: 9, borderRadius: "50%", background: m.status === "online" ? "var(--kairo-color-ok)" : "var(--kairo-color-warn)", border: "2px solid var(--k-bg)" }} />
-              </div>
+          <Box key={m.email} grid gridTemplateColumns="2fr 1fr 1fr 30px" paddingVertical={14} paddingHorizontal={18} alignItems="center" borderBottomWidth={i < TEAM_MEMBERS.length - 1 ? 1 : 0} borderBottomColor="var(--k-border)" backgroundColor="var(--k-bg)" borderStyle="solid">
+            <Box display="flex" gap={12} alignItems="center">
+              <Box position="relative">
+                <Avatar name={m.name} seed={m.name} size={32} />
+                <Text position="absolute" bottom={-1} right={-1} width={9} height={9} circle backgroundColor={m.status === "online" ? "var(--kairo-color-ok)" : "var(--kairo-color-warn)"} borderWidth={2} borderColor="var(--k-bg)" borderStyle="solid" />
+              </Box>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{m.name}</div>
-                <div style={{ fontSize: 12, color: "var(--k-text-tertiary)" }}>{m.email}</div>
+                <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{m.name}</Text>
+                <Text tag="div" fontSize={12} color="var(--k-text-tertiary)" display="block">{m.email}</Text>
               </div>
-            </div>
-            <span style={{ fontSize: 13, color: "var(--k-text-primary)" }}>{m.role}</span>
-            <span style={{ fontSize: 12, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)" }}>
+            </Box>
+            <Text fontSize={13} color="var(--k-text-primary)">{m.role}</Text>
+            <Text fontSize={12} color="var(--k-text-tertiary)" font="mono">
               {m.status === "online" ? t("dashboard:settings.team.statusActive") : t("dashboard:settings.team.statusAway")}
-            </span>
-            <button style={{ color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+            </Text>
+            <Pressable color="var(--k-text-tertiary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={4}>
               <Icon name="more" size={14} />
-            </button>
-          </div>
+            </Pressable>
+          </Box>
         ))}
-      </div>
+      </Box>
     </div>
   );
 }
@@ -202,65 +185,59 @@ function IntegrationsSection({ onViewChange }: { onViewChange: (view: AppView) =
   const { t } = useTranslation(["dashboard"]);
   return (
     <div>
-      <h1 style={styles.pageTitle}>{t("dashboard:settings.integrations.title")}</h1>
-      <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "-16px 0 24px" }}>
+      <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} marginTop={0} marginHorizontal={0} marginBottom={24} font="display" color="var(--k-text-primary)" display="block">{t("dashboard:settings.integrations.title")}</Text>
+      <Text tag="p" fontSize={14} color="var(--k-text-tertiary)" marginTop={-16} marginHorizontal={0} marginBottom={24} display="block">
         {t("dashboard:settings.integrations.subtitle")}
-      </p>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      </Text>
+      <Box grid gridTemplateColumns="1fr 1fr" gap={12}>
         {INTEGRATIONS.map((int) => (
-          <div
-            key={int.name}
-            style={{ padding: 16, border: "1px solid var(--k-border)", borderRadius: 10, display: "flex", gap: 12, alignItems: "center", background: "var(--k-bg)" }}
-          >
-            <div style={{ width: 38, height: 38, borderRadius: 8, background: int.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, flexShrink: 0 }}>
+          <Box key={int.name} padding={16} borderWidth={1} borderColor="var(--k-border)" borderRadius={10} display="flex" gap={12} alignItems="center" backgroundColor="var(--k-bg)" borderStyle="solid">
+            <Text tag="div" width={38} height={38} borderRadius={8} backgroundColor={int.color} color="white" display="flex" alignItems="center" justifyContent="center" fontSize={16} fontWeight={600} flexShrink={0}>
               {int.letter}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>
+            </Text>
+            <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
+              <Text tag="div" display="flex" alignItems="center" gap={6} fontSize={14} fontWeight={500} color="var(--k-text-primary)">
                 {int.name}
                 {int.status === "connected" && (
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--kairo-color-ok)", flexShrink: 0 }} />
+                  <Text width={6} height={6} circle backgroundColor="var(--kairo-color-ok)" flexShrink={0} />
                 )}
                 {int.status === "beta" && (
-                  <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 5px", borderRadius: 4, background: "rgba(43,91,255,.12)", color: "var(--kairo-color-accent)" }}>BETA</span>
+                  <Text fontSize={10} fontWeight={600} paddingVertical={1} paddingHorizontal={5} borderRadius={4} backgroundColor="rgba(43,91,255,.12)" color="var(--kairo-color-accent)">BETA</Text>
                 )}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>{int.meta}</div>
-            </div>
+              </Text>
+              <Text tag="div" fontSize={12} color="var(--k-text-tertiary)" marginTop={2} display="block">{int.meta}</Text>
+            </Box>
             {int.status === "connected" && (
-              <button style={{ fontSize: 12, color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer" }}>{t("dashboard:settings.integrations.configure")}</button>
+              <Pressable fontSize={12} color="var(--k-text-tertiary)" backgroundColor="transparent" borderWidth={0} cursor="pointer">{t("dashboard:settings.integrations.configure")}</Pressable>
             )}
             {int.status === "available" && (
-              <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px" }}>{t("dashboard:settings.integrations.connect")}</button>
+              <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={4} paddingHorizontal={10} borderRadius={8} backgroundColor="transparent" color="var(--k-text-secondary)" fontSize={12} fontWeight={500} borderWidth={1} borderColor="var(--k-border)" cursor="pointer" borderStyle="solid">{t("dashboard:settings.integrations.connect")}</Pressable>
             )}
             {int.status === "beta" && (
-              <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px" }}>{t("dashboard:settings.integrations.requestAccess")}</button>
+              <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={4} paddingHorizontal={10} borderRadius={8} backgroundColor="transparent" color="var(--k-text-secondary)" fontSize={12} fontWeight={500} borderWidth={1} borderColor="var(--k-border)" cursor="pointer" borderStyle="solid">{t("dashboard:settings.integrations.requestAccess")}</Pressable>
             )}
             {int.status === "soon" && (
-              <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)", whiteSpace: "nowrap" }}>{t("dashboard:settings.integrations.comingSoon")}</span>
+              <Text fontSize={11} color="var(--k-text-tertiary)" font="mono" whiteSpace="nowrap">{t("dashboard:settings.integrations.comingSoon")}</Text>
             )}
-          </div>
+          </Box>
         ))}
-      </div>
+      </Box>
 
       {/* Support Channels */}
-      <div style={{ marginTop: 28 }}>
-        <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--k-text-primary)", margin: "0 0 12px" }}>
+      <Box marginTop={28}>
+        <Text tag="h2" fontSize={14} fontWeight={600} color="var(--k-text-primary)" marginTop={0} marginHorizontal={0} marginBottom={12} display="block">
           Support Channels
-        </h2>
-        <div style={{ padding: 16, border: "1px solid var(--k-border)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--k-bg)" }}>
+        </Text>
+        <Box padding={16} borderWidth={1} borderColor="var(--k-border)" borderRadius={10} display="flex" alignItems="center" justifyContent="space-between" backgroundColor="var(--k-bg)" borderStyle="solid">
           <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>Email inboxes</div>
-            <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>Gmail and other email channels connected to this account</div>
+            <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">Email inboxes</Text>
+            <Text tag="div" fontSize={12} color="var(--k-text-tertiary)" marginTop={2} display="block">Gmail and other email channels connected to this account</Text>
           </div>
-          <button
-            onClick={() => onViewChange("channels")}
-            style={{ fontSize: 12, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer" }}
-          >
+          <Pressable onClick={() => onViewChange("channels")} fontSize={12} fontWeight={500} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer">
             Manage →
-          </button>
-        </div>
-      </div>
+          </Pressable>
+        </Box>
+      </Box>
     </div>
   );
 }
@@ -296,89 +273,78 @@ function TriageSection() {
 
   return (
     <div>
-      <h1 style={styles.pageTitle}>{t("dashboard:settings.triage.title")}</h1>
-      <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "-16px 0 28px" }}>
+      <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} marginTop={0} marginHorizontal={0} marginBottom={24} font="display" color="var(--k-text-primary)" display="block">{t("dashboard:settings.triage.title")}</Text>
+      <Text tag="p" fontSize={14} color="var(--k-text-tertiary)" marginTop={-16} marginHorizontal={0} marginBottom={28} display="block">
         {t("dashboard:settings.triage.subtitle")}
-      </p>
+      </Text>
 
       {/* Tier toggles */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={styles.sectionLabel}>{t("dashboard:settings.triage.tiersLabel")}</div>
+      <Box marginBottom={32}>
+        <Text tag="div" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" font="mono" textTransform="uppercase" letterSpacing={0.6} marginBottom={12} display="block">{t("dashboard:settings.triage.tiersLabel")}</Text>
         {TIER_DATA.map((tier, i) => {
           const col = TIER_COLORS[tier.tier];
           return (
-            <div key={tier.tier} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px", border: "1px solid var(--k-border)", borderRadius: 10, marginBottom: 8, background: "var(--k-bg)" }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: col + "20", color: col, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--k-font-mono)", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+            <Box key={tier.tier} display="flex" alignItems="center" gap={16} paddingVertical={14} paddingHorizontal={16} borderWidth={1} borderColor="var(--k-border)" borderRadius={10} marginBottom={8} backgroundColor="var(--k-bg)" borderStyle="solid">
+              <Text tag="div" width={32} height={32} borderRadius={8} backgroundColor={col + "20"} color={col} display="flex" alignItems="center" justifyContent="center" font="mono" fontSize={12} fontWeight={600} flexShrink={0}>
                 T{tier.tier}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t(`dashboard:settings.triage.${tier.nameKey}`)}</div>
-                <div style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>{t(`dashboard:settings.triage.${tier.descKey}`)}</div>
-              </div>
+              </Text>
+              <Box flexGrow={1} flexShrink={1} flexBasis="0%">
+                <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{t(`dashboard:settings.triage.${tier.nameKey}`)}</Text>
+                <Text tag="div" fontSize={13} color="var(--k-text-tertiary)" display="block">{t(`dashboard:settings.triage.${tier.descKey}`)}</Text>
+              </Box>
               <Switch
                 checked={tiers[i]}
                 label={t(`dashboard:settings.triage.${tier.nameKey}`)}
                 onCheckedChange={() => setTiers((p) => p.map((v, j) => j === i ? !v : v))}
               />
-            </div>
+            </Box>
           );
         })}
-      </div>
+      </Box>
 
       {/* Confidence slider */}
-      <div style={{ marginBottom: 32, padding: 18, border: "1px solid var(--k-border)", borderRadius: 10, background: "var(--k-bg)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t("dashboard:settings.triage.confidenceTitle")}</div>
-          <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 16, color: "var(--k-accent)", fontWeight: 500 }}>{confidence.toFixed(2)}</span>
-        </div>
-        <p style={{ fontSize: 13, color: "var(--k-text-tertiary)", margin: "0 0 14px" }}>
+      <Box marginBottom={32} padding={18} borderWidth={1} borderColor="var(--k-border)" borderRadius={10} backgroundColor="var(--k-bg)" borderStyle="solid">
+        <Box display="flex" justifyContent="space-between" alignItems="baseline" marginBottom={6}>
+          <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{t("dashboard:settings.triage.confidenceTitle")}</Text>
+          <Text font="mono" fontSize={16} color="var(--k-accent)" fontWeight={500}>{confidence.toFixed(2)}</Text>
+        </Box>
+        <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" marginTop={0} marginHorizontal={0} marginBottom={14} display="block">
           {t("dashboard:settings.triage.confidenceDesc", { threshold: confidence.toFixed(2) })}
-        </p>
-        <input
-          type="range" min={0.5} max={1} step={0.01}
-          value={confidence}
-          onChange={(e) => setConfidence(parseFloat(e.target.value))}
-          style={{ width: "100%", accentColor: "var(--k-accent)" }}
-        />
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", marginTop: 6 }}>
+        </Text>
+        <PlainInput type="range" min={0.5} max={1} step={0.01} value={confidence} onChange={(e) => setConfidence(parseFloat(e.target.value))} width="100%" accentColor="var(--k-accent)" />
+        <Text tag="div" display="flex" justifyContent="space-between" fontSize={11} font="mono" color="var(--k-text-tertiary)" marginTop={6}>
           <span>{t("dashboard:settings.triage.confidenceLow")}</span>
           <span>{t("dashboard:settings.triage.confidenceHigh")}</span>
-        </div>
-      </div>
+        </Text>
+      </Box>
 
       {/* Custom categories */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={styles.sectionLabel}>{t("dashboard:settings.triage.categoriesLabel")}</div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <input
-              style={{ ...styles.input, width: 140, padding: "4px 10px", fontSize: 12 }}
-              placeholder={t("dashboard:settings.triage.categoryPlaceholder")}
-              value={newCat}
-              onChange={(e) => setNewCat(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addCat()}
-            />
-            <button style={{ ...styles.btnGhost, fontSize: 12, padding: "4px 10px", display: "flex", alignItems: "center", gap: 4 }} onClick={addCat}>
+      <Box marginBottom={32}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" marginBottom={12}>
+          <Text tag="div" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" font="mono" textTransform="uppercase" letterSpacing={0.6} marginBottom={12} display="block">{t("dashboard:settings.triage.categoriesLabel")}</Text>
+          <Box display="flex" gap={6}>
+            <PlainInput placeholder={t("dashboard:settings.triage.categoryPlaceholder")} value={newCat} onChange={(e) => setNewCat(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addCat()} width={140} height={36} paddingVertical={4} paddingHorizontal={10} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--k-surface)" color="var(--k-text-primary)" fontSize={12} outlineWidth={0} borderStyle="solid" />
+            <Pressable onClick={addCat} display="flex" alignItems="center" gap={4} paddingVertical={4} paddingHorizontal={10} borderRadius={8} backgroundColor="transparent" color="var(--k-text-secondary)" fontSize={12} fontWeight={500} borderWidth={1} borderColor="var(--k-border)" cursor="pointer" borderStyle="solid">
               <Icon name="plus" size={12} /> {t("dashboard:settings.triage.addCategory")}
-            </button>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            </Pressable>
+          </Box>
+        </Box>
+        <Box display="flex" gap={8} flexWrap="wrap">
           {categories.map((c) => (
-            <span key={c} style={{ padding: "5px 10px", fontSize: 12, borderRadius: 6, border: "1px solid var(--k-border)", display: "flex", alignItems: "center", gap: 6, color: "var(--k-text-primary)", background: "var(--k-bg)" }}>
+            <Text key={c} paddingVertical={5} paddingHorizontal={10} fontSize={12} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" display="flex" alignItems="center" gap={6} color="var(--k-text-primary)" backgroundColor="var(--k-bg)" borderStyle="solid">
               {c}
-              <button style={{ color: "var(--k-text-tertiary)", background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }} onClick={() => setCategories((p) => p.filter((x) => x !== c))}>
+              <Pressable onClick={() => setCategories((p) => p.filter((x) => x !== c))} color="var(--k-text-tertiary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={0} display="flex">
                 <Icon name="x" size={11} />
-              </button>
-            </span>
+              </Pressable>
+            </Text>
           ))}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
-      <div style={styles.formFooter}>
-        <button style={styles.btnGhost}>{t("dashboard:settings.discard")}</button>
-        <button style={styles.btnPrimary}>{t("dashboard:settings.saveChanges")}</button>
-      </div>
+      <Box display="flex" justifyContent="flex-end" gap={8} paddingTop={20} borderTopWidth={1} borderTopColor="var(--k-border)" borderStyle="solid">
+        <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={14} borderRadius={8} backgroundColor="transparent" color="var(--k-text-secondary)" fontSize={13} fontWeight={500} borderWidth={1} borderColor="var(--k-border)" cursor="pointer" borderStyle="solid">{t("dashboard:settings.discard")}</Pressable>
+        <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={16} borderRadius={8} backgroundColor="var(--k-accent)" color="white" fontSize={13} fontWeight={500} borderWidth={0} cursor="pointer">{t("dashboard:settings.saveChanges")}</Pressable>
+      </Box>
     </div>
   );
 }
@@ -457,7 +423,7 @@ function OperationalSlaSection() {
   if (!rows) {
     return (
       <div>
-        <h1 style={styles.pageTitle}>{t("dashboard:settings.nav.sla")}</h1>
+        <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} marginTop={0} marginHorizontal={0} marginBottom={24} font="display" color="var(--k-text-primary)" display="block">{t("dashboard:settings.nav.sla")}</Text>
         <Spinner size="lg" />
       </div>
     );
@@ -465,20 +431,20 @@ function OperationalSlaSection() {
 
   return (
     <div>
-      <h1 style={styles.pageTitle}>{t("dashboard:settings.nav.sla")}</h1>
-      <p style={{ fontSize: 14, color: "var(--k-text-tertiary)", margin: "-16px 0 24px" }}>
+      <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} marginTop={0} marginHorizontal={0} marginBottom={24} font="display" color="var(--k-text-primary)" display="block">{t("dashboard:settings.nav.sla")}</Text>
+      <Text tag="p" fontSize={14} color="var(--k-text-tertiary)" marginTop={-16} marginHorizontal={0} marginBottom={24} display="block">
         {t("dashboard:settings.sla.subtitle")}
-      </p>
+      </Text>
 
       {PRIORITY_ORDER.map((priority) => {
         const row = rows.find((r) => r.priority === priority);
         if (!row) return null;
         return (
-          <div key={priority} style={{ ...styles.card, marginBottom: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--k-text-primary)", marginBottom: 12 }}>
+          <Box key={priority} padding={24} borderWidth={1} borderColor="var(--k-border)" borderRadius={12} backgroundColor="var(--k-bg)" marginBottom={12} borderStyle="solid">
+            <Text tag="div" fontSize={14} fontWeight={600} color="var(--k-text-primary)" marginBottom={12} display="block">
               {t(`dashboard:settings.sla.priority${priority}`)}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
+            </Text>
+            <Box grid gridTemplateColumns="1fr 1fr 1fr 1fr" gap={16}>
               {SLA_FIELDS.map((field) => (
                 <div key={field.key}>
                   {/* Fixed height (not minHeight) fits 2 lines so every column in the
@@ -486,59 +452,35 @@ function OperationalSlaSection() {
                       own text wraps to 1 or 2 lines (ES labels are longer than EN) —
                       a minHeight only floors the shortest column, it doesn't force
                       the 1-line and 2-line columns to match each other. */}
-                  <label
-                    style={{
-                      ...styles.label,
-                      height: 32,
-                      lineHeight: "16px",
-                      display: "flex",
-                      alignItems: "flex-end",
-                    }}
-                  >
+                  <Text tag="label" display="flex" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" marginBottom={6} textTransform="uppercase" letterSpacing={0.48} height={32} lineHeight={16} alignItems="flex-end">
                     {t(field.labelKey)}
-                  </label>
-                  <div style={{ position: "relative" }}>
-                    <input
-                      type="number"
-                      min={1}
-                      style={{ ...styles.input, paddingRight: 40 }}
-                      value={secondsToMinutes(row[field.key])}
-                      onChange={(e) => updateField(priority, field.key, Number(e.target.value))}
-                    />
-                    <span
-                      style={{
-                        position: "absolute",
-                        right: 10,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        fontSize: 12,
-                        color: "var(--k-text-tertiary)",
-                        pointerEvents: "none",
-                      }}
-                    >
+                  </Text>
+                  <Box position="relative">
+                    <PlainInput type="number" min={1} value={secondsToMinutes(row[field.key])} onChange={(e) => updateField(priority, field.key, Number(e.target.value))} width="100%" height={36} paddingVertical={0} paddingHorizontal={10} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--k-surface)" color="var(--k-text-primary)" fontSize={13} outlineWidth={0} paddingRight={40} borderStyle="solid" />
+                    <Text position="absolute" right={10} top="50%" transform="translateY(-50%)" fontSize={12} color="var(--k-text-tertiary)" pointerEvents="none">
                       {t("dashboard:settings.sla.unitMinutes")}
-                    </span>
-                  </div>
+                    </Text>
+                  </Box>
                 </div>
               ))}
-            </div>
-          </div>
+            </Box>
+          </Box>
         );
       })}
 
       {msg && (
-        <div style={{ ...styles.msgBanner, background: msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" : "var(--kairo-color-bad-soft)", color: msg.type === "success" ? "var(--kairo-color-ok-ink)" : "var(--kairo-color-bad-ink)", border: `1px solid ${msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" : "var(--kairo-color-bad-line)"}`, marginBottom: 16 }}>
+        <Text tag="div" display="flex" alignItems="center" gap={8} borderRadius={6} paddingVertical={8} paddingHorizontal={12} fontSize={13} backgroundColor={msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" : "var(--kairo-color-bad-soft)"} color={msg.type === "success" ? "var(--kairo-color-ok-ink)" : "var(--kairo-color-bad-ink)"} borderWidth={1} borderColor={msg.type === "success" ? "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" : "var(--kairo-color-bad-line)"} marginBottom={16} borderStyle="solid">
           {msg.type === "success" ? <Icon name="check" size={14} /> : <Icon name="alert" size={14} />}
           {msg.text}
-        </div>
+        </Text>
       )}
 
-      <div style={styles.formFooter}>
-        <button style={styles.btnPrimary} onClick={save} disabled={saving}>
+      <Box display="flex" justifyContent="flex-end" gap={8} paddingTop={20} borderTopWidth={1} borderTopColor="var(--k-border)" borderStyle="solid">
+        <Pressable onClick={save} disabled={saving} display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={16} borderRadius={8} backgroundColor="var(--k-accent)" color="white" fontSize={13} fontWeight={500} borderWidth={0} cursor="pointer">
           {saving && <Spinner />}
           {saving ? t("dashboard:settings.savingState") : t("dashboard:settings.saveChanges")}
-        </button>
-      </div>
+        </Pressable>
+      </Box>
     </div>
   );
 }
@@ -552,36 +494,33 @@ function SecuritySection({ onViewChange }: { onViewChange: (view: AppView) => vo
 
   return (
     <div>
-      <h1 style={styles.pageTitle}>{t("dashboard:settings.security.title")}</h1>
+      <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} marginTop={0} marginHorizontal={0} marginBottom={24} font="display" color="var(--k-text-primary)" display="block">{t("dashboard:settings.security.title")}</Text>
 
-      <div style={{ border: "1px solid var(--k-border)", borderRadius: 12, overflow: "hidden", background: "var(--k-bg)" }}>
-        <div style={{ padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--k-border)" }}>
+      <Box borderWidth={1} borderColor="var(--k-border)" borderRadius={12} overflow="hidden" backgroundColor="var(--k-bg)" borderStyle="solid">
+        <Box paddingVertical={18} paddingHorizontal={20} display="flex" alignItems="center" justifyContent="space-between" borderBottomWidth={1} borderBottomColor="var(--k-border)" borderStyle="solid">
           <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t("dashboard:settings.security.passwordLabel")}</div>
-            <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>
+            <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{t("dashboard:settings.security.passwordLabel")}</Text>
+            <Text tag="div" fontSize={12} color="var(--k-text-tertiary)" marginTop={2} display="block">
               {hasPassword
                 ? t("dashboard:settings.security.passwordActiveDesc")
                 : t("dashboard:settings.security.passwordNoneDesc")}
-            </div>
+            </Text>
           </div>
-          <button
-            onClick={() => onViewChange("change-password")}
-            style={{ fontSize: 13, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer" }}
-          >
+          <Pressable onClick={() => onViewChange("change-password")} fontSize={13} fontWeight={500} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer">
             {hasPassword
               ? t("dashboard:settings.security.changePassword")
               : t("dashboard:settings.security.setPassword")}
-          </button>
-        </div>
+          </Pressable>
+        </Box>
 
-        <div style={{ padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Box paddingVertical={18} paddingHorizontal={20} display="flex" alignItems="center" justifyContent="space-between">
           <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{t("dashboard:settings.security.twoFaLabel")}</div>
-            <div style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 2 }}>{t("dashboard:settings.security.twoFaDesc")}</div>
+            <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{t("dashboard:settings.security.twoFaLabel")}</Text>
+            <Text tag="div" fontSize={12} color="var(--k-text-tertiary)" marginTop={2} display="block">{t("dashboard:settings.security.twoFaDesc")}</Text>
           </div>
-          <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)" }}>{t("dashboard:settings.security.comingSoon")}</span>
-        </div>
-      </div>
+          <Text fontSize={11} color="var(--k-text-tertiary)" font="mono">{t("dashboard:settings.security.comingSoon")}</Text>
+        </Box>
+      </Box>
     </div>
   );
 }
@@ -592,124 +531,16 @@ function ComingSoonSection({ title }: { title: string }) {
   const { t } = useTranslation(["dashboard"]);
   return (
     <div>
-      <h1 style={styles.pageTitle}>{title}</h1>
-      <div style={{ padding: 40, border: "1px dashed var(--k-border)", borderRadius: 12, color: "var(--k-text-tertiary)", fontSize: 14, textAlign: "center" }}>
+      <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} marginTop={0} marginHorizontal={0} marginBottom={24} font="display" color="var(--k-text-primary)" display="block">{title}</Text>
+      <Text tag="div" padding={40} borderWidth={1} borderColor="var(--k-border)" borderRadius={12} color="var(--k-text-tertiary)" fontSize={14} textAlign="center" display="block" borderStyle="dashed">
         {t("dashboard:settings.comingSoon")}
-      </div>
+      </Text>
     </div>
   );
 }
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
-const styles = {
-  pageTitle: {
-    fontSize: 26,
-    fontWeight: 600,
-    letterSpacing: "-0.02em",
-    margin: "0 0 24px",
-    fontFamily: "var(--k-font-display)",
-    color: "var(--k-text-primary)",
-  } as React.CSSProperties,
-  card: {
-    padding: 24,
-    border: "1px solid var(--k-border)",
-    borderRadius: 12,
-    background: "var(--k-bg)",
-  } as React.CSSProperties,
-  label: {
-    display: "block",
-    fontSize: 12,
-    fontWeight: 500,
-    color: "var(--k-text-secondary)",
-    marginBottom: 6,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.04em",
-  } as React.CSSProperties,
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: 500,
-    color: "var(--k-text-secondary)",
-    fontFamily: "var(--k-font-mono)",
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.05em",
-    marginBottom: 12,
-  } as React.CSSProperties,
-  input: {
-    width: "100%",
-    height: 36,
-    padding: "0 10px",
-    borderRadius: 8,
-    border: "1px solid var(--k-border)",
-    background: "var(--k-surface)",
-    color: "var(--k-text-primary)",
-    fontSize: 13,
-    outline: "none",
-    boxSizing: "border-box" as const,
-  } as React.CSSProperties,
-  select: {
-    padding: "6px 10px",
-    border: "1px solid var(--k-border)",
-    borderRadius: 6,
-    fontSize: 13,
-    background: "var(--k-surface)",
-    color: "var(--k-text-primary)",
-  } as React.CSSProperties,
-  wsLogo: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    background: "var(--kairo-color-text)",
-    color: "white",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 20,
-    fontWeight: 600,
-    flexShrink: 0,
-  } as React.CSSProperties,
-  btnPrimary: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "7px 16px",
-    borderRadius: 8,
-    background: "var(--k-accent)",
-    color: "white",
-    fontSize: 13,
-    fontWeight: 500,
-    border: "none",
-    cursor: "pointer",
-  } as React.CSSProperties,
-  btnGhost: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "7px 14px",
-    borderRadius: 8,
-    background: "transparent",
-    color: "var(--k-text-secondary)",
-    fontSize: 13,
-    fontWeight: 500,
-    border: "1px solid var(--k-border)",
-    cursor: "pointer",
-  } as React.CSSProperties,
-  formFooter: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 8,
-    paddingTop: 20,
-    borderTop: "1px solid var(--k-border)",
-  } as React.CSSProperties,
-  msgBanner: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 6,
-    padding: "8px 12px",
-    fontSize: 13,
-  } as React.CSSProperties,
-};
 
 // ── Root component ────────────────────────────────────────────────────────────
 
@@ -721,51 +552,32 @@ export function ProfileSettings({ onViewChange }: Props) {
 
   if (!profile) {
     return (
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" alignItems="center" justifyContent="center">
         <Spinner size="lg" />
-      </div>
+      </Box>
     );
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", height: "100%", overflow: "hidden", background: "var(--k-surface)" }}>
+    <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" height="100%" overflow="hidden" backgroundColor="var(--k-surface)">
       {/* Left nav */}
-      <div style={{ width: 220, borderRight: "1px solid var(--k-border)", padding: "24px 12px", flexShrink: 0, overflowY: "auto" }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", padding: "0 10px", marginBottom: 12 }}>
+      <Box width={220} borderRightWidth={1} borderRightColor="var(--k-border)" paddingVertical={24} paddingHorizontal={12} flexShrink={0} scroll borderStyle="solid">
+        <Text tag="div" fontSize={11} fontWeight={600} color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.88} paddingVertical={0} paddingHorizontal={10} marginBottom={12} display="block">
           {t("dashboard:settings.navHeading")}
-        </div>
+        </Text>
         {navItems.map((item) => {
           const active = section === item.id;
           return (
-            <button
-              key={item.id}
-              onClick={() => setSection(item.id)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "7px 10px",
-                borderRadius: 6,
-                width: "100%",
-                textAlign: "left",
-                background: active ? "var(--k-surface-raised, rgba(0,0,0,0.06))" : "transparent",
-                color: active ? "var(--k-text-primary)" : "var(--k-text-secondary)",
-                fontSize: 13,
-                fontWeight: active ? 500 : 400,
-                marginBottom: 1,
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
+            <Pressable key={item.id} onClick={() => setSection(item.id)} display="flex" alignItems="center" gap={10} paddingVertical={7} paddingHorizontal={10} borderRadius={6} width="100%" textAlign="left" backgroundColor={active ? "var(--k-surface-raised, rgba(0,0,0,0.06))" : "transparent"} color={active ? "var(--k-text-primary)" : "var(--k-text-secondary)"} fontSize={13} fontWeight={active ? 500 : 400} marginBottom={1} borderWidth={0} cursor="pointer">
               <Icon name={item.icon} size={14} />
               <span>{item.label}</span>
-            </button>
+            </Pressable>
           );
         })}
-      </div>
+      </Box>
 
       {/* Content */}
-      <div style={{ flex: 1, padding: "32px 40px 56px", maxWidth: 880, overflowY: "auto" }}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" paddingTop={32} paddingHorizontal={40} paddingBottom={56} maxWidth={880} scroll>
         {section === "workspace" && <WorkspaceSection />}
         {section === "team" && <TeamSection />}
         {section === "integrations" && <IntegrationsSection onViewChange={onViewChange} />}
@@ -775,7 +587,7 @@ export function ProfileSettings({ onViewChange }: Props) {
         {section === "kb" && <ComingSoonSection title={t("dashboard:settings.nav.kb")} />}
         {section === "billing" && <ComingSoonSection title={t("dashboard:settings.nav.billing")} />}
         {section === "api" && <ComingSoonSection title={t("dashboard:settings.nav.api")} />}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

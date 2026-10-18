@@ -36,6 +36,7 @@ const KbdFrame = styled(Stack, {
 const KbdText = styled(Text, {
   name: 'KbdText',
   fontFamily: '$mono',
+  whiteSpace: 'nowrap',
   variants: {
     size: {
       sm: { fontSize: 10.5, color: tokens['text.secondary'] },

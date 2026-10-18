@@ -11,7 +11,7 @@ import { useResizablePanel } from "@/hooks/use-resizable-panel";
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
 import { NotesPanel } from "@/components/triage/NotesPanel";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
-import { Button, Field, FieldTextarea, Icon, Resizer, Skeleton } from "@kairo/ui";
+import { Box, Button, Field, FieldTextarea, Icon, Pressable, Resizer, Skeleton, Text } from "@kairo/ui";
 
 const RESIZE_MIN = 340;
 
@@ -143,15 +143,15 @@ function ClientTab({ loading }: { loading: boolean }) {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <Box display="flex" flexDirection="column" gap={14}>
         <ClientProfileSkeleton />
         <Skeleton height={112} borderRadius={8} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <Box display="flex" flexDirection="column" gap={8}>
           <Skeleton height={9} width={100} />
           <Skeleton height={9} width="90%" />
           <Skeleton height={9} width="80%" />
-        </div>
-      </div>
+        </Box>
+      </Box>
     );
   }
 
@@ -178,77 +178,59 @@ function ClientTab({ loading }: { loading: boolean }) {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <Box display="flex" flexDirection="column" gap={14}>
       <ClientProfileCard />
 
       {/* KPI grid */}
       {clientProfile && (
-        <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1,
-          background: "var(--k-border-subtle)", border: "1px solid var(--k-border)",
-          borderRadius: 8, overflow: "hidden",
-        }}>
+        <Box grid gridTemplateColumns="1fr 1fr" gap={1} backgroundColor="var(--k-border-subtle)" borderWidth={1} borderColor="var(--k-border)" borderRadius={8} overflow="hidden" borderStyle="solid">
           {kpis.map((kpi) => {
             const planStyle = PLAN_STYLE[kpi.value] ?? PLAN_STYLE.unknown;
             return (
-              <div key={kpi.label} style={{ background: "white", padding: 10 }}>
-                <div style={{ fontSize: 10, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <Box key={kpi.label} backgroundColor="white" padding={10}>
+                <Text tag="div" fontSize={10} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.5} display="block">
                   {kpi.label}
-                </div>
+                </Text>
                 {kpi.isBadge ? (
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", borderRadius: 999, marginTop: 4,
-                    padding: "2px 8px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em",
-                    background: planStyle.bg, color: planStyle.color, border: `1px solid ${planStyle.border}`,
-                  }}>
+                  <Text display="inline-flex" alignItems="center" borderRadius={999} marginTop={4} paddingVertical={2} paddingHorizontal={8} fontSize={10} fontWeight={600} textTransform="uppercase" letterSpacing={0.4} backgroundColor={planStyle.bg} color={planStyle.color} borderWidth={1} borderColor={planStyle.border} borderStyle="solid">
                     {kpi.value}
-                  </span>
+                  </Text>
                 ) : (
-                  <div
-                    title={kpi.tooltip}
-                    style={{
-                      fontSize: 14, fontWeight: 500, marginTop: 2,
-                      color: kpi.accent ? "var(--k-accent)" : "var(--k-text-primary)",
-                      cursor: kpi.tooltip ? "default" : undefined,
-                    }}
-                  >
+                  <Text tag="div" title={kpi.tooltip} fontSize={14} fontWeight={500} marginTop={2} color={kpi.accent ? "var(--k-accent)" : "var(--k-text-primary)"} cursor={kpi.tooltip ? "default" : undefined} display="block">
                     {kpi.value}
-                  </div>
+                  </Text>
                 )}
-              </div>
+              </Box>
             );
           })}
-        </div>
+        </Box>
       )}
 
       {/* Last interactions */}
       {clientProfile && clientProfile.recentTickets.length > 0 && (
         <div>
-          <p style={{ fontSize: 10, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 8px" }}>
+          <Text tag="p" fontSize={10} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.5} marginTop={0} marginHorizontal={0} marginBottom={8} display="block">
             {t("ai.lastInteractions")}
-          </p>
+          </Text>
           {clientProfile.recentTickets.slice(0, 3).map((rt, i) => {
             const dateStr = rt.resolved_at ?? rt.created_at;
             const label = dateStr
               ? new Date(dateStr).toLocaleDateString(i18n.language === "en" ? "en-US" : "es-ES", { day: "2-digit", month: "short" })
               : "—";
             return (
-              <div key={rt.id} style={{
-                display: "flex", gap: 10, padding: "8px 0", fontSize: 12,
-                borderTop: i > 0 ? "1px solid var(--k-border-subtle)" : "none",
-              }}>
-                <span style={{ fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", width: 44, flexShrink: 0 }}>
+              <Text tag="div" key={rt.id} display="flex" gap={10} paddingVertical={8} paddingHorizontal={0} fontSize={12} borderTopWidth={i > 0 ? 1 : 0} borderTopColor="var(--k-border-subtle)" borderStyle="solid">
+                <Text font="mono" color="var(--k-text-tertiary)" width={44} flexShrink={0}>
                   {label}
-                </span>
-                <span style={{ color: "var(--k-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                </Text>
+                <Text color="var(--k-text-secondary)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" flexGrow={1} flexShrink={1} flexBasis="0%">
                   {rt.subject ?? "—"}
-                </span>
-              </div>
+                </Text>
+              </Text>
             );
           })}
         </div>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -279,75 +261,69 @@ function SimilarTab({ ticketId, lang }: { ticketId: string | null; lang: string 
 
   if (loading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <Box display="flex" flexDirection="column" gap={8}>
         <Skeleton height={80} borderRadius={8} />
         <Skeleton height={80} borderRadius={8} />
-      </div>
+      </Box>
     );
   }
 
   if (cases.length === 0) {
     return (
-      <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", fontStyle: "italic", margin: 0 }}>
+      <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" fontStyle="italic" margin={0} display="block">
         {t("ai.noSimilarCases")}
-      </p>
+      </Text>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <p style={{ fontSize: 11, color: "var(--k-text-tertiary)", fontFamily: "var(--k-font-mono)", margin: "0 0 4px" }}>
+    <Box display="flex" flexDirection="column" gap={8}>
+      <Text tag="p" fontSize={11} color="var(--k-text-tertiary)" font="mono" marginTop={0} marginHorizontal={0} marginBottom={4} display="block">
         {cases.length} {t("ai.resolvedCases")}
-      </p>
+      </Text>
       {cases.map((c) => (
-        <div key={c.id} style={{ padding: 12, border: "1px solid var(--k-border)", borderRadius: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 11, color: "var(--k-text-tertiary)" }}>
+        <Box key={c.id} padding={12} borderWidth={1} borderColor="var(--k-border)" borderRadius={8} display="flex" flexDirection="column" gap={4} borderStyle="solid">
+          <Box display="flex" alignItems="center" justifyContent="space-between" gap={8}>
+            <Text font="mono" fontSize={11} color="var(--k-text-tertiary)">
               {t("ai.ticketNumber", { number: c.ticket_number })}
-            </span>
+            </Text>
             {formatSim(c.similarity) && (
-              <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 11, color: "var(--kairo-color-ok)", flexShrink: 0 }}>
+              <Text font="mono" fontSize={11} color="var(--kairo-color-ok)" flexShrink={0}>
                 {formatSim(c.similarity)} sim
-              </span>
+              </Text>
             )}
-          </div>
+          </Box>
           {c.subject && (
-            <p style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", lineHeight: 1.35, margin: 0 }}>
+            <Text tag="p" fontSize={13} fontWeight={500} color="var(--k-text-primary)" lineHeight={17.55} margin={0} display="block">
               {c.subject}
-            </p>
+            </Text>
           )}
           {c.resolved_at && (
-            <p style={{ fontSize: 11, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", margin: 0 }}>
+            <Text tag="p" fontSize={11} font="mono" color="var(--k-text-tertiary)" margin={0} display="block">
               {t("ai.resolvedOn")} {formatDate(c.resolved_at, lang)}
-            </p>
+            </Text>
           )}
           {c.resolution_summary && (
             <>
-              <button
-                style={{ fontSize: 11, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}
-                onClick={() => setExpandedCase((p) => (p === c.id ? null : c.id))}
-              >
+              <Pressable onClick={() => setExpandedCase((p) => (p === c.id ? null : c.id))} fontSize={11} fontWeight={500} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={0} textAlign="left">
                 {expandedCase === c.id ? t("ai.hideResolution") : t("ai.viewResolution")} →
-              </button>
+              </Pressable>
               {expandedCase === c.id && (
                 <>
-                  <p style={{ marginTop: 4, borderRadius: 6, background: "var(--k-surface)", padding: "8px 10px", fontSize: 12, lineHeight: 1.55, color: "var(--k-text-secondary)" }}>
+                  <Text tag="p" marginTop={4} borderRadius={6} backgroundColor="var(--k-surface)" paddingVertical={8} paddingHorizontal={10} fontSize={12} lineHeight={18.6} color="var(--k-text-secondary)" display="block">
                     {c.resolution_summary}
-                  </p>
-                  <button
-                    style={{ fontSize: 11, color: "var(--k-accent)", fontWeight: 500, background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left", display: "flex", alignItems: "center", gap: 4 }}
-                    onClick={() => setSuggestedReply(c.resolution_summary!)}
-                  >
+                  </Text>
+                  <Pressable onClick={() => setSuggestedReply(c.resolution_summary!)} fontSize={11} color="var(--k-accent)" fontWeight={500} backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={0} textAlign="left" display="flex" alignItems="center" gap={4}>
                     <Icon name="note" size={12} />
                     {t("ai.useInReply")}
-                  </button>
+                  </Pressable>
                 </>
               )}
             </>
           )}
-        </div>
+        </Box>
       ))}
-    </div>
+    </Box>
   );
 }
 
@@ -377,58 +353,52 @@ function ArticlesTab({ ticketId }: { ticketId: string | null }) {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <Box display="flex" flexDirection="column" gap={8}>
         <Skeleton height={72} borderRadius={8} />
         <Skeleton height={72} borderRadius={8} />
-      </div>
+      </Box>
     );
   }
 
   if (!ticketId || articles.length === 0) {
     return (
-      <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", fontStyle: "italic", margin: 0 }}>
+      <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" fontStyle="italic" margin={0} display="block">
         {t("ai.noKbArticles")}
-      </p>
+      </Text>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <Box display="flex" flexDirection="column" gap={6}>
       {articles.map((article) => (
-        <div
-          key={article.id}
-          style={{ borderRadius: 8, border: "1px solid var(--k-border)", borderLeft: "3px solid var(--k-accent)", padding: "10px 10px 10px 12px", display: "flex", flexDirection: "column", gap: 6 }}
-        >
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--k-text-primary)", lineHeight: 1.35, display: "flex", alignItems: "center", gap: 6 }}>
-              <Icon name="knowledge" size={13} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
+        <Box key={article.id} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" borderLeftWidth={3} borderLeftColor="var(--k-accent)" paddingTop={10} paddingRight={10} paddingBottom={10} paddingLeft={12} display="flex" flexDirection="column" gap={6} borderStyle="solid">
+          <Box display="flex" alignItems="flex-start" justifyContent="space-between" gap={8}>
+            <Text fontSize={13} fontWeight={500} color="var(--k-text-primary)" lineHeight={17.55} display="flex" alignItems="center" gap={6}>
+              <Icon name="knowledge" size={13} color="var(--k-text-tertiary)" />
               {article.title}
-            </span>
+            </Text>
             {formatSim(article.similarity) && (
-              <span style={{ flexShrink: 0, fontSize: 10, fontFamily: "var(--k-font-mono)", padding: "2px 6px", borderRadius: 4, background: "var(--k-accent-subtle)", color: "var(--k-accent)" }}>
+              <Text flexShrink={0} fontSize={10} font="mono" paddingVertical={2} paddingHorizontal={6} borderRadius={4} backgroundColor="var(--k-accent-subtle)" color="var(--k-accent)">
                 {formatSim(article.similarity)}
-              </span>
+              </Text>
             )}
-          </div>
+          </Box>
           {article.tags && article.tags.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            <Box display="flex" flexWrap="wrap" gap={4}>
               {article.tags.map((tag) => (
-                <span key={tag} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 999, background: "var(--k-surface-2)", color: "var(--k-text-tertiary)" }}>
+                <Text key={tag} fontSize={10} paddingVertical={2} paddingHorizontal={6} borderRadius={999} backgroundColor="var(--k-surface-2)" color="var(--k-text-tertiary)">
                   {tag}
-                </span>
+                </Text>
               ))}
-            </div>
+            </Box>
           )}
-          <button
-            style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, color: "var(--k-accent)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-            onClick={() => setSuggestedReply(article.content)}
-          >
+          <Pressable onClick={() => setSuggestedReply(article.content)} display="flex" alignItems="center" gap={4} fontSize={11} fontWeight={500} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={0}>
             <Icon name="note" size={12} />
             {t("ai.useInReply")}
-          </button>
-        </div>
+          </Pressable>
+        </Box>
       ))}
-    </div>
+    </Box>
   );
 }
 
@@ -490,75 +460,75 @@ function EscalateTab({
 
   if (!ticketId) {
     return (
-      <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", fontStyle: "italic", margin: 0 }}>
+      <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" fontStyle="italic" margin={0} display="block">
         {t("ai.noEscalationSignals")}
-      </p>
+      </Text>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <Box display="flex" flexDirection="column" gap={12}>
 
       {/* Escalation reasons */}
-      <div style={{ borderRadius: 8, border: "1px solid var(--k-border)", borderLeft: `3px solid ${SEVERITY_BORDER[sev]}`, padding: 12 }}>
-        <p style={{ fontSize: 12, fontWeight: 500, color: sev === "none" ? "var(--k-text-secondary)" : "var(--kairo-color-bad-ink)", margin: "0 0 8px" }}>
+      <Box borderRadius={8} borderWidth={1} borderColor="var(--k-border)" borderLeftWidth={3} borderLeftColor={SEVERITY_BORDER[sev]} padding={12} borderStyle="solid">
+        <Text tag="p" fontSize={12} fontWeight={500} color={sev === "none" ? "var(--k-text-secondary)" : "var(--kairo-color-bad-ink)"} marginTop={0} marginHorizontal={0} marginBottom={8} display="block">
           {t("ai.escalationSuggested")}
-        </p>
+        </Text>
         {reasonsLoading ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <Box display="flex" flexDirection="column" gap={6}>
             <Skeleton height={10} width="80%" />
             <Skeleton height={10} width="60%" />
-          </div>
+          </Box>
         ) : reasons.length === 0 ? (
-          <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", fontStyle: "italic", margin: 0 }}>
+          <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" fontStyle="italic" margin={0} display="block">
             {t("ai.noEscalationSignals")}
-          </p>
+          </Text>
         ) : (
           <>
             {conf > 0.80 && (
-              <p style={{ fontSize: 10, fontWeight: 600, color: "var(--kairo-color-ok)", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 8px" }}>
+              <Text tag="p" fontSize={10} fontWeight={600} color="var(--kairo-color-ok)" textTransform="uppercase" letterSpacing={0.4} marginTop={0} marginHorizontal={0} marginBottom={8} display="block">
                 {t("ai.highConfidence")}
-              </p>
+              </Text>
             )}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <Box display="flex" flexWrap="wrap" gap={6}>
               {reasons.map((r) => {
                 const chip = SEVERITY_CHIP[r.severity] ?? SEVERITY_CHIP.low;
                 return (
-                  <span key={r.id} style={{ display: "inline-flex", alignItems: "center", borderRadius: 999, padding: "2px 8px", fontSize: 11, fontWeight: 500, background: chip.bg, color: chip.color, border: `1px solid ${chip.border}` }}>
+                  <Text key={r.id} display="inline-flex" alignItems="center" borderRadius={999} paddingVertical={2} paddingHorizontal={8} fontSize={11} fontWeight={500} backgroundColor={chip.bg} color={chip.color} borderWidth={1} borderColor={chip.border} borderStyle="solid">
                     {lang === "en" ? r.label_en : r.label_es}
-                  </span>
+                  </Text>
                 );
               })}
-            </div>
+            </Box>
           </>
         )}
-      </div>
+      </Box>
 
       {/* Escalation packet */}
       {escalatedAt ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--kairo-color-ok)", fontWeight: 500 }}>
+        <Text tag="div" display="flex" alignItems="center" gap={6} fontSize={12} color="var(--kairo-color-ok)" fontWeight={500}>
           <Icon name="resolve" size={13} />
           <span>{t("ai.escalatedSuccess")} {escalatedAt}</span>
-        </div>
+        </Text>
       ) : (
         <>
           {/* Context summary */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+          <Box grid gridTemplateColumns="1fr 1fr 1fr" gap={6}>
             {([
               { labelKey: "ai.customer", value: customer },
               { labelKey: "ai.workflow", value: selectedTicketCategory ?? "—" },
               { labelKey: "ai.status",   value: selectedTicketStatus   ?? "—" },
             ] as const).map(({ labelKey, value }) => (
-              <div key={labelKey} style={{ borderRadius: 6, padding: "8px 6px", textAlign: "center", background: "var(--k-surface)", border: "1px solid var(--k-border-subtle)" }}>
-                <p style={{ fontSize: 10, color: "var(--k-text-tertiary)", margin: "0 0 2px", fontFamily: "var(--k-font-mono)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              <Text tag="div" key={labelKey} borderRadius={6} paddingVertical={8} paddingHorizontal={6} textAlign="center" backgroundColor="var(--k-surface)" borderWidth={1} borderColor="var(--k-border-subtle)" display="block" borderStyle="solid">
+                <Text tag="p" fontSize={10} color="var(--k-text-tertiary)" marginTop={0} marginHorizontal={0} marginBottom={2} font="mono" textTransform="uppercase" letterSpacing={0.4} display="block">
                   {t(labelKey)}
-                </p>
-                <p style={{ fontSize: 11, fontWeight: 500, color: "var(--k-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+                </Text>
+                <Text tag="p" fontSize={11} fontWeight={500} color="var(--k-text-primary)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
                   {value}
-                </p>
-              </div>
+                </Text>
+              </Text>
             ))}
-          </div>
+          </Box>
 
           {editMode && (
             <Field label={t("ai.escalationReason")}>
@@ -571,7 +541,7 @@ function EscalateTab({
             </Field>
           )}
 
-          <div style={{ display: "flex", gap: 6 }}>
+          <Box display="flex" gap={6}>
             {editMode ? (
               <>
                 <Button flex={1} onPress={() => setEditMode(false)}>
@@ -591,10 +561,10 @@ function EscalateTab({
                 </Button>
               </>
             )}
-          </div>
+          </Box>
         </>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -672,11 +642,11 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   });
 
   return (
-    <div ref={panelRef} style={{ position: "relative", width, flexShrink: 0, display: "flex", flexDirection: "column", height: "100%", borderLeft: "1px solid var(--k-border)", background: "white" }}>
+    <Box ref={panelRef} position="relative" width={width} flexShrink={0} display="flex" flexDirection="column" height="100%" borderLeftWidth={1} borderLeftColor="var(--k-border)" borderStyle="solid" backgroundColor="white">
 
       {/* Resize handle — drag the left edge to widen (steals from center only);
           double-click to reset to the minimum width. */}
-      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 5, display: "flex" }}>
+      <Box position="absolute" left={0} top={0} bottom={0} zIndex={5} display="flex">
         <Resizer
           label={t("ai.resizeHint")}
           value={width}
@@ -687,80 +657,39 @@ export function AiAssistant({ customer }: AiAssistantProps) {
           onCommit={commit}
           onReset={reset}
         />
-      </div>
+      </Box>
 
       {/* Tab bar */}
-      <div style={{ padding: "12px 14px 0", flexShrink: 0 }}>
-        <div style={{ display: "flex", borderBottom: "1px solid var(--k-border)" }}>
+      <Box paddingTop={12} paddingHorizontal={14} paddingBottom={0} flexShrink={0}>
+        <Box display="flex" borderBottomWidth={1} borderBottomColor="var(--k-border)" borderStyle="solid">
           {tabs.map(({ id, label, disabled }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => !disabled && setActiveTab(id)}
-              disabled={disabled}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                fontSize: 12,
-                padding: "8px 10px",
-                fontWeight: activeTab === id ? 500 : 400,
-                color: disabled
+            <Pressable key={id} type="button" onClick={() => !disabled && setActiveTab(id)} disabled={disabled} display="flex" alignItems="center" gap={5} fontSize={12} paddingVertical={8} paddingHorizontal={10} fontWeight={activeTab === id ? 500 : 400} color={disabled
                   ? "var(--k-text-disabled, #C0C0C0)"
-                  : activeTab === id ? "var(--k-text-primary)" : "var(--k-text-tertiary)",
-                borderBottom: `2px solid ${activeTab === id ? "var(--k-accent)" : "transparent"}`,
-                marginBottom: -1,
-                background: "none",
-                border: "none",
-                borderBottomStyle: "solid",
-                cursor: disabled ? "not-allowed" : "pointer",
-                whiteSpace: "nowrap",
-                transition: "color 0.1s",
-                opacity: disabled ? 0.5 : 1,
-              }}
-            >
+                  : activeTab === id ? "var(--k-text-primary)" : "var(--k-text-tertiary)"} borderBottomWidth={2} borderBottomColor={activeTab === id ? "var(--k-accent)" : "transparent"} marginBottom={-1} backgroundColor="transparent" cursor={disabled ? "not-allowed" : "pointer"} whiteSpace="nowrap" transition="color 0.1s" opacity={disabled ? 0.5 : 1} borderStyle="solid">
               {/* `ai` dot commented out — only ever set on the assistant tab, no
                   tooltip/label explaining what it means, no clear value as-is.
                   Pending: reuse this visual for an actual "in testing"/special-tab
                   indicator if that's ever a real need, instead of an unexplained dot. */}
-              {/* {ai && (
-                <span style={{ width: 5, height: 5, borderRadius: 999, flexShrink: 0, background: "var(--k-gradient-ai)" }} />
-              )} */}
               {label}
               {/* KAI-232 — unread mentions on this ticket's notes (spec E2). */}
               {id === "notes" && notesBadge > 0 && (
-                <span
-                  style={{
-                    minWidth: 15,
-                    height: 15,
-                    padding: "0 4px",
-                    borderRadius: 999,
-                    background: "var(--k-mention-solid)",
-                    color: "white",
-                    fontFamily: "var(--k-font-mono)",
-                    fontSize: 9,
-                    fontWeight: 600,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
+                <Text minWidth={15} height={15} paddingVertical={0} paddingHorizontal={4} borderRadius={999} backgroundColor="var(--k-mention-solid)" color="white" font="mono" fontSize={9} fontWeight={600} display="inline-flex" alignItems="center" justifyContent="center">
                   {notesBadge}
-                </span>
+                </Text>
               )}
-            </button>
+            </Pressable>
           ))}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* Tab content — the Assistant chat owns full height (internal scroll +
           pinned composer); the other tabs use a padded, scrollable container. */}
       {assistantTabEnabled && activeTab === "assistant" ? (
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} display="flex" flexDirection="column">
           <AssistantPanel />
-        </div>
+        </Box>
       ) : (
-      <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll padding={14}>
         {clientTabEnabled && activeTab === "client" && (
           <ClientTab loading={profileLoading} />
         )}
@@ -782,8 +711,8 @@ export function AiAssistant({ customer }: AiAssistantProps) {
         {INTERNAL_NOTES_ENABLED && activeTab === "notes" && (
           <NotesPanel ticketId={selectedTicketId} onNewNote={requestComposeNote} />
         )}
-      </div>
+      </Box>
       )}
-    </div>
+    </Box>
   );
 }

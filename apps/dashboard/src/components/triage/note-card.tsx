@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Avatar, Icon } from "@kairo/ui";
+import { Avatar, Box, Icon, Text } from "@kairo/ui";
 import { NoteBody } from "./note-body";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 
@@ -39,40 +39,8 @@ export function NoteCard({ note, onJump }: NoteCardProps) {
   const borderColor = unread || raised ? "var(--k-note-border-hover)" : "var(--k-note-border)";
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onJump(note.id)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onJump(note.id);
-        }
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      title={t("notes.jump", "View in thread")}
-      style={{
-        position: "relative",
-        display: "block",
-        width: "100%",
-        textAlign: "left",
-        font: "inherit",
-        padding: "10px 12px",
-        borderRadius: 8,
-        marginBottom: 8,
-        background: unread ? "var(--k-note-bg-strong)" : "var(--k-note-bg)",
-        border: `1px solid ${borderColor}`,
-        borderLeft: unread ? "2px solid var(--k-mention-solid)" : `1px solid ${borderColor}`,
-        boxShadow: raised ? "0 2px 8px rgba(146,64,14,0.10)" : "none",
-        transform: raised ? "translateY(-1px)" : "none",
-        cursor: "pointer",
-        transition: "all .12s ease",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+    <Text tag="div" role="button" tabIndex={0} onClick={() => onJump(note.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onJump(note.id); } }} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} title={t("notes.jump", "View in thread")} position="relative" display="block" width="100%" textAlign="left" paddingVertical={10} paddingHorizontal={12} borderRadius={8} marginBottom={8} backgroundColor={unread ? "var(--k-note-bg-strong)" : "var(--k-note-bg)"} borderWidth={1} borderStyle="solid" borderColor={borderColor} borderLeftWidth={unread ? 2 : 1} borderLeftColor={unread ? "var(--k-mention-solid)" : borderColor} boxShadow={raised ? "0 2px 8px rgba(146,64,14,0.10)" : "none"} transform={raised ? "translateY(-1px)" : "none"} cursor="pointer" transition="all .12s ease">
+      <Box display="flex" alignItems="center" gap={7} marginBottom={6}>
         <Avatar
           name={note.sender_display_name}
           email={note.sender_external_id}
@@ -80,93 +48,38 @@ export function NoteCard({ note, onJump }: NoteCardProps) {
           size={20}
           ring={unread}
         />
-        <span
-          style={{
-            fontSize: 12.5,
-            fontWeight: unread ? 600 : 500,
-            color: "var(--k-note-text-strong)",
-          }}
-        >
+        <Text fontSize={12.5} fontWeight={unread ? 600 : 500} color="var(--k-note-text-strong)">
           {authorLabel}
-        </span>
+        </Text>
         {unread && (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              padding: "1px 5px",
-              borderRadius: 3,
-              background: "var(--k-mention-solid)",
-              color: "white",
-              fontFamily: "var(--k-font-mono)",
-              fontSize: 9,
-              fontWeight: 600,
-              letterSpacing: "0.04em",
-            }}
-          >
+          <Text display="inline-flex" alignItems="center" paddingVertical={1} paddingHorizontal={5} borderRadius={3} backgroundColor="var(--k-mention-solid)" color="white" font="mono" fontSize={9} fontWeight={600} letterSpacing={0.36}>
             {t("notes.mentionedYou", "MENTIONED YOU")}
-          </span>
+          </Text>
         )}
-        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-          <span
-            style={{
-              fontFamily: "var(--k-font-mono)",
-              fontSize: 10,
-              color: unread ? "var(--k-note-label)" : "#B98A3E",
-            }}
-          >
+        <Text marginLeft="auto" display="flex" alignItems="center" gap={6}>
+          <Text font="mono" fontSize={10} color={unread ? "var(--k-note-label)" : "#B98A3E"}>
             {note.received_at ? new Date(note.received_at).toLocaleString(i18n.language) : ""}
-          </span>
+          </Text>
           {unread && (
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: 999,
-                background: "var(--k-mention-solid)",
-                flexShrink: 0,
-              }}
-            />
+            <Text width={6} height={6} borderRadius={999} backgroundColor="var(--k-mention-solid)" flexShrink={0} />
           )}
-        </span>
-      </div>
+        </Text>
+      </Box>
 
       <NoteBody
         body={note.body_plain ?? note.snippet ?? null}
         mentions={note.mentions}
-        style={{
-          fontSize: 12.5,
-          lineHeight: 1.55,
-          color: unread ? "var(--k-note-text-strong)" : "var(--k-note-text)",
-        }}
+        fontSize={12.5} lineHeightRatio={1.55} color={unread ? "var(--k-note-text-strong)" : "var(--k-note-text)"}
       />
 
       {raised && (
-        <div
-          style={{
-            marginTop: 8,
-            paddingTop: 7,
-            borderTop: "1px dashed var(--k-note-border)",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "var(--k-font-mono)",
-              fontSize: 10,
-              color: "var(--k-note-label)",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
+        <Box marginTop={8} paddingTop={7} borderTopWidth={1} borderTopColor="var(--k-note-border)" display="flex" alignItems="center" gap={6} borderStyle="dashed">
+          <Text font="mono" fontSize={10} color="var(--k-note-label)" display="flex" alignItems="center" gap={4}>
             <Icon name="arrow" size={10} />
             {t("notes.jump", "View in thread")}
-          </span>
-        </div>
+          </Text>
+        </Box>
       )}
-    </div>
+    </Text>
   );
 }

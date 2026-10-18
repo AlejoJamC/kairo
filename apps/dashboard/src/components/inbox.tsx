@@ -11,6 +11,7 @@ import { TicketList } from "./ticket-list";
 import { TicketDetail } from "./ticket-detail";
 import { AiAssistant } from "./ai-assistant";
 import type { TicketPriority, PrioritySlaConfig } from "@kairo/types";
+import { Box } from "@kairo/ui";
 
 export function Inbox() {
   const { user, accountId } = useAuth();
@@ -62,9 +63,9 @@ export function Inbox() {
 
   return (
     <>
-      <div className="flex w-[360px] flex-col border-r bg-white" style={{ flexShrink: 0, borderRight: "1px solid var(--k-border)" }}>
+      <Box width={360} display="flex" flexDirection="column" backgroundColor="white" flexShrink={0} borderRightWidth={1} borderRightColor="var(--k-border)" borderStyle="solid">
         <TicketList />
-      </div>
+      </Box>
       <TicketDetail />
       <AiAssistant
         customer={selectedTicket?.from_name ?? selectedTicket?.from_email ?? "—"}

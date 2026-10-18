@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@kairo/client-core/auth";
 import { listChannels, deleteChannel, startGmailConnect } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
-import { Icon, Spinner } from "@kairo/ui";
+import { Box, Icon, Pressable, Spinner, Text } from "@kairo/ui";
 
 interface SupportChannel {
   id: string;
@@ -62,114 +62,85 @@ export function ChannelsSettings({ onViewChange }: Props) {
   };
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", background: "var(--k-bg)", padding: "32px 40px" }}>
+    <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll backgroundColor="var(--k-bg)" paddingVertical={32} paddingHorizontal={40}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button
-          onClick={() => onViewChange("settings")}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", padding: 4, borderRadius: 6, display: "flex" }}
-        >
+      <Box display="flex" alignItems="center" gap={12} marginBottom={28}>
+        <Pressable onClick={() => onViewChange("settings")} backgroundColor="transparent" borderWidth={0} cursor="pointer" color="var(--k-text-tertiary)" padding={4} borderRadius={6} display="flex">
           <Icon name="back" size={18} />
-        </button>
+        </Pressable>
         <div>
-          <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--k-text-primary)" }}>
+          <Text tag="h1" fontSize={18} fontWeight={600} margin={0} color="var(--k-text-primary)" display="block">
             Support Channels
-          </h1>
-          <p style={{ fontSize: 13, color: "var(--k-text-tertiary)", margin: "4px 0 0" }}>
+          </Text>
+          <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" marginTop={4} marginHorizontal={0} marginBottom={0} display="block">
             Email inboxes connected to this account as support channels.
-          </p>
+          </Text>
         </div>
-      </div>
+      </Box>
 
       {/* Error */}
       {error && (
-        <div style={{ display: "flex", gap: 8, alignItems: "center", background: "var(--kairo-color-bad-soft)", border: "1px solid var(--kairo-color-bad-line)", borderRadius: 8, padding: "10px 14px", marginBottom: 20 }}>
+        <Box display="flex" gap={8} alignItems="center" backgroundColor="var(--kairo-color-bad-soft)" borderWidth={1} borderColor="var(--kairo-color-bad-line)" borderRadius={8} paddingVertical={10} paddingHorizontal={14} marginBottom={20} borderStyle="solid">
           <Icon name="alert" size={15} color="var(--kairo-color-bad)" />
-          <p style={{ fontSize: 13, color: "var(--kairo-color-bad-ink)", margin: 0 }}>{error}</p>
-        </div>
+          <Text tag="p" fontSize={13} color="var(--kairo-color-bad-ink)" margin={0} display="block">{error}</Text>
+        </Box>
       )}
 
       {/* Channel list */}
-      <div style={{ background: "var(--k-surface)", border: "1px solid var(--k-border)", borderRadius: 10, overflow: "hidden", marginBottom: 20 }}>
+      <Box backgroundColor="var(--k-surface)" borderWidth={1} borderColor="var(--k-border)" borderRadius={10} overflow="hidden" marginBottom={20} borderStyle="solid">
         {loading ? (
-          <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
+          <Box display="flex" justifyContent="center" padding={32}>
             <Spinner size="lg" />
-          </div>
+          </Box>
         ) : channels.length === 0 ? (
-          <div style={{ padding: 32, textAlign: "center" }}>
-            <Icon name="mail" size={28} color="var(--k-text-tertiary)" style={{ marginBottom: 8 }} />
-            <p style={{ fontSize: 14, color: "var(--k-text-secondary)", margin: 0 }}>
+          <Text tag="div" padding={32} textAlign="center" display="block">
+            <Icon name="mail" size={28} color="var(--k-text-tertiary)" marginBottom={8} />
+            <Text tag="p" fontSize={14} color="var(--k-text-secondary)" margin={0} display="block">
               No channels connected yet.
-            </p>
-            <p style={{ fontSize: 13, color: "var(--k-text-tertiary)", margin: "4px 0 0" }}>
+            </Text>
+            <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" marginTop={4} marginHorizontal={0} marginBottom={0} display="block">
               Connect a Gmail inbox to start receiving support tickets.
-            </p>
-          </div>
+            </Text>
+          </Text>
         ) : (
           channels.map((ch, i) => (
-            <div
-              key={ch.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "14px 18px",
-                borderBottom: i < channels.length - 1 ? "1px solid var(--k-border)" : "none",
-              }}
-            >
+            <Box key={ch.id} display="flex" alignItems="center" gap={12} paddingVertical={14} paddingHorizontal={18} borderBottomWidth={i < channels.length - 1 ? 1 : 0} borderBottomColor="var(--k-border)" borderStyle="solid">
               <Icon name="mail" size={16} color="var(--k-text-tertiary)" />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>
+              <Box flexGrow={1} flexShrink={1} flexBasis="0%">
+                <Box display="flex" alignItems="center" gap={6}>
+                  <Text fontSize={14} fontWeight={500} color="var(--k-text-primary)">
                     {ch.email_address}
-                  </span>
+                  </Text>
                   {ch.is_primary && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "var(--kairo-color-warn)", fontWeight: 500 }}>
+                    <Text display="flex" alignItems="center" gap={3} fontSize={11} color="var(--kairo-color-warn)" fontWeight={500}>
                       <Icon name="star" size={10} color="var(--kairo-color-warn)" fill="var(--kairo-color-warn)" /> Primary
-                    </span>
+                    </Text>
                   )}
-                </div>
-                <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", margin: "2px 0 0", textTransform: "capitalize" }}>
+                </Box>
+                <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" marginTop={2} marginHorizontal={0} marginBottom={0} textTransform="capitalize" display="block">
                   {ch.channel_type} · Connected {new Date(ch.connected_at).toLocaleDateString()}
-                </p>
-              </div>
-              <button
-                onClick={() => handleDisconnect(ch.id)}
-                disabled={disconnecting === ch.id}
-                title="Disconnect channel"
-                style={{
-                  background: "none", border: "none", cursor: disconnecting === ch.id ? "not-allowed" : "pointer",
-                  color: "var(--k-text-tertiary)", padding: 6, borderRadius: 6, display: "flex",
-                  opacity: disconnecting === ch.id ? 0.5 : 1,
-                }}
-              >
+                </Text>
+              </Box>
+              <Pressable onClick={() => handleDisconnect(ch.id)} disabled={disconnecting === ch.id} title="Disconnect channel" backgroundColor="transparent" borderWidth={0} cursor={disconnecting === ch.id ? "not-allowed" : "pointer"} color="var(--k-text-tertiary)" padding={6} borderRadius={6} display="flex" opacity={disconnecting === ch.id ? 0.5 : 1}>
                 {disconnecting === ch.id
                   ? <Spinner />
                   : <Icon name="trash" size={14} />
                 }
-              </button>
-            </div>
+              </Pressable>
+            </Box>
           ))
         )}
-      </div>
+      </Box>
 
       {/* Connect Gmail button */}
-      <button
-        onClick={handleConnectGmail}
-        style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "10px 16px", borderRadius: 8,
-          border: "1px solid var(--k-border)", background: "var(--k-surface)",
-          cursor: "pointer", fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)",
-        }}
-      >
+      <Pressable onClick={handleConnectGmail} display="flex" alignItems="center" gap={8} paddingVertical={10} paddingHorizontal={16} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--k-surface)" cursor="pointer" fontSize={14} fontWeight={500} color="var(--k-text-primary)" borderStyle="solid">
         <Icon name="plus" size={16} />
         Connect Gmail inbox
-      </button>
+      </Pressable>
 
-      <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 12 }}>
+      <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" marginTop={12} display="block">
         Outlook, IMAP, and custom channels coming soon.
-      </p>
-    </div>
+      </Text>
+    </Box>
   );
 }

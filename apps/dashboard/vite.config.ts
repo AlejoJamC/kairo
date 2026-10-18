@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 import { tamaguiPlugin } from '@tamagui/vite-plugin'
 import path from 'path'
 
@@ -11,7 +10,6 @@ export default defineConfig({
   envDir: '../../',
   plugins: [
     react(),
-    tailwindcss(),
     tamaguiPlugin({
       config: path.resolve(__dirname, '../../packages/ui/tamagui.config.ts'),
       components: ['@tamagui/core'],

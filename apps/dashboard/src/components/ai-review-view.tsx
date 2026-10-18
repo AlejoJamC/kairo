@@ -9,7 +9,7 @@ import { AiAssistant } from "@/components/ai-assistant";
 import { TicketCard } from "@/components/ticket-card";
 import type { AppView } from "@/types";
 import type { Ticket } from "@kairo/types";
-import { Icon, Spinner } from "@kairo/ui";
+import { Box, Button, Chip, Icon, Spinner, Text } from "@kairo/ui";
 
 type ProposalFilter = "pending" | "auto_approved";
 
@@ -81,61 +81,38 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
 
   const showDetailPane = selected !== null;
 
-  const tabStyle = (active: boolean) => ({
-    padding: "6px 12px",
-    fontSize: 13,
-    fontWeight: 500,
-    borderRadius: 6,
-    border: "1px solid var(--k-border)",
-    cursor: "pointer",
-    background: active ? "var(--k-text-primary)" : "white",
-    color: active ? "white" : "var(--k-text-secondary)",
-  });
-
   const listPane = (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        background: "var(--k-surface)",
-        width: showDetailPane ? 360 : undefined,
-        minWidth: showDetailPane ? 360 : undefined,
-        flex: showDetailPane ? undefined : 1,
-        borderRight: showDetailPane ? "1px solid var(--k-border)" : undefined,
-        flexShrink: 0,
-      }}
-    >
-      <div style={{ borderBottom: "1px solid var(--k-border)", background: "white", padding: "16px 24px", flexShrink: 0 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 600, color: "var(--k-text-primary)", letterSpacing: "-0.01em", fontFamily: "var(--k-font-display)", margin: 0 }}>
+    <Box display="flex" flexDirection="column" overflow="hidden" backgroundColor="var(--k-surface)" width={showDetailPane ? 360 : undefined} minWidth={showDetailPane ? 360 : undefined} flex={showDetailPane ? undefined : 1} borderRightWidth={showDetailPane ? 1 : 0} borderRightColor="var(--k-border)" flexShrink={0} borderStyle="solid">
+      <Box borderBottomWidth={1} borderBottomColor="var(--k-border)" backgroundColor="white" paddingVertical={16} paddingHorizontal={24} flexShrink={0} borderStyle="solid">
+        <Text tag="h1" fontSize={18} fontWeight={600} color="var(--k-text-primary)" letterSpacing={-0.18} font="display" margin={0} display="block">
           {t("aiReviewView.title")}
-        </h1>
-        <p style={{ marginTop: 2, fontSize: 13, color: "var(--k-text-tertiary)" }}>
+        </Text>
+        <Text tag="p" marginTop={2} fontSize={13} color="var(--k-text-tertiary)" display="block">
           {t("aiReviewView.subtitle")}
-        </p>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button type="button" style={tabStyle(filter === "pending")} onClick={() => setFilter("pending")}>
+        </Text>
+        <Box display="flex" gap={8} marginTop={12}>
+          <Chip selected={filter === "pending"} onPress={() => setFilter("pending")}>
             {t("aiReviewView.tabPending")}
-          </button>
-          <button type="button" style={tabStyle(filter === "auto_approved")} onClick={() => setFilter("auto_approved")}>
+          </Chip>
+          <Chip selected={filter === "auto_approved"} onPress={() => setFilter("auto_approved")}>
             {t("aiReviewView.tabAutoApproved")}
-          </button>
-        </div>
-      </div>
+          </Chip>
+        </Box>
+      </Box>
 
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll paddingBottom={8}>
         {loading && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
+          <Box display="flex" alignItems="center" justifyContent="center" paddingTop={64}>
             <Spinner size="lg" />
-          </div>
+          </Box>
         )}
 
         {!loading && proposals.length === 0 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 80, textAlign: "center" }}>
-            <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>
+          <Text tag="div" display="flex" flexDirection="column" alignItems="center" justifyContent="center" paddingTop={80} textAlign="center">
+            <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" display="block">
               {t(filter === "pending" ? "aiReviewView.emptyPending" : "aiReviewView.emptyAutoApproved")}
-            </p>
-          </div>
+            </Text>
+          </Text>
         )}
 
         {!loading &&
@@ -147,8 +124,8 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
               onSelect={() => openThread(proposal)}
             />
           ))}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 
   if (!selected) return listPane;
@@ -160,63 +137,46 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
     [t("aiReviewView.fieldTone"), selected.proposed_sentiment],
   ];
 
-  const buttonStyle = (primary: boolean) => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "6px 14px",
-    fontSize: 13,
-    fontWeight: 500,
-    borderRadius: 6,
-    cursor: busy ? "not-allowed" : "pointer",
-    opacity: busy ? 0.6 : 1,
-    border: "1px solid var(--k-border)",
-    background: primary ? "var(--k-text-primary)" : "white",
-    color: primary ? "white" : "var(--k-text-primary)",
-  });
-
   return (
     <>
       {listPane}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
-        <div style={{ borderBottom: "1px solid var(--k-border)", background: "white", padding: "12px 24px", flexShrink: 0 }}>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--k-text-primary)" }}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" flexDirection="column" minWidth={0} overflow="hidden">
+        <Box borderBottomWidth={1} borderBottomColor="var(--k-border)" backgroundColor="white" paddingVertical={12} paddingHorizontal={24} flexShrink={0} borderStyle="solid">
+          <Text tag="p" margin={0} fontSize={13} fontWeight={600} color="var(--k-text-primary)" display="block">
             {t("aiReviewView.proposalTitle")}
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 20px", marginTop: 6, fontSize: 13, color: "var(--k-text-secondary)" }}>
+          </Text>
+          <Text tag="div" display="flex" flexWrap="wrap" rowGap={4} columnGap={20} marginTop={6} fontSize={13} color="var(--k-text-secondary)">
             {fields.map(([label, value]) => (
               <span key={label}>
-                <span style={{ color: "var(--k-text-tertiary)" }}>{label}: </span>
+                <Text color="var(--k-text-tertiary)">{label}: </Text>
                 {value ?? "—"}
               </span>
             ))}
             <span>
-              <span style={{ color: "var(--k-text-tertiary)" }}>{t("aiReviewView.fieldConfidence")}: </span>
+              <Text color="var(--k-text-tertiary)">{t("aiReviewView.fieldConfidence")}: </Text>
               {Math.round(selected.confidence_score * 100)}%
             </span>
             <span>
-              <span style={{ color: "var(--k-text-tertiary)" }}>{t("aiReviewView.fieldModel")}: </span>
+              <Text color="var(--k-text-tertiary)">{t("aiReviewView.fieldModel")}: </Text>
               {selected.model_version}
             </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-            <button type="button" disabled={busy} style={buttonStyle(true)} onClick={() => void review(selected, "confirm")}>
-              <Icon name="check" size={14} />
+          </Text>
+          <Box display="flex" alignItems="center" gap={8} marginTop={10}>
+            <Button variant="primary" disabled={busy} icon={<Icon name="check" size={14} />} onPress={() => void review(selected, "confirm")}>
               {t("aiReviewView.confirm")}
-            </button>
-            <button type="button" disabled={busy} style={buttonStyle(false)} onClick={() => void review(selected, "reject")}>
-              <Icon name="x" size={14} />
+            </Button>
+            <Button disabled={busy} icon={<Icon name="x" size={14} />} onPress={() => void review(selected, "reject")}>
               {t("aiReviewView.reject")}
-            </button>
+            </Button>
             {error && (
-              <span style={{ fontSize: 13, color: "var(--k-danger, var(--kairo-color-bad-ink))" }}>{t("aiReviewView.error")}</span>
+              <Text fontSize={13} color="var(--k-danger, var(--kairo-color-bad-ink))">{t("aiReviewView.error")}</Text>
             )}
-          </div>
-        </div>
-        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+          </Box>
+        </Box>
+        <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" overflow="hidden">
           <TicketDetail />
-        </div>
-      </div>
+        </Box>
+      </Box>
       <AiAssistant customer={selectedTicket?.from_name ?? selectedTicket?.from_email ?? "—"} />
     </>
   );

@@ -11,11 +11,15 @@ type IconProps = {
   color?: string
   strokeWidth?: number
   fill?: string
+  marginTop?: number
+  marginBottom?: number
+  marginLeft?: number
+  marginRight?: number
   /** Makes the icon meaningful: announced with this accessible name. */
   label?: string
 }
 
-function Icon({ name, size = 14, color = tokens['text.secondary'], strokeWidth, fill, label }: IconProps) {
+function Icon({ name, size = 14, color = tokens['text.secondary'], strokeWidth, fill, label, marginTop, marginBottom, marginLeft, marginRight }: IconProps) {
   const accessibility = label
     ? ({ accessible: true, accessibilityLabel: label, accessibilityRole: 'image' } as const)
     : ({ accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' } as const)
@@ -38,6 +42,7 @@ function Icon({ name, size = 14, color = tokens['text.secondary'], strokeWidth, 
       strokeWidth={strokeWidth ?? (size <= 13 ? 2.2 : 1.7)}
       strokeLinecap="round"
       strokeLinejoin="round"
+      style={{ marginTop, marginBottom, marginLeft, marginRight }}
       {...accessibility}
     >
       {iconNodes[name].map(([tag, attributes], index) => {

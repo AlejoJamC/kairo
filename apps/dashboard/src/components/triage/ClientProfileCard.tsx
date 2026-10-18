@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { getPlatform } from "@kairo/client-core/config";
-import { Icon, Skeleton, getInitials } from "@kairo/ui";
+import { Box, Icon, Pressable, Skeleton, Text, getInitials } from "@kairo/ui";
 
 const initials = (name: string | null) => getInitials(name);
 
@@ -12,20 +12,20 @@ const initials = (name: string | null) => getInitials(name);
 
 export function ClientProfileSkeleton() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <Box display="flex" flexDirection="column" gap={10}>
+      <Box display="flex" alignItems="center" gap={10}>
         <Skeleton width={36} height={36} borderRadius={999} flexShrink={0} />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" flexDirection="column" gap={6}>
           <Skeleton height={11} width={112} />
           <Skeleton height={9} width={64} />
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 6 }}>
+        </Box>
+      </Box>
+      <Box display="flex" gap={6}>
         <Skeleton height={16} width={56} borderRadius={999} />
         <Skeleton height={16} width={80} borderRadius={999} />
-      </div>
+      </Box>
       <Skeleton height={10} width={144} />
-    </div>
+    </Box>
   );
 }
 
@@ -52,9 +52,9 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
 
   if (!clientProfile) {
     return (
-      <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", fontStyle: "italic", margin: 0 }}>
+      <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" fontStyle="italic" margin={0} display="block">
         {t("clientProfile.noData")}
-      </p>
+      </Text>
     );
   }
 
@@ -71,101 +71,72 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <Box display="flex" flexDirection="column" gap={10}>
 
       {/* Avatar + name + draft badge */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 999, flexShrink: 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: "var(--k-accent-subtle)", color: "var(--k-accent)",
-          fontSize: 13, fontWeight: 600,
-        }}>
+      <Box display="flex" alignItems="center" gap={10}>
+        <Text tag="div" width={36} height={36} borderRadius={999} flexShrink={0} display="flex" alignItems="center" justifyContent="center" backgroundColor="var(--k-accent-subtle)" color="var(--k-accent)" fontSize={13} fontWeight={600}>
           {initials(name)}
-        </div>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--k-text-primary)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+        </Text>
+        <Box minWidth={0} flexGrow={1} flexShrink={1} flexBasis="0%">
+          <Box display="flex" alignItems="center" gap={6} flexWrap="wrap">
+            <Text tag="p" fontSize={13} fontWeight={600} color="var(--k-text-primary)" lineHeight={16.9} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
               {name ?? email ?? t("clientProfile.unknown")}
-            </p>
+            </Text>
             {/* KAI-227 — surface draft origin so the agent knows this profile came from
                 the contact-extraction worker (KAI-225) and not from the CRM. */}
             {isDraft && draftStatus && <DraftStatusBadge status={draftStatus} />}
-          </div>
+          </Box>
           {organization && (
-            <p style={{ fontSize: 11, color: "var(--k-text-tertiary)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+            <Text tag="p" fontSize={11} color="var(--k-text-tertiary)" lineHeight={14.3} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
               {organization}
-            </p>
+            </Text>
           )}
           {!isDraft && clientId && (
-            <p style={{ fontSize: 10, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+            <Text tag="p" fontSize={10} font="mono" color="var(--k-text-tertiary)" lineHeight={13} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
               {clientId}
-            </p>
+            </Text>
           )}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* Email row (only for drafts — for CRM clients, email lives in the KPI/details below) */}
       {isDraft && email && (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--k-text-secondary)", padding: "0 8px", fontFamily: "var(--k-font-mono)", wordBreak: "break-all" }}>
+        <Text tag="div" display="flex" alignItems="center" gap={6} fontSize={12} color="var(--k-text-secondary)" paddingVertical={0} paddingHorizontal={8} font="mono" wordBreak="break-all">
           {email}
-        </div>
+        </Text>
       )}
 
       {/* Phone copy */}
       {phone && (
-        <button
-          onClick={handleCopyPhone}
-          style={{ display: "flex", width: "100%", alignItems: "center", gap: 6, borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--k-text-secondary)", background: "none", border: "none", cursor: "pointer", transition: "background 0.1s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--k-surface-2)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-        >
-          <Icon name="phone" size={11} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />
-          <span style={{ flex: 1, textAlign: "left", fontFamily: "var(--k-font-mono)" }}>{phone}</span>
+        <Pressable onClick={handleCopyPhone} hoverStyle={{ backgroundColor: "var(--k-surface-2)" }} display="flex" width="100%" alignItems="center" gap={6} borderRadius={6} paddingVertical={5} paddingHorizontal={8} fontSize={12} color="var(--k-text-secondary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" transition="background 0.1s">
+          <Icon name="phone" size={11} color="var(--k-text-tertiary)" />
+          <Text flexGrow={1} flexShrink={1} flexBasis="0%" textAlign="left" font="mono">{phone}</Text>
           {copied
-            ? <Icon name="check" size={11} color="var(--kairo-color-ok)" style={{ flexShrink: 0 }} />
-            : <Icon name="copy" size={11} color="var(--k-text-tertiary)" style={{ flexShrink: 0 }} />}
-        </button>
+            ? <Icon name="check" size={11} color="var(--kairo-color-ok)" />
+            : <Icon name="copy" size={11} color="var(--k-text-tertiary)" />}
+        </Pressable>
       )}
 
       {/* KAI-168 — operational SLA history for this client (own domain, separate
           from tenant_sla_rules). Only shown once we have a total ticket count. */}
       {!isDraft && clientProfile.totalTickets > 0 && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-            fontWeight: 500,
-            padding: "6px 8px",
-            borderRadius: 6,
-            background: clientProfile.slaBreachedCount > 0 ? "var(--kairo-color-bad-soft)" : "var(--k-surface-2)",
-            color: clientProfile.slaBreachedCount > 0 ? "var(--kairo-color-bad-ink)" : "var(--k-text-secondary)",
-          }}
-        >
+        <Text tag="div" display="flex" alignItems="center" gap={6} fontSize={12} fontWeight={500} paddingVertical={6} paddingHorizontal={8} borderRadius={6} backgroundColor={clientProfile.slaBreachedCount > 0 ? "var(--kairo-color-bad-soft)" : "var(--k-surface-2)"} color={clientProfile.slaBreachedCount > 0 ? "var(--kairo-color-bad-ink)" : "var(--k-text-secondary)"}>
           {t("clientProfile.slaHistory", {
             breached: clientProfile.slaBreachedCount,
             total: clientProfile.totalTickets,
           })}
-        </div>
+        </Text>
       )}
 
       {/* KAI-228 placeholder — confirm / reject / edit actions for drafts go here.
           Rendered only for drafts so the CRM card UI is untouched. */}
       {isDraft && (
-        <div
-          data-kai228-action-slot
-          style={{
-            marginTop: 4, padding: "8px 10px", fontSize: 11,
-            color: "var(--k-text-tertiary)", background: "var(--k-surface-2)",
-            border: "1px dashed var(--k-border)", borderRadius: 6, lineHeight: 1.4,
-          }}
-        >
+        <Text tag="div" data-kai228-action-slot marginTop={4} paddingVertical={8} paddingHorizontal={10} fontSize={11} color="var(--k-text-tertiary)" backgroundColor="var(--k-surface-2)" borderWidth={1} borderColor="var(--k-border)" borderRadius={6} lineHeight={15.4} display="block" borderStyle="dashed">
           {t("clientProfile.draftActionsPending")}
-        </div>
+        </Text>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -187,12 +158,8 @@ function DraftStatusBadge({ status }: { status: "proposed" | "confirmed" | "reje
     status === "confirmed" ? "clientProfile.badgeConfirmed" :
                              "clientProfile.badgeRejected";
   return (
-    <span style={{
-      fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 999,
-      background: s.bg, color: s.color, border: `1px solid ${s.border}`,
-      letterSpacing: "0.03em", flexShrink: 0,
-    }}>
+    <Text fontSize={10} fontWeight={600} paddingVertical={2} paddingHorizontal={7} borderRadius={999} backgroundColor={s.bg} color={s.color} borderWidth={1} borderColor={s.border} letterSpacing={0.3} flexShrink={0} borderStyle="solid">
       {t(labelKey)}
-    </span>
+    </Text>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { reviewDecision, markTicketViewed, getTicketDecisions } from '@kairo/client-core/endpoints';
 import { getPlatform } from '@kairo/client-core/config';
+import { Box } from "@kairo/ui";
 
 interface Decision {
   id: string; contract: string; status: string; created_at: string; message_id: string | null;
@@ -60,11 +61,11 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
     return () => { active = false; unsubscribeFocus(); };
   }, [ticketId, refresh]);
   const label = (value: string) => t(`decisionWorkflow.values.${value}`, { defaultValue: t('decisionWorkflow.unavailable') });
-  return <details style={{ border: '1px solid var(--k-border)', borderRadius: 6, padding: 10 }}>
+  return <Box tag="details" display="block" borderWidth={1} borderStyle="solid" borderColor="var(--k-border)" borderRadius={6} padding={10}>
     <summary>{t('decisionWorkflow.title')}</summary>
     {failed && <p role="alert">{t('decisionWorkflow.error')}</p>}
     {!failed && !decisions.length && <p>{t('decisionWorkflow.empty')}</p>}
-    {decisions.map(decision => <section key={decision.id} style={{ marginTop: 12 }}>
+    {decisions.map(decision => <Box tag="section" key={decision.id} marginTop={12}>
       {decision.contract === 'knowledge_impact' && decision.status === 'pending_human_review' && !reviewed.has(decision.id) && <div>
         <button disabled={reviewing !== null} onClick={() => void review(decision.id,true)}>{t('decisionWorkflow.accept')}</button>
         <button disabled={reviewing !== null} onClick={() => void review(decision.id,false)}>{t('decisionWorkflow.reject')}</button>
@@ -92,6 +93,6 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
       {!!decision.result.sources?.length && <details><summary>{t('decisionWorkflow.sources')}</summary>
         {decision.result.sources.map(source => <blockquote key={source.version}>{source.content}<footer>{t('decisionWorkflow.version')}: {source.version}</footer></blockquote>)}
       </details>}
-    </section>)}
-  </details>;
+    </Box>)}
+  </Box>;
 }

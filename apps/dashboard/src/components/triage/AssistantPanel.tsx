@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { Caret, Icon, Spinner, type IconName } from "@kairo/ui";
+import { Box, Caret, Icon, PlainTextarea, Pressable, Spinner, Text, type IconName } from "@kairo/ui";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface Step { label: string; detail: string }
@@ -56,9 +56,9 @@ function renderInline(text: string): ReactNode[] {
     if (m.index > last) out.push(text.slice(last, m.index));
     const tok = m[0];
     if (tok.startsWith("**")) {
-      out.push(<strong key={k++} style={{ fontWeight: 600, color: "var(--k-text-primary)" }}>{tok.slice(2, -2)}</strong>);
+      out.push(<Text tag="strong" key={k++} fontWeight={600} color="var(--k-text-primary)">{tok.slice(2, -2)}</Text>);
     } else {
-      out.push(<code key={k++} style={{ fontFamily: "var(--k-font-mono)", fontSize: 12, background: "var(--k-surface-2)", padding: "1px 5px", borderRadius: 4, color: "var(--k-text-primary)" }}>{tok.slice(1, -1)}</code>);
+      out.push(<Text tag="code" key={k++} font="mono" fontSize={12} backgroundColor="var(--k-surface-2)" paddingVertical={1} paddingHorizontal={5} borderRadius={4} color="var(--k-text-primary)">{tok.slice(1, -1)}</Text>);
     }
     last = m.index + tok.length;
   }
@@ -69,14 +69,9 @@ function renderInline(text: string): ReactNode[] {
 // ── Atoms ────────────────────────────────────────────────────────────────────
 function AssistantMark({ size = 24 }: { size?: number }) {
   return (
-    <div style={{
-      width: size, height: size, borderRadius: 7, flexShrink: 0,
-      background: "var(--k-gradient-ai)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      boxShadow: "0 0 0 1px rgba(43,91,255,0.18), 0 4px 12px rgba(43,91,255,0.28)",
-    }}>
+    <Box width={size} height={size} borderRadius={7} flexShrink={0} backgroundColor="var(--k-gradient-ai)" display="flex" alignItems="center" justifyContent="center" boxShadow="0 0 0 1px rgba(43,91,255,0.18), 0 4px 12px rgba(43,91,255,0.28)">
       <Icon name="spark" size={size * 0.56} color="white" />
-    </div>
+    </Box>
   );
 }
 
@@ -87,56 +82,47 @@ function Steps({ steps, phase }: { steps: Step[]; phase: Phase }) {
   const done = phase !== "thinking";
   useEffect(() => { if (done) setOpen(false); }, [done]);
   return (
-    <div style={{ marginBottom: 10 }}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", padding: "2px 0", background: "none", border: "none", cursor: "pointer" }}
-      >
+    <Box marginBottom={10}>
+      <Pressable type="button" onClick={() => setOpen((o) => !o)} display="flex" alignItems="center" gap={6} fontSize={11.5} font="mono" color="var(--k-text-tertiary)" paddingVertical={2} paddingHorizontal={0} backgroundColor="transparent" borderWidth={0} cursor="pointer">
         {!done
           ? <Spinner />
           : <Icon name="check" size={12} color="var(--k-success)" />}
         <span>{done ? t("ai.assistantReasoned", { count: steps.length }) : t("ai.assistantThinking")}</span>
-        <span style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s", display: "inline-flex" }}>
+        <Text transform={open ? "rotate(90deg)" : "none"} transition="transform .15s" display="inline-flex">
           <Icon name="right" size={11} color="var(--k-text-tertiary)" />
-        </span>
-      </button>
+        </Text>
+      </Pressable>
       {open && (
-        <div style={{ marginTop: 6, marginLeft: 5, paddingLeft: 12, borderLeft: "1px solid var(--k-border-subtle)", display: "flex", flexDirection: "column", gap: 7 }}>
+        <Box marginTop={6} marginLeft={5} paddingLeft={12} borderLeftWidth={1} borderLeftColor="var(--k-border-subtle)" display="flex" flexDirection="column" gap={7} borderStyle="solid">
           {steps.map((s, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12 }}>
-              <span style={{ width: 5, height: 5, borderRadius: 999, background: "var(--k-success)", flexShrink: 0 }} />
-              <span style={{ color: "var(--k-text-secondary)" }}>{s.label}</span>
-              <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 10.5, color: "var(--k-text-tertiary)" }}>{s.detail}</span>
-            </div>
+            <Text tag="div" key={i} display="flex" alignItems="center" gap={7} fontSize={12}>
+              <Text width={5} height={5} borderRadius={999} backgroundColor="var(--k-success)" flexShrink={0} />
+              <Text color="var(--k-text-secondary)">{s.label}</Text>
+              <Text font="mono" fontSize={10.5} color="var(--k-text-tertiary)">{s.detail}</Text>
+            </Text>
           ))}
-        </div>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 }
 
 function CitationCard({ c }: { c: Citation }) {
   return (
-    <button
-      type="button"
-      style={{ display: "flex", alignItems: "flex-start", gap: 9, width: "100%", textAlign: "left", padding: "8px 10px", border: "1px solid var(--k-border)", borderRadius: 8, background: "white", cursor: "pointer", transition: "all .12s" }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--k-accent-border)"; e.currentTarget.style.background = "var(--k-accent-faint)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--k-border)"; e.currentTarget.style.background = "white"; }}
-    >
-      <div style={{ width: 22, height: 22, borderRadius: 5, flexShrink: 0, marginTop: 1, background: c.kind === "kb" ? "var(--k-accent-subtle)" : "var(--k-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <Pressable type="button" hoverStyle={{ borderColor: "var(--k-accent-border)", backgroundColor: "var(--k-accent-faint)" }} display="flex" alignItems="flex-start" gap={9} width="100%" textAlign="left" paddingVertical={8} paddingHorizontal={10} borderWidth={1} borderColor="var(--k-border)" borderRadius={8} backgroundColor="white" cursor="pointer" transition="all .12s" borderStyle="solid">
+      <Box width={22} height={22} borderRadius={5} flexShrink={0} marginTop={1} backgroundColor={c.kind === "kb" ? "var(--k-accent-subtle)" : "var(--k-surface-2)"} display="flex" alignItems="center" justifyContent="center">
         {c.kind === "kb"
           ? <Icon name="knowledge" size={12} color="var(--k-accent)" />
           : <Icon name="ticket" size={12} color="var(--k-text-secondary)" />}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 10.5, color: "var(--k-text-tertiary)" }}>{c.id}</span>
-          <span style={{ marginLeft: "auto", fontFamily: "var(--k-font-mono)", fontSize: 10, color: c.kind === "kb" ? "var(--k-accent)" : "var(--k-success)" }}>{c.meta}</span>
-        </div>
-        <div style={{ fontSize: 12.5, color: "var(--k-text-primary)", lineHeight: 1.35, marginTop: 1 }}>{c.title}</div>
-      </div>
-    </button>
+      </Box>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
+        <Box display="flex" alignItems="center" gap={6}>
+          <Text font="mono" fontSize={10.5} color="var(--k-text-tertiary)">{c.id}</Text>
+          <Text marginLeft="auto" font="mono" fontSize={10} color={c.kind === "kb" ? "var(--k-accent)" : "var(--k-success)"}>{c.meta}</Text>
+        </Box>
+        <Text tag="div" fontSize={12.5} color="var(--k-text-primary)" lineHeight={16.88} marginTop={1} display="block">{c.title}</Text>
+      </Box>
+    </Pressable>
   );
 }
 
@@ -144,43 +130,34 @@ function DraftCard({ d, onInsert, inserted }: { d: Draft; onInsert: () => void; 
   const { t } = useTranslation("dashboard");
   const [copied, setCopied] = useState(false);
   return (
-    <div style={{ border: "1px solid var(--k-border)", borderRadius: 10, overflow: "hidden", position: "relative" }}>
-      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: "var(--k-gradient-ai)" }} />
-      <div style={{ padding: "8px 11px", borderBottom: "1px solid var(--k-border-subtle)", display: "flex", alignItems: "center", gap: 7, background: "var(--k-surface)" }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, fontFamily: "var(--k-font-mono)", letterSpacing: "0.02em", padding: "2px 7px", borderRadius: 999, background: "var(--k-accent-subtle)", color: "var(--k-accent)", border: "1px solid var(--k-accent-border)" }}>
+    <Box borderWidth={1} borderColor="var(--k-border)" borderRadius={10} overflow="hidden" position="relative" borderStyle="solid">
+      <Box position="absolute" left={0} top={0} bottom={0} width={2} backgroundColor="var(--k-gradient-ai)" />
+      <Box paddingVertical={8} paddingHorizontal={11} borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" display="flex" alignItems="center" gap={7} backgroundColor="var(--k-surface)" borderStyle="solid">
+        <Text display="inline-flex" alignItems="center" gap={4} fontSize={10} fontWeight={600} font="mono" letterSpacing={0.2} paddingVertical={2} paddingHorizontal={7} borderRadius={999} backgroundColor="var(--k-accent-subtle)" color="var(--k-accent)" borderWidth={1} borderColor="var(--k-accent-border)" borderStyle="solid">
           <Icon name="spark" size={9} /> {t("ai.assistantDraftBadge")}
-        </span>
-        <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.subject}</span>
-      </div>
-      <div style={{ padding: "11px 13px", fontSize: 12.5, lineHeight: 1.6, color: "var(--k-text-primary)", whiteSpace: "pre-wrap", maxHeight: 168, overflowY: "auto" }}>{d.body}</div>
-      <div style={{ padding: "8px 10px", borderTop: "1px solid var(--k-border-subtle)", display: "flex", gap: 6 }}>
-        <button
-          type="button"
-          onClick={() => { getPlatform().clipboard.writeText(d.body).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1400); }}
-          style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, padding: "5px 9px", border: "1px solid var(--k-border)", borderRadius: 6, color: copied ? "var(--k-success)" : "var(--k-text-secondary)", background: "white", cursor: "pointer" }}
-        >
+        </Text>
+        <Text fontSize={11} color="var(--k-text-tertiary)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{d.subject}</Text>
+      </Box>
+      <Text tag="div" paddingVertical={11} paddingHorizontal={13} fontSize={12.5} lineHeight={20} color="var(--k-text-primary)" whiteSpace="pre-wrap" maxHeight={168} scroll display="block">{d.body}</Text>
+      <Box paddingVertical={8} paddingHorizontal={10} borderTopWidth={1} borderTopColor="var(--k-border-subtle)" display="flex" gap={6} borderStyle="solid">
+        <Pressable type="button" onClick={() => { getPlatform().clipboard.writeText(d.body).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1400); }} display="flex" alignItems="center" gap={5} fontSize={11.5} paddingVertical={5} paddingHorizontal={9} borderWidth={1} borderColor="var(--k-border)" borderRadius={6} color={copied ? "var(--k-success)" : "var(--k-text-secondary)"} backgroundColor="white" cursor="pointer" borderStyle="solid">
           {copied ? <Icon name="check" size={12} /> : <Icon name="copy" size={12} />}
           {copied ? t("ai.assistantCopied") : t("ai.assistantCopy")}
-        </button>
-        <button
-          type="button"
-          onClick={onInsert}
-          disabled={inserted}
-          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, padding: "5px 11px", borderRadius: 6, color: "white", background: inserted ? "var(--k-success)" : "var(--k-accent)", fontWeight: 500, border: "none", cursor: inserted ? "default" : "pointer" }}
-        >
+        </Pressable>
+        <Pressable type="button" onClick={onInsert} disabled={inserted} marginLeft="auto" display="flex" alignItems="center" gap={5} fontSize={11.5} paddingVertical={5} paddingHorizontal={11} borderRadius={6} color="white" backgroundColor={inserted ? "var(--k-success)" : "var(--k-accent)"} fontWeight={500} borderWidth={0} cursor={inserted ? "default" : "pointer"}>
           {inserted ? <Icon name="check" size={12} /> : <Icon name="plus" size={12} />}
           {inserted ? t("ai.assistantInserted") : t("ai.assistantInsert")}
-        </button>
-      </div>
-    </div>
+        </Pressable>
+      </Box>
+    </Box>
   );
 }
 
 function UserBubble({ text }: { text: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 18 }}>
-      <div style={{ maxWidth: "85%", padding: "8px 12px", borderRadius: "12px 12px 4px 12px", background: "var(--k-surface-2)", color: "var(--k-text-primary)", fontSize: 13.5, lineHeight: 1.5 }}>{text}</div>
-    </div>
+    <Box display="flex" justifyContent="flex-end" marginBottom={18}>
+      <Text tag="div" maxWidth="85%" paddingVertical={8} paddingHorizontal={12} borderTopLeftRadius={12} borderTopRightRadius={12} borderBottomRightRadius={4} borderBottomLeftRadius={12} backgroundColor="var(--k-surface-2)" color="var(--k-text-primary)" fontSize={13.5} lineHeight={20.25} display="block">{text}</Text>
+    </Box>
   );
 }
 
@@ -202,73 +179,66 @@ function AssistantTurn({ answer, onInsert, onFollowup }: {
   const done = phase === "done";
 
   return (
-    <div style={{ display: "flex", gap: 9, marginBottom: 20 }}>
+    <Box display="flex" gap={9} marginBottom={20}>
       <AssistantMark size={24} />
-      <div style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0} paddingTop={1}>
         <Steps steps={answer.steps} phase={phase} />
 
         {visibleBlocks.map((b, i) => {
           const streaming = phase === "streaming" && i === proseN;
           if (b.type === "p") {
             const txt = streaming ? b.text.slice(0, charN) : b.text;
-            return <p key={i} style={{ margin: "0 0 9px", fontSize: 13.5, lineHeight: 1.6, color: "var(--k-text-secondary)" }}>{renderInline(txt)}{streaming && <Caret display="inline-flex" marginLeft={1} marginBottom={-2} />}</p>;
+            return <Text tag="p" key={i} marginTop={0} marginHorizontal={0} marginBottom={9} fontSize={13.5} lineHeight={21.6} color="var(--k-text-secondary)" display="block">{renderInline(txt)}{streaming && <Caret display="inline-flex" marginLeft={1} marginBottom={-2} />}</Text>;
           }
           const joined = b.items.join("\n");
           const shown = streaming ? joined.slice(0, charN).split("\n") : b.items;
           return (
-            <ul key={i} style={{ margin: "0 0 9px", paddingLeft: 2, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+            <Box tag="ul" key={i} marginTop={0} marginHorizontal={0} marginBottom={9} paddingLeft={2} listStyle="none" display="flex" flexDirection="column" gap={6}>
               {shown.map((it, j) => it !== "" && (
-                <li key={j} style={{ display: "flex", gap: 8, fontSize: 13, lineHeight: 1.55, color: "var(--k-text-secondary)" }}>
-                  <span style={{ marginTop: 7, width: 4, height: 4, borderRadius: 999, background: "var(--k-accent)", flexShrink: 0 }} />
+                <Text tag="li" key={j} display="flex" gap={8} fontSize={13} lineHeight={20.15} color="var(--k-text-secondary)">
+                  <Text marginTop={7} width={4} height={4} borderRadius={999} backgroundColor="var(--k-accent)" flexShrink={0} />
                   <span>{renderInline(it)}{streaming && j === shown.length - 1 && <Caret display="inline-flex" marginLeft={1} marginBottom={-2} />}</span>
-                </li>
+                </Text>
               ))}
-            </ul>
+            </Box>
           );
         })}
 
         {done && answer.quote && (
-          <div style={{ margin: "0 0 11px", padding: "10px 12px", background: "var(--k-surface)", borderLeft: "2px solid var(--k-accent)", borderRadius: "0 8px 8px 0" }}>
-            <div style={{ fontSize: 12.5, lineHeight: 1.55, color: "var(--k-text-primary)", fontStyle: "italic" }}>“{answer.quote.text}”</div>
-            <div style={{ fontFamily: "var(--k-font-mono)", fontSize: 10.5, color: "var(--k-text-tertiary)", marginTop: 6 }}>— {answer.quote.source}</div>
-          </div>
+          <Box marginTop={0} marginHorizontal={0} marginBottom={11} paddingVertical={10} paddingHorizontal={12} backgroundColor="var(--k-surface)" borderLeftWidth={2} borderLeftColor="var(--k-accent)" borderTopLeftRadius={0} borderTopRightRadius={8} borderBottomRightRadius={8} borderBottomLeftRadius={0} borderStyle="solid">
+            <Text tag="div" fontSize={12.5} lineHeight={19.38} color="var(--k-text-primary)" fontStyle="italic" display="block">“{answer.quote.text}”</Text>
+            <Text tag="div" font="mono" fontSize={10.5} color="var(--k-text-tertiary)" marginTop={6} display="block">— {answer.quote.source}</Text>
+          </Box>
         )}
 
         {done && answer.draft && (
-          <div className="kai-fade" style={{ margin: "2px 0 11px" }}>
+          <Box fadeIn marginTop={2} marginHorizontal={0} marginBottom={11}>
             <DraftCard d={answer.draft} inserted={inserted} onInsert={() => { setInserted(true); onInsert(); }} />
-          </div>
+          </Box>
         )}
 
         {done && answer.citations && (
-          <div className="kai-fade" style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+          <Box fadeIn marginBottom={12}>
+            <Text tag="div" fontSize={10.5} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.63} marginBottom={6} display="block">
               {t("ai.assistantSources")} · {answer.citations.length}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            </Text>
+            <Box display="flex" flexDirection="column" gap={6}>
               {answer.citations.map((c, i) => <CitationCard key={i} c={c} />)}
-            </div>
-          </div>
+            </Box>
+          </Box>
         )}
 
         {done && answer.followups && (
-          <div className="kai-fade" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <Box fadeIn display="flex" flexWrap="wrap" gap={6}>
             {answer.followups.map((f, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => onFollowup(f)}
-                style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, padding: "5px 10px", border: "1px solid var(--k-border)", borderRadius: 999, color: "var(--k-text-secondary)", background: "white", cursor: "pointer" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-surface-2)"; e.currentTarget.style.color = "var(--k-text-primary)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "white"; e.currentTarget.style.color = "var(--k-text-secondary)"; }}
-              >
+              <Pressable key={i} type="button" onClick={() => onFollowup(f)} hoverStyle={{ backgroundColor: "var(--k-surface-2)", color: "var(--k-text-primary)" }} display="flex" alignItems="center" gap={5} fontSize={12} paddingVertical={5} paddingHorizontal={10} borderWidth={1} borderColor="var(--k-border)" borderRadius={999} color="var(--k-text-secondary)" backgroundColor="white" cursor="pointer" borderStyle="solid">
                 <Icon name="spark" size={10} color="var(--k-accent)" />{f}
-              </button>
+              </Pressable>
             ))}
-          </div>
+          </Box>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
@@ -300,50 +270,42 @@ function Composer({ onSend, busy, onStop, ticketLabel, senderName, modelName }: 
   ];
 
   return (
-    <div style={{ borderTop: "1px solid var(--k-border)", padding: "10px 12px 12px", background: "white", flexShrink: 0 }}>
-      <div style={{ border: "1px solid var(--k-border)", borderRadius: 12, background: "white", boxShadow: "var(--k-shadow-card)", overflow: "hidden" }}>
+    <Box borderTopWidth={1} borderTopColor="var(--k-border)" paddingTop={10} paddingHorizontal={12} paddingBottom={12} backgroundColor="white" flexShrink={0} borderStyle="solid">
+      <Box borderWidth={1} borderColor="var(--k-border)" borderRadius={12} backgroundColor="white" boxShadow="var(--k-shadow-card)" overflow="hidden" borderStyle="solid">
         {/* context row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 8px 0", flexWrap: "wrap" }}>
+        <Box display="flex" alignItems="center" gap={5} paddingTop={7} paddingHorizontal={8} paddingBottom={0} flexWrap="wrap">
           {chips.map((c, i) => (
-            <span key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontFamily: "var(--k-font-mono)", padding: "2px 7px", borderRadius: 6, background: "var(--k-surface)", border: "1px solid var(--k-border)", color: "var(--k-text-secondary)", maxWidth: 150 }}>
+            <Text key={i} display="flex" alignItems="center" gap={5} fontSize={11} font="mono" paddingVertical={2} paddingHorizontal={7} borderRadius={6} backgroundColor="var(--k-surface)" borderWidth={1} borderColor="var(--k-border)" color="var(--k-text-secondary)" maxWidth={150} borderStyle="solid">
               <Icon name={c.icon} size={11} color="var(--k-text-tertiary)" />
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.label}</span>
-            </span>
+              <Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{c.label}</Text>
+            </Text>
           ))}
-          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontFamily: "var(--k-font-mono)", padding: "2px 7px", borderRadius: 6, color: "var(--k-text-tertiary)", border: "1px dashed var(--k-border)" }}>
+          <Text display="flex" alignItems="center" gap={4} fontSize={11} font="mono" paddingVertical={2} paddingHorizontal={7} borderRadius={6} color="var(--k-text-tertiary)" borderWidth={1} borderColor="var(--k-border)" borderStyle="dashed">
             <Icon name="mention" size={11} />{t("ai.assistantContextChip")}
-          </span>
-        </div>
-        <textarea
-          ref={ref}
-          value={val}
-          rows={1}
-          onChange={(e) => { setVal(e.target.value); grow(e.target); }}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-          placeholder={t("ai.assistantComposerPlaceholder")}
-          style={{ width: "100%", border: "none", outline: "none", resize: "none", padding: "8px 12px 4px", fontSize: 13.5, lineHeight: 1.5, color: "var(--k-text-primary)", background: "transparent", display: "block", fontFamily: "inherit", boxSizing: "border-box" }}
-        />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px 8px", minWidth: 0 }}>
+          </Text>
+        </Box>
+        <PlainTextarea ref={ref} value={val} rows={1} onChange={(e) => { setVal(e.target.value); grow(e.target); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }} placeholder={t("ai.assistantComposerPlaceholder")} width="100%" borderWidth={0} outlineWidth={0} resize="none" paddingTop={8} paddingHorizontal={12} paddingBottom={4} fontSize={13.5} lineHeight={20.25} color="var(--k-text-primary)" backgroundColor="transparent" display="block" />
+        <Box display="flex" alignItems="center" gap={8} paddingTop={4} paddingHorizontal={8} paddingBottom={8} minWidth={0}>
           {/* Model selector — keep the name on one line; clip rather than wrap
               when the panel is at its minimum width (it's a combobox: the full
               name reads again on resize / when more models are available). */}
-          <span style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", fontSize: 11.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-secondary)", padding: "3px 7px", borderRadius: 6, border: "1px solid var(--k-border)" }}>
-            <span style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, background: "var(--k-gradient-ai)" }} />{modelName}
-          </span>
+          <Text display="flex" alignItems="center" gap={5} flexShrink={0} whiteSpace="nowrap" overflow="hidden" fontSize={11.5} font="mono" color="var(--k-text-secondary)" paddingVertical={3} paddingHorizontal={7} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" borderStyle="solid">
+            <Text width={6} height={6} borderRadius={999} flexShrink={0} backgroundColor="var(--k-gradient-ai)" />{modelName}
+          </Text>
           {/* Helper text yields first: truncates with ellipsis before anything wraps. */}
-          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)" }}>{t("ai.assistantModelContext")}</span>
+          <Text flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" fontSize={10.5} font="mono" color="var(--k-text-tertiary)">{t("ai.assistantModelContext")}</Text>
           {busy ? (
-            <button type="button" onClick={onStop} style={{ marginLeft: "auto", flexShrink: 0, width: 30, height: 30, borderRadius: 8, background: "var(--k-surface-2)", display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer" }}>
+            <Pressable type="button" onClick={onStop} marginLeft="auto" flexShrink={0} width={30} height={30} borderRadius={8} backgroundColor="var(--k-surface-2)" display="flex" alignItems="center" justifyContent="center" borderWidth={0} cursor="pointer">
               <Icon name="square" size={12} color="var(--k-text-secondary)" />
-            </button>
+            </Pressable>
           ) : (
-            <button type="button" onClick={submit} disabled={!val.trim()} style={{ marginLeft: "auto", flexShrink: 0, width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: val.trim() ? "var(--k-accent)" : "var(--k-surface-2)", border: "none", cursor: val.trim() ? "pointer" : "default", transition: "background .12s" }}>
+            <Pressable type="button" onClick={submit} disabled={!val.trim()} marginLeft="auto" flexShrink={0} width={30} height={30} borderRadius={8} display="flex" alignItems="center" justifyContent="center" backgroundColor={val.trim() ? "var(--k-accent)" : "var(--k-surface-2)"} borderWidth={0} cursor={val.trim() ? "pointer" : "default"} transition="background .12s">
               <Icon name="escalate" size={15} color={val.trim() ? "white" : "var(--k-text-tertiary)"} />
-            </button>
+            </Pressable>
           )}
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Box>
+    </Box>
   );
 }
 
@@ -411,11 +373,11 @@ export function AssistantPanel() {
   // No ticket selected — nothing to reason about yet.
   if (!selectedTicket) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, height: "100%", padding: "32px 16px", textAlign: "center" }}>
+      <Text tag="div" display="flex" flexDirection="column" alignItems="center" justifyContent="center" gap={8} height="100%" paddingVertical={32} paddingHorizontal={16} textAlign="center">
         <AssistantMark size={30} />
-        <p style={{ fontSize: 13, fontWeight: 600, color: "var(--k-text-secondary)", margin: 0 }}>{t("ai.assistantNoTicketTitle")}</p>
-        <p style={{ fontSize: 11, color: "var(--k-text-tertiary)", margin: 0, lineHeight: 1.5 }}>{t("ai.assistantNoTicketBody")}</p>
-      </div>
+        <Text tag="p" fontSize={13} fontWeight={600} color="var(--k-text-secondary)" margin={0} display="block">{t("ai.assistantNoTicketTitle")}</Text>
+        <Text tag="p" fontSize={11} color="var(--k-text-tertiary)" margin={0} lineHeight={16.5} display="block">{t("ai.assistantNoTicketBody")}</Text>
+      </Text>
     );
   }
 
@@ -424,42 +386,35 @@ export function AssistantPanel() {
   const empty = turns.length === 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: empty ? 0 : "16px 14px 8px", minHeight: 0 }}>
+    <Box display="flex" flexDirection="column" height="100%" minHeight={0}>
+      <Box ref={scrollRef} flexGrow={1} flexShrink={1} flexBasis="0%" scroll paddingTop={empty ? 0 : 16} paddingRight={empty ? 0 : 14} paddingBottom={empty ? 0 : 8} paddingLeft={empty ? 0 : 14} minHeight={0}>
         {empty ? (
-          <div style={{ padding: "22px 16px 8px", display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <Box paddingTop={22} paddingHorizontal={16} paddingBottom={8} display="flex" flexDirection="column">
+            <Box display="flex" alignItems="center" gap={10} marginBottom={12}>
               <AssistantMark size={34} />
               <div>
-                <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>{t("ai.assistantName")}</div>
-                <div style={{ fontSize: 12, color: "var(--k-text-tertiary)" }}>{t("ai.assistantTagline")}</div>
+                <Text tag="div" fontSize={15} fontWeight={600} letterSpacing={-0.15} display="block">{t("ai.assistantName")}</Text>
+                <Text tag="div" fontSize={12} color="var(--k-text-tertiary)" display="block">{t("ai.assistantTagline")}</Text>
               </div>
-            </div>
-            <p style={{ fontSize: 13.5, lineHeight: 1.6, color: "var(--k-text-secondary)", margin: "0 0 18px" }}>
+            </Box>
+            <Text tag="p" fontSize={13.5} lineHeight={21.6} color="var(--k-text-secondary)" marginTop={0} marginHorizontal={0} marginBottom={18} display="block">
               {t("ai.assistantIntro", { ticket: ticketLabel, name: senderName })}
-            </p>
-            <div style={{ fontSize: 10.5, fontFamily: "var(--k-font-mono)", color: "var(--k-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+            </Text>
+            <Text tag="div" fontSize={10.5} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.63} marginBottom={8} display="block">
               {t("ai.assistantSuggestions")}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            </Text>
+            <Box display="flex" flexDirection="column" gap={7}>
               {STARTERS.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => ask(t(s.labelKey))}
-                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", textAlign: "left", border: "1px solid var(--k-border)", borderRadius: 9, background: "white", fontSize: 13, color: "var(--k-text-primary)", lineHeight: 1.4, cursor: "pointer" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--k-accent-border)"; e.currentTarget.style.background = "var(--k-accent-faint)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--k-border)"; e.currentTarget.style.background = "white"; }}
-                >
-                  <div style={{ width: 26, height: 26, borderRadius: 6, background: "var(--k-accent-subtle)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Pressable key={s.id} type="button" onClick={() => ask(t(s.labelKey))} hoverStyle={{ borderColor: "var(--k-accent-border)", backgroundColor: "var(--k-accent-faint)" }} display="flex" alignItems="center" gap={10} paddingVertical={10} paddingHorizontal={12} textAlign="left" borderWidth={1} borderColor="var(--k-border)" borderRadius={9} backgroundColor="white" fontSize={13} color="var(--k-text-primary)" lineHeight={18.2} cursor="pointer" borderStyle="solid">
+                  <Box width={26} height={26} borderRadius={6} backgroundColor="var(--k-accent-subtle)" display="flex" alignItems="center" justifyContent="center" flexShrink={0}>
                     <Icon name={s.icon} size={14} color="var(--k-accent)" />
-                  </div>
-                  <span style={{ flex: 1 }}>{t(s.labelKey)}</span>
+                  </Box>
+                  <Text flexGrow={1} flexShrink={1} flexBasis="0%">{t(s.labelKey)}</Text>
                   <Icon name="right" size={13} color="var(--k-text-tertiary)" />
-                </button>
+                </Pressable>
               ))}
-            </div>
-          </div>
+            </Box>
+          </Box>
         ) : (
           turns.map((turn) => turn.role === "u"
             ? <UserBubble key={turn.id} text={turn.text} />
@@ -470,10 +425,10 @@ export function AssistantPanel() {
                 onFollowup={(f) => ask(f)}
               />)
         )}
-      </div>
-      {busy && <p role="status" style={{ padding: '0 14px' }}>{t('ai.assistantWaiting')}</p>}
-      {error && <p role="alert" style={{ padding: '0 14px' }}>{error}</p>}
+      </Box>
+      {busy && <Text tag="p" role="status" paddingVertical={0} paddingHorizontal={14} display="block">{t('ai.assistantWaiting')}</Text>}
+      {error && <Text tag="p" role="alert" paddingVertical={0} paddingHorizontal={14} display="block">{error}</Text>}
       <Composer modelName={modelName} onSend={(text) => ask(text)} busy={busy} onStop={() => { controller.current?.abort(); setBusy(false); }} ticketLabel={ticketLabel} senderName={senderName} />
-    </div>
+    </Box>
   );
 }

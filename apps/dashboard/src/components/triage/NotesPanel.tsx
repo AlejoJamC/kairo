@@ -10,7 +10,7 @@ import {
   TeamOnlyChip,
 } from "./note-primitives";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
-import { EmptyState, LoadingStatus } from "@kairo/ui";
+import { Box, EmptyState, LoadingStatus } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // KAI-232 / ADR-025 §7.2 — right-panel "Notes" tab.
@@ -112,9 +112,9 @@ export function NotesPanel({ ticketId, onNewNote }: NotesPanelProps) {
   if (loading) {
     return (
       <div>
-        <div style={{ marginBottom: 10 }}>
+        <Box marginBottom={10}>
           <LoadingStatus>{t("notes.loading", "loading notes…")}</LoadingStatus>
-        </div>
+        </Box>
         <NoteSkeleton />
         <NoteSkeleton />
         <NoteSkeleton />

@@ -68,7 +68,7 @@ export function buildCatalog(): string {
   }
 
   const specNames = new Set(["components", "blocks"].flatMap((kind) => list(join(UI, "spec", kind))));
-  const extras = [...modules].filter((m) => m !== "provider" && !specNames.has(m)).sort();
+  const extras = [...modules].filter((m) => m !== "provider" && m !== "layout" && m !== "plain" && !specNames.has(m)).sort();
   lines.push("## Exports without a specification", "", extras.length ? extras.map((m) => `- \`${m}\``).join("\n") : "None.", "");
   return lines.join("\n");
 }

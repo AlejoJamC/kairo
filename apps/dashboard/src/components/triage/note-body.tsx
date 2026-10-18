@@ -1,7 +1,7 @@
-import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { parseNoteBody } from "@kairo/client-core/note-mentions";
 import type { NoteMention } from "@kairo/client-core/hooks/use-ticket-thread";
+import { Text, type TextProps } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // KAI-232 — renders an internal-note body with `@[user:<uuid>]` tokens drawn
@@ -13,14 +13,12 @@ import type { NoteMention } from "@kairo/client-core/hooks/use-ticket-thread";
 // API's `is_me`, so this component needs no identity of its own.
 // ---------------------------------------------------------------------------
 
-interface NoteBodyProps {
+type NoteBodyProps = {
   body: string | null;
   mentions?: NoteMention[];
-  /** Base text style — the surrounding card owns color and sizing. */
-  style?: CSSProperties;
-}
+} & Omit<TextProps, "children">; // the surrounding card owns color and sizing
 
-export function NoteBody({ body, mentions = [], style }: NoteBodyProps) {
+export function NoteBody({ body, mentions = [], ...textProps }: NoteBodyProps) {
   const { t } = useTranslation("dashboard");
   const segments = parseNoteBody(body, mentions);
 
@@ -29,46 +27,18 @@ export function NoteBody({ body, mentions = [], style }: NoteBodyProps) {
   const isMeById = new Map(mentions.map((m) => [m.user_id.toLowerCase(), m.is_me === true]));
 
   return (
-    <pre
-      style={{
-        fontFamily: "inherit",
-        fontSize: 13,
-        lineHeight: 1.65,
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-        overflowX: "hidden",
-        margin: 0,
-        ...style,
-      }}
-    >
+    <Text tag="pre" display="block" fontSize={13} lineHeightRatio={1.65} whiteSpace="pre-wrap" wordBreak="break-word" overflowX="hidden" margin={0} {...textProps}>
       {segments.map((segment, index) => {
         if (segment.type === "text") {
           return <span key={index}>{segment.value}</span>;
         }
         const isMe = isMeById.get(segment.userId) === true;
         return (
-          <span
-            key={index}
-            // An unresolved id still renders — the person may have left the
-            // account since the note was written.
-            title={segment.name ?? undefined}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              padding: "0.5px 5px",
-              borderRadius: 4,
-              fontSize: "0.94em",
-              fontWeight: 500,
-              whiteSpace: "nowrap",
-              background: isMe ? "var(--k-mention-solid)" : "var(--k-mention-bg)",
-              color: isMe ? "white" : "var(--k-accent)",
-              border: `1px solid ${isMe ? "var(--k-mention-solid)" : "var(--k-mention-border)"}`,
-            }}
-          >
+          <Text key={index} title={segment.name ?? undefined} display="inline-flex" alignItems="center" paddingVertical={0.5} paddingHorizontal={5} borderRadius={4} fontSize="0.94em" fontWeight={500} whiteSpace="nowrap" backgroundColor={isMe ? "var(--k-mention-solid)" : "var(--k-mention-bg)"} color={isMe ? "white" : "var(--k-accent)"} borderWidth={1} borderColor={isMe ? "var(--k-mention-solid)" : "var(--k-mention-border)"} borderStyle="solid">
             @{segment.name ?? t("notes.unknownMember", "member")}
-          </span>
+          </Text>
         );
       })}
-    </pre>
+    </Text>
   );
 }

@@ -18,7 +18,7 @@ import { ChannelsSettings } from "@/components/channels-settings";
 import type { AppView } from "@/types";
 import { useActiveView } from "@/hooks/useActiveView";
 import { pathForView } from "@/routes";
-import { Spinner } from "@kairo/ui";
+import { Box, Spinner, Text } from "@kairo/ui";
 
 const COMING_SOON_VIEWS: AppView[] = ["in-progress"];
 
@@ -29,24 +29,14 @@ function ComingSoon({ view }: { view: AppView }) {
     view === "resolved" ? "dashboard:sidebar.resolved" :
     "dashboard:sidebar.escalation";
   return (
-    <div
-      style={{
-        display: "flex",
-        flex: 1,
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        background: "var(--k-bg)",
-      }}
-    >
-      <p style={{ color: "var(--k-text-primary)", fontSize: 15, fontWeight: 600 }}>
+    <Box display="flex" flexGrow={1} flexShrink={1} flexBasis="0%" flexDirection="column" alignItems="center" justifyContent="center" gap={8} backgroundColor="var(--k-bg)">
+      <Text tag="p" color="var(--k-text-primary)" fontSize={15} fontWeight={600} display="block">
         {t(titleKey)}
-      </p>
-      <p style={{ color: "var(--k-text-tertiary)", fontSize: 13 }}>
+      </Text>
+      <Text tag="p" color="var(--k-text-tertiary)" fontSize={13} display="block">
         {t("dashboard:settings.comingSoon")}
-      </p>
-    </div>
+      </Text>
+    </Box>
   );
 }
 
@@ -70,20 +60,10 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100vh",
-          flexDirection: "column",
-          gap: 12,
-          background: "var(--k-bg)",
-        }}
-      >
+      <Box display="flex" alignItems="center" justifyContent="center" height="100vh" flexDirection="column" gap={12} backgroundColor="var(--k-bg)">
         <Spinner size="lg" />
-        <p style={{ color: "var(--k-text-tertiary)", fontSize: 13 }}>Loading Kairo…</p>
-      </div>
+        <Text tag="p" color="var(--k-text-tertiary)" fontSize={13} display="block">Loading Kairo…</Text>
+      </Box>
     );
   }
 
@@ -103,20 +83,12 @@ function AppContent() {
   };
 
   return (
-    <div
-      style={{
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--k-bg)",
-        overflow: "hidden",
-      }}
-    >
+    <Box height="100vh" display="flex" flexDirection="column" backgroundColor="var(--k-bg)" overflow="hidden">
       {/* Top chrome — 56 px: logo/toggle | search | bell + avatar */}
       <TopChrome collapsed={sidebarCollapsed} onToggle={handleToggle} onViewChange={setActiveView} />
 
       {/* Body — sidebar + main content */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" overflow="hidden">
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={handleToggle}
@@ -128,11 +100,11 @@ function AppContent() {
             and right panel (340px floor — see use-resizable-panel.ts) become a
             real supported minimum: below that sum the row scrolls horizontally
             instead of clipping/squishing the center column. */}
-        <main style={{ flex: 1, overflowY: "hidden", overflowX: "auto", display: "flex" }}>
+        <Box tag="main" flexGrow={1} flexShrink={1} flexBasis="0%" overflowY="hidden" overflowX="auto" display="flex">
           {renderView()}
-        </main>
-      </div>
-    </div>
+        </Box>
+      </Box>
+    </Box>
   );
 }
 

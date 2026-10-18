@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Chip, Icon, Skeleton } from "@kairo/ui";
+import { Box, Chip, Icon, Pressable, Skeleton, Text } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // KAI-232 — small shared pieces of the internal-notes surface. Kept here (not
@@ -22,41 +22,16 @@ export function TeamOnlyChip({ size = "md" }: { size?: "sm" | "md" }) {
 export function NotesHeader({ count, onNewNote }: { count: number; onNewNote?: () => void }) {
   const { t } = useTranslation("dashboard");
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-      <span
-        style={{
-          fontFamily: "var(--k-font-mono)",
-          fontSize: 10.5,
-          color: "var(--k-text-tertiary)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-        }}
-      >
+    <Box display="flex" alignItems="center" gap={8} marginBottom={10}>
+      <Text font="mono" fontSize={10.5} color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.53}>
         {t("notes.count", { count, defaultValue: "{{count}} notes · this ticket" })}
-      </span>
+      </Text>
       {onNewNote && (
-        <button
-          type="button"
-          onClick={onNewNote}
-          style={{
-            marginLeft: "auto",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 11,
-            padding: "4px 8px",
-            borderRadius: 5,
-            border: "1px solid var(--k-note-border)",
-            background: "var(--k-note-bg)",
-            color: "var(--k-note-label)",
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
+        <Pressable type="button" onClick={onNewNote} marginLeft="auto" display="flex" alignItems="center" gap={4} fontSize={11} paddingVertical={4} paddingHorizontal={8} borderRadius={5} borderWidth={1} borderColor="var(--k-note-border)" backgroundColor="var(--k-note-bg)" color="var(--k-note-label)" fontWeight={500} cursor="pointer" borderStyle="solid">
           + {t("notes.new", "New note")}
-        </button>
+        </Pressable>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -64,45 +39,26 @@ export function NotesHeader({ count, onNewNote }: { count: number; onNewNote?: (
 export function PrivacyFootnote() {
   const { t } = useTranslation("dashboard");
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 6,
-        marginTop: 4,
-        padding: "8px 10px",
-        borderRadius: 6,
-        background: "var(--k-surface)",
-        border: "1px solid var(--k-border-subtle)",
-      }}
-    >
-      <Icon name="lock" size={11} color="var(--k-text-tertiary)" style={{ flexShrink: 0, marginTop: 2 }} />
-      <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", lineHeight: 1.45 }}>
+    <Box display="flex" alignItems="flex-start" gap={6} marginTop={4} paddingVertical={8} paddingHorizontal={10} borderRadius={6} backgroundColor="var(--k-surface)" borderWidth={1} borderColor="var(--k-border-subtle)" borderStyle="solid">
+      <Icon name="lock" size={11} color="var(--k-text-tertiary)" marginTop={2} />
+      <Text fontSize={11} color="var(--k-text-tertiary)" lineHeight={15.95}>
         {t("notes.privacy", "Internal notes are never sent to or visible by the customer.")}
-      </span>
-    </div>
+      </Text>
+    </Box>
   );
 }
 
 /** Loading placeholder with the real card's amber outline and metrics. */
 export function NoteSkeleton() {
   return (
-    <div
-      style={{
-        padding: "10px 12px",
-        borderRadius: 8,
-        marginBottom: 8,
-        background: "var(--k-note-bg)",
-        border: "1px solid var(--k-note-border)",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+    <Box paddingVertical={10} paddingHorizontal={12} borderRadius={8} marginBottom={8} backgroundColor="var(--k-note-bg)" borderWidth={1} borderColor="var(--k-note-border)" borderStyle="solid">
+      <Box display="flex" alignItems="center" gap={7} marginBottom={8}>
         <Skeleton width={20} height={20} borderRadius={999} />
         <Skeleton height={9} width={92} />
         <Skeleton height={8} width={34} marginLeft="auto" />
-      </div>
+      </Box>
       <Skeleton height={8} width="100%" marginBottom={6} />
       <Skeleton height={8} width="72%" />
-    </div>
+    </Box>
   );
 }

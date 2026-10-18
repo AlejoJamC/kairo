@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",
-    "clean": "rm -rf dist node_modules/.tmp"
+    "clean": "rm -rf dist node_modules/.tmp",
+    "preview:dev": "vite --config vite.preview.config.ts"
   },
   "dependencies": {
     "@kairo/client-core": "workspace:*",
@@ -24,7 +25,6 @@
     "@kairo/ui": "workspace:*",
     "@supabase/supabase-js": "^2.105.3",
     "@t3-oss/env-core": "^0.13.11",
-    "@tailwindcss/vite": "^4.2.4",
     "@tamagui/core": "^1.144.3",
     "@tanstack/react-virtual": "^3.13.24",
     "i18next": "^26.0.9",
@@ -33,7 +33,6 @@
     "react-dom": "^19.2.5",
     "react-i18next": "^17.0.6",
     "react-router": "^7.18.4",
-    "tailwindcss": "^4.2.4",
     "zod": "^4.4.3",
     "zustand": "^5.0.13"
   },

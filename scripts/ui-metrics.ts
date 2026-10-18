@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
-const SKIP_DIRS = new Set(["node_modules", ".next", "out", "dist", ".turbo", "public", ".tamagui", "coverage"]);
+const SKIP_DIRS = new Set(["node_modules", ".next", "out", "dist", ".turbo", "public", ".tamagui", "coverage", "preview"]);
 const CLIENT_APPS = ["dashboard", "landing", "kelan", "mobile"];
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -91,7 +91,7 @@ const tokenSources = [
 // Modules exported by packages/ui against the specification files, with the
 // names the specification uses for pieces whose code name differs.
 const SPEC_ALIAS: Record<string, string> = {};
-const NOT_COMPONENTS = new Set(["provider"]);
+const NOT_COMPONENTS = new Set(["provider", "layout", "plain"]);
 const uiIndex = join(ROOT, "packages/ui/src/index.ts");
 const uiModules = existsSync(uiIndex)
   ? [...read(uiIndex).matchAll(/export \* from ["']\.\/([a-z-]+)["']/g)].map((m) => m[1])

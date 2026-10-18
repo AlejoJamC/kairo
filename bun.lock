@@ -48,7 +48,6 @@
         "@kairo/ui": "workspace:*",
         "@supabase/supabase-js": "^2.105.3",
         "@t3-oss/env-core": "^0.13.11",
-        "@tailwindcss/vite": "^4.2.4",
         "@tamagui/core": "^1.144.3",
         "@tanstack/react-virtual": "^3.13.24",
         "i18next": "^26.0.9",
@@ -56,8 +55,7 @@
         "react": "^19.2.5",
         "react-dom": "^19.2.5",
         "react-i18next": "^17.0.6",
-        "react-router": "7",
-        "tailwindcss": "^4.2.4",
+        "react-router": "^7.18.4",
         "zod": "^4.4.3",
         "zustand": "^5.0.13",
       },
@@ -1283,8 +1281,6 @@
     "@tailwindcss/oxide-win32-x64-msvc": ["@tailwindcss/oxide-win32-x64-msvc@4.2.4", "", { "os": "win32", "cpu": "x64" }, "sha512-ESlKG0EpVJQwRjXDDa9rLvhEAh0mhP1sF7sap9dNZT0yyl9SAG6T7gdP09EH0vIv0UNTlo6jPWyujD6559fZvw=="],
 
     "@tailwindcss/postcss": ["@tailwindcss/postcss@4.2.4", "", { "dependencies": { "@alloc/quick-lru": "^5.2.0", "@tailwindcss/node": "4.2.4", "@tailwindcss/oxide": "4.2.4", "postcss": "^8.5.6", "tailwindcss": "4.2.4" } }, "sha512-wgAVj6nUWAolAu8YFvzT2cTBIElWHkjZwFYovF+xsqKsW2ADxM/X2opxj5NsF/qVccAOjRNe8X2IdPzMsWyHTg=="],
-
-    "@tailwindcss/vite": ["@tailwindcss/vite@4.2.4", "", { "dependencies": { "@tailwindcss/node": "4.2.4", "@tailwindcss/oxide": "4.2.4", "tailwindcss": "4.2.4" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7 || ^8" } }, "sha512-pCvohwOCspk3ZFn6eJzrrX3g4n2JY73H6MmYC87XfGPyTty4YsCjYTMArRZm/zOI8dIt3+EcrLHAFPe5A4bgtw=="],
 
     "@tamagui/animations-css": ["@tamagui/animations-css@1.144.4", "", { "dependencies": { "@tamagui/constants": "1.144.4", "@tamagui/cubic-bezier-animator": "1.144.4", "@tamagui/use-presence": "1.144.4", "@tamagui/web": "1.144.4" }, "peerDependencies": { "react": "*", "react-dom": "*" } }, "sha512-U9uwhbrlKfc6USm++QT85EChBBWhRdMhTiS6ydHDAeM/KnRkH/enKdj6pwRis4CYRQ6JvjciNWj6nT/uMjNuBQ=="],
 

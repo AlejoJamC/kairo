@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { renderWithProviders as render } from '@/test/render-with-providers';
 import { TicketDecisions } from './ticket-decisions';
 import { apiCall } from '@kairo/client-core/api-client';
 vi.mock('@kairo/client-core/api-client', () => ({ apiCall:vi.fn() }));

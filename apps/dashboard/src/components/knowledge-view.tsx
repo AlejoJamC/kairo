@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { getKnowledgeDrafts, getKbEvidence, reviewKnowledge } from "@kairo/client-core/endpoints";
 import { useAuth } from "@kairo/client-core/auth";
 import type { AppView } from "@/types";
-import { Spinner } from "@kairo/ui";
+import { Box, Button, Chip, Field, FieldInput, FieldTextarea, Pressable, Spinner, Text } from "@kairo/ui";
 
 type ArticleFilter = "draft" | "published";
 
@@ -126,114 +126,53 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
     }
   };
 
-  const tabStyle = (active: boolean) => ({
-    padding: "6px 12px",
-    fontSize: 13,
-    fontWeight: 500,
-    borderRadius: 6,
-    border: "1px solid var(--k-border)",
-    cursor: "pointer",
-    background: active ? "var(--k-text-primary)" : "white",
-    color: active ? "white" : "var(--k-text-secondary)",
-  });
-
-  const buttonStyle = (primary: boolean) => ({
-    padding: "6px 14px",
-    fontSize: 13,
-    fontWeight: 500,
-    borderRadius: 6,
-    cursor: busy ? "not-allowed" : "pointer",
-    opacity: busy ? 0.6 : 1,
-    border: "1px solid var(--k-border)",
-    background: primary ? "var(--k-text-primary)" : "white",
-    color: primary ? "white" : "var(--k-text-primary)",
-  });
-
-  const fieldStyle = {
-    width: "100%",
-    boxSizing: "border-box" as const,
-    padding: "8px 10px",
-    fontSize: 14,
-    border: "1px solid var(--k-border)",
-    borderRadius: 6,
-    fontFamily: "inherit",
-    color: "var(--k-text-primary)",
-    background: "white",
-  };
-
   return (
     <>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          background: "var(--k-surface)",
-          width: selected ? 360 : undefined,
-          minWidth: selected ? 360 : undefined,
-          flex: selected ? undefined : 1,
-          borderRight: selected ? "1px solid var(--k-border)" : undefined,
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ borderBottom: "1px solid var(--k-border)", background: "white", padding: "16px 24px", flexShrink: 0 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 600, color: "var(--k-text-primary)", letterSpacing: "-0.01em", fontFamily: "var(--k-font-display)", margin: 0 }}>
+      <Box display="flex" flexDirection="column" overflow="hidden" backgroundColor="var(--k-surface)" width={selected ? 360 : undefined} minWidth={selected ? 360 : undefined} flex={selected ? undefined : 1} borderRightWidth={selected ? 1 : 0} borderRightColor="var(--k-border)" flexShrink={0} borderStyle="solid">
+        <Box borderBottomWidth={1} borderBottomColor="var(--k-border)" backgroundColor="white" paddingVertical={16} paddingHorizontal={24} flexShrink={0} borderStyle="solid">
+          <Text tag="h1" fontSize={18} fontWeight={600} color="var(--k-text-primary)" letterSpacing={-0.18} font="display" margin={0} display="block">
             {t("knowledgeView.title")}
-          </h1>
-          <p style={{ marginTop: 2, fontSize: 13, color: "var(--k-text-tertiary)" }}>{t("knowledgeView.subtitle")}</p>
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button type="button" style={tabStyle(filter === "draft")} onClick={() => { setFilter("draft"); setSelectedId(null); }}>
+          </Text>
+          <Text tag="p" marginTop={2} fontSize={13} color="var(--k-text-tertiary)" display="block">{t("knowledgeView.subtitle")}</Text>
+          <Box display="flex" gap={8} marginTop={12}>
+            <Chip selected={filter === "draft"} onPress={() => { setFilter("draft"); setSelectedId(null); }}>
               {t("knowledgeView.tabDrafts")}
-            </button>
-            <button type="button" style={tabStyle(filter === "published")} onClick={() => { setFilter("published"); setSelectedId(null); }}>
+            </Chip>
+            <Chip selected={filter === "published"} onPress={() => { setFilter("published"); setSelectedId(null); }}>
               {t("knowledgeView.tabPublished")}
-            </button>
-          </div>
-        </div>
+            </Chip>
+          </Box>
+        </Box>
 
-        <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
+        <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll paddingBottom={8}>
           {loading && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
+            <Box display="flex" alignItems="center" justifyContent="center" paddingTop={64}>
               <Spinner size="lg" />
-            </div>
+            </Box>
           )}
 
           {!loading && visible.length === 0 && (
-            <div style={{ display: "flex", justifyContent: "center", paddingTop: 80, textAlign: "center" }}>
-              <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>
+            <Text tag="div" display="flex" justifyContent="center" paddingTop={80} textAlign="center">
+              <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" display="block">
                 {t(filter === "draft" ? "knowledgeView.emptyDrafts" : "knowledgeView.emptyPublished")}
-              </p>
-            </div>
+              </Text>
+            </Text>
           )}
 
           {!loading &&
             visible.map((article) => (
-              <button
-                key={article.id}
-                type="button"
-                onClick={() => open(article)}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "12px 24px",
-                  border: "none",
-                  borderBottom: "1px solid var(--k-border)",
-                  cursor: "pointer",
-                  background: selectedId === article.id ? "var(--k-bg)" : "transparent",
-                }}
-              >
-                <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{article.title}</span>
-                <span style={{ display: "block", marginTop: 2, fontSize: 12, color: "var(--k-text-tertiary)" }}>
+              <Pressable key={article.id} type="button" onClick={() => open(article)} display="block" width="100%" textAlign="left" paddingVertical={12} paddingHorizontal={24} borderBottomWidth={1} borderBottomColor="var(--k-border)" cursor="pointer" backgroundColor={selectedId === article.id ? "var(--k-bg)" : "transparent"} borderStyle="solid">
+                <Text display="block" fontSize={14} fontWeight={500} color="var(--k-text-primary)">{article.title}</Text>
+                <Text display="block" marginTop={2} fontSize={12} color="var(--k-text-tertiary)">
                   {(article.tags ?? []).includes(AI_DRAFT_TAG) ? t("knowledgeView.aiDraft") : t("knowledgeView.manual")}
-                </span>
-              </button>
+                </Text>
+              </Pressable>
             ))}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {selected && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflowY: "auto", background: "var(--k-surface)", padding: 24, gap: 12 }}>
+        <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" flexDirection="column" minWidth={0} scroll backgroundColor="var(--k-surface)" padding={24} gap={12}>
           {selected.tags?.some(tag => tag.startsWith('source-message:')) && (
             <section aria-label={t('knowledgeView.evidenceTitle')}>
               <strong>{t('knowledgeView.evidenceTitle')}</strong>
@@ -245,40 +184,34 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
                 ))}
               </ul>
               {evidenceError && <p role="alert">{t('knowledgeView.evidenceUnavailable')}</p>}
-              {evidence?.evidence.map((quote, index) => <blockquote key={index} style={{ whiteSpace: 'pre-wrap' }}>{quote}</blockquote>)}
+              {evidence?.evidence.map((quote, index) => <Text tag="blockquote" key={index} display="block" whiteSpace="pre-wrap">{quote}</Text>)}
               {evidence && !evidence.evidence.length && <p>{t('knowledgeView.evidenceUnavailable')}</p>}
               <ol>
                 {evidence?.steps.map(step => <li key={step.feature}>{t(labelKey(STEP_KEYS, step.feature) ?? 'knowledgeView.evidenceTitle')} — {step.model} ({step.version})</li>)}
               </ol>
             </section>
           )}
-          <label style={{ fontSize: 12, color: "var(--k-text-tertiary)" }}>
-            {t("knowledgeView.fieldTitle")}
-            <input value={title} onChange={(e) => setTitle(e.target.value)} style={{ ...fieldStyle, marginTop: 4 }} />
-          </label>
-          <label style={{ fontSize: 12, color: "var(--k-text-tertiary)", display: "flex", flexDirection: "column", flex: 1 }}>
-            {t("knowledgeView.fieldContent")}
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              style={{ ...fieldStyle, marginTop: 4, flex: 1, minHeight: 320, resize: "vertical" }}
-            />
-          </label>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Field label={t("knowledgeView.fieldTitle")}>
+            <FieldInput value={title} onChangeText={setTitle} />
+          </Field>
+          <Field label={t("knowledgeView.fieldContent")}>
+            <FieldTextarea value={content} onChangeText={setContent} minHeight={320} />
+          </Field>
+          <Box display="flex" alignItems="center" gap={8}>
             {!selected.is_published && (
-              <button type="button" disabled={busy} style={buttonStyle(true)} onClick={() => void save(selected, true)}>
-                {t("knowledgeView.publish")}
-              </button>
+              <Button variant="primary" disabled={busy} onPress={() => void save(selected, true)}>
+              {t("knowledgeView.publish")}
+            </Button>
             )}
-            <button type="button" disabled={busy} style={buttonStyle(false)} onClick={() => void save(selected, false)}>
+            <Button disabled={busy} onPress={() => void save(selected, false)}>
               {t("knowledgeView.save")}
-            </button>
-            <button type="button" disabled={busy} style={buttonStyle(false)} onClick={() => void discard(selected)}>
+            </Button>
+            <Button disabled={busy} onPress={() => void discard(selected)}>
               {selected.is_published ? t("knowledgeView.delete") : t("knowledgeView.discard")}
-            </button>
-            {error && <span style={{ fontSize: 13, color: "var(--k-danger, var(--kairo-color-bad-ink))" }}>{t("knowledgeView.error")}</span>}
-          </div>
-        </div>
+            </Button>
+            {error && <Text fontSize={13} color="var(--k-danger, var(--kairo-color-bad-ink))">{t("knowledgeView.error")}</Text>}
+          </Box>
+        </Box>
       )}
     </>
   );

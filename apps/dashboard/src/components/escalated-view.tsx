@@ -7,7 +7,7 @@ import { TicketCard } from "@/components/ticket-card";
 import type { AppView } from "@/types";
 import type { Ticket } from "@kairo/types";
 import { ESCALATED_STATUSES } from "@kairo/client-core/triage-status";
-import { EmptyState, Spinner } from "@kairo/ui";
+import { Box, EmptyState, Spinner, Text } from "@kairo/ui";
 
 // Own bucket in triage-status.ts (STATUS_BUCKET), counted by the Escalado
 // badge and not by Triage — mirrors ResolvedView's setup one status down.
@@ -50,36 +50,23 @@ export function EscalatedView({ onViewChange: _onViewChange }: EscalatedViewProp
   // ---------------------------------------------------------------------------
 
   const listPane = (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        background: "var(--k-surface)",
-        // Full width when no ticket selected; fixed width (like inbox) when detail pane is open
-        width: showDetailPane ? 360 : undefined,
-        minWidth: showDetailPane ? 360 : undefined,
-        flex: showDetailPane ? undefined : 1,
-        borderRight: showDetailPane ? "1px solid var(--k-border)" : undefined,
-        flexShrink: 0,
-      }}
-    >
+    <Box display="flex" flexDirection="column" overflow="hidden" backgroundColor="var(--k-surface)" width={showDetailPane ? 360 : undefined} minWidth={showDetailPane ? 360 : undefined} flex={showDetailPane ? undefined : 1} borderRightWidth={showDetailPane ? 1 : 0} borderRightColor="var(--k-border)" flexShrink={0} borderStyle="solid">
       {/* Header */}
-      <div style={{ borderBottom: "1px solid var(--k-border)", background: "white", padding: "16px 24px", flexShrink: 0 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 600, color: "var(--k-text-primary)", letterSpacing: "-0.01em", fontFamily: "var(--k-font-display)", margin: 0 }}>
+      <Box borderBottomWidth={1} borderBottomColor="var(--k-border)" backgroundColor="white" paddingVertical={16} paddingHorizontal={24} flexShrink={0} borderStyle="solid">
+        <Text tag="h1" fontSize={18} fontWeight={600} color="var(--k-text-primary)" letterSpacing={-0.18} font="display" margin={0} display="block">
           {t("escalatedView.title")}
-        </h1>
-        <p style={{ marginTop: 2, fontSize: 13, color: "var(--k-text-tertiary)" }}>
+        </Text>
+        <Text tag="p" marginTop={2} fontSize={13} color="var(--k-text-tertiary)" display="block">
           {t("escalatedView.subtitle")}
-        </p>
-      </div>
+        </Text>
+      </Box>
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll paddingBottom={8}>
         {loading && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
+          <Box display="flex" alignItems="center" justifyContent="center" paddingTop={64}>
             <Spinner size="lg" />
-          </div>
+          </Box>
         )}
 
         {!loading && tickets.length === 0 && (
@@ -95,8 +82,8 @@ export function EscalatedView({ onViewChange: _onViewChange }: EscalatedViewProp
               onSelect={() => openThread(ticket)}
             />
           ))}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 
   if (!showDetailPane) {

@@ -1,7 +1,7 @@
 import { useLocale } from "@/hooks/useLocale";
 import type { SupportedLanguage } from "@/i18n/types";
 import { useTranslation } from "react-i18next";
-import { Field, FieldSelect, Icon } from "@kairo/ui";
+import { Box, Field, FieldSelect, Icon } from "@kairo/ui";
 
 export function LanguageSwitcher() {
   const { t } = useTranslation("common");
@@ -9,8 +9,10 @@ export function LanguageSwitcher() {
     useLocale();
 
   return (
-    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-      <Icon name="globe" size={13} color="var(--k-text-tertiary)" style={{ position: "absolute", left: 8, pointerEvents: "none", zIndex: 1 }} />
+    <Box position="relative" display="flex" alignItems="center">
+      <Box position="absolute" left={8} zIndex={1} pointerEvents="none">
+        <Icon name="globe" size={13} color="var(--k-text-tertiary)" />
+      </Box>
       <Field label={t("language")} hideLabel>
       <FieldSelect
         value={language}
@@ -25,6 +27,6 @@ export function LanguageSwitcher() {
         ))}
       </FieldSelect>
       </Field>
-    </div>
+    </Box>
   );
 }

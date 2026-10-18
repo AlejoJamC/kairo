@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Dialog, Field, FieldInput, FieldSelect, FieldTextarea, Icon, IconButton } from "@kairo/ui";
+import { Box, Button, Dialog, Field, FieldInput, FieldSelect, FieldTextarea, Icon, IconButton, Text } from "@kairo/ui";
 import { saveClient } from "@kairo/client-core/endpoints";
 import type { Client, PlanType, SlaLevel, ContactPerson } from "@/types";
 
@@ -169,13 +169,13 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
       }
     >
       {error && (
-        <div role="alert" style={{ borderRadius: 6, background: "var(--kairo-color-bad-soft)", border: "1px solid var(--kairo-color-bad-line)", padding: "8px 12px", fontSize: 13, color: "var(--kairo-color-bad-ink)" }}>
+        <Text tag="div" role="alert" borderRadius={6} backgroundColor="var(--kairo-color-bad-soft)" borderWidth={1} borderColor="var(--kairo-color-bad-line)" paddingVertical={8} paddingHorizontal={12} fontSize={13} color="var(--kairo-color-bad-ink)" display="block" borderStyle="solid">
           {error}
-        </div>
+        </Text>
       )}
 
       {/* Internal ID & Name */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <Box grid gridTemplateColumns="1fr 1fr" gap={16}>
         <Field label={`${t("form.internalIdLabel")} *`}>
           <FieldInput
             value={form.internal_id}
@@ -187,20 +187,20 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
         <Field label={`${t("form.nameLabel")} *`}>
           <FieldInput value={form.name} onChangeText={(text) => set("name", text)} placeholder={t("form.namePlaceholder")} />
         </Field>
-      </div>
+      </Box>
 
       {/* Legal ID & Telephone */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <Box grid gridTemplateColumns="1fr 1fr" gap={16}>
         <Field label={t("form.legalIdLabel")}>
           <FieldInput value={form.legal_id} onChangeText={(text) => set("legal_id", text)} placeholder={t("form.legalIdPlaceholder")} />
         </Field>
         <Field label={t("form.telephoneLabel")}>
           <FieldInput value={form.telephone} onChangeText={(text) => set("telephone", text)} placeholder={t("form.telephonePlaceholder")} />
         </Field>
-      </div>
+      </Box>
 
       {/* Plan & SLA */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <Box grid gridTemplateColumns="1fr 1fr" gap={16}>
         <Field label={t("form.planLabel")}>
           <FieldSelect value={form.plan_type} onValueChange={(next) => set("plan_type", next as PlanType | "")}>
             <option value="">{t("form.planPlaceholder")}</option>
@@ -217,7 +217,7 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
             <option value="Standard">Standard</option>
           </FieldSelect>
         </Field>
-      </div>
+      </Box>
 
       {/* Authorized Emails */}
       <Field label={t("form.authorizedEmailsLabel")}>
@@ -231,17 +231,17 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
 
       {/* Contact Persons */}
       <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ fontFamily: "var(--k-font-mono)", fontSize: 10.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--k-text-tertiary)" }}>
+        <Box display="flex" alignItems="center" justifyContent="space-between" marginBottom={8}>
+          <Text font="mono" fontSize={10.5} letterSpacing={0.63} textTransform="uppercase" color="var(--k-text-tertiary)">
             {t("form.contactPersonsLabel")}
-          </span>
+          </Text>
           <Button variant="link" icon={<Icon name="plus" size={12} color="var(--k-accent)" />} onPress={addPerson}>
             {t("form.addPerson")}
           </Button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        </Box>
+        <Box display="flex" flexDirection="column" gap={8}>
           {form.contactPersons.map((cp, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <Box key={i} display="flex" gap={8} alignItems="flex-end">
               <Field label={t("form.personNamePlaceholder")} hideLabel>
                 <FieldInput value={cp.name} onChangeText={(text) => updatePerson(i, "name", text)} placeholder={t("form.personNamePlaceholder")} />
               </Field>
@@ -251,9 +251,9 @@ export function ClientFormModal({ isOpen, client, onClose, onSaved }: Props) {
               <IconButton label={t("form.removePerson")} onPress={() => removePerson(i)}>
                 <Icon name="trash" size={14} color="var(--k-text-tertiary)" />
               </IconButton>
-            </div>
+            </Box>
           ))}
-        </div>
+        </Box>
       </div>
     </Dialog>
   );
