@@ -27,6 +27,7 @@ there, not here.
 │   ├── types/          # shared TypeScript interfaces
 │   ├── i18n/           # shared translation resources (EN/ES)
 │   ├── ui/             # shared UI primitives and blocks for web and native clients
+│   ├── tokens/         # design tokens (W3C DTCG source, generated CSS and TS)
 │   ├── client-core/    # shared client logic: API client, session, platform ports, triage state
 │   ├── feature-flags/  # static + runtime feature flags
 │   ├── identity/       # email/phone normalization, contact dedup

@@ -74,21 +74,42 @@ const duplicatedComponents = [...definitions.entries()]
   .map(([name, files]) => ({ name, files: [...files] }));
 
 const tokenSources = [
-  ...walk(join(ROOT, "apps")).concat(walk(join(ROOT, "packages"))).filter((f) => f.endsWith(".css") && count(read(f), /^\s*--[a-z0-9-]+\s*:/gm) >= 10),
+  ...walk(join(ROOT, "apps")).concat(walk(join(ROOT, "packages"))).filter(
+    (f) =>
+      f.endsWith(".css") &&
+      !f.includes("/packages/tokens/") &&
+      count(read(f), /^\s*--[a-z0-9-]+\s*:/gm) >= 10,
+  ),
   ...["packages/ui/tamagui.config.ts", "packages/ui/src/triage-tokens.ts"].map((f) => join(ROOT, f)).filter(existsSync),
 ].map((f) => relative(ROOT, f));
 
-const uiExports = existsSync(join(ROOT, "packages/ui/src/index.ts"))
-  ? count(read(join(ROOT, "packages/ui/src/index.ts")), /^export \* from/gm)
-  : 0;
-const specDir = join(ROOT, "packages/ui/spec");
-const specFiles = existsSync(specDir) ? walk(specDir).filter((f) => f.endsWith(".md")).length : 0;
+// Modules exported by packages/ui against the specification files, with the
+// names the specification uses for pieces whose code name differs.
+const SPEC_ALIAS: Record<string, string> = { "dropdown-menu": "menu", input: "field", sheet: "drawer" };
+const NOT_COMPONENTS = new Set(["triage-tokens", "provider"]);
+const uiIndex = join(ROOT, "packages/ui/src/index.ts");
+const uiModules = existsSync(uiIndex)
+  ? [...read(uiIndex).matchAll(/export \* from ["']\.\/([a-z-]+)["']/g)].map((m) => m[1])
+  : [];
+const specNames = new Set(
+  ["components", "blocks"].flatMap((d) => {
+    const dir = join(ROOT, "packages/ui/spec", d);
+    return existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)) : [];
+  }),
+);
+const uiExportsWithoutSpec = uiModules.filter((m) => !NOT_COMPONENTS.has(m) && !specNames.has(SPEC_ALIAS[m] ?? m));
+const implemented = new Set(uiModules.map((m) => SPEC_ALIAS[m] ?? m));
+const specPiecesWithoutCode = [...specNames].filter((n) => !implemented.has(n)).sort();
+
+const specTemplates = join(ROOT, "packages/ui/spec/templates");
+const specFiles = [...specNames].length + (existsSync(specTemplates) ? readdirSync(specTemplates).length : 0);
 
 const report = {
-  tokenSources: { count: tokenSources.length, target: 1, files: tokenSources },
+  tokenSources: { count: tokenSources.length, target: 0, files: tokenSources },
   tokensPackagePresent: existsSync(join(ROOT, "packages/tokens")),
-  uiModulesExported: uiExports,
-  uiSpecFiles: specFiles,
+  uiExportsWithoutSpec,
+  specPiecesWithoutCode,
+  specFiles,
   apps,
   duplicatedComponentNames: duplicatedComponents,
 };
@@ -96,10 +117,12 @@ const report = {
 if (process.argv.includes("--json")) {
   console.log(JSON.stringify(report, null, 2));
 } else {
-  console.log(`Token sources: ${report.tokenSources.count} (target 1)`);
+  console.log(`Hand-written token sources outside packages/tokens: ${report.tokenSources.count} (target 0)`);
   for (const f of tokenSources) console.log(`  ${f}`);
   console.log(`packages/tokens present: ${report.tokensPackagePresent}`);
-  console.log(`packages/ui modules exported: ${uiExports}, spec files: ${specFiles}`);
+  console.log(`spec files: ${specFiles}`);
+  console.log(`packages/ui exports without a specification: ${uiExportsWithoutSpec.length} (${uiExportsWithoutSpec.join(", ") || "-"})`);
+  console.log(`specified pieces without code in packages/ui: ${specPiecesWithoutCode.length}`);
   console.log("");
   console.log("app        tsx  importUi  style={{}}  hex  viewsCallingApi");
   for (const a of apps) {
