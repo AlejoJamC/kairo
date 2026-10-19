@@ -12,9 +12,8 @@ import {
   extractMentionUserIds,
   removeMentionToken,
 } from "@kairo/client-core/note-mentions";
-import { MentionDropdown } from "./triage/mention-dropdown";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, Box, Icon, PlainTextarea, Pressable, Segmented, Text, type PressableProps } from "@kairo/ui";
+import { Avatar, Box, Composer, ComposerPill, Icon, MentionList, PlainTextarea, Pressable, Text, type PressableProps, type SendOption } from "@kairo/ui";
 import { useAuth } from "@kairo/client-core/auth";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import type { TicketStatus } from "@kairo/types";
@@ -159,24 +158,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const [actionLoading, setActionLoading] = React.useState<TicketAction | null>(null);
   const [textareaHeight, setTextareaHeight] = React.useState(80);
   const dragRef = React.useRef<{ startY: number; startHeight: number } | null>(null);
-  const [sendMenuOpen, setSendMenuOpen] = React.useState(false);
   const [resolving, setResolving] = React.useState(false);
-  const sendMenuRef = React.useRef<HTMLDivElement>(null);
-
-  // Send split-button menu — click-outside / Escape to close.
-  React.useEffect(() => {
-    if (!sendMenuOpen) return;
-    function onDown(e: MouseEvent) {
-      if (sendMenuRef.current && !sendMenuRef.current.contains(e.target as Node)) setSendMenuOpen(false);
-    }
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setSendMenuOpen(false); }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [sendMenuOpen]);
 
   // ---------------------------------------------------------------------------
   // KAI-232 — @mention autocomplete (note mode only)
@@ -431,7 +413,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   // menu instead of the row above the composer. Never sends an email.
   async function handleResolveOnly() {
     if (!selectedTicketId || resolving) return;
-    setSendMenuOpen(false);
     setResolving(true);
     await patchStatus("resolved");
     setResolving(false);
@@ -461,7 +442,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   // ---------------------------------------------------------------------------
   // Keyboard
   // ---------------------------------------------------------------------------
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+  function handleKeyDown(e: { key: string; preventDefault: () => void }) {
     // KAI-232: while the mention dropdown is open it owns the arrow keys,
     // Enter/Tab (select) and Escape (dismiss) — send shortcuts still work.
     if (mentionOpen) {
@@ -487,21 +468,12 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         return;
       }
     }
-
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      if (isNote) {
-        handleSendNote();
-      } else {
-        handleSend(false);
-      }
-    }
   }
 
   // ---------------------------------------------------------------------------
   // Drag handle
   // ---------------------------------------------------------------------------
-  function handleDragStart(e: React.MouseEvent) {
+  function handleDragStart(e: { clientY: number; preventDefault: () => void }) {
     e.preventDefault();
     dragRef.current = { startY: e.clientY, startHeight: textareaHeight };
     function onMove(ev: MouseEvent) {
@@ -541,256 +513,191 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     !isNote &&
     ESCALATABLE_STATUSES.includes(currentStatus as (typeof ESCALATABLE_STATUSES)[number]);
 
-  // Accent / left stripe based on mode
-  const modeAccentGradient = isNote
-    ? "linear-gradient(180deg, var(--kairo-color-warn), var(--kairo-color-cat-billing))"
-    : "linear-gradient(180deg, var(--k-accent), var(--k-accent-2))";
-
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
-  return (
-    <Box position="relative" borderTopWidth={1} borderTopColor="var(--k-border)" backgroundColor="white" paddingTop={0} paddingHorizontal={16} paddingBottom={10} flexShrink={0} borderStyle="solid">
-      {/* Left accent stripe — changes color per mode */}
-      <Box position="absolute" left={0} top={0} bottom={0} width={2} backgroundImage={modeAccentGradient} transition="background 0.2s ease" />
+  const sendOptions: SendOption[] = [
+    { id: "send-resolve", label: t("replyBar.sendAndResolve", "Send & Resolve"), disabled: !canSend, onSelect: () => handleSend(true) },
+    { id: "resolve", label: resolving ? "…" : t(ACTION_CONFIG.resolver.labelKey, ACTION_CONFIG.resolver.defaultLabel), disabled: resolving, onSelect: handleResolveOnly },
+  ];
 
-      {/* Drag handle */}
-      <Box onMouseDown={handleDragStart} display="flex" justifyContent="center" alignItems="center" paddingTop={6} paddingHorizontal={0} paddingBottom={4} cursor="ns-resize" userSelect="none">
-        <Box hoverStyle={{ backgroundColor: "var(--k-text-tertiary)" }} width={32} height={4} borderRadius={999} backgroundColor="var(--k-border)" transition="background 0.15s ease" />
-      </Box>
-
-      {/* ── DIMENSION 1: Mode selector ─────────────────────────────────── */}
-      {/* KAI-232: the reply/note switch only exists when internal notes are on. */}
-      {INTERNAL_NOTES_ENABLED && (
-      <Box marginBottom={8}>
-        <Segmented
-          label={t("replyBar.modeLabel", "Composer mode")}
-          value={mode}
-          items={[
-            { value: "reply", label: t("replyBar.modeReply", "Reply") },
-            { value: "note", label: t("replyBar.modeNote", "Internal note"), tone: "note" },
-          ]}
-          onChange={(next) => {
-            setMode(next);
-            setSendError(null);
-            setSendSuccess(false);
-            if (next === "note") {
-              setShowAiBanner(false);
-              setShowEscalatePanel(false);
-            }
-          }}
-        />
-      </Box>
-      )}
-
-      {/* Tool buttons row */}
-      <Box display="flex" gap={4} marginBottom={8}>
-        {!isNote && (
-          <TemplatePicker onSelect={handleTemplateSelect} previewVars={templatePreviewVars}>
-            <Pressable type="button" display="flex" alignItems="center" gap={4} fontSize={11} paddingVertical={4} paddingHorizontal={9} borderWidth={1} borderColor="var(--k-border)" borderRadius={999} color="var(--k-text-secondary)" backgroundColor="white" cursor="pointer" borderStyle="solid">
-              <Icon name="zap" size={11} />
-              {t("ticketDetail.quickReply")}
-            </Pressable>
-          </TemplatePicker>
-        )}
-        {isNote && <TeamOnlyChip />}
-        {/* KAI-232 spec C7: who this note will notify. The body stores opaque
-            tokens, so these chips are the only readable confirmation. */}
-        {isNote && draftMentions.map((member) => (
-          <SelectedMentionChip key={member.user_id} member={member} onRemove={removeMention} />
-        ))}
-        {isNote && draftMentions.length > 0 && (
-          <Text fontSize={10.5} color="var(--k-note-label)" opacity={0.75} marginLeft={2}>
-            {t("mention.willNotify", { count: draftMentions.length, defaultValue: "will be notified" })}
+  const aiBanner = showAiBanner && !isNote ? (
+    <Box marginBottom={10} borderWidth={1} borderColor="var(--kairo-color-accent-line)" borderRadius={10} overflow="hidden" backgroundColor="var(--k-accent-subtle)" borderStyle="solid">
+      {/* Card header */}
+      <Box display="flex" alignItems="center" justifyContent="space-between" paddingTop={7} paddingHorizontal={10} paddingBottom={6} borderBottomWidth={1} borderBottomColor="var(--kairo-color-accent-line)" borderStyle="solid">
+        <Box display="flex" alignItems="center" gap={8}>
+          <Text fontSize={10} fontWeight={700} paddingVertical={2} paddingHorizontal={7} borderRadius={999} backgroundColor="var(--k-accent)" color="white" letterSpacing={0.5}>
+            ✦ {t("replyBar.aiBadge", "AI DRAFT")}
           </Text>
-        )}
-        <Pressable type="button" display="flex" alignItems="center" gap={4} fontSize={11} paddingVertical={4} paddingHorizontal={9} borderWidth={1} borderColor="var(--k-border)" borderRadius={999} color="var(--k-text-secondary)" backgroundColor="white" cursor="pointer" borderStyle="solid">
-          <Icon name="clip" size={11} />
-          {t("ticketDetail.attach")}
+          <Text fontSize={11} color="var(--k-text-tertiary)">
+            {t("replyBar.aiDraftSource", "generated from similar cases + KB")}
+          </Text>
+        </Box>
+        <Box display="flex" alignItems="center" gap={4}>
+          <Pressable type="button" onClick={() => {
+              setDraft("");
+              clearSuggestedReply();
+              setShowAiBanner(false);
+            }} display="flex" alignItems="center" gap={3} fontSize={11} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer" paddingVertical={2} paddingHorizontal={4} borderRadius={4}>
+            <Icon name="refresh" size={10} />
+            {t("replyBar.regenerate", "Regenerate")}
+          </Pressable>
+          <Pressable type="button" onClick={() => setShowAiBanner(false)} aria-label={t("replyBar.dismissSuggestion")} backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={2} color="var(--k-text-tertiary)" display="flex" alignItems="center" borderRadius={3}>
+            <Icon name="x" size={13} />
+          </Pressable>
+        </Box>
+      </Box>
+
+      {/* Editable draft text */}
+      <PlainTextarea value={draft} onChange={(e) => {
+          setDraft(e.target.value);
+          if (sendError) setSendError(null);
+          if (sendSuccess) setSendSuccess(false);
+        }} onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void handleSend(false); }
+        }} width="100%" height={textareaHeight} resize="none" borderWidth={0} backgroundColor="transparent" paddingVertical={10} paddingHorizontal={12} fontSize={13} lineHeight={20.8} color="var(--k-text-primary)" outlineWidth={0} />
+    </Box>
+  ) : undefined;
+
+  const escalatePanel = showEscalatePanel ? (
+    <Box marginBottom={8} borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" borderRadius={8} backgroundColor="color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)" paddingVertical={10} paddingHorizontal={12} borderStyle="solid">
+      <Box display="flex" alignItems="center" gap={6} marginBottom={8}>
+        <Icon name="warning" size={12} color="var(--kairo-color-sla-escalate-ink)" />
+        <Text fontSize={12} fontWeight={600} color="var(--kairo-color-sla-escalate-ink)">
+          {t("replyBar.escalateTitle", "Escalate ticket")}
+        </Text>
+        <Pressable type="button" onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }} aria-label={t("replyBar.escalateCancel", "Cancel")} marginLeft="auto" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={2} color="var(--k-text-tertiary)" display="flex" alignItems="center">
+          <Icon name="x" size={12} />
         </Pressable>
       </Box>
-
-      {/* ── DIMENSION 2: Composer ──────────────────────────────────────── */}
-
-      {/* BORRADOR IA card (reply mode only) */}
-      {showAiBanner && !isNote ? (
-        <Box marginBottom={10} borderWidth={1} borderColor="var(--kairo-color-accent-line)" borderRadius={10} overflow="hidden" backgroundColor="var(--k-accent-subtle)" borderStyle="solid">
-          {/* Card header */}
-          <Box display="flex" alignItems="center" justifyContent="space-between" paddingTop={7} paddingHorizontal={10} paddingBottom={6} borderBottomWidth={1} borderBottomColor="var(--kairo-color-accent-line)" borderStyle="solid">
-            <Box display="flex" alignItems="center" gap={8}>
-              <Text fontSize={10} fontWeight={700} paddingVertical={2} paddingHorizontal={7} borderRadius={999} backgroundColor="var(--k-accent)" color="white" letterSpacing={0.5}>
-                ✦ {t("replyBar.aiBadge", "AI DRAFT")}
-              </Text>
-              <Text fontSize={11} color="var(--k-text-tertiary)">
-                {t("replyBar.aiDraftSource", "generated from similar cases + KB")}
-              </Text>
-            </Box>
-            <Box display="flex" alignItems="center" gap={4}>
-              <Pressable type="button" onClick={() => {
-                  setDraft("");
-                  clearSuggestedReply();
-                  setShowAiBanner(false);
-                }} display="flex" alignItems="center" gap={3} fontSize={11} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer" paddingVertical={2} paddingHorizontal={4} borderRadius={4}>
-                <Icon name="refresh" size={10} />
-                {t("replyBar.regenerate", "Regenerate")}
-              </Pressable>
-              <Pressable type="button" onClick={() => setShowAiBanner(false)} aria-label={t("replyBar.dismissSuggestion")} backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={2} color="var(--k-text-tertiary)" display="flex" alignItems="center" borderRadius={3}>
-                <Icon name="x" size={13} />
-              </Pressable>
-            </Box>
-          </Box>
-
-          {/* Editable draft text */}
-          <PlainTextarea value={draft} onChange={(e) => {
-              setDraft(e.target.value);
-              if (sendError) setSendError(null);
-              if (sendSuccess) setSendSuccess(false);
-            }} onKeyDown={handleKeyDown} width="100%" height={textareaHeight} resize="none" borderWidth={0} backgroundColor="transparent" paddingVertical={10} paddingHorizontal={12} fontSize={13} lineHeight={20.8} color="var(--k-text-primary)" outlineWidth={0} />
-        </Box>
-      ) : (
-        /* Standard composer textarea */
-        <Box position="relative">
-        {mentionOpen && (
-          <MentionDropdown
-            members={mentionMatches}
-            totalCount={mentionPool.length}
-            query={mentionQuery?.query ?? ""}
-            activeIndex={mentionIndex}
-            // Skeletons only on the very first open of the session (spec C5) —
-            // once the list is cached, a refresh must not blank the rows.
-            loading={membersLoading && members.length === 0}
-            onPick={applyMention}
-            onHover={setMentionIndex}
-          />
-        )}
-        <PlainTextarea ref={textareaRef} placeholder={
-            isNote
-              ? t("replyBar.notePlaceholder", "Write a note for your team… use @ to mention")
-              : t("ticketDetail.replyPlaceholder")
-          } maxLength={isNote ? NOTE_MAX_LENGTH : undefined} value={draft} onChange={(e) => {
-            setDraft(e.target.value);
-            syncMentionQuery(e.target.value, e.target.selectionStart ?? 0);
-            if (sendError) setSendError(null);
-            if (sendSuccess) setSendSuccess(false);
-          }} onSelect={(e) => {
-            const el = e.currentTarget;
-            syncMentionQuery(el.value, el.selectionStart ?? 0);
-          }} onKeyDown={handleKeyDown} onFocus={(e) => {
-            if (isNote) {
-              e.currentTarget.style.borderColor = "var(--kairo-color-warn)";
-              e.currentTarget.style.boxShadow = "0 0 0 2px var(--kairo-color-note-soft)";
-            } else {
-              e.currentTarget.style.borderColor = "var(--k-accent)";
-              e.currentTarget.style.boxShadow = "0 0 0 2px var(--kairo-color-accent-soft)";
-            }
-          }} onBlur={(e) => {
-            e.currentTarget.style.borderColor = isNote ? "var(--kairo-color-note-line)" : "var(--k-border)";
-            e.currentTarget.style.boxShadow = "none";
-          }} width="100%" height={textareaHeight} resize="none" borderRadius={8} borderWidth={1} borderColor={isNote ? "var(--kairo-color-note-line)" : "var(--k-border)"} backgroundColor={isNote ? "var(--kairo-color-note-soft)" : "var(--k-surface)"} paddingVertical={10} paddingHorizontal={12} fontSize={14} lineHeight={22.4} color={isNote ? "var(--kairo-color-note-ink)" : "var(--k-text-primary)"} outlineWidth={0} marginBottom={8} transition="border-color 0.1s ease, background 0.1s ease" borderStyle="solid" />
-        </Box>
-      )}
-
-      {/* ── DIMENSION 3: Lifecycle actions ────────────────────────────── */}
-
-      {/* Escalation inline panel (KAI-221) */}
-      {showEscalatePanel && (
-        <Box marginBottom={8} borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" borderRadius={8} backgroundColor="color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)" paddingVertical={10} paddingHorizontal={12} borderStyle="solid">
-          <Box display="flex" alignItems="center" gap={6} marginBottom={8}>
-            <Icon name="warning" size={12} color="var(--kairo-color-sla-escalate-ink)" />
-            <Text fontSize={12} fontWeight={600} color="var(--kairo-color-sla-escalate-ink)">
-              {t("replyBar.escalateTitle", "Escalate ticket")}
-            </Text>
-            <Pressable type="button" onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }} aria-label={t("replyBar.escalateCancel", "Cancel")} marginLeft="auto" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={2} color="var(--k-text-tertiary)" display="flex" alignItems="center">
-              <Icon name="x" size={12} />
-            </Pressable>
-          </Box>
-          <PlainTextarea placeholder={t("replyBar.escalateReasonPlaceholder", "Reason for escalation (optional)…")} value={escalateReason} onChange={(e) => setEscalateReason(e.target.value)} rows={2} onFocus={(e) => { e.currentTarget.style.borderColor = "var(--kairo-color-mood)"; }} onBlur={(e) => { e.currentTarget.style.borderColor = "color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)"; }} width="100%" resize="none" borderRadius={6} borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" backgroundColor="white" paddingVertical={7} paddingHorizontal={10} fontSize={12} lineHeight={18.6} color="var(--k-text-primary)" outlineWidth={0} marginBottom={8} borderStyle="solid" />
-          <Box display="flex" gap={6} justifyContent="flex-end">
-            <Pressable type="button" onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={10} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" backgroundColor="white" color="var(--k-text-secondary)" cursor="pointer" borderStyle="solid">
-              {t("replyBar.escalateCancel", "Cancel")}
-            </Pressable>
-            <Pressable type="button" disabled={escalating} onClick={handleEscalateConfirm} fontSize={11} fontWeight={600} paddingVertical={4} paddingHorizontal={12} borderRadius={6} borderWidth={0} backgroundColor={escalating ? "var(--k-border)" : "var(--kairo-color-sla-escalate-ink)"} color={escalating ? "var(--k-text-tertiary)" : "white"} cursor={escalating ? "wait" : "pointer"} transition="background 0.1s ease">
-              {escalating
-                ? t("replyBar.escalating", "Escalating…")
-                : t("replyBar.escalateConfirm", "Confirm escalation")}
-            </Pressable>
-          </Box>
-        </Box>
-      )}
-
-      {/* Lifecycle buttons row: Reconocer, Resolver, Escalar */}
-      {(visibleActions.length > 0 || canEscalate) && !showEscalatePanel && (
-        <Box display="flex" gap={6} marginBottom={8}>
-          {visibleActions.map((action) => {
-            const cfg = ACTION_CONFIG[action];
-            const loading = actionLoading === action;
-            return (
-              <Pressable key={action} type="button" disabled={!!actionLoading} onClick={() => handleAction(action)} {...cfg.style} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={11} borderRadius={999} cursor={actionLoading ? "wait" : "pointer"} opacity={actionLoading && !loading ? 0.5 : 1} transition="opacity 0.1s ease">
-                {loading ? "…" : t(cfg.labelKey, cfg.defaultLabel)}
-              </Pressable>
-            );
-          })}
-          {canEscalate && (
-            <Pressable type="button" disabled={showEscalatePanel} onClick={() => setShowEscalatePanel(true)} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={11} borderRadius={999} cursor="pointer" backgroundColor="color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)" color="var(--kairo-color-sla-escalate-ink)" borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" transition="opacity 0.1s ease" borderStyle="solid">
-              {t("replyBar.actionEscalar", "Escalate")}
-            </Pressable>
-          )}
-        </Box>
-      )}
-
-      {/* Send buttons row */}
-      <Box display="flex" alignItems="center" justifyContent="flex-end" gap={8}>
-        {/* KAI-232 rule F.9 — only surfaces near the cap, not while writing. */}
-        {isNote && draft.length >= NOTE_COUNTER_THRESHOLD && (
-          <Text marginRight="auto" font="mono" fontSize={11} color={draft.length >= NOTE_MAX_LENGTH ? "var(--kairo-color-bad)" : "var(--k-note-label)"}>
-            {draft.length} / {NOTE_MAX_LENGTH}
-          </Text>
-        )}
-        {isNote ? (
-          /* Note mode: single "Add note" button */
-          <Pressable type="button" disabled={!canSend} onClick={handleSendNote} display="flex" alignItems="center" gap={5} fontSize={12} fontWeight={600} paddingVertical={6} paddingHorizontal={14} borderRadius={6} borderWidth={0} backgroundColor={canSend ? "var(--kairo-color-warn)" : "var(--k-border)"} color={canSend ? "white" : "var(--k-text-tertiary)"} cursor={canSend ? "pointer" : "not-allowed"} transition="background 0.1s ease">
-            <Icon name="lock" size={11} />
-            {sending ? t("replyBar.sendingNote", "Saving…") : t("replyBar.sendNote", "Add note")}
-          </Pressable>
-        ) : (
-          /* Reply mode: send split-button — primary "Enviar", dropdown has
-             "Enviar y resolver" and "Resolver" (status-only, no email). */
-          <Box ref={sendMenuRef} position="relative" display="flex">
-            <Pressable type="button" disabled={!canSend} onClick={() => handleSend(false)} display="flex" alignItems="center" gap={5} fontSize={12} fontWeight={500} paddingVertical={6} paddingHorizontal={14} borderTopLeftRadius={6} borderTopRightRadius={0} borderBottomRightRadius={0} borderBottomLeftRadius={6} borderWidth={0} backgroundColor={canSend ? "var(--k-accent)" : "var(--k-border)"} color={canSend ? "white" : "var(--k-text-tertiary)"} cursor={canSend ? "pointer" : "not-allowed"} transition="background 0.1s ease">
-              <Icon name="send" size={12} />
-              {sending ? t("replyBar.sending") : t("ticketDetail.send")}
-            </Pressable>
-
-            <Pressable type="button" disabled={!canSend} onClick={() => setSendMenuOpen((v) => !v)} aria-label={t("replyBar.sendOptionsLabel", "More send options")} aria-expanded={sendMenuOpen} display="flex" alignItems="center" justifyContent="center" width={26} padding={0} borderTopLeftRadius={0} borderTopRightRadius={6} borderBottomRightRadius={6} borderBottomLeftRadius={0} borderLeftWidth={1} borderLeftColor={canSend ? "rgba(255,255,255,0.3)" : "var(--k-border)"} borderTopWidth={0} borderRightWidth={0} borderBottomWidth={0} backgroundColor={canSend ? "var(--k-accent)" : "var(--k-border)"} color={canSend ? "white" : "var(--k-text-tertiary)"} cursor={canSend ? "pointer" : "not-allowed"} transition="background 0.1s ease" borderStyle="solid">
-              <Icon name="down" size={13} />
-            </Pressable>
-
-            {sendMenuOpen && (
-              <Box data-testid="send-split-menu" position="absolute" bottom="calc(100% + 6px)" right={0} minWidth={180} backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={8} boxShadow="0 4px 16px rgba(9,9,11,0.12)" overflow="hidden" zIndex={20} borderStyle="solid">
-                <Pressable type="button" disabled={!canSend} onClick={() => { setSendMenuOpen(false); handleSend(true); }} hoverStyle={{ backgroundColor: "var(--k-surface-2)" }} display="flex" width="100%" alignItems="center" paddingVertical={8} paddingHorizontal={12} fontSize={12} fontWeight={500} color={canSend ? "var(--k-text-primary)" : "var(--k-text-tertiary)"} backgroundColor="transparent" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" cursor={canSend ? "pointer" : "not-allowed"} textAlign="left" borderStyle="solid">
-                  {t("replyBar.sendAndResolve", "Send & Resolve")}
-                </Pressable>
-                <Pressable type="button" disabled={resolving} onClick={handleResolveOnly} hoverStyle={!resolving ? { backgroundColor: "var(--k-surface-2)" } : undefined} display="flex" width="100%" alignItems="center" paddingVertical={8} paddingHorizontal={12} fontSize={12} fontWeight={500} color={resolving ? "var(--k-text-tertiary)" : "var(--k-text-primary)"} backgroundColor="transparent" borderWidth={0} cursor={resolving ? "wait" : "pointer"} textAlign="left">
-                  {resolving ? "…" : t(ACTION_CONFIG.resolver.labelKey, ACTION_CONFIG.resolver.defaultLabel)}
-                </Pressable>
-              </Box>
-            )}
-          </Box>
-        )}
+      <PlainTextarea placeholder={t("replyBar.escalateReasonPlaceholder", "Reason for escalation (optional)…")} value={escalateReason} onChange={(e) => setEscalateReason(e.target.value)} rows={2} width="100%" resize="none" borderRadius={6} borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" focusStyle={{ borderColor: "var(--kairo-color-mood)" }} backgroundColor="var(--kairo-color-surface)" paddingVertical={7} paddingHorizontal={10} fontSize={12} lineHeight={18.6} color="var(--k-text-primary)" outlineWidth={0} marginBottom={8} borderStyle="solid" />
+      <Box display="flex" gap={6} justifyContent="flex-end">
+        <Pressable type="button" onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={10} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--kairo-color-surface)" color="var(--k-text-secondary)" cursor="pointer" borderStyle="solid">
+          {t("replyBar.escalateCancel", "Cancel")}
+        </Pressable>
+        <Pressable type="button" disabled={escalating} onClick={handleEscalateConfirm} fontSize={11} fontWeight={600} paddingVertical={4} paddingHorizontal={12} borderRadius={6} borderWidth={0} backgroundColor={escalating ? "var(--k-border)" : "var(--kairo-color-sla-escalate-ink)"} color={escalating ? "var(--k-text-tertiary)" : "white"} cursor={escalating ? "wait" : "pointer"} transition="background 0.1s ease">
+          {escalating
+            ? t("replyBar.escalating", "Escalating…")
+            : t("replyBar.escalateConfirm", "Confirm escalation")}
+        </Pressable>
       </Box>
-
-      {/* Status messages */}
-      {sendError ? (
-        <Text tag="p" marginTop={6} fontSize={12} color="var(--kairo-color-bad)" display="block">{sendError}</Text>
-      ) : sendSuccess ? (
-        <Text tag="p" marginTop={6} fontSize={12} color={isNote ? "var(--kairo-color-cat-billing)" : "var(--kairo-color-ok)"} display="block">
-          {isNote ? t("replyBar.noteSuccess", "Note added.") : t("replyBar.sendSuccess")}
-        </Text>
-      ) : (
-        <Text tag="p" marginTop={6} fontSize={11} font="mono" color="var(--k-text-tertiary)" display="block">
-          {t("ticketDetail.sendHint")}
-        </Text>
-      )}
     </Box>
+  ) : undefined;
+
+  const lifecycleActions = (visibleActions.length > 0 || canEscalate) && !showEscalatePanel ? (
+    <>
+      {visibleActions.map((action) => {
+        const cfg = ACTION_CONFIG[action];
+        const loading = actionLoading === action;
+        return (
+          <Pressable key={action} type="button" disabled={!!actionLoading} onClick={() => handleAction(action)} {...cfg.style} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={11} borderRadius={999} cursor={actionLoading ? "wait" : "pointer"} opacity={actionLoading && !loading ? 0.5 : 1} transition="opacity 0.1s ease">
+            {loading ? "…" : t(cfg.labelKey, cfg.defaultLabel)}
+          </Pressable>
+        );
+      })}
+      {canEscalate && (
+        <Pressable type="button" disabled={showEscalatePanel} onClick={() => setShowEscalatePanel(true)} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={11} borderRadius={999} cursor="pointer" backgroundColor="color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)" color="var(--kairo-color-sla-escalate-ink)" borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" transition="opacity 0.1s ease" borderStyle="solid">
+          {t("replyBar.actionEscalar", "Escalate")}
+        </Pressable>
+      )}
+    </>
+  ) : undefined;
+
+  return (
+    <Composer
+      mode={isNote ? "note" : "reply"}
+      onModeChange={INTERNAL_NOTES_ENABLED ? (next) => {
+        setMode(next);
+        setSendError(null);
+        setSendSuccess(false);
+        if (next === "note") {
+          setShowAiBanner(false);
+          setShowEscalatePanel(false);
+        }
+      } : undefined}
+      value={draft}
+      onChange={(value, caret) => {
+        setDraft(value);
+        syncMentionQuery(value, caret);
+        if (sendError) setSendError(null);
+        if (sendSuccess) setSendSuccess(false);
+      }}
+      onFieldSelect={syncMentionQuery}
+      onFieldKeyDown={handleKeyDown}
+      fieldRef={textareaRef}
+      onSend={isNote ? handleSendNote : () => handleSend(false)}
+      sending={sending}
+      error={sendError}
+      onRetry={() => void (isNote ? handleSendNote() : handleSend(false))}
+      status={sendError ? undefined : sendSuccess
+        ? { tone: "success", text: isNote ? t("replyBar.noteSuccess", "Note added.") : t("replyBar.sendSuccess") }
+        : { tone: "hint", text: t("ticketDetail.sendHint") }}
+      tools={
+        <>
+          {!isNote && (
+            <TemplatePicker onSelect={handleTemplateSelect} previewVars={templatePreviewVars}>
+              <ComposerPill icon="zap">{t("ticketDetail.quickReply")}</ComposerPill>
+            </TemplatePicker>
+          )}
+          {isNote && <TeamOnlyChip />}
+          {/* KAI-232 spec C7: who this note will notify. The body stores opaque
+              tokens, so these chips are the only readable confirmation. */}
+          {isNote && draftMentions.map((member) => (
+            <SelectedMentionChip key={member.user_id} member={member} onRemove={removeMention} />
+          ))}
+          {isNote && draftMentions.length > 0 && (
+            <Text fontSize={10.5} color="var(--k-note-label)" opacity={0.75} marginLeft={2}>
+              {t("mention.willNotify", { count: draftMentions.length, defaultValue: "will be notified" })}
+            </Text>
+          )}
+          <ComposerPill icon="clip">{t("ticketDetail.attach")}</ComposerPill>
+        </>
+      }
+      banner={aiBanner}
+      panel={escalatePanel}
+      actions={lifecycleActions}
+      sendOptions={sendOptions}
+      counter={isNote && draft.length >= NOTE_COUNTER_THRESHOLD ? { text: `${draft.length} / ${NOTE_MAX_LENGTH}`, over: draft.length >= NOTE_MAX_LENGTH } : undefined}
+      popover={mentionOpen ? (
+        <MentionList
+          testId="mention-dropdown"
+          title={t("mention.header", "Mention")}
+          query={mentionQuery?.query ?? ""}
+          options={mentionMatches.map((member) => ({ id: member.user_id, name: member.name ?? member.email ?? member.user_id, email: member.email, role: member.role }))}
+          activeIndex={mentionIndex}
+          // Skeletons only on the very first open of the session (spec C5) —
+          // once the list is cached, a refresh must not blank the rows.
+          loading={membersLoading && members.length === 0}
+          onPick={(id) => { const picked = mentionMatches.find((member) => member.user_id === id); if (picked) applyMention(picked); }}
+          onHover={setMentionIndex}
+          labels={{
+            counter: t("mention.counter", { shown: mentionMatches.length, total: mentionPool.length, defaultValue: "{{shown}} of {{total}}" }),
+            empty: t("mention.empty", "No members found"),
+            more: t("mention.more", { count: mentionPool.length - mentionMatches.length, defaultValue: "+{{count}} more · keep typing to filter" }),
+            keyNavigate: t("mention.keyNavigate", "navigate"),
+            keyInsert: t("mention.keyInsert", "insert"),
+            keyClose: t("mention.keyClose", "close"),
+          }}
+        />
+      ) : undefined}
+      placeholder={isNote
+        ? t("replyBar.notePlaceholder", "Write a note for your team… use @ to mention")
+        : t("ticketDetail.replyPlaceholder")}
+      maxLength={isNote ? NOTE_MAX_LENGTH : undefined}
+      height={textareaHeight}
+      onResizeStart={handleDragStart}
+      labels={{
+        modeGroup: t("replyBar.modeLabel", "Composer mode"),
+        reply: t("replyBar.modeReply", "Reply"),
+        note: t("replyBar.modeNote", "Internal note"),
+        textarea: t("replyBar.textareaLabel"),
+        placeholder: "",
+        send: isNote ? t("replyBar.sendNote", "Add note") : t("ticketDetail.send"),
+        sending: isNote ? t("replyBar.sendingNote", "Saving…") : t("replyBar.sending"),
+        retry: t("replyBar.retry"),
+        sendOptions: t("replyBar.sendOptionsLabel", "More send options"),
+        dragHandle: t("replyBar.resize"),
+      }}
+    />
   );
 }

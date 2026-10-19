@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Text } from "@kairo/ui";
 
@@ -10,10 +10,16 @@ import { Text } from "@kairo/ui";
 export function SlaBadge({ slaDate, breached = false }: { slaDate: string | null | undefined; breached?: boolean }) {
   const { t } = useTranslation("dashboard");
 
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const label = useMemo(() => {
     if (breached) return { text: t("ticketCard.slaBreached"), breached: true };
     if (!slaDate) return null;
-    const diff = new Date(slaDate).getTime() - Date.now();
+    const diff = new Date(slaDate).getTime() - now;
     if (diff <= 0) return { text: t("ticketCard.slaBreached"), breached: true };
 
     const totalMinutes = Math.floor(diff / 60_000);
@@ -22,7 +28,7 @@ export function SlaBadge({ slaDate, breached = false }: { slaDate: string | null
     return hours > 0
       ? { text: t("ticketCard.slaHours_other", { count: hours, minutes }), breached: false }
       : { text: t("ticketCard.slaMinutes_other", { count: totalMinutes }), breached: false };
-  }, [slaDate, breached, t]);
+  }, [slaDate, breached, now, t]);
 
   if (!label) return null;
 

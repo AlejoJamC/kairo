@@ -1,6 +1,6 @@
 import * as React from "react";
 import { JSDOM } from "jsdom";
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReplyBar } from "./reply-bar";
@@ -177,8 +177,7 @@ describe("ReplyBar", () => {
     await userEvent.type(composer, "All set, this is now resolved!");
     // "Send & Resolve" lives inside the send split-button's dropdown now.
     await userEvent.click(screen.getByRole("button", { name: "replyBar.sendOptionsLabel" }));
-    const sendMenu = within(await screen.findByTestId("send-split-menu"));
-    await userEvent.click(sendMenu.getByRole("button", { name: "replyBar.sendAndResolve" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "replyBar.sendAndResolve" }));
 
     await waitFor(() => expect(apiCallMock).toHaveBeenCalledTimes(1));
     const [, options] = apiCallMock.mock.calls[0] as [string, { body: string }];
@@ -201,8 +200,7 @@ describe("ReplyBar", () => {
     const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
     await userEvent.type(composer, "Draft not sent");
     await userEvent.click(screen.getByRole("button", { name: "replyBar.sendOptionsLabel" }));
-    const sendMenu = within(await screen.findByTestId("send-split-menu"));
-    await userEvent.click(sendMenu.getByRole("button", { name: "replyBar.actionResolver" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "replyBar.actionResolver" }));
 
     await waitFor(() => expect(apiCallMock).toHaveBeenCalledTimes(1));
     const [url, options] = apiCallMock.mock.calls[0] as [string, { method: string; body: string }];

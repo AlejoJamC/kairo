@@ -28,6 +28,8 @@ type DomControl<E extends HTMLElement> = {
   placeholder?: string
   disabled?: boolean
   readOnly?: boolean
+  required?: boolean
+  minLength?: number
   autoFocus?: boolean
   name?: string
   id?: string

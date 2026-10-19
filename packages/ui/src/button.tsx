@@ -104,6 +104,8 @@ type ButtonProps = Omit<GetProps<typeof ButtonFrame>, 'variant' | 'size' | 'chil
   /** Primary web button: disabled with a spinner and this label while it runs. */
   loading?: boolean
   loadingLabel?: string
+  /** Form behavior: submit sends the surrounding form. */
+  type?: 'button' | 'submit'
   /** Shortcut, carried in the title. */
   shortcut?: string
   title?: string
@@ -120,6 +122,7 @@ function Button({
   shortcut,
   disabled,
   title,
+  type,
   ...props
 }: ButtonProps) {
   const inactive = disabled || loading
@@ -130,7 +133,7 @@ function Button({
       disabled={inactive}
       aria-disabled={inactive || undefined}
       aria-busy={loading || undefined}
-      {...domProps({ title: title ?? (shortcut ? `${children} (${shortcut})` : undefined) })}
+      {...domProps({ title: title ?? (shortcut ? `${children} (${shortcut})` : undefined), ...(type ? { type } : null) })}
       {...props}
     >
       {loading ? <Spinner onAccent={variant === 'primary'} /> : icon}

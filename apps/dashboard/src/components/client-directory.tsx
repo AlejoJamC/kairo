@@ -7,8 +7,9 @@ import { useDraftContacts } from "@kairo/client-core/hooks/use-draft-contacts";
 import { mapClientToRow, type ContactRow } from "@kairo/client-core/contact-row";
 import { confirmDraft, bulkConfirmByOrganization } from "@kairo/client-core/draft-actions";
 import type { Client } from "@/types";
-import { Box, Button, Callout, Icon, KpiStrip, PlainInput, PlainSelect, Pressable, Skeleton, Spinner, Text } from "@kairo/ui";
-import { ContactCard, clientKpis, mapRow } from "@/components/clients/contact-parts";
+import { Box, Button, Callout, DataTable, Dialog, FilterPill, Icon, KpiStrip, PlainInput, PlainSelect, Pressable, Skeleton, Text, Toast } from "@kairo/ui";
+import { useContactColumns } from "@/components/clients/contact-columns";
+import { clientKpis, mapRow } from "@/components/clients/contact-helpers";
 import { ContactDetailDrawer } from "@/components/clients/contact-detail-drawer";
 
 type StatusFilter = "all" | "drafts" | "confirmed" | "rejected";
@@ -242,6 +243,19 @@ export function ClientDirectory() {
     finally { setDeleting(null); }
   };
 
+  const columns = useContactColumns({
+    deletingId: deleting,
+    onEdit: (row) => {
+      const client = clients.find((c) => c.id === row.id.replace("client:", "")) ?? null;
+      if (client) { setEditing(client); setFormOpen(true); }
+    },
+    onDelete: (row) => {
+      const client = clients.find((c) => c.id === row.id.replace("client:", ""));
+      if (client) void handleDelete(client.id, client.name);
+    },
+    onQuickConfirm: (row) => void handleQuickConfirm(row),
+  });
+
   // -------------------------------------------------------------------------
   // Loading state (first load only)
   // -------------------------------------------------------------------------
@@ -293,8 +307,6 @@ export function ClientDirectory() {
 
   const showPlanFilters = statusFilter === "all" || statusFilter === "confirmed";
 
-  const TABLE_HEADERS = ["CLIENTE", "PLAN", "MRR", "TICKETS", "CSAT", "ÚLTIMO CONTACTO", ""];
-
   // -------------------------------------------------------------------------
   // Empty state message
   // -------------------------------------------------------------------------
@@ -336,9 +348,9 @@ export function ClientDirectory() {
         {/* Status pills */}
         <Box display="flex" gap={6} marginTop={20} flexWrap="wrap" alignItems="center">
           {STATUS_FILTERS.map(({ key, labelKey }) => (
-            <Pressable key={key} onClick={() => setStatusFilter(key)} paddingVertical={5} paddingHorizontal={12} borderRadius={999} fontSize={13} cursor="pointer" backgroundColor={statusFilter === key ? "var(--k-text-primary)" : "white"} color={statusFilter === key ? "white" : "var(--k-text-secondary)"} borderWidth={1} borderColor={statusFilter === key ? "var(--k-text-primary)" : "var(--k-border)"} borderStyle="solid">
+            <FilterPill key={key} active={statusFilter === key} onPress={() => setStatusFilter(key)}>
               {t(labelKey)}
-            </Pressable>
+            </FilterPill>
           ))}
         </Box>
 
@@ -352,9 +364,9 @@ export function ClientDirectory() {
               ))}
             </PlainSelect>
             {orgFilter !== "all" && statusFilter === "drafts" && proposedCountForOrg > 0 && (
-              <Pressable onClick={() => setBulkModalOpen(true)} paddingVertical={5} paddingHorizontal={12} borderRadius={6} fontSize={13} cursor="pointer" backgroundColor="var(--kairo-color-ok)" color="white" borderWidth={0} fontWeight={500}>
+              <Button variant="primary" onPress={() => setBulkModalOpen(true)}>
                 {t("actions.bulkConfirmButton", { org: orgFilter })}
-              </Pressable>
+              </Button>
             )}
           </Box>
         )}
@@ -363,9 +375,9 @@ export function ClientDirectory() {
         <Box display="flex" gap={6} marginTop={10} alignItems="center" flexWrap="wrap">
           {/* Plan pills — only when viewing confirmed/all */}
           {showPlanFilters && PLAN_FILTERS.map(({ key, label }) => (
-            <Pressable key={key} onClick={() => setPlanFilter(planFilter === key ? "all" : key)} paddingVertical={5} paddingHorizontal={12} borderRadius={999} fontSize={13} cursor="pointer" backgroundColor={planFilter === key ? "var(--kairo-color-accent)" : "white"} color={planFilter === key ? "white" : "var(--k-text-secondary)"} borderWidth={1} borderColor={planFilter === key ? "var(--kairo-color-accent)" : "var(--k-border)"} borderStyle="solid">
+            <FilterPill key={key} active={planFilter === key} onPress={() => setPlanFilter(planFilter === key ? "all" : key)}>
               {label}
-            </Pressable>
+            </FilterPill>
           ))}
 
           {/* Search */}
@@ -381,10 +393,7 @@ export function ClientDirectory() {
 
           {/* Export + Add client */}
           <Box display="flex" gap={8} marginLeft={showPlanFilters ? undefined : "auto"}>
-            <Pressable display="flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={12} fontSize={13} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" backgroundColor="white" color="var(--k-text-secondary)" cursor="pointer" borderStyle="solid">
-              <Icon name="download" size={13} />
-              Exportar
-            </Pressable>
+            <Button icon={<Icon name="download" size={13} />}>Exportar</Button>
             <Button variant="primary" icon={<Icon name="plus" size={13} color="white" />} onPress={() => { setEditing(null); setFormOpen(true); }}>
               Agregar cliente
             </Button>
@@ -394,39 +403,15 @@ export function ClientDirectory() {
 
       {/* Table */}
       <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll paddingTop={16} paddingHorizontal={32} paddingBottom={32}>
-        {filteredRows.length === 0 ? (
-          <Text tag="div" display="flex" alignItems="center" justifyContent="center" height={160} fontSize={13} color="var(--k-text-tertiary)" textAlign="center" paddingVertical={0} paddingHorizontal={40}>
-            {emptyMessage()}
-          </Text>
-        ) : (
-          <Box borderWidth={1} borderColor="var(--k-border)" borderRadius={12} overflow="hidden" backgroundColor="white" boxShadow="0 1px 2px rgba(9,9,11,0.04)" borderStyle="solid">
-            {/* Table header */}
-            <Text tag="div" grid gridTemplateColumns="2.5fr 1fr 0.8fr 0.8fr 1fr 0.8fr 36px" paddingVertical={10} paddingHorizontal={16} borderBottomWidth={1} borderBottomColor="var(--k-border)" backgroundColor="var(--k-surface)" font="mono" fontSize={11} color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.55} borderStyle="solid">
-              {TABLE_HEADERS.map((h, i) => <span key={i}>{h}</span>)}
-            </Text>
-
-            {/* Rows */}
-            {filteredRows.map((row, idx) => {
-              // Resolve back to Client for edit/delete (only for source=client)
-              const clientId = row.source === "client" ? row.id.replace("client:", "") : null;
-              const client = clientId ? clients.find((c) => c.id === clientId) ?? null : null;
-
-              return (
-                <ContactCard
-                  key={row.id}
-                  row={row}
-                  isLast={idx === filteredRows.length - 1}
-                  isNew={newIds.has(row.id)}
-                  onSelect={setSelectedRow}
-                  onEdit={client ? (e) => { e.stopPropagation(); setEditing(client); setFormOpen(true); } : undefined}
-                  onDelete={client ? (e) => handleDelete(client.id, client.name, e) : undefined}
-                  onQuickConfirm={row.source === "draft" && row.status === "proposed" ? () => handleQuickConfirm(row) : undefined}
-                  deleting={clientId ? deleting === clientId : false}
-                />
-              );
-            })}
-          </Box>
-        )}
+        <DataTable
+          label="Clientes"
+          columns={columns}
+          rows={filteredRows}
+          rowKey={(row) => row.id}
+          onRowClick={setSelectedRow}
+          isNewRow={(row) => newIds.has(row.id)}
+          emptyLabel={emptyMessage()}
+        />
       </Box>
 
       {selectedRow && (
@@ -449,35 +434,22 @@ export function ClientDirectory() {
       )}
 
       {/* Bulk confirm modal */}
-      {bulkModalOpen && orgFilter !== "all" && (
-        <>
-          <Box onClick={() => !bulkConfirming && setBulkModalOpen(false)} fixed top={0} right={0} bottom={0} left={0} zIndex={50} backgroundColor="rgba(0,0,0,0.3)" />
-          <Box fixed top="50%" left="50%" transform="translate(-50%,-50%)" zIndex={60} backgroundColor="white" borderRadius={12} padding={24} width={400} boxShadow="0 8px 32px rgba(9,9,11,0.16)">
-            <Text tag="h3" marginTop={0} marginHorizontal={0} marginBottom={12} fontSize={16} fontWeight={600} color="var(--k-text-primary)" display="block">
-              {t("actions.bulkConfirmModalTitle", { org: orgFilter })}
-            </Text>
-            <Text tag="p" marginTop={0} marginHorizontal={0} marginBottom={20} fontSize={13} color="var(--k-text-secondary)" lineHeight={19.5} display="block">
-              {t("actions.bulkConfirmModalBody", { count: proposedCountForOrg })}
-            </Text>
-            <Box display="flex" gap={8} justifyContent="flex-end">
-              <Pressable onClick={() => setBulkModalOpen(false)} disabled={bulkConfirming} paddingVertical={7} paddingHorizontal={14} borderRadius={6} fontSize={13} cursor="pointer" backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" color="var(--k-text-secondary)" borderStyle="solid">
-                {t("actions.cancel")}
-              </Pressable>
-              <Pressable onClick={handleBulkConfirm} disabled={bulkConfirming} paddingVertical={7} paddingHorizontal={14} borderRadius={6} fontSize={13} cursor="pointer" backgroundColor="var(--kairo-color-ok)" color="white" borderWidth={0} fontWeight={500} display="flex" alignItems="center" gap={6}>
-                {bulkConfirming && <Spinner />}
-                {t("actions.confirm")}
-              </Pressable>
-            </Box>
-          </Box>
-        </>
-      )}
-
-      {/* Toast notification */}
-      {bulkToast && (
-        <Text tag="div" fixed bottom={24} right={24} zIndex={70} backgroundColor="#1E293B" color="white" paddingVertical={12} paddingHorizontal={16} borderRadius={8} fontSize={13} boxShadow="0 4px 12px rgba(0,0,0,0.2)" display="block">
-          {bulkToast}
+      <Dialog
+        open={bulkModalOpen && orgFilter !== "all"}
+        onOpenChange={(open) => { if (!bulkConfirming) setBulkModalOpen(open); }}
+        title={t("actions.bulkConfirmModalTitle", { org: orgFilter })}
+        maxWidth={400}
+        footer={<>
+          <Button disabled={bulkConfirming} onPress={() => setBulkModalOpen(false)}>{t("actions.cancel")}</Button>
+          <Button variant="primary" loading={bulkConfirming} onPress={handleBulkConfirm}>{t("actions.confirm")}</Button>
+        </>}
+      >
+        <Text tag="p" display="block" margin={0} fontSize={13} color="var(--k-text-secondary)" lineHeight={19.5}>
+          {t("actions.bulkConfirmModalBody", { count: proposedCountForOrg })}
         </Text>
-      )}
+      </Dialog>
+
+      {bulkToast && <Toast closeLabel={t("actions.cancel")} onClose={() => setBulkToast(null)}>{bulkToast}</Toast>}
 
       <ClientFormModal
         isOpen={formOpen}

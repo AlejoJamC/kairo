@@ -17,7 +17,8 @@ describe("buildCatalog", () => {
 
   it("marks implemented and specified pieces", () => {
     expect(catalog).toMatch(/\| `button` \| implemented \| .*`Button`/);
-    expect(catalog).toMatch(/\| `command-palette` \| specified \|/);
+    expect(catalog).toMatch(/\| `command-palette` \| implemented \| .*`CommandPalette`/);
+    expect(catalog).toMatch(/\| `login` \| specified \|/);
   });
 
   it("covers components, blocks and templates", () => {

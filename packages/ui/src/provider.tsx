@@ -19,5 +19,10 @@ function UiProvider({ children, theme = 'light' }: UiProviderProps) {
   )
 }
 
-export { UiProvider }
+/** CSS of every style rendered so far: a server-rendering host injects it before hydration. */
+function getUiCss(): string {
+  return tamaguiConfig.getCSS()
+}
+
+export { UiProvider, getUiCss }
 export type { UiProviderProps }

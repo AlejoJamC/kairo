@@ -33,7 +33,7 @@ function ConfidenceRing({ value, variant = 'graphic', size = 16, showValue, labe
   if (variant === 'numeric') {
     return (
       <Text inlineBlock minWidth={28} textAlign="right" font="mono" fontSize={11} color={known ? tokens['text.secondary'] : tokens['text.tertiary']} title={name}>
-        <Box tag="span" position="absolute" width={1} height={1} overflowX="hidden" overflowY="hidden">{label}</Box>
+        <Text tag="span" position="absolute" width={1} height={1} overflowX="hidden" overflowY="hidden">{label}</Text>
         {known ? value.toFixed(2) : '—'}
       </Text>
     )

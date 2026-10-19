@@ -37,11 +37,6 @@
       "count": 1
     }
   },
-  "src/components/client-directory.tsx": {
-    "no-restricted-syntax": {
-      "count": 5
-    }
-  },
   "src/components/client-form-modal.tsx": {
     "react-hooks/set-state-in-effect": {
       "count": 1
@@ -116,11 +111,8 @@
     }
   },
   "src/components/triage/AssistantPanel.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
-    },
     "react-hooks/set-state-in-effect": {
-      "count": 2
+      "count": 1
     }
   },
   "src/components/triage/ClientProfileCard.tsx": {

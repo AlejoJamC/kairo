@@ -12,6 +12,8 @@ try {
 
 const nextConfig: NextConfig = {
   trailingSlash: true,
+  // The UI packages ship TypeScript source.
+  transpilePackages: ["@kairo/ui", "@kairo/tokens"],
 };
 
 export default nextConfig;

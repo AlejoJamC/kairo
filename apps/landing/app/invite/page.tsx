@@ -4,7 +4,9 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { getDashboardUrl } from '@/lib/api-config';
-import { KairoLogo } from '@/components/kairo-logo';
+import { useRouter } from 'next/navigation';
+import { AuthPage } from '@/components/auth-page';
+import { AuthCard, Avatar, Field, FieldInput, InvitationSummary, Spinner, StatusPanel, Text } from "@kairo/ui";
 
 type InvitationDetails = {
   id: string;
@@ -31,6 +33,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 // useSearchParams() requires a Suspense boundary during static build (Next.js App Router).
 function InvitePageInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
 
@@ -58,8 +61,7 @@ function InvitePageInner() {
       );
   }, [token]);
 
-  const handleAccept = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAccept = async () => {
     if (state.status !== 'ready') return;
 
     setError(null);
@@ -133,44 +135,32 @@ function InvitePageInner() {
     }
   };
 
-  // ── Shared layout wrapper ────────────────────────────────────────────────
-  const Wrapper = ({ children }: { children: React.ReactNode }) => (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--kairo-color-sunk)' }}>
-      <div style={{ width: '100%', maxWidth: 440, background: 'white', borderRadius: 12, padding: '40px 36px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-        <div style={{ marginBottom: 28 }}>
-          <KairoLogo size={26} href="/" />
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-
   // ── Loading ──────────────────────────────────────────────────────────────
   if (state.status === 'loading') {
     return (
-      <Wrapper>
-        <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14 }}>Loading invitation…</p>
-      </Wrapper>
+      <AuthPage>
+        <Text tag="div" display="flex" alignItems="center" justifyContent="center" gap={8} paddingVertical={40} fontSize={14} color="var(--kairo-color-faint)">
+          <Spinner /> Loading invitation…
+        </Text>
+      </AuthPage>
     );
   }
 
   // ── Invalid / expired ────────────────────────────────────────────────────
   if (state.status === 'invalid') {
     return (
-      <Wrapper>
-        <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Invitation not found</h1>
-        <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14 }}>{state.message}</p>
-      </Wrapper>
+      <AuthPage>
+        <StatusPanel title="Invitation not found" description={state.message} icon="clock" action={{ label: 'Back to home', onPress: () => router.push('/') }} />
+      </AuthPage>
     );
   }
 
   // ── Success (brief flash before redirect) ────────────────────────────────
   if (state.status === 'success') {
     return (
-      <Wrapper>
-        <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Welcome aboard 🎉</h1>
-        <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14 }}>Redirecting to your dashboard…</p>
-      </Wrapper>
+      <AuthPage>
+        <StatusPanel title="Welcome aboard 🎉" description="Redirecting to your dashboard…" icon="check" action={{ label: 'Open dashboard', onPress: () => { window.location.href = getDashboardUrl(); } }} />
+      </AuthPage>
     );
   }
 
@@ -180,82 +170,47 @@ function InvitePageInner() {
   const actionLabel = invitation.email_exists ? 'Sign in to accept' : 'Create account & accept';
 
   return (
-    <Wrapper>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>You've been invited</h1>
-      <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14, marginBottom: 24 }}>
-        Join <strong>{invitation.account_name}</strong> as{' '}
-        <strong>{ROLE_LABELS[invitation.role] ?? invitation.role}</strong>.
-      </p>
-
-      <form onSubmit={handleAccept} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <AuthPage wide>
+      <AuthCard
+        title="You've been invited"
+        subtitle={`Join ${invitation.account_name} as ${ROLE_LABELS[invitation.role] ?? invitation.role}.`}
+        error={error ?? undefined}
+        submitLabel={actionLabel}
+        loading={isSubmitting}
+        loadingLabel="Please wait…"
+        submitDisabled={!password}
+        onSubmit={handleAccept}
+        footer={`Invitation expires ${new Date(invitation.expires_at).toLocaleDateString()}.`}
+      >
+        <InvitationSummary
+          workspace={invitation.account_name}
+          inviter={<Avatar name={invitation.account_name} seed={invitation.account_id} size={28} />}
+          rows={[
+            { label: 'Workspace', value: invitation.account_name },
+            { label: 'Role', value: ROLE_LABELS[invitation.role] ?? invitation.role },
+            { label: 'Expires', value: new Date(invitation.expires_at).toLocaleDateString() },
+          ]}
+        />
         {/* Email — read-only, pre-filled from invitation */}
-        <div>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4, color: 'var(--kairo-color-muted)' }}>
-            Email
-          </label>
-          <input
-            type="email"
-            value={invitation.email}
-            readOnly
-            style={{
-              width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--kairo-color-line)',
-              fontSize: 14, background: 'var(--kairo-color-sunk)', color: 'var(--kairo-color-faint)', boxSizing: 'border-box',
-            }}
-          />
-        </div>
-
-        {/* Password */}
-        <div>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4, color: 'var(--kairo-color-muted)' }}>
-            {invitation.email_exists ? 'Password' : 'Choose a password'}
-          </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={8}
-            placeholder="Minimum 8 characters"
-            disabled={isSubmitting}
-            style={{
-              width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--kairo-color-line-strong)',
-              fontSize: 14, boxSizing: 'border-box', outline: 'none',
-            }}
-          />
-        </div>
-
-        {error && (
-          <p style={{ color: 'var(--kairo-color-bad)', fontSize: 13, margin: 0 }}>{error}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={isSubmitting || !password}
-          style={{
-            padding: '10px 0', borderRadius: 8, border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer',
-            background: isSubmitting ? 'var(--kairo-color-faint)' : 'var(--kairo-color-text)', color: 'white',
-            fontSize: 14, fontWeight: 600, marginTop: 4,
-          }}
-        >
-          {isSubmitting ? 'Please wait…' : actionLabel}
-        </button>
-      </form>
-
-      <p style={{ fontSize: 12, color: 'var(--kairo-color-faint)', marginTop: 20, textAlign: 'center' }}>
-        Invitation expires {new Date(invitation.expires_at).toLocaleDateString()}.
-      </p>
-    </Wrapper>
+        <Field label="Email" size="web">
+          <FieldInput value={invitation.email} readOnly />
+        </Field>
+        <Field label={invitation.email_exists ? 'Password' : 'Choose a password'} hint={invitation.email_exists ? undefined : 'Minimum 8 characters'} size="web">
+          <FieldInput secureTextEntry value={password} onChangeText={setPassword} placeholder="Minimum 8 characters" readOnly={isSubmitting} autoComplete={invitation.email_exists ? 'current-password' : 'new-password'} />
+        </Field>
+      </AuthCard>
+    </AuthPage>
   );
 }
 
 export default function InvitePage() {
   return (
     <Suspense fallback={
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--kairo-color-sunk)' }}>
-        <div style={{ width: '100%', maxWidth: 440, background: 'white', borderRadius: 12, padding: '40px 36px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-          <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14 }}>Loading invitation…</p>
-        </div>
-      </div>
+      <AuthPage>
+        <Text tag="div" display="flex" alignItems="center" justifyContent="center" gap={8} paddingVertical={40} fontSize={14} color="var(--kairo-color-faint)">
+          <Spinner /> Loading invitation…
+        </Text>
+      </AuthPage>
     }>
       <InvitePageInner />
     </Suspense>

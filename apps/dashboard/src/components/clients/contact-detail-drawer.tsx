@@ -5,7 +5,8 @@ import { type ContactRow } from "@kairo/client-core/contact-row";
 import { confirmDraft, rejectDraft, unrejectDraft, editDraft, type EditPatch } from "@kairo/client-core/draft-actions";
 import type { Client } from "@/types";
 import { Avatar, Box, Callout, Icon, PlainInput, Pressable, PropRow, Spinner, Text } from "@kairo/ui";
-import { ExternalSourceBadge, StatusBadge, relativeTime } from "@/components/clients/contact-parts";
+import { ExternalSourceBadge, StatusBadge } from "@/components/clients/contact-parts";
+import { relativeTime } from "@/components/clients/contact-helpers";
 
 // ---------------------------------------------------------------------------
 // ContactDetailDrawer — read-only slide-out for both source='client' and 'draft'.
@@ -122,8 +123,8 @@ export function ContactDetailDrawer({
 
   return (
     <>
-      <Box onClick={onClose} fixed top={0} right={0} bottom={0} left={0} zIndex={30} backgroundColor="rgba(0,0,0,0.2)" />
-      <Box role="dialog" aria-label={row.displayName} fixed top={0} right={0} bottom={0} zIndex={40} width={400} backgroundColor="white" boxShadow="-4px 0 16px rgba(9,9,11,0.08)" scroll display="flex" flexDirection="column">
+      <Box onClick={onClose} fixed top={0} right={0} bottom={0} left={0} zIndex={30} backgroundColor="var(--kairo-color-scrim)" />
+      <Box role="dialog" aria-label={row.displayName} fixed top={0} right={0} bottom={0} zIndex={40} width={400} backgroundColor="white" boxShadow="var(--kairo-shadow-pop)" scroll display="flex" flexDirection="column">
         <Box display="flex" alignItems="flex-start" justifyContent="space-between" paddingTop={20} paddingHorizontal={24} paddingBottom={16} borderBottomWidth={1} borderBottomColor="var(--k-border)" flexShrink={0} borderStyle="solid">
           <Box display="flex" gap={10} alignItems="center" minWidth={0}>
             <Avatar name={row.displayName} seed={row.id} size={40} />

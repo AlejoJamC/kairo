@@ -10,7 +10,8 @@ import { getSimilarTickets, getRelatedHistory, syncGmail, classifyBatch } from "
 import { fetchTicketById, fetchInboxTickets, fetchBatchJobStatus } from "@kairo/client-core/queries";
 import { useAuth } from "@kairo/client-core/auth";
 import { Box, Callout, EmptyState, Icon, Pressable, PulseDot, Segmented, Spinner, Text } from "@kairo/ui";
-import { INITIAL_FILTERS, TicketSkeleton, VirtualTicketList, applyFilters, assignToGroupOrCreate, deriveGroupName, type BatchTicketResult, type FilterState, type SimilarTicketRow } from "@/components/ticket-list-parts";
+import { TicketSkeleton, VirtualTicketList } from "@/components/ticket-list-parts";
+import { INITIAL_FILTERS, applyFilters, assignToGroupOrCreate, deriveGroupName, type BatchTicketResult, type FilterState, type SimilarTicketRow } from "@/components/ticket-list-helpers";
 
 
 // ---------------------------------------------------------------------------
@@ -83,7 +84,6 @@ export function TicketList() {
     return () => {
       if (groupSuccessTimeoutRef.current) clearTimeout(groupSuccessTimeoutRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTicketId]);
 
   // KAI-25 — historical context drawer: up to 3 past resolved tickets related

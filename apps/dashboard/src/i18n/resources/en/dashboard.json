@@ -405,6 +405,9 @@
     "readOnlyBadge": "Read-only"
   },
   "replyBar": {
+    "textareaLabel": "Message",
+    "retry": "Retry",
+    "resize": "Resize composer",
     "sending": "Sending...",
     "sendSuccess": "Reply sent successfully.",
     "aiSuggestionBanner": "Kairo suggested this reply. You can edit it before sending.",
@@ -569,6 +572,11 @@
     "assistantStarterDraft": "Draft a refund reply for the customer",
     "assistantStarterSimilar": "Find similar resolved cases",
     "assistantThinking": "Thinking…",
+    "assistantWriting": "Writing…",
+    "assistantSend": "Send",
+    "assistantStop": "Stop",
+    "assistantRetry": "Retry",
+    "assistantQuestionLabel": "Ask Kairo Assistant",
     "assistantReasoned": "Reasoned · {{count}} steps",
     "assistantSources": "Sources",
     "assistantDraftBadge": "DRAFT",
@@ -707,5 +715,25 @@
     "account": "account",
     "general": "general",
     "not_applicable": "n/a"
+  },
+  "channelsSettings": {
+    "title": "Support Channels",
+    "subtitle": "Email inboxes connected to this account as support channels.",
+    "loadError": "Could not load channels.",
+    "disconnectError": "Failed to disconnect channel.",
+    "emptyTitle": "No channels connected yet.",
+    "emptyBody": "Connect a Gmail inbox to start receiving support tickets.",
+    "connectedOn": "{{type}} · Connected {{date}}",
+    "primary": "Primary",
+    "gmailName": "Gmail",
+    "gmailDescription": "Connect a Gmail inbox to receive support email.",
+    "outlookName": "Outlook",
+    "outlookDescription": "Outlook, IMAP and custom channels coming soon.",
+    "connect": "Connect",
+    "connecting": "Connecting…",
+    "reconnect": "Reconnect",
+    "disconnect": "Disconnect",
+    "soon": "Coming soon",
+    "back": "Back"
   }
 }

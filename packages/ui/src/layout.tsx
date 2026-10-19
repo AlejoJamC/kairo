@@ -81,16 +81,25 @@ type WebProps = {
   onBlur?: Handler<FocusEvent<HTMLElement>>
   type?: 'button' | 'submit' | 'reset'
   htmlFor?: string
+  /** Link target for tag="a". */
+  href?: string
+  target?: '_blank'
+  rel?: string
+  /** Table cell scope and span. */
+  scope?: 'col' | 'row'
+  colSpan?: number
   gridTemplateColumns?: string
   transition?: string
   transform?: string
-  listStyle?: 'none'
+  listStyle?: 'none' | 'disc' | 'decimal'
   fontStyle?: 'italic' | 'normal'
   wordBreak?: 'break-all' | 'break-word' | 'normal'
   textDecoration?: string
   backgroundImage?: string
   textUnderlineOffset?: number
   boxSizing?: 'content-box' | 'border-box'
+  /** Blurs what is behind the element (frosted bars). */
+  backdropFilter?: string
   cssAnimation?: string
   overflowX?: 'auto' | 'hidden' | 'scroll' | 'visible'
   overflowY?: 'auto' | 'hidden' | 'scroll' | 'visible'
@@ -114,7 +123,7 @@ type WebProps = {
 // Splits the web-only props into DOM attributes/events and an inline style
 // object; the library is the one place allowed to build inline styles.
 function webProps(props: WebProps): Record<string, never> {
-  const { gridTemplateColumns, transition, transform, listStyle, fontStyle, wordBreak, textDecoration, backgroundImage, textUnderlineOffset, boxSizing, cssAnimation, fadeIn, pulse, lineClamp, overflowX, overflowY, lineHeightRatio, ...dom } = props
+  const { gridTemplateColumns, transition, transform, listStyle, fontStyle, wordBreak, textDecoration, backgroundImage, textUnderlineOffset, boxSizing, backdropFilter, cssAnimation, fadeIn, pulse, lineClamp, overflowX, overflowY, lineHeightRatio, ...dom } = props
   const style: Record<string, string> = {}
   if (gridTemplateColumns) style.gridTemplateColumns = gridTemplateColumns
   if (transition) style.transition = transition
@@ -125,6 +134,7 @@ function webProps(props: WebProps): Record<string, never> {
   if (textDecoration) style.textDecoration = textDecoration
   if (backgroundImage) style.backgroundImage = backgroundImage
   if (boxSizing) style.boxSizing = boxSizing
+  if (backdropFilter) Object.assign(style, { backdropFilter, WebkitBackdropFilter: backdropFilter })
   if (cssAnimation) style.animation = cssAnimation
   if (lineClamp) Object.assign(style, { display: '-webkit-box', WebkitLineClamp: String(lineClamp), WebkitBoxOrient: 'vertical', overflow: 'hidden' })
   if (overflowX) style.overflowX = overflowX
@@ -145,8 +155,8 @@ type TextProps = Omit<GetProps<typeof TextFrame>, 'role' | 'fontSize'> &
 
 const WEB_KEYS = [
   'title', 'role', 'ref', 'fontSize', 'onClick', 'onDoubleClick', 'onMouseDown', 'onMouseUp', 'onMouseEnter', 'onMouseLeave',
-  'onKeyDown', 'onSubmit', 'onFocus', 'onBlur', 'type', 'htmlFor', 'gridTemplateColumns', 'transition', 'transform',
-  'listStyle', 'fontStyle', 'wordBreak', 'textDecoration', 'backgroundImage', 'textUnderlineOffset', 'boxSizing', 'cssAnimation', 'fadeIn', 'pulse', 'lineClamp', 'overflowX', 'overflowY', 'lineHeightRatio', 'onPointerDown', 'onPointerUp', 'onPointerLeave', 'onPointerCancel', 'onSelect', 'onKeyUp',
+  'onKeyDown', 'onSubmit', 'onFocus', 'onBlur', 'type', 'htmlFor', 'href', 'target', 'rel', 'scope', 'colSpan', 'gridTemplateColumns', 'transition', 'transform',
+  'listStyle', 'fontStyle', 'wordBreak', 'textDecoration', 'backgroundImage', 'textUnderlineOffset', 'boxSizing', 'backdropFilter', 'cssAnimation', 'fadeIn', 'pulse', 'lineClamp', 'overflowX', 'overflowY', 'lineHeightRatio', 'onPointerDown', 'onPointerUp', 'onPointerLeave', 'onPointerCancel', 'onSelect', 'onKeyUp',
 ] as const
 
 function split<P extends object>(props: P): [Record<string, unknown>, Record<string, unknown>] {

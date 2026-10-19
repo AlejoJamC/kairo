@@ -1,10 +1,9 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import { KairoLogo } from '@/components/kairo-logo';
-import { AlertCircle } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { AuthPage } from '@/components/auth-page';
+import { Box, Spinner, StatusPanel, Text } from "@kairo/ui";
 
 type ErrorType = 'duplicate_email' | 'oauth_error' | 'session_error' | string;
 
@@ -32,83 +31,38 @@ const ERROR_CONTENT: Record<string, { title: string; body: string; cta?: string;
 };
 
 function AuthErrorContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const type = (searchParams.get('type') ?? 'oauth_error') as ErrorType;
   const description = searchParams.get('description');
 
-  const content = ERROR_CONTENT[type] ?? ERROR_CONTENT.oauth_error;
+  const content = ERROR_CONTENT[type] ?? ERROR_CONTENT.oauth_error!;
+  const href = content.ctaHref ?? '/login';
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--kairo-color-sunk)',
-    }}>
-      <div style={{
-        width: '100%',
-        maxWidth: 440,
-        background: 'white',
-        borderRadius: 12,
-        padding: '40px 36px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-      }}>
-        <div style={{ marginBottom: 24 }}>
-          <KairoLogo size={26} href="/" />
-        </div>
-
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-          <AlertCircle size={22} color="var(--kairo-color-bad)" style={{ flexShrink: 0, marginTop: 1 }} />
-          <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: 'var(--kairo-color-text)' }}>
-            {content.title}
-          </h1>
-        </div>
-
-        <p style={{ fontSize: 14, color: 'var(--kairo-color-faint)', lineHeight: 1.6, margin: '0 0 24px' }}>
-          {content.body}
-        </p>
-
-        {/* Show raw description only for generic errors in non-production */}
-        {description && type === 'oauth_error' && (
-          <p style={{
-            fontSize: 12, color: 'var(--kairo-color-faint)', fontFamily: 'monospace',
-            background: 'var(--kairo-color-hover)', borderRadius: 6, padding: '8px 12px',
-            marginBottom: 20, wordBreak: 'break-word',
-          }}>
-            {decodeURIComponent(description)}
-          </p>
-        )}
-
-        {content.cta && content.ctaHref && (
-          <Link
-            href={content.ctaHref}
-            style={{
-              display: 'block',
-              textAlign: 'center',
-              padding: '10px 0',
-              borderRadius: 8,
-              background: 'var(--kairo-color-text)',
-              color: 'white',
-              fontSize: 14,
-              fontWeight: 600,
-              textDecoration: 'none',
-            }}
-          >
-            {content.cta}
-          </Link>
-        )}
-      </div>
-    </div>
+    <AuthPage>
+      <StatusPanel
+          tone="error"
+          title={content.title}
+          description={content.body}
+          action={{ label: content.cta ?? 'Back to sign in', onPress: () => router.push(href) }}
+          secondary={{ label: 'Back to home', onPress: () => router.push('/') }}
+          // Raw description only for generic errors.
+          errorCode={description && type === 'oauth_error' ? decodeURIComponent(description) : type}
+        />
+    </AuthPage>
   );
 }
 
 export default function AuthErrorPage() {
   return (
     <Suspense fallback={
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--kairo-color-sunk)' }}>
-        <p style={{ color: 'var(--kairo-color-faint)', fontSize: 14 }}>Loading…</p>
-      </div>
+      <Box minHeight="100vh" display="flex" alignItems="center" justifyContent="center" backgroundColor="var(--kairo-color-sunk)">
+        <Box display="flex" alignItems="center" gap={8}>
+          <Spinner />
+          <Text fontSize={14} color="var(--kairo-color-faint)">Loading…</Text>
+        </Box>
+      </Box>
     }>
       <AuthErrorContent />
     </Suspense>

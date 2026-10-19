@@ -55,6 +55,7 @@
     "removePerson": "Remove contact person"
   },
   "actions": {
+    "more": "More actions",
     "edit": "Edit",
     "delete": "Delete Client",
     "confirmDelete": "Delete \"{{name}}\"? This cannot be undone.",

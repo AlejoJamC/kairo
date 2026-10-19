@@ -405,6 +405,9 @@
     "readOnlyBadge": "Solo lectura"
   },
   "replyBar": {
+    "textareaLabel": "Mensaje",
+    "retry": "Reintentar",
+    "resize": "Cambiar tamaño del editor",
     "sending": "Enviando...",
     "sendSuccess": "Respuesta enviada correctamente.",
     "aiSuggestionBanner": "Kairo sugirió esta respuesta. Puedes editarla antes de enviar.",
@@ -569,6 +572,11 @@
     "assistantStarterDraft": "Redacta una respuesta de reembolso para el cliente",
     "assistantStarterSimilar": "Busca casos similares ya resueltos",
     "assistantThinking": "Pensando…",
+    "assistantWriting": "Escribiendo…",
+    "assistantSend": "Enviar",
+    "assistantStop": "Detener",
+    "assistantRetry": "Reintentar",
+    "assistantQuestionLabel": "Preguntar al asistente de Kairo",
     "assistantReasoned": "Razonó · {{count}} pasos",
     "assistantSources": "Fuentes",
     "assistantDraftBadge": "BORRADOR",
@@ -707,5 +715,25 @@
     "account": "cuenta",
     "general": "general",
     "not_applicable": "n/a"
+  },
+  "channelsSettings": {
+    "title": "Canales de soporte",
+    "subtitle": "Buzones de correo conectados a esta cuenta como canales de soporte.",
+    "loadError": "No se pudieron cargar los canales.",
+    "disconnectError": "No se pudo desconectar el canal.",
+    "emptyTitle": "Aún no hay canales conectados.",
+    "emptyBody": "Conecte un buzón de Gmail para empezar a recibir tickets de soporte.",
+    "connectedOn": "{{type}} · Conectado el {{date}}",
+    "primary": "Principal",
+    "gmailName": "Gmail",
+    "gmailDescription": "Conecte un buzón de Gmail para recibir el correo de soporte.",
+    "outlookName": "Outlook",
+    "outlookDescription": "Outlook, IMAP y canales personalizados estarán disponibles próximamente.",
+    "connect": "Conectar",
+    "connecting": "Conectando…",
+    "reconnect": "Reconectar",
+    "disconnect": "Desconectar",
+    "soon": "Próximamente",
+    "back": "Volver"
   }
 }

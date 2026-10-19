@@ -55,6 +55,7 @@
     "removePerson": "Quitar persona de contacto"
   },
   "actions": {
+    "more": "Más acciones",
     "edit": "Editar",
     "delete": "Eliminar Cliente",
     "confirmDelete": "¿Eliminar \"{{name}}\"? Esta acción no se puede deshacer.",

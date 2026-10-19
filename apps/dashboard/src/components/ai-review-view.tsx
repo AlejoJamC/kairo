@@ -9,7 +9,7 @@ import { AiAssistant } from "@/components/ai-assistant";
 import { TicketCard } from "@/components/ticket-card";
 import type { AppView } from "@/types";
 import type { Ticket } from "@kairo/types";
-import { Box, Button, Chip, Icon, Spinner, Text } from "@kairo/ui";
+import { AiProposal, Box, Chip, Spinner, Text } from "@kairo/ui";
 
 type ProposalFilter = "pending" | "auto_approved";
 
@@ -39,7 +39,7 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
   const [filter, setFilter] = useState<ProposalFilter>("pending");
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"confirm" | "reject" | null>(null);
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
@@ -65,7 +65,7 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
   };
 
   const review = async (proposal: Proposal, action: "confirm" | "reject") => {
-    setBusy(true);
+    setBusyAction(action);
     setError(false);
     try {
       const res = await approveClassification(proposal.ticket_id, { proposal_id: proposal.id, action });
@@ -75,7 +75,7 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
     } catch {
       setError(true);
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   };
 
@@ -130,48 +130,32 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
 
   if (!selected) return listPane;
 
-  const fields: [string, string | null][] = [
-    [t("aiReviewView.fieldType"), selected.proposed_type],
-    [t("aiReviewView.fieldCategory"), selected.proposed_category],
-    [t("aiReviewView.fieldPriority"), selected.proposed_priority],
-    [t("aiReviewView.fieldTone"), selected.proposed_sentiment],
+  const fields = [
+    { label: t("aiReviewView.fieldType"), value: selected.proposed_type },
+    { label: t("aiReviewView.fieldCategory"), value: selected.proposed_category },
+    { label: t("aiReviewView.fieldPriority"), value: selected.proposed_priority },
+    { label: t("aiReviewView.fieldTone"), value: selected.proposed_sentiment },
   ];
 
   return (
     <>
       {listPane}
       <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" flexDirection="column" minWidth={0} overflow="hidden">
-        <Box borderBottomWidth={1} borderBottomColor="var(--k-border)" backgroundColor="white" paddingVertical={12} paddingHorizontal={24} flexShrink={0} borderStyle="solid">
-          <Text tag="p" margin={0} fontSize={13} fontWeight={600} color="var(--k-text-primary)" display="block">
-            {t("aiReviewView.proposalTitle")}
-          </Text>
-          <Text tag="div" display="flex" flexWrap="wrap" rowGap={4} columnGap={20} marginTop={6} fontSize={13} color="var(--k-text-secondary)">
-            {fields.map(([label, value]) => (
-              <span key={label}>
-                <Text color="var(--k-text-tertiary)">{label}: </Text>
-                {value ?? "—"}
-              </span>
-            ))}
-            <span>
-              <Text color="var(--k-text-tertiary)">{t("aiReviewView.fieldConfidence")}: </Text>
-              {Math.round(selected.confidence_score * 100)}%
-            </span>
-            <span>
-              <Text color="var(--k-text-tertiary)">{t("aiReviewView.fieldModel")}: </Text>
-              {selected.model_version}
-            </span>
-          </Text>
-          <Box display="flex" alignItems="center" gap={8} marginTop={10}>
-            <Button variant="primary" disabled={busy} icon={<Icon name="check" size={14} />} onPress={() => void review(selected, "confirm")}>
-              {t("aiReviewView.confirm")}
-            </Button>
-            <Button disabled={busy} icon={<Icon name="x" size={14} />} onPress={() => void review(selected, "reject")}>
-              {t("aiReviewView.reject")}
-            </Button>
-            {error && (
-              <Text fontSize={13} color="var(--k-danger, var(--kairo-color-bad-ink))">{t("aiReviewView.error")}</Text>
-            )}
-          </Box>
+        <Box borderBottomWidth={1} borderBottomColor="var(--k-border)" backgroundColor="var(--kairo-color-surface)" paddingVertical={12} paddingHorizontal={24} flexShrink={0} borderStyle="solid">
+          <AiProposal
+            title={t("aiReviewView.proposalTitle")}
+            model={selected.model_version}
+            fields={fields}
+            confidence={selected.confidence_score}
+            confidenceLabel={t("aiReviewView.fieldConfidence")}
+            state={busyAction === "confirm" ? "confirming" : "ready"}
+            onConfirm={() => void review(selected, "confirm")}
+            onReject={() => void review(selected, "reject")}
+            labels={{ confirm: t("aiReviewView.confirm"), reject: t("aiReviewView.reject"), retry: t("aiReviewView.confirm"), error: t("aiReviewView.error") }}
+          />
+          {error && (
+            <Text role="alert" tag="p" margin={0} marginTop={8} fontSize={13} color="var(--kairo-color-bad-ink)" display="block">{t("aiReviewView.error")}</Text>
+          )}
         </Box>
         <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" overflow="hidden">
           <TicketDetail />

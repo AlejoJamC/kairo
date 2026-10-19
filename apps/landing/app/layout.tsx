@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import "@kairo/tokens/tokens.css";
-import "./globals.css";
+import "./reset.css";
 import { InstrumentationClient } from "./_instrumentation-client";
 import { LanguageProvider } from "@/lib/i18n";
+import { UiRoot } from "./ui-root";
 
 export const metadata: Metadata = {
   title: "Kairo — AI Support Cockpit",
@@ -17,9 +18,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="flex flex-col min-h-screen antialiased">
+      <body>
         <InstrumentationClient />
-        <LanguageProvider>{children}</LanguageProvider>
+        <UiRoot>
+          <LanguageProvider>{children}</LanguageProvider>
+        </UiRoot>
       </body>
     </html>
   );

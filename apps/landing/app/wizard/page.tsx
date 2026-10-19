@@ -1,14 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Lock } from "lucide-react";
 import { getApiUrl } from "@/lib/api-config";
 import { useTranslation } from "@/lib/i18n";
 import { WizardChrome } from "@/components/wizard-chrome";
-import { WizardStepper } from "@/components/wizard-stepper";
-import { GoogleIcon } from "@/components/google-button";
-
-const COMING_SOON = ["Slack", "WhatsApp", "Telegram", "Instagram"];
+import { WizardSteps } from "@/components/wizard-steps";
+import { Box, Button, Callout, ChoiceCard, ChoiceGroup, GoogleMark, Icon, Text } from "@kairo/ui";
 
 export default function WizardPage() {
   const { t } = useTranslation();
@@ -21,128 +18,37 @@ export default function WizardPage() {
   };
 
   return (
-    <WizardChrome>
-      <WizardStepper
-        steps={[t.wizard.stepConnect, t.wizard.stepDetect, t.wizard.stepTriage]}
-        current={0}
-      />
-
-      <div
-        style={{
-          background: "white",
-          border: "1px solid var(--border)",
-          borderRadius: 14,
-          padding: 40,
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 32,
-            fontWeight: 600,
-            letterSpacing: "-0.02em",
-            margin: "0 0 12px",
-            fontFamily: "var(--font-display)",
-            color: "var(--text-primary)",
-          }}
-        >
+    <WizardChrome stepper={<WizardSteps current="connect" />}>
+      <Box backgroundColor="var(--kairo-color-surface)" borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" borderRadius={14} padding={40}>
+        <Text tag="h1" display="block" fontSize={32} fontWeight={600} letterSpacing={-0.64} marginTop={0} marginHorizontal={0} marginBottom={12} font="display" color="var(--kairo-color-text)">
           {t.wizard.connectTitle}
-        </h1>
-        <p
-          style={{
-            fontSize: 15,
-            color: "var(--text-secondary)",
-            lineHeight: 1.6,
-            margin: "0 0 28px",
-          }}
-        >
+        </Text>
+        <Text tag="p" display="block" fontSize={15} color="var(--kairo-color-muted)" lineHeightRatio={1.6} marginTop={0} marginHorizontal={0} marginBottom={28}>
           {t.wizard.connectSubtitle}
-        </p>
+        </Text>
 
-        {/* Google connect button */}
-        <button
-          onClick={handleGoogleSignIn}
-          disabled={connecting}
-          style={{
-            width: "100%",
-            padding: "16px 18px",
-            border: "1px solid var(--border)",
-            borderRadius: 10,
-            background: "white",
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            cursor: connecting ? "default" : "pointer",
-            fontSize: 14,
-            fontWeight: 500,
-            transition: "background 0.15s ease",
-            position: "relative",
-            overflow: "hidden",
-            fontFamily: "inherit",
-            color: "var(--text-primary)",
-            opacity: connecting ? 0.7 : 1,
-          }}
-          onMouseEnter={(e) => {
-            if (!connecting) e.currentTarget.style.background = "var(--surface)";
-          }}
-          onMouseLeave={(e) => {
-            if (!connecting) e.currentTarget.style.background = "white";
-          }}
-        >
-          <GoogleIcon size={22} />
-          <span>{t.wizard.googleButton}</span>
-          <span
-            style={{
-              marginLeft: "auto",
-              fontSize: 12,
-              color: "var(--text-tertiary)",
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            {t.wizard.connectOAuth}
-          </span>
-        </button>
+        <ChoiceGroup legend={t.wizard.channelLegend}>
+          <ChoiceCard icon={<GoogleMark size={20} />} name="Gmail" availability={t.wizard.channelAvailable} selected />
+          <ChoiceCard icon={<Icon name="msg" size={20} />} name="Slack" availability={t.wizard.channelSoon} soon />
+          <ChoiceCard icon={<Icon name="phone" size={20} />} name="WhatsApp" availability={t.wizard.channelSoon} soon />
+        </ChoiceGroup>
+        <Text tag="p" display="block" font="mono" fontSize={12} color="var(--kairo-color-faint)" marginTop={12} marginHorizontal={0} marginBottom={24}>
+          {t.wizard.channelsNoted}
+        </Text>
 
-        {/* Coming soon channels */}
-        <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-          {COMING_SOON.map((name) => (
-            <span
-              key={name}
-              style={{
-                padding: "6px 10px",
-                borderRadius: 999,
-                fontSize: 12,
-                color: "var(--text-tertiary)",
-                background: "var(--surface)",
-                fontFamily: "var(--font-mono)",
-              }}
-            >
-              {name} · {t.wizard.emailComingSoon.replace("(", "").replace(")", "")}
-            </span>
-          ))}
-        </div>
+        <Button variant="primary" size="webLg" full loading={connecting} icon={<GoogleMark size={18} />} onPress={handleGoogleSignIn}>
+          {t.wizard.googleButton}
+        </Button>
 
-        {/* Security note */}
-        <div
-          style={{
-            marginTop: 28,
-            padding: 14,
-            background: "var(--surface)",
-            borderRadius: 8,
-            fontSize: 12,
-            color: "var(--text-secondary)",
-            display: "flex",
-            gap: 10,
-          }}
-        >
-          <Lock size={14} color="var(--text-tertiary)" strokeWidth={1.6} style={{ marginTop: 1, flexShrink: 0 }} />
-          <div>
-            <div style={{ fontWeight: 500, color: "var(--text-primary)", marginBottom: 2 }}>
+        <Box marginTop={28}>
+          <Callout icon={<Icon name="lock" size={14} />}>
+            <Text fontWeight={500} color="var(--kairo-color-text)">
               {t.wizard.connectReadOnlyTitle}
-            </div>
+            </Text>{" "}
             {t.wizard.connectReadOnlyDesc}
-          </div>
-        </div>
-      </div>
+          </Callout>
+        </Box>
+      </Box>
     </WizardChrome>
   );
 }

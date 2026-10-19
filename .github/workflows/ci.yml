@@ -30,6 +30,10 @@ jobs:
 
       - name: Lint dashboard
         run: bun run --cwd apps/dashboard lint
+      - name: Lint landing
+        run: bun run --cwd apps/landing lint
+      - name: Lint kelan
+        run: bun run --cwd apps/kelan lint
 
       - name: Package boundaries
         run: bun run ui:boundaries

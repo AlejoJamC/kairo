@@ -9,6 +9,8 @@ export const es: Translations = {
     navDocs: "Docs",
     navChangelog: "Changelog",
     getStarted: "Comenzar",
+    language: "Idioma",
+    navLabel: "Principal",
   },
   hero: {
     titlePrefix: "Resuelve tickets en",
@@ -123,6 +125,15 @@ export const es: Translations = {
     testimonialRole: "Head of Support · LATAM",
   },
   wizard: {
+    rulesLabel: "Reglas iniciales",
+    ruleOptional: "opcional",
+    ruleRequired: "requerido",
+    channelLegend: "Canal",
+    channelAvailable: "disponible",
+    channelSoon: "próximamente",
+    channelsNoted: "Telegram e Instagram también están en camino.",
+    stepperLabel: "Progreso de la configuración",
+    back: "Volver",
     title: "Bienvenido a Kairo",
     subtitle: "Conecta tu bandeja de soporte para empezar",
     googleButton: "Continuar con Google",
@@ -287,6 +298,7 @@ export const es: Translations = {
     heroTitle: "Precios honestos. Sin sorpresas.",
     heroSubtitle:
       "Empezá gratis. Pasás a Pro cuando tu equipo necesita más manos. Cancelás cuando quieras.",
+    billingLabel: "Periodo de facturación",
     billingAnnual: "Anual · -20%",
     billingMonthly: "Mensual",
     plans: {

@@ -14,6 +14,8 @@ try {
 
 const nextConfig: NextConfig = {
   trailingSlash: true,
+  // The UI packages ship TypeScript source.
+  transpilePackages: ["@kairo/ui", "@kairo/tokens"],
   // Proxies /api/* (dashboard's @kairo/api calls, Inngest's /api/inngest sync
   // target) to the deployed apps/api origin. The dashboard client always uses
   // relative URLs (see apps/dashboard/src/lib/api-client.ts), so without this

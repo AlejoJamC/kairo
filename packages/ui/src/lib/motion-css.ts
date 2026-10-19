@@ -20,9 +20,14 @@ const CSS = `
 .kairo-ui-slide { animation: kairo-ui-slide-in 160ms ease-out }
 .kairo-ui-fade { animation: kairo-ui-fade .26s ease both }
 .kairo-ui-knob { transition: transform 150ms }
+.kairo-ui-faq > summary { list-style: none }
+.kairo-ui-faq > summary::-webkit-details-marker { display: none }
+.kairo-ui-faq > summary > svg { transition: transform 150ms }
+.kairo-ui-faq[open] > summary > svg { transform: rotate(45deg) }
+.kairo-ui-faq > summary:hover > svg { color: ${tokens['text.primary']} }
 @media (prefers-reduced-motion: reduce) {
   .kairo-ui-shim, .kairo-ui-pulse, .kairo-ui-spin, .kairo-ui-caret, .kairo-ui-slide, .kairo-ui-fade { animation: kairo-ui-fade .26s ease both }
-.kairo-ui-knob { animation: none !important; transition: none !important }
+.kairo-ui-knob, .kairo-ui-faq > summary > svg { animation: none !important; transition: none !important }
 }
 `
 

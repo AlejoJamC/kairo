@@ -1,5 +1,7 @@
-import Link from "next/link";
-import { Zap } from "lucide-react";
+"use client";
+
+import { Icon, Text } from "@kairo/ui";
+import { AppLink } from "@/components/app-link";
 
 interface KairoLogoProps {
   size?: number;
@@ -7,42 +9,16 @@ interface KairoLogoProps {
 }
 
 export function KairoLogo({ size = 28, href = "/" }: KairoLogoProps) {
-  const iconSize = Math.round(size * 0.55);
-
   const inner = (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-      <span
-        style={{
-          width: size,
-          height: size,
-          borderRadius: 6,
-          background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        <Zap size={iconSize} color="white" strokeWidth={2.5} />
-      </span>
-      <span
-        style={{
-          fontWeight: 600,
-          fontSize: size * 0.6,
-          letterSpacing: "-0.01em",
-          color: "var(--text-primary)",
-        }}
-      >
+    <Text display="inline-flex" alignItems="center" gap={8}>
+      <Text width={size} height={size} borderRadius={6} backgroundImage="linear-gradient(135deg, var(--kairo-color-accent), var(--kairo-color-accent-hover))" display="inline-flex" alignItems="center" justifyContent="center" flexShrink={0}>
+        <Icon name="zap" size={Math.round(size * 0.55)} color="var(--kairo-color-on-accent)" strokeWidth={2.5} />
+      </Text>
+      <Text fontWeight={600} fontSize={size * 0.6} letterSpacing={-0.01 * size * 0.6} color="var(--kairo-color-text)">
         Kairo
-      </span>
-    </span>
+      </Text>
+    </Text>
   );
 
-  return href ? (
-    <Link href={href} style={{ textDecoration: "none" }}>
-      {inner}
-    </Link>
-  ) : (
-    inner
-  );
+  return href ? <AppLink href={href}>{inner}</AppLink> : inner;
 }
