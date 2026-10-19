@@ -36,6 +36,7 @@ const Item = styled(Stack, {
 const ItemText = styled(Text, {
   name: 'MenuItemText',
   flex: 1,
+  textAlign: 'left',
   fontSize: 13,
   color: tokens['text.secondary'],
   variants: {

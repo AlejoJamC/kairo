@@ -7,7 +7,7 @@ import { SlaBadge } from "@/components/sla-badge";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { normalizeTicketType } from "@/lib/ticket-labels";
-import { Box, Button, CategoryChip, Chip, Icon, PlainInput, Pressable, Text, TicketRow, type Sentiment, type TextProps } from "@kairo/ui";
+import { Box, Button, CategoryChip, Chip, Icon, PlainInput, Pressable, SlaIndicator, Text, TicketRow, type Sentiment } from "@kairo/ui";
 
 const NO_NOTE_COUNTS = { notes: 0, unread_mentions: 0 } as const;
 
@@ -33,12 +33,6 @@ const EMOTION_LABEL_KEY = {
 // existing element is touched.
 // ---------------------------------------------------------------------------
 
-const PRIORITY_SLA_STYLE: Record<"ok" | "at_risk" | "breached", TextProps> = {
-  ok:       { backgroundColor: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok-ink)" },
-  at_risk:  { backgroundColor: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)", color: "var(--kairo-color-sla-escalate-ink)" },
-  breached: { backgroundColor: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)" },
-};
-
 function PrioritySlaBadge({ ticket }: { ticket: Ticket }) {
   const { t } = useTranslation("dashboard");
   const config = useTriageStore((s) => s.operationalSlaConfig);
@@ -59,9 +53,12 @@ function PrioritySlaBadge({ ticket }: { ticket: Ticket }) {
   }
 
   return (
-    <Text {...PRIORITY_SLA_STYLE[sla.status]} fontSize={10} fontWeight={600} paddingVertical={2} paddingHorizontal={6} borderRadius={4} whiteSpace="nowrap" flexShrink={0} title={t("prioritySla.tooltip", "ANS operativo según la prioridad del ticket")}>
-      {label}
-    </Text>
+    <SlaIndicator
+      variant="compact"
+      status={sla.status === "ok" ? "onTime" : sla.status === "at_risk" ? "atRisk" : "overdue"}
+      time={label}
+      title={t("prioritySla.tooltip", "ANS operativo según la prioridad del ticket")}
+    />
   );
 }
 

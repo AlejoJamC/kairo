@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { tokens } from '@kairo/tokens'
 import { Box, Pressable, Text } from './layout'
 
@@ -7,6 +8,8 @@ import { Box, Pressable, Text } from './layout'
 type SegmentedItem<V extends string> = {
   value: V
   label: string
+  /** Leading glyph, for example the priority bars of a list filter. */
+  icon?: ReactNode
   /** Count shown after the label (the view-tab variant). */
   count?: number
   /** Amber styling for the internal-note mode. */
@@ -23,19 +26,22 @@ type SegmentedProps<V extends string> = {
   /** tablist for composer modes; group (aria-pressed) for language and billing period. */
   semantics?: 'tablist' | 'group'
   size?: 'md' | 'lg'
+  /** track: modes on a shared track; tabs: 28px list filters without a track, with counts. */
+  variant?: 'track' | 'tabs'
 }
 
-function Segmented<V extends string>({ items, value, onChange, label, semantics = 'tablist', size = 'md' }: SegmentedProps<V>) {
-  const height = size === 'lg' ? 34 : 26
+function Segmented<V extends string>({ items, value, onChange, label, semantics = 'tablist', size = 'md', variant = 'track' }: SegmentedProps<V>) {
+  const tabs = variant === 'tabs'
+  const height = tabs ? 28 : size === 'lg' ? 34 : 26
   return (
     <Box
       role={semantics === 'tablist' ? 'tablist' : 'group'}
       aria-label={label}
       display="inline-flex"
-      padding={2}
-      gap={2}
+      padding={tabs ? 0 : 2}
+      gap={tabs ? 4 : 2}
       borderRadius={8}
-      backgroundColor={tokens['surface.hover']}
+      backgroundColor={tabs ? 'transparent' : tokens['surface.hover']}
     >
       {items.map((item) => {
         const active = item.value === value
@@ -51,14 +57,14 @@ function Segmented<V extends string>({ items, value, onChange, label, semantics 
             onClick={() => !item.disabled && onChange(item.value)}
             display="flex"
             alignItems="center"
-            gap={5}
+            gap={tabs ? 6 : 5}
             height={height}
-            paddingHorizontal={size === 'lg' ? 14 : 10}
-            borderRadius={6}
+            paddingHorizontal={size === 'lg' && !tabs ? 14 : 10}
+            borderRadius={tabs ? 7 : 6}
             fontSize={12}
             fontWeight={500}
             color={active ? (note ? tokens['notes.label'] : tokens['text.primary']) : tokens['text.tertiary']}
-            hoverStyle={item.disabled || active ? undefined : { color: tokens['text.primary'] }}
+            hoverStyle={item.disabled || active ? undefined : tabs ? { color: tokens['text.primary'], backgroundColor: tokens['surface.hover'] } : { color: tokens['text.primary'] }}
             backgroundColor={active ? (note ? tokens['notes.background'] : tokens['surface.panel']) : 'transparent'}
             borderWidth={1}
             borderStyle="solid"
@@ -68,9 +74,10 @@ function Segmented<V extends string>({ items, value, onChange, label, semantics 
             cursor={item.disabled ? 'default' : 'pointer'}
             whiteSpace="nowrap"
           >
+            {item.icon}
             {item.label}
             {item.count !== undefined && (
-              <Text font="mono" fontSize={11} opacity={0.65}>
+              <Text font="mono" fontSize={tabs ? 10.5 : 11} opacity={0.65}>
                 {item.count}
               </Text>
             )}

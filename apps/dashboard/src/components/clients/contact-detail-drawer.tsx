@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { type ContactRow } from "@kairo/client-core/contact-row";
 import { confirmDraft, rejectDraft, unrejectDraft, editDraft, type EditPatch } from "@kairo/client-core/draft-actions";
 import type { Client } from "@/types";
-import { Avatar, Box, Callout, Icon, PlainInput, Pressable, PropRow, Spinner, Text } from "@kairo/ui";
+import { Avatar, Box, Button, Callout, Chip, Drawer, Field, FieldInput, Icon, PropRow, Text } from "@kairo/ui";
 import { ExternalSourceBadge, StatusBadge } from "@/components/clients/contact-parts";
 import { relativeTime } from "@/components/clients/contact-helpers";
 
@@ -121,186 +121,135 @@ export function ContactDetailDrawer({
     }
   };
 
+  const actionButtons = (
+    <Box display="flex" gap={8}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%">
+        <Button variant="primary" full loading={actionBusy} icon={<Icon name="check" size={13} color="var(--kairo-color-on-accent)" />} onPress={handleConfirm}>
+          {t("actions.confirm")}
+        </Button>
+      </Box>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%">
+        <Button full disabled={actionBusy} icon={<Icon name="reject" size={13} />} onPress={handleReject}>
+          {t("actions.reject")}
+        </Button>
+      </Box>
+    </Box>
+  );
+
   return (
-    <>
-      <Box onClick={onClose} fixed top={0} right={0} bottom={0} left={0} zIndex={30} backgroundColor="var(--kairo-color-scrim)" />
-      <Box role="dialog" aria-label={row.displayName} fixed top={0} right={0} bottom={0} zIndex={40} width={400} backgroundColor="white" boxShadow="var(--kairo-shadow-pop)" scroll display="flex" flexDirection="column">
-        <Box display="flex" alignItems="flex-start" justifyContent="space-between" paddingTop={20} paddingHorizontal={24} paddingBottom={16} borderBottomWidth={1} borderBottomColor="var(--k-border)" flexShrink={0} borderStyle="solid">
-          <Box display="flex" gap={10} alignItems="center" minWidth={0}>
-            <Avatar name={row.displayName} seed={row.id} size={40} />
-            <Box minWidth={0}>
-              <Text tag="h2" fontSize={16} fontWeight={600} color="var(--k-text-primary)" font="display" margin={0} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
-                {row.displayName}
-              </Text>
-              <Box display="flex" gap={6} marginTop={4} alignItems="center" flexWrap="wrap">
-                <StatusBadge status={row.status} />
-                {row.externalSource && <ExternalSourceBadge source={row.externalSource} />}
-                {client && (
-                  <Text fontSize={11} font="mono" color="var(--k-text-tertiary)">
-                    {client.internalId}
-                  </Text>
-                )}
-              </Box>
-            </Box>
-          </Box>
-          <Pressable onClick={onClose} aria-label="Close" borderRadius={6} padding={6} backgroundColor="transparent" borderWidth={0} cursor="pointer" color="var(--k-text-tertiary)" marginLeft={8} flexShrink={0}>
-            <Icon name="x" size={14} />
-          </Pressable>
-        </Box>
-
-        <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll padding={24}>
-          {/* KPI mini grid */}
-          <Box grid gridTemplateColumns="1fr 1fr" gap={1} backgroundColor="var(--k-border-subtle)" borderWidth={1} borderColor="var(--k-border)" borderRadius={8} overflow="hidden" marginBottom={20} borderStyle="solid">
-            {[
-              { l: t("detail.plan"),    v: client?.plan ?? "—" },
-              { l: t("detail.tickets"), v: String(row.ticketCount) },
-              { l: t("detail.csat"),    v: client?.csatAvg != null ? String(client.csatAvg) : "—" },
-              { l: t("detail.lastSeen"), v: relativeTime(row.lastSeenAt) },
-            ].map((kpi) => (
-              <Box key={kpi.l} backgroundColor="white" padding={10}>
-                <Text tag="div" fontSize={10} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.5} display="block">{kpi.l}</Text>
-                <Text tag="div" fontSize={14} fontWeight={500} marginTop={2} color="var(--k-text-primary)" display="block">{kpi.v}</Text>
-              </Box>
-            ))}
-          </Box>
-
-          {row.organization && <PropRow label={t("detail.organization")}>{row.organization}</PropRow>}
-          {row.email && <PropRow label={t("detail.email")}>{row.email}</PropRow>}
-          {row.phone && <PropRow label={t("detail.phone")}>{row.phone}</PropRow>}
-
-          {/* CRM-only fields */}
-          {client?.legalId && <PropRow label={t("detail.legalId")}>{client.legalId}</PropRow>}
-
-          {client && client.authorizedEmails.length > 0 && (
-            <Box marginBottom={16}>
-              <Text tag="p" fontSize={11} fontWeight={500} color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.44} marginBottom={8} display="block">
-                {t("detail.authorizedEmails")}
-              </Text>
-              <Box display="flex" flexWrap="wrap" gap={6}>
-                {client.authorizedEmails.map((email) => (
-                  <Text key={email} fontSize={12} paddingVertical={2} paddingHorizontal={8} borderRadius={999} borderWidth={1} borderColor="var(--k-border)" color="var(--k-text-secondary)" font="mono" borderStyle="solid">
-                    {email}
-                  </Text>
-                ))}
-              </Box>
-            </Box>
-          )}
-
-          {client && client.contactPersons.length > 0 && (
-            <div>
-              <Text tag="p" fontSize={11} fontWeight={500} color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.44} marginBottom={8} display="block">
-                {t("detail.contactPersons")}
-              </Text>
-              <Box display="flex" flexDirection="column" gap={6}>
-                {client.contactPersons.map((cp) => (
-                  <Box key={cp.name} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" paddingVertical={8} paddingHorizontal={12} borderStyle="solid">
-                    <Text tag="p" fontSize={13} fontWeight={500} color="var(--k-text-primary)" margin={0} display="block">{cp.name}</Text>
-                    <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" margin={0} display="block">{cp.role}</Text>
-                  </Box>
-                ))}
-              </Box>
-            </div>
-          )}
-
-          {/* ── Draft action panel ── */}
-          {isDraft && (
-            <Box marginTop={20}>
-              {/* Action error */}
-              {actionError && (
-                <Box marginBottom={10}>
-                  <Callout tone="error">{actionError}</Callout>
-                </Box>
-              )}
-
-              {/* ── proposed + kairo_created: confirm / reject / edit ── */}
-              {isProposed && isKairoCreated && !editMode && (
-                <Box display="flex" flexDirection="column" gap={8}>
-                  <Box display="flex" gap={8}>
-                    <Pressable onClick={handleConfirm} disabled={actionBusy} flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" alignItems="center" justifyContent="center" gap={6} paddingVertical={9} paddingHorizontal={14} borderRadius={7} fontSize={13} fontWeight={600} cursor="pointer" backgroundColor="var(--kairo-color-ok)" color="white" borderWidth={0}>
-                      {actionBusy ? <Spinner /> : <Icon name="check" size={13} />}
-                      {t("actions.confirm")}
-                    </Pressable>
-                    <Pressable onClick={handleReject} disabled={actionBusy} flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" alignItems="center" justifyContent="center" gap={6} paddingVertical={9} paddingHorizontal={14} borderRadius={7} fontSize={13} fontWeight={600} cursor="pointer" backgroundColor="white" color="var(--kairo-color-bad-ink)" borderWidth={1} borderColor="var(--kairo-color-bad-line)" borderStyle="solid">
-                      {actionBusy ? <Spinner /> : <Icon name="reject" size={13} />}
-                      {t("actions.reject")}
-                    </Pressable>
-                  </Box>
-                  <Pressable onClick={() => setEditMode(true)} display="flex" alignItems="center" justifyContent="center" gap={6} paddingVertical={7} paddingHorizontal={14} borderRadius={7} fontSize={13} cursor="pointer" backgroundColor="transparent" borderWidth={0} color="var(--k-text-secondary)" textDecoration="underline">
-                    <Icon name="draft" size={12} />
-                    {t("actions.edit")}
-                  </Pressable>
-                </Box>
-              )}
-
-              {/* ── proposed + kairo_created: edit mode ── */}
-              {isProposed && isKairoCreated && editMode && (
-                <Box display="flex" flexDirection="column" gap={10}>
-                  {(["display_name", "email", "phone", "organization"] as const).map((field) => (
-                    <div key={field}>
-                      <Text tag="label" display="block" fontSize={11} fontWeight={500} color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.44} marginBottom={4}>
-                        {field === "display_name" ? "Nombre" : field === "email" ? t("detail.email") : field === "phone" ? t("detail.phone") : t("detail.organization")}
-                      </Text>
-                      <PlainInput value={editValues[field]} onChange={(e) => setEditValues((v) => ({ ...v, [field]: e.target.value }))} width="100%" paddingVertical={7} paddingHorizontal={10} fontSize={13} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" outlineWidth={0} color="var(--k-text-primary)" backgroundColor="white" borderStyle="solid" />
-                    </div>
-                  ))}
-                  {editError && (
-                    <Text tag="div" fontSize={12} color="var(--kairo-color-bad-ink)" paddingVertical={6} paddingHorizontal={10} backgroundColor="var(--kairo-color-bad-soft)" borderRadius={6} borderWidth={1} borderColor="var(--kairo-color-bad-line)" display="block" borderStyle="solid">
-                      {editError}
-                    </Text>
-                  )}
-                  <Box display="flex" gap={8}>
-                    <Pressable onClick={handleSave} disabled={saving} flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" alignItems="center" justifyContent="center" gap={6} paddingVertical={8} paddingHorizontal={14} borderRadius={6} fontSize={13} fontWeight={600} cursor="pointer" backgroundColor="var(--kairo-color-accent)" color="white" borderWidth={0}>
-                      {saving && <Spinner />}
-                      {t("actions.save")}
-                    </Pressable>
-                    <Pressable onClick={() => { setEditMode(false); setEditError(null); }} disabled={saving} flexGrow={1} flexShrink={1} flexBasis="0%" paddingVertical={8} paddingHorizontal={14} borderRadius={6} fontSize={13} cursor="pointer" backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" color="var(--k-text-secondary)" borderStyle="solid">
-                      {t("actions.cancel")}
-                    </Pressable>
-                  </Box>
-                </Box>
-              )}
-
-              {/* ── proposed + external_synced: confirm/reject only, no edit ── */}
-              {isProposed && !isKairoCreated && (
-                <Box display="flex" flexDirection="column" gap={8}>
-                  <Text tag="p" fontSize={11} color="var(--k-text-tertiary)" marginTop={0} marginHorizontal={0} marginBottom={4} fontStyle="italic" display="block">
-                    {t("actions.externalReadOnly", { source: row.externalSource ?? "external" })}
-                  </Text>
-                  <Box display="flex" gap={8}>
-                    <Pressable onClick={handleConfirm} disabled={actionBusy} flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" alignItems="center" justifyContent="center" gap={6} paddingVertical={9} paddingHorizontal={14} borderRadius={7} fontSize={13} fontWeight={600} cursor="pointer" backgroundColor="var(--kairo-color-ok)" color="white" borderWidth={0}>
-                      {actionBusy ? <Spinner /> : <Icon name="check" size={13} />}
-                      {t("actions.confirm")}
-                    </Pressable>
-                    <Pressable onClick={handleReject} disabled={actionBusy} flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" alignItems="center" justifyContent="center" gap={6} paddingVertical={9} paddingHorizontal={14} borderRadius={7} fontSize={13} fontWeight={600} cursor="pointer" backgroundColor="white" color="var(--kairo-color-bad-ink)" borderWidth={1} borderColor="var(--kairo-color-bad-line)" borderStyle="solid">
-                      {actionBusy ? <Spinner /> : <Icon name="reject" size={13} />}
-                      {t("actions.reject")}
-                    </Pressable>
-                  </Box>
-                </Box>
-              )}
-
-              {/* ── rejected: re-activate ── */}
-              {isRejected && (
-                <Pressable onClick={handleUnreject} disabled={actionBusy} width="100%" display="flex" alignItems="center" justifyContent="center" gap={6} paddingVertical={9} paddingHorizontal={14} borderRadius={7} fontSize={13} fontWeight={600} cursor="pointer" backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" color="var(--k-text-secondary)" borderStyle="solid">
-                  {actionBusy ? <Spinner /> : <Icon name="undo" size={13} />}
-                  {t("actions.reactivate")}
-                </Pressable>
-              )}
-
-              {/* ── confirmed: read-only with date ── */}
-              {isConfirmed && (
-                <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" margin={0} display="block">
-                  {t("actions.confirmedOn", { date: row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleDateString() : "—" })}
-                </Text>
-              )}
-            </Box>
+    <Drawer open onOpenChange={(next) => { if (!next) onClose(); }} title={row.displayName} closeLabel={t("actions.close")}>
+      <Box display="flex" gap={10} alignItems="center" minWidth={0} marginBottom={16}>
+        <Avatar name={row.displayName} seed={row.id} size={40} />
+        <Box display="flex" gap={6} alignItems="center" flexWrap="wrap">
+          <StatusBadge status={row.status} />
+          {row.externalSource && <ExternalSourceBadge source={row.externalSource} />}
+          {client && (
+            <Text fontSize={11} font="mono" color="var(--kairo-color-faint)">
+              {client.internalId}
+            </Text>
           )}
         </Box>
       </Box>
-    </>
+
+      <PropRow label={t("detail.plan")}>{client?.plan ?? "—"}</PropRow>
+      <PropRow label={t("detail.tickets")} mono>{String(row.ticketCount)}</PropRow>
+      <PropRow label={t("detail.csat")} mono>{client?.csatAvg != null ? String(client.csatAvg) : "—"}</PropRow>
+      <PropRow label={t("detail.lastSeen")} mono>{relativeTime(row.lastSeenAt)}</PropRow>
+      {row.organization && <PropRow label={t("detail.organization")}>{row.organization}</PropRow>}
+      {row.email && <PropRow label={t("detail.email")}>{row.email}</PropRow>}
+      {row.phone && <PropRow label={t("detail.phone")}>{row.phone}</PropRow>}
+
+      {/* CRM-only fields */}
+      {client?.legalId && <PropRow label={t("detail.legalId")}>{client.legalId}</PropRow>}
+
+      {client && client.authorizedEmails.length > 0 && (
+        <Box marginTop={16} marginBottom={16}>
+          <Text tag="p" fontSize={11} fontWeight={500} color="var(--kairo-color-faint)" textTransform="uppercase" letterSpacing={0.44} marginBottom={8} display="block">
+            {t("detail.authorizedEmails")}
+          </Text>
+          <Box display="flex" flexWrap="wrap" gap={6}>
+            {client.authorizedEmails.map((email) => (
+              <Chip key={email} mono>{email}</Chip>
+            ))}
+          </Box>
+        </Box>
+      )}
+
+      {client && client.contactPersons.length > 0 && (
+        <Box marginTop={16}>
+          <Text tag="p" fontSize={11} fontWeight={500} color="var(--kairo-color-faint)" textTransform="uppercase" letterSpacing={0.44} marginBottom={8} display="block">
+            {t("detail.contactPersons")}
+          </Text>
+          {client.contactPersons.map((cp, index) => (
+            <PropRow key={cp.name} label={cp.name} last={index === client.contactPersons.length - 1}>{cp.role}</PropRow>
+          ))}
+        </Box>
+      )}
+
+      {/* ── Draft action panel ── */}
+      {isDraft && (
+        <Box marginTop={20}>
+          {actionError && (
+            <Box marginBottom={10}>
+              <Callout tone="error">{actionError}</Callout>
+            </Box>
+          )}
+
+          {/* proposed + kairo_created: confirm / reject / edit */}
+          {isProposed && isKairoCreated && !editMode && (
+            <Box display="flex" flexDirection="column" gap={8}>
+              {actionButtons}
+              <Button variant="link" icon={<Icon name="draft" size={12} color="var(--kairo-color-accent-ink)" />} onPress={() => setEditMode(true)}>
+                {t("actions.edit")}
+              </Button>
+            </Box>
+          )}
+
+          {/* proposed + kairo_created: edit mode */}
+          {isProposed && isKairoCreated && editMode && (
+            <Box display="flex" flexDirection="column" gap={10}>
+              {(["display_name", "email", "phone", "organization"] as const).map((field) => (
+                <Field key={field} label={field === "display_name" ? "Nombre" : field === "email" ? t("detail.email") : field === "phone" ? t("detail.phone") : t("detail.organization")}>
+                  <FieldInput value={editValues[field]} onChangeText={(value) => setEditValues((v) => ({ ...v, [field]: value }))} />
+                </Field>
+              ))}
+              {editError && <Callout tone="error">{editError}</Callout>}
+              <Box display="flex" gap={8}>
+                <Box flexGrow={1} flexShrink={1} flexBasis="0%">
+                  <Button variant="primary" full loading={saving} onPress={handleSave}>{t("actions.save")}</Button>
+                </Box>
+                <Box flexGrow={1} flexShrink={1} flexBasis="0%">
+                  <Button full disabled={saving} onPress={() => { setEditMode(false); setEditError(null); }}>{t("actions.cancel")}</Button>
+                </Box>
+              </Box>
+            </Box>
+          )}
+
+          {/* proposed + external_synced: confirm/reject only, no edit */}
+          {isProposed && !isKairoCreated && (
+            <Box display="flex" flexDirection="column" gap={8}>
+              <Text tag="p" fontSize={11} color="var(--kairo-color-faint)" marginTop={0} marginHorizontal={0} marginBottom={4} fontStyle="italic" display="block">
+                {t("actions.externalReadOnly", { source: row.externalSource ?? "external" })}
+              </Text>
+              {actionButtons}
+            </Box>
+          )}
+
+          {/* rejected: re-activate */}
+          {isRejected && (
+            <Button full loading={actionBusy} icon={<Icon name="undo" size={13} />} onPress={handleUnreject}>
+              {t("actions.reactivate")}
+            </Button>
+          )}
+
+          {/* confirmed: read-only with date */}
+          {isConfirmed && (
+            <Text tag="p" fontSize={12} color="var(--kairo-color-faint)" margin={0} display="block">
+              {t("actions.confirmedOn", { date: row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleDateString() : "—" })}
+            </Text>
+          )}
+        </Box>
+      )}
+    </Drawer>
   );
 }
-
-// ---------------------------------------------------------------------------
-// DetailField — small reusable label/value row inside the drawer
-// ---------------------------------------------------------------------------

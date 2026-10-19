@@ -19,12 +19,14 @@ type EvidenceRow = {
   routing?: boolean
   /** Confidence of this decision, 0 to 1. */
   confidence?: number | null
+  /** Actions of this decision (for example Accept and Reject), under its row. */
+  actions?: ReactNode
 }
 
 type EvidencePanelProps = {
   title: string
-  /** Confidence of the whole classification; null renders the no-value ring. */
-  confidence: number | null | undefined
+  /** Confidence of the whole classification; null renders the no-value ring, undefined hides the ring. */
+  confidence?: number | null
   confidenceLabel: string
   /** One-line decision summary in the header. */
   summary?: string
@@ -65,7 +67,7 @@ function EvidencePanel({ title, confidence, confidenceLabel, summary, rows, expa
         <Text fontSize={13} fontWeight={600} color={tokens['text.primary']}>
           {title}
         </Text>
-        <ConfidenceRing value={loading ? null : confidence} label={confidenceLabel} size={14} />
+        {confidence !== undefined && <ConfidenceRing value={loading ? null : confidence} label={confidenceLabel} size={14} />}
         {summary && !loading && (
           <Text flexGrow={1} flexShrink={1} fontSize={12} color={tokens['text.secondary']} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
             {summary}
@@ -106,6 +108,7 @@ function EvidencePanel({ title, confidence, confidenceLabel, summary, rows, expa
                   )}
                 </Box>
                 {typeof row.confidence === 'number' && <ConfidenceRing value={row.confidence} variant="numeric" label={confidenceLabel} size={14} />}
+                {row.actions && <Box display="flex" gap={6} flexShrink={0}>{row.actions}</Box>}
               </Box>
             ))
           )}

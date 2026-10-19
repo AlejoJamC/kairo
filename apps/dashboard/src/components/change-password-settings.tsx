@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@kairo/client-core/auth";
 import { updatePassword } from "@kairo/client-core/queries";
 import type { AppView } from "@/types";
-import { Box, Button, Callout, Field, FieldInput, Icon, PasswordStrength, Pressable, Text } from "@kairo/ui";
+import { Box, Button, Callout, Field, FieldInput, Icon, PasswordStrength, Text } from "@kairo/ui";
 
 interface Props {
   onViewChange: (view: AppView) => void;
@@ -60,10 +60,11 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
 
         {/* Back + title */}
         <Box marginBottom={28}>
-          <Pressable onClick={() => onViewChange("settings")} display="flex" alignItems="center" gap={6} fontSize={13} color="var(--k-text-tertiary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" marginBottom={12} padding={0}>
-            <Icon name="back" size={14} />
-            {t("dashboard:changePassword.backToSettings")}
-          </Pressable>
+          <Box marginBottom={12}>
+            <Button variant="link" icon={<Icon name="back" size={14} color="var(--kairo-color-accent-ink)" />} onPress={() => onViewChange("settings")}>
+              {t("dashboard:changePassword.backToSettings")}
+            </Button>
+          </Box>
           <Text tag="h1" fontSize={22} fontWeight={600} letterSpacing={-0.22} color="var(--k-text-primary)" font="display" margin={0} display="block">
             {hasPassword
               ? t("dashboard:changePassword.changeTitle")
@@ -129,9 +130,9 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
                 >
                   {hasPassword ? t("dashboard:changePassword.updateButton") : t("dashboard:changePassword.setButton")}
                 </Button>
-                <Pressable type="button" onClick={() => onViewChange("settings")} fontSize={13} color="var(--k-text-tertiary)" backgroundColor="transparent" borderWidth={0} cursor="pointer">
+                <Button variant="ghost" onPress={() => onViewChange("settings")}>
                   {t("common:cancel")}
-                </Pressable>
+                </Button>
               </Box>
             </Box>
           )}

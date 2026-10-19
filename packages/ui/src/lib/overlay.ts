@@ -105,17 +105,18 @@ const OFFSET = 6
 
 /** Fixed-position style that follows the anchor on scroll and resize. */
 export function useAnchoredPosition(anchor: Element | null, side: Side, align: Align) {
-  const [style, setStyle] = useState<Record<string, number | undefined> | null>(null)
+  const [style, setStyle] = useState<Record<string, number> | null>(null)
   useLayoutEffect(() => {
     if (!anchor) return
     const update = () => {
       const rect = anchor.getBoundingClientRect()
-      setStyle({
-        top: side === 'bottom' ? rect.bottom + OFFSET : undefined,
-        bottom: side === 'top' ? window.innerHeight - rect.top + OFFSET : undefined,
-        left: align === 'start' ? rect.left : undefined,
-        right: align === 'end' ? window.innerWidth - rect.right : undefined,
-      })
+      // Only the anchored edges are set: an undefined edge would be written as 0 and stretch the surface.
+      const next: Record<string, number> = {}
+      if (side === 'bottom') next.top = rect.bottom + OFFSET
+      else next.bottom = window.innerHeight - rect.top + OFFSET
+      if (align === 'start') next.left = rect.left
+      else next.right = window.innerWidth - rect.right
+      setStyle(next)
     }
     update()
     window.addEventListener('resize', update)

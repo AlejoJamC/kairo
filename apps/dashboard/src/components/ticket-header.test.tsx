@@ -58,13 +58,19 @@ afterEach(() => {
 });
 
 describe("TicketHeader — read-only mode (KAI-25)", () => {
-  it("hides assign button by default (VITE_FF_ENABLE_ASSIGN_TO_ME unset), still shows correction trigger", async () => {
+  it("hides assign button by default (VITE_FF_ENABLE_ASSIGN_TO_ME unset)", async () => {
     vi.resetModules();
     const { TicketHeader } = await import("./ticket-header");
     renderWithProviders(React.createElement(TicketHeader, { ticket: baseTicket() }));
     expect(screen.queryByText("Asignar a mí")).not.toBeInTheDocument();
-    expect(screen.getByText("correction.triggerLabel")).toBeInTheDocument();
     expect(screen.queryByText("ticketHeader.readOnlyBadge")).not.toBeInTheDocument();
+  });
+
+  it("shows the correction trigger under the subject", async () => {
+    vi.resetModules();
+    const { TicketClassification } = await import("./ticket-header");
+    renderWithProviders(React.createElement(TicketClassification, { ticket: baseTicket() }));
+    expect(screen.getByText("correction.triggerLabel")).toBeInTheDocument();
   });
 
   it("shows the assign button when VITE_FF_ENABLE_ASSIGN_TO_ME=true", async () => {
@@ -75,14 +81,20 @@ describe("TicketHeader — read-only mode (KAI-25)", () => {
     expect(screen.getByText("Asignar a mí")).toBeInTheDocument();
   });
 
-  it("hides assign button and correction trigger, shows read-only badge, when readOnly (flag on or off)", async () => {
+  it("hides assign button, shows read-only badge, when readOnly (flag on or off)", async () => {
     vi.stubEnv("VITE_FF_ENABLE_ASSIGN_TO_ME", "true");
     vi.resetModules();
     const { TicketHeader } = await import("./ticket-header");
     renderWithProviders(React.createElement(TicketHeader, { ticket: baseTicket(), readOnly: true }));
     expect(screen.queryByText("Asignar a mí")).not.toBeInTheDocument();
-    expect(screen.queryByText("correction.triggerLabel")).not.toBeInTheDocument();
     expect(screen.getByText("ticketHeader.readOnlyBadge")).toBeInTheDocument();
+  });
+
+  it("hides the correction trigger when readOnly", async () => {
+    vi.resetModules();
+    const { TicketClassification } = await import("./ticket-header");
+    renderWithProviders(React.createElement(TicketClassification, { ticket: baseTicket(), readOnly: true }));
+    expect(screen.queryByText("correction.triggerLabel")).not.toBeInTheDocument();
   });
 
   it("still shows the 'Asignado' badge for an already-assigned ticket even when the flag is off", async () => {

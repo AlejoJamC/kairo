@@ -69,7 +69,8 @@
     "bulkConfirmModalTitle": "Confirm drafts from {{org}}",
     "bulkConfirmModalBody": "{{count}} drafts will be confirmed. This action cannot be undone from the regular UI.",
     "bulkConfirmSuccess": "{{count}} drafts confirmed",
-    "externalReadOnly": "Data synced from {{source}}. Editing not available."
+    "externalReadOnly": "Data synced from {{source}}. Editing not available.",
+    "close": "Close"
   },
   "empty": {
     "noClients": "No clients found",

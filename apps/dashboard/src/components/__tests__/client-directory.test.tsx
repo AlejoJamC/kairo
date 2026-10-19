@@ -35,6 +35,7 @@ vi.mock("react-i18next", () => ({
         "actions.edit":            "Editar",
         "actions.save":            "Guardar",
         "actions.cancel":          "Cancelar",
+        "actions.close":           "Cerrar",
         "actions.reactivate":      "Re-activar",
         "actions.confirmedOn":     `Confirmado el ${opts?.date ?? ""}`,
         "actions.bulkConfirmButton": `Confirmar todos los de ${opts?.org ?? ""}`,
@@ -595,7 +596,7 @@ describe("ClientDirectory", () => {
     });
 
     // Close drawer
-    await userEvent.click(screen.getByLabelText("Close"));
+    await userEvent.click(screen.getByLabelText("Cerrar"));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });

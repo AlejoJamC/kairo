@@ -3,7 +3,9 @@ import { Navigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { AuthProvider, useAuth } from "@kairo/client-core/auth";
 import { getPlatform } from "@kairo/client-core/config";
-import { TopChrome } from "@/components/top-chrome";
+import { useSidebarCounts } from "@kairo/client-core/hooks/use-sidebar-counts";
+import { SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS } from "@/lib/poll-intervals";
+import { AppStatusBar } from "@/components/app-status-bar";
 import { Sidebar } from "@/components/sidebar";
 import { Inbox } from "@/components/inbox";
 import { ClientDirectory } from "@/components/client-directory";
@@ -46,6 +48,7 @@ function AppContent() {
     () => getPlatform().storage.getItem("sidebar-collapsed") === "true"
   );
   const [routedView, setActiveView] = useActiveView();
+  const counts = useSidebarCounts(SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS);
 
   const handleToggle = () => {
     setSidebarCollapsed((c) => {
@@ -84,16 +87,13 @@ function AppContent() {
 
   return (
     <Box height="100vh" display="flex" flexDirection="column" backgroundColor="var(--k-bg)" overflow="hidden">
-      {/* Top chrome — 56 px: logo/toggle | search | bell + avatar */}
-      <TopChrome collapsed={sidebarCollapsed} onToggle={handleToggle} onViewChange={setActiveView} />
-
-      {/* Body — sidebar + main content */}
       <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" overflow="hidden">
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={handleToggle}
           activeView={activeView}
           onViewChange={setActiveView}
+          counts={counts}
         />
         {/* overflowX: auto (not hidden) so the combined min-widths of the ticket
             list (360px fixed), center panel (520px min — see ticket-detail.tsx),
@@ -104,6 +104,8 @@ function AppContent() {
           {renderView()}
         </Box>
       </Box>
+
+      <AppStatusBar counts={counts} />
     </Box>
   );
 }

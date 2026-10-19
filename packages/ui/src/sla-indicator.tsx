@@ -11,6 +11,8 @@ type SlaIndicatorProps =
       /** Mono time, for example "48m". */
       time: string
       title: string
+      /** Where the SLA stands; overdue by default. */
+      status?: 'onTime' | 'atRisk' | 'overdue'
     }
   | {
       variant: 'full'
@@ -20,29 +22,35 @@ type SlaIndicatorProps =
       noResponse?: boolean
       /** 0 to 1: how much of the SLA window has elapsed. */
       progress?: number
+      /** Where the SLA stands; overdue by default. */
+      status?: 'onTime' | 'atRisk' | 'overdue'
     }
 
 function SlaIndicator(props: SlaIndicatorProps) {
   if (props.variant === 'compact') {
+    const tone = props.status === 'onTime' ? tokens['color.ok-ink'] : props.status === 'atRisk' ? tokens['color.sla-alert-ink'] : tokens['sla.overdueText']
     return (
       <Box tag="span" display="inline-flex" alignItems="center" gap={4} title={props.title}>
-        <Icon name="clock" size={12} color={tokens['sla.overdueText']} />
-        <Text font="mono" fontSize={11} color={tokens['sla.overdueText']}>
+        <Icon name="clock" size={12} color={tone} />
+        <Text font="mono" fontSize={11} color={tone}>
           {props.time}
         </Text>
       </Box>
     )
   }
   const muted = props.noResponse
+  const status = props.status ?? 'overdue'
+  const text = status === 'onTime' ? tokens['color.ok-ink'] : status === 'atRisk' ? tokens['color.sla-alert-ink'] : tokens['sla.overdueText']
+  const bar = status === 'onTime' ? tokens['sla.onTime'] : status === 'atRisk' ? tokens['sla.atRisk'] : tokens['sla.overdueBar']
   return (
     <Box display="flex" alignItems="center" gap={8}>
-      <Icon name="clock" size={14} color={muted ? tokens['text.tertiary'] : tokens['sla.overdueText']} />
-      <Text fontSize={12.5} fontWeight={500} color={muted ? tokens['text.tertiary'] : tokens['sla.overdueText']}>
+      <Icon name="clock" size={14} color={muted ? tokens['text.tertiary'] : text} />
+      <Text fontSize={12.5} fontWeight={500} color={muted ? tokens['text.tertiary'] : text}>
         {props.label}
       </Text>
       {props.progress !== undefined && (
         <Box width={120} height={4} borderRadius={999} backgroundColor={tokens['sla.track']} overflowX="hidden" overflowY="hidden" aria-hidden>
-          <Box height={4} width={`${Math.round(Math.max(0, Math.min(1, props.progress)) * 100)}%` as never} backgroundColor={tokens['sla.overdueBar']} />
+          <Box height={4} width={`${Math.round(Math.max(0, Math.min(1, props.progress)) * 100)}%` as never} backgroundColor={bar} />
         </Box>
       )}
     </Box>

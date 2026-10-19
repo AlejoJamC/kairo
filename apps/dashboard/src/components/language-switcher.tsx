@@ -1,32 +1,35 @@
 import { useLocale } from "@/hooks/useLocale";
 import type { SupportedLanguage } from "@/i18n/types";
 import { useTranslation } from "react-i18next";
-import { Box, Field, FieldSelect, Icon } from "@kairo/ui";
+import { Box, Icon, PlainSelect } from "@kairo/ui";
 
-export function LanguageSwitcher() {
+export function LanguageSwitcher({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useTranslation("common");
-  const { language, setLanguage, supportedLanguages, languageMeta } =
-    useLocale();
+  const { language, setLanguage, supportedLanguages, languageMeta } = useLocale();
 
   return (
-    <Box position="relative" display="flex" alignItems="center">
-      <Box position="absolute" left={8} zIndex={1} pointerEvents="none">
-        <Icon name="globe" size={13} color="var(--k-text-tertiary)" />
-      </Box>
-      <Field label={t("language")} hideLabel>
-      <FieldSelect
-        value={language}
-        onValueChange={(next) => setLanguage(next as SupportedLanguage)}
-        paddingLeft={26}
-        minWidth={110}
-      >
-        {supportedLanguages.map((lang: SupportedLanguage) => (
-          <option key={lang} value={lang}>
-            {languageMeta[lang].nativeLabel}
-          </option>
-        ))}
-      </FieldSelect>
-      </Field>
+    <Box display="flex" alignItems="center" gap={8} height={30} paddingHorizontal={collapsed ? 0 : 9} justifyContent={collapsed ? "center" : "flex-start"} borderRadius={7} borderWidth={1} borderStyle="solid" borderColor="var(--k-border)" backgroundColor="var(--kairo-color-bg)">
+      <Icon name="globe" size={14} color="var(--k-text-tertiary)" />
+      {!collapsed && (
+        <PlainSelect
+          aria-label={t("language")}
+          value={language}
+          onChange={(event) => setLanguage(event.target.value as SupportedLanguage)}
+          flexGrow={1}
+          flexShrink={1}
+          flexBasis="0%"
+          minWidth={0}
+          backgroundColor="transparent"
+          borderWidth={0}
+          fontSize={12.5}
+          color="var(--k-text-primary)"
+          cursor="pointer"
+        >
+          {supportedLanguages.map((lang: SupportedLanguage) => (
+            <option key={lang} value={lang}>{languageMeta[lang].nativeLabel}</option>
+          ))}
+        </PlainSelect>
+      )}
     </Box>
   );
 }

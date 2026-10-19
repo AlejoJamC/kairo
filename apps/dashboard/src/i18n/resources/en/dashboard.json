@@ -66,8 +66,7 @@
     "detailOverdue": "SLA overdue by {{duration}} with no first response"
   },
   "ticketList": {
-    "header": "Tickets",
-    "classifyAll": "Classify All",
+    "header": "Triage",
     "classifying": "Classifying...",
     "scanning": "Scanning emails... {{count}} ticket classified",
     "scanning_other": "Scanning emails... {{count}} tickets classified",
@@ -94,7 +93,8 @@
     "similarSuggestion_other": "{{count}} tickets seem to be about the same issue. Group them?",
     "similarAccept": "Group",
     "similarDismiss": "Dismiss",
-    "filterLabel": "Filter by priority"
+    "filterLabel": "Filter by priority",
+    "classify": "Classify"
   },
   "tickets": {
     "title": "Open Tickets",
@@ -117,41 +117,42 @@
     "aiReview": "AI Classification",
     "knowledge": "Knowledge",
     "resolved": "Resolved",
-    "clients": "Clients"
+    "clients": "Clients",
+    "workspace": "Workspace"
   },
   "topChrome": {
-    "searchPlaceholder": "Search tickets, clients, KB…",
+    "searchPlaceholder": "Search or run a command…",
     "notifications": {
       "title": "Activity",
       "unreadCount": "{{count}} unread",
       "markRead": "Mark read",
       "tabAll": "All",
-      "tabUnread": "Unread",
       "tabMentions": "@mentions",
-      "empty": "◌ no notifications",
-      "liveStream": "live stream",
-      "viewAll": "View all activity →"
+      "empty": "◌ no notifications"
     },
     "account": {
-      "roleBadge": "Agent · Support",
       "statusSection": "Status",
       "statusOnline": "Online",
       "statusBusy": "On call",
       "statusAway": "Away",
       "statusOffline": "Invisible",
-      "workspaceSection": "Workspace",
-      "workspaceName": "Kairo Workspace",
-      "workspacePlan": "Pro plan",
-      "workspaceChange": "change",
-      "menuProfile": "My profile",
       "menuSettings": "Settings",
-      "menuShortcuts": "Keyboard shortcuts",
-      "menuDocs": "Documentation",
       "appearanceSection": "Appearance",
       "themeLight": "Light",
-      "themeAuto": "Auto",
       "themeDark": "Dark",
       "signOut": "Sign out"
+    },
+    "palette": {
+      "searchTitle": "Command palette",
+      "searchLabel": "Search",
+      "ticketsSection": "Tickets",
+      "goToSection": "Go to",
+      "runFirst": "run first",
+      "close": "close",
+      "ticketPrefix": "KAI-",
+      "notifications": "Notifications",
+      "account": "Account",
+      "toggleSidebar": "Toggle sidebar"
     }
   },
   "awaitingView": {
@@ -275,7 +276,8 @@
       "fieldMin": "Minimum response time",
       "fieldRisk": "Risk alert",
       "fieldEscalation": "Automatic escalation",
-      "unitMinutes": "min"
+      "unitMinutes": "min",
+      "orderError": "The order must be minimum < alert < escalation < maximum"
     },
     "workspace": {
       "title": "Workspace",
@@ -295,7 +297,8 @@
       "seats": "{{used}} / {{total}} seats used in {{plan}} plan.",
       "invite": "Invite",
       "statusActive": "active",
-      "statusAway": "away"
+      "statusAway": "away",
+      "more": "More"
     },
     "integrations": {
       "title": "Integrations",
@@ -402,7 +405,8 @@
     "assignToMe": "Assign to me",
     "assigning": "Assigning…",
     "assigned": "Assigned",
-    "readOnlyBadge": "Read-only"
+    "readOnlyBadge": "Read-only",
+    "escalated": "ESCALATED"
   },
   "replyBar": {
     "textareaLabel": "Message",
@@ -599,7 +603,8 @@
     "assistantOperation_failed": "Failed",
     "assistantRequestFailed": "Assistant unavailable. Try again.",
     "assistantWaiting": "Consulting the ticket…",
-    "contextTabs": "Context"
+    "contextTabs": "Context",
+    "account": "Account"
   },
   "relatedHistory": {
     "title": "Related history",
@@ -609,6 +614,11 @@
     "ticketNumber": "Ticket #{{number}}"
   },
   "decisionWorkflow": {
+    "executionLabel": "Execution",
+    "authorizationLabel": "Authorization",
+    "retry": "Retry",
+    "engine": "Triage Intelligence",
+    "note": "typed decision · no generated reasoning text",
     "title": "Decisions and evidence",
     "error": "Could not record your view or load the history. Retrying.",
     "empty": "No decision history is available yet.",
@@ -735,5 +745,9 @@
     "disconnect": "Disconnect",
     "soon": "Coming soon",
     "back": "Back"
+  },
+  "statusBar": {
+    "commands": "commands",
+    "open": "kairo · {{count}} open"
   }
 }

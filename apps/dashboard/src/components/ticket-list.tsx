@@ -9,7 +9,7 @@ import { isTriageActive } from "@kairo/client-core/triage-status";
 import { getSimilarTickets, getRelatedHistory, syncGmail, classifyBatch } from "@kairo/client-core/endpoints";
 import { fetchTicketById, fetchInboxTickets, fetchBatchJobStatus } from "@kairo/client-core/queries";
 import { useAuth } from "@kairo/client-core/auth";
-import { Box, Callout, EmptyState, Icon, Pressable, PulseDot, Segmented, Spinner, Text } from "@kairo/ui";
+import { Box, Button, Callout, EmptyState, Icon, IconButton, Menu, MenuItem, Popover, PopoverContent, PopoverTrigger, PriorityGlyph, PulseDot, Segmented, Spinner, Text } from "@kairo/ui";
 import { TicketSkeleton, VirtualTicketList } from "@/components/ticket-list-parts";
 import { INITIAL_FILTERS, applyFilters, assignToGroupOrCreate, deriveGroupName, type BatchTicketResult, type FilterState, type SimilarTicketRow } from "@/components/ticket-list-helpers";
 
@@ -47,7 +47,6 @@ export function TicketList() {
   const [syncResult, setSyncResult] = useState<{ created: number; skipped: number } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   // KAI-24 — manual grouping (action bar) + AI similarity callout state.
   const [grouping, setGrouping] = useState(false);
@@ -109,16 +108,6 @@ export function TicketList() {
   }, [tickets]);
 
   // Close dropdown on outside click
-  useEffect(() => {
-    if (!menuOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [menuOpen]);
 
   function toggleFilter<K extends keyof FilterState>(key: K, value: FilterState[K]) {
     setFilters((prev) => ({ ...prev, [key]: prev[key] === value ? null : value }));
@@ -415,55 +404,51 @@ export function TicketList() {
   return (
     <Box display="flex" flexGrow={1} flexShrink={1} flexBasis="0%" flexDirection="column" overflow="hidden" backgroundColor="white">
       {/* Header */}
-      <Box paddingTop={12} paddingHorizontal={14} paddingBottom={8} borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" borderStyle="solid">
-        <Box display="flex" alignItems="center" justifyContent="space-between" marginBottom={8}>
-          <Box display="flex" alignItems="baseline" gap={8} marginTop={2}>
-            <Text fontSize={18} fontWeight={600} letterSpacing={-0.18} color="var(--k-text-primary)">
-              {t("ticketList.header")}
-            </Text>
-            <Text fontSize={12} font="mono" color="var(--k-text-tertiary)">
-              {activeClassifiedCount}/{activeTickets.length}
-            </Text>
-          </Box>
+      <Box display="flex" alignItems="center" gap={8} minHeight={56} paddingTop={14} paddingRight={12} paddingLeft={20} flexShrink={0}>
+        <Text tag="h1" fontSize={16} fontWeight={600} letterSpacing={-0.16} color="var(--k-text-primary)" margin={0}>
+          {t("ticketList.header")}
+        </Text>
+        <Text fontSize={12} font="mono" color="var(--k-text-tertiary)">
+          {activeClassifiedCount}/{activeTickets.length}
+        </Text>
+        <Box flexGrow={1} />
+        <Button
+          icon={busy ? <Spinner /> : <Icon name="spark" size={13} color="var(--kairo-color-accent)" />}
+          disabled={busy || tickets.length === 0}
+          onPress={handleClassifyAll}
+        >
+          {classifyingAll ? (classifyProgress ?? t("ticketList.classifying")) : t("ticketList.classify")}
+        </Button>
 
-          {/* ⋯ actions dropdown */}
-          <Box ref={menuRef} position="relative">
-            <Pressable onClick={() => setMenuOpen((v) => !v)} disabled={busy} aria-label={t("ticketList.moreActions", "Más acciones")} display="flex" alignItems="center" justifyContent="center" width={28} height={28} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" backgroundColor={menuOpen ? "var(--k-surface-2)" : "white"} cursor={busy ? "not-allowed" : "pointer"} opacity={busy ? 0.5 : 1} color="var(--k-text-secondary)" borderStyle="solid">
-              {busy
-                ? <Spinner />
-                : <Icon name="more" size={15} />}
-            </Pressable>
+        {/* ⋯ actions dropdown */}
+        <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+          <PopoverTrigger>
+            <IconButton label={t("ticketList.moreActions", "Más acciones")} disabled={busy}>
+              <Icon name="more" size={15} color="var(--kairo-color-muted)" />
+            </IconButton>
+          </PopoverTrigger>
+          <PopoverContent role="menu" label={t("ticketList.moreActions", "Más acciones")} align="end" width={220}>
+            <Menu label={t("ticketList.moreActions", "Más acciones")}>
+              <MenuItem icon={<Icon name="refresh" size={13} color="var(--kairo-color-faint)" />} label={t("ticketList.syncGmail", "Sincronizar Gmail")} onSelect={handleSyncGmail} />
+            </Menu>
+          </PopoverContent>
+        </Popover>
+      </Box>
 
-            {menuOpen && (
-              <Box position="absolute" top="calc(100% + 4px)" right={0} zIndex={50} backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={8} boxShadow="var(--kairo-shadow-pop)" minWidth={180} overflow="hidden" borderStyle="solid">
-                <Pressable onClick={handleSyncGmail} hoverStyle={{ backgroundColor: "var(--k-surface)" }} display="flex" alignItems="center" gap={8} width="100%" paddingVertical={9} paddingHorizontal={14} fontSize={13} color="var(--k-text-primary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" textAlign="left">
-                  <Icon name="refresh" size={13} color="var(--k-text-tertiary)" />
-                  {t("ticketList.syncGmail", "Sincronizar Gmail")}
-                </Pressable>
-
-                <Box height={1} backgroundColor="var(--k-border-subtle)" marginVertical={0} marginHorizontal={10} />
-
-                <Pressable onClick={handleClassifyAll} disabled={tickets.length === 0} hoverStyle={tickets.length > 0 ? { backgroundColor: "var(--k-surface)" } : undefined} display="flex" alignItems="center" gap={8} width="100%" paddingVertical={9} paddingHorizontal={14} fontSize={13} color={tickets.length === 0 ? "var(--k-text-tertiary)" : "var(--k-text-primary)"} backgroundColor="transparent" borderWidth={0} cursor={tickets.length === 0 ? "not-allowed" : "pointer"} textAlign="left">
-                  <Icon name="refresh" size={13} color="var(--k-text-tertiary)" />
-                  {classifyingAll
-                    ? (classifyProgress ?? t("ticketList.classifying"))
-                    : t("ticketList.classifyAll")}
-                </Pressable>
-              </Box>
-            )}
-          </Box>
-        </Box>
-
-        {/* Filter chips */}
+      {/* Priority filters */}
+      <Box paddingVertical={10} paddingHorizontal={14} borderBottomWidth={1} borderBottomColor="var(--k-border)" borderStyle="solid" flexShrink={0}>
         <Segmented
+          variant="tabs"
           label={t("ticketList.filterLabel", "Filtrar por prioridad")}
-          semantics="group"
           value={filters.priority === null && filters.type === null ? "all" : filters.priority ?? "all"}
           items={[
-            { value: "all", label: t("ticketList.filterAll", "Todos") },
-            { value: "P1", label: "P1" },
-            { value: "P2", label: "P2" },
-            { value: "P3", label: "P3" },
+            { value: "all", label: t("ticketList.filterAll", "Todos"), count: activeTickets.length },
+            ...(["P1", "P2", "P3"] as const).map((level) => ({
+              value: level,
+              label: level,
+              icon: <PriorityGlyph priority={level} size={12} label={false} />,
+              count: activeTickets.filter((ticket) => ticket.priority === level).length,
+            })),
           ]}
           onChange={(value) => (value === "all" ? setFilters(INITIAL_FILTERS) : toggleFilter("priority", value))}
         />
@@ -471,26 +456,26 @@ export function TicketList() {
 
       {/* KAI-24 — multi-select action bar (behind VITE_FF_ENABLE_TICKET_GROUPING) */}
       {TICKET_GROUPING_ENABLED && selectedTicketIds.size >= 2 && (
-        <Box borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="var(--k-accent-subtle)" paddingVertical={6} paddingHorizontal={14} display="flex" alignItems="center" justifyContent="space-between" gap={8} borderStyle="solid">
-          <Text fontSize={11} font="mono" color="var(--k-accent)">
+        <Box paddingVertical={6} paddingHorizontal={14}>
+          <Callout
+            tone="ai"
+            actionLabel={grouping ? t("ticketList.grouping", "Agrupando...") : t("ticketList.groupSelected")}
+            onAction={grouping ? undefined : handleGroupSelected}
+            dismissLabel={t("ticketList.cancelSelection")}
+            onDismiss={grouping ? undefined : clearTicketSelection}
+          >
             {t("ticketList.selectedCount", { count: selectedTicketIds.size })}
-          </Text>
-          <Box display="flex" alignItems="center" gap={6}>
-            <Pressable onClick={handleGroupSelected} disabled={grouping} fontSize={11} fontWeight={500} paddingVertical={3} paddingHorizontal={8} borderRadius={4} backgroundColor="var(--k-accent)" color="white" borderWidth={0} cursor={grouping ? "not-allowed" : "pointer"} opacity={grouping ? 0.6 : 1}>
-              {grouping ? t("ticketList.grouping", "Agrupando...") : t("ticketList.groupSelected")}
-            </Pressable>
-            <Pressable onClick={clearTicketSelection} disabled={grouping} fontSize={11} fontWeight={500} paddingVertical={3} paddingHorizontal={8} borderRadius={4} backgroundColor="transparent" color="var(--k-text-secondary)" borderWidth={1} borderColor="var(--k-border)" cursor={grouping ? "not-allowed" : "pointer"} borderStyle="solid">
-              {t("ticketList.cancelSelection")}
-            </Pressable>
-          </Box>
+          </Callout>
         </Box>
       )}
 
       {/* KAI-108 — grouping success banner (manual selection or AI-suggested accept) */}
       {groupSuccessCount !== null && (
-        <Text tag="div" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" paddingVertical={5} paddingHorizontal={14} fontSize={11} font="mono" color="var(--kairo-color-ok-ink)" display="block" borderStyle="solid">
+        <Box paddingVertical={6} paddingHorizontal={14}>
+          <Callout icon={<Icon name="check" size={13} color="var(--kairo-color-ok)" />}>
           {t("ticketList.groupSuccess", { count: groupSuccessCount })}
-        </Text>
+          </Callout>
+        </Box>
       )}
 
       {/* KAI-24 — grouping error banner (manual selection or AI-suggested) */}
@@ -502,29 +487,29 @@ export function TicketList() {
 
       {/* KAI-24 — AI similarity suggestion callout (behind VITE_FF_ENABLE_TICKET_GROUPING) */}
       {TICKET_GROUPING_ENABLED && similarTickets && similarTickets.length > 0 && (
-        <Box borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="var(--k-accent-subtle)" paddingVertical={8} paddingHorizontal={14} display="flex" flexDirection="column" gap={6} borderStyle="solid">
-          <Text fontSize={12} color="var(--k-accent)">
+        <Box paddingVertical={6} paddingHorizontal={14}>
+          <Callout
+            tone="ai"
+            actionLabel={groupingSimilar ? t("ticketList.grouping", "Agrupando...") : t("ticketList.similarAccept")}
+            onAction={groupingSimilar ? undefined : handleAcceptSimilar}
+            dismissLabel={t("ticketList.similarDismiss")}
+            onDismiss={groupingSimilar ? undefined : handleDismissSimilar}
+          >
             {t("ticketList.similarSuggestion", { count: similarTickets.length })}
-          </Text>
-          <Box display="flex" alignItems="center" gap={6}>
-            <Pressable onClick={handleAcceptSimilar} disabled={groupingSimilar} fontSize={11} fontWeight={500} paddingVertical={3} paddingHorizontal={8} borderRadius={4} backgroundColor="var(--k-accent)" color="white" borderWidth={0} cursor={groupingSimilar ? "not-allowed" : "pointer"} opacity={groupingSimilar ? 0.6 : 1}>
-              {groupingSimilar ? t("ticketList.grouping", "Agrupando...") : t("ticketList.similarAccept")}
-            </Pressable>
-            <Pressable onClick={handleDismissSimilar} disabled={groupingSimilar} fontSize={11} fontWeight={500} paddingVertical={3} paddingHorizontal={8} borderRadius={4} backgroundColor="transparent" color="var(--k-text-secondary)" borderWidth={1} borderColor="var(--k-border)" cursor={groupingSimilar ? "not-allowed" : "pointer"} borderStyle="solid">
-              {t("ticketList.similarDismiss")}
-            </Pressable>
-          </Box>
+          </Callout>
         </Box>
       )}
 
       {/* Sync result / error banner */}
       {syncResult && (
-        <Text tag="div" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" paddingVertical={5} paddingHorizontal={14} fontSize={11} font="mono" color="var(--kairo-color-ok-ink)" display="block" borderStyle="solid">
+        <Box paddingVertical={6} paddingHorizontal={14}>
+          <Callout icon={<Icon name="check" size={13} color="var(--kairo-color-ok)" />}>
           {t("ticketList.syncSuccess", "{{created}} nuevos · {{skipped}} omitidos", {
             created: syncResult.created,
             skipped: syncResult.skipped,
           })}
-        </Text>
+          </Callout>
+        </Box>
       )}
       {syncError && (
         <Box paddingVertical={6} paddingHorizontal={14}>
@@ -534,10 +519,11 @@ export function TicketList() {
 
       {/* Scanning banner */}
       {isScanning && tickets.length > 0 && (
-        <Text tag="div" borderBottomWidth={1} borderBottomColor="var(--k-border-subtle)" backgroundColor="var(--k-accent-subtle)" paddingVertical={6} paddingHorizontal={14} fontSize={11} font="mono" color="var(--k-accent)" display="flex" alignItems="center" gap={6} borderStyle="solid">
-          <PulseDot width={5} height={5} backgroundColor="var(--k-accent)" />
-          {t("ticketList.scanning", { count: classifiedCount })}
-        </Text>
+        <Box paddingVertical={6} paddingHorizontal={14}>
+          <Callout tone="ai" icon={<PulseDot />}>
+            {t("ticketList.scanning", { count: classifiedCount })}
+          </Callout>
+        </Box>
       )}
 
       {/* Skeleton while scanning with no tickets */}

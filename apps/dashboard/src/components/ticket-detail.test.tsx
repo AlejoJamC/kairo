@@ -103,6 +103,7 @@ vi.mock("./reply-bar", () => ({
 
 vi.mock("./ticket-header", () => ({
   TicketHeader: () => React.createElement("div", { "data-testid": "ticket-header" }),
+  TicketClassification: () => React.createElement("div", { "data-testid": "ticket-classification" }),
 }));
 
 // We mock useTicketThread directly — we test the hook separately

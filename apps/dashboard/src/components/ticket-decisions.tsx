@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { reviewDecision, markTicketViewed, getTicketDecisions } from '@kairo/client-core/endpoints';
 import { getPlatform } from '@kairo/client-core/config';
-import { Box } from "@kairo/ui";
+import { Button, EvidencePanel, type EvidenceRow } from "@kairo/ui";
 
 interface Decision {
   id: string; contract: string; status: string; created_at: string; message_id: string | null;
@@ -26,6 +26,8 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
   const [failed, setFailed] = useState(false);
   const [reviewing, setReviewing] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const viewedTicket = useRef<string | null>(null);
   const reviewed = new Set(decisions.flatMap(row => row.result.reviewOf ? [row.result.reviewOf] : []));
   async function review(id: string, accept: boolean) {
@@ -40,6 +42,7 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
     let active = true;
     let loading = false;
     setDecisions([]);
+    setLoaded(false);
     const load = async () => {
       if (loading) return;
       loading = true;
@@ -53,46 +56,63 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
         const response = await getTicketDecisions(ticketId);
         if (!response.ok) throw new Error('Decision retrieval failed');
         const data = await response.json() as { decisions: Decision[] };
-        if (active) { setDecisions(data.decisions); setFailed(false); }
-      } catch { if (active) setFailed(true); } finally { loading = false; }
+        if (active) { setDecisions(data.decisions); setFailed(false); setLoaded(true); }
+      } catch { if (active) { setFailed(true); setLoaded(true); } } finally { loading = false; }
     };
     void load();
     const unsubscribeFocus = getPlatform().appFocus.subscribe((visible) => { if (visible) void load(); });
     return () => { active = false; unsubscribeFocus(); };
   }, [ticketId, refresh]);
   const label = (value: string) => t(`decisionWorkflow.values.${value}`, { defaultValue: t('decisionWorkflow.unavailable') });
-  return <Box tag="details" display="block" borderWidth={1} borderStyle="solid" borderColor="var(--k-border)" borderRadius={6} padding={10}>
-    <summary>{t('decisionWorkflow.title')}</summary>
-    {failed && <p role="alert">{t('decisionWorkflow.error')}</p>}
-    {!failed && !decisions.length && <p>{t('decisionWorkflow.empty')}</p>}
-    {decisions.map(decision => <Box tag="section" key={decision.id} marginTop={12}>
-      {decision.contract === 'knowledge_impact' && decision.status === 'pending_human_review' && !reviewed.has(decision.id) && <div>
-        <button disabled={reviewing !== null} onClick={() => void review(decision.id,true)}>{t('decisionWorkflow.accept')}</button>
-        <button disabled={reviewing !== null} onClick={() => void review(decision.id,false)}>{t('decisionWorkflow.reject')}</button>
-      </div>}
-      <strong>{label(decision.contract)} · {label(decision.status)}</strong>
-      <div><time>{new Date(decision.created_at).toLocaleString()}</time></div>
-      {decision.result.verdict?.reasoning && <p>{decision.result.verdict.reasoning}</p>}
-      <dl>{Object.entries(decision.result.judgments ?? decision.result.verdict?.workflow?.judgments ?? {}).map(([key,value]) =>
-        <div key={key}><dt>{label(key)}</dt><dd>{label(value)}</dd></div>)}</dl>
-      {decision.result.analysis?.observations.map((observation,index) => <div key={index}>
-        <strong>{label(observation.dimension)} · {label(observation.status)}</strong><p>{observation.statement}</p>
-        {observation.citations.map((citation,i) => <blockquote key={i}>{citation.quote}<footer>{citation.sourceId}</footer></blockquote>)}
-      </div>)}
-      {!!decision.result.analysis?.missing.length && <p>{t('decisionWorkflow.missing')}: {decision.result.analysis.missing.map(value => value.startsWith('unsupported_') ? t('decisionWorkflow.unsupported', { dimension: label(value.slice(12)) }) : value).join('; ')}</p>}
-      {decision.result.analysis?.waitingOn && <p>{t('decisionWorkflow.waitingOn')}: {decision.result.analysis.waitingOn} — {decision.result.analysis.resumeWhen}</p>}
-      {decision.result.classificationProposal && Object.keys(decision.result.classificationProposal).length > 0 && <p>{t('decisionWorkflow.classificationProposal')}: {[decision.result.classificationProposal.priority,decision.result.classificationProposal.urgency].filter((value):value is string => !!value).map(value => value.startsWith('P') ? value : label(value)).join(' · ')}</p>}
-      {decision.result.nextAction && <p>{t('decisionWorkflow.nextAction')}: {label(decision.result.nextAction)}</p>}
-      {decision.result.execution && <p>{label(decision.result.execution)}</p>}
-      {decision.result.contribution && <p>{t('decisionWorkflow.contribution')}: {label(decision.result.contribution)}</p>}
-      {decision.result.suggestion && <p>{decision.result.suggestion}</p>}
-      {decision.result.attention && <p>{t('decisionWorkflow.attention')}: {label(decision.result.attention)}</p>}
-      {decision.result.sla && <p>{t('decisionWorkflow.due')}: {new Date(decision.result.sla.dueAt).toLocaleString()}</p>}
-      {decision.result.authorization && <p>{label(decision.result.authorization)}</p>}
-      {missingEvidence(decision.result).length > 0 && <p>{t('decisionWorkflow.missing')}: {missingEvidence(decision.result).map(label).join(', ')}</p>}
-      {!!decision.result.sources?.length && <details><summary>{t('decisionWorkflow.sources')}</summary>
-        {decision.result.sources.map(source => <blockquote key={source.version}>{source.content}<footer>{t('decisionWorkflow.version')}: {source.version}</footer></blockquote>)}
-      </details>}
-    </Box>)}
-  </Box>;
+  const rows: EvidenceRow[] = decisions.flatMap((decision) => {
+    const result = decision.result;
+    const pending = decision.contract === 'knowledge_impact' && decision.status === 'pending_human_review' && !reviewed.has(decision.id);
+    const head: EvidenceRow = {
+      id: `${decision.id}:head`,
+      key: label(decision.contract),
+      value: label(decision.status),
+      sub: new Date(decision.created_at).toLocaleString(),
+      actions: pending ? <>
+        <Button size="sm" variant="primary" disabled={reviewing !== null} onPress={() => void review(decision.id, true)}>{t('decisionWorkflow.accept')}</Button>
+        <Button size="sm" disabled={reviewing !== null} onPress={() => void review(decision.id, false)}>{t('decisionWorkflow.reject')}</Button>
+      </> : undefined,
+    };
+    const typed: EvidenceRow[] = [];
+    const row = (key: string, value: string, sub?: string) => typed.push({ id: `${decision.id}:${typed.length}`, key, value, ...(sub ? { sub } : {}) });
+    for (const [key, value] of Object.entries(result.judgments ?? result.verdict?.workflow?.judgments ?? {})) row(label(key), label(value));
+    for (const observation of result.analysis?.observations ?? []) {
+      row(label(observation.dimension), label(observation.status), observation.citations.map((citation) => `“${citation.quote}” · ${citation.sourceId}`).join(' · ') || undefined);
+    }
+    const gaps = result.analysis?.missing ?? [];
+    if (gaps.length) row(t('decisionWorkflow.missing'), gaps.map((value) => value.startsWith('unsupported_') ? t('decisionWorkflow.unsupported', { dimension: label(value.slice(12)) }) : value).join('; '));
+    if (result.analysis?.waitingOn) row(t('decisionWorkflow.waitingOn'), result.analysis.waitingOn, result.analysis.resumeWhen ?? undefined);
+    const proposal = result.classificationProposal;
+    if (proposal && Object.keys(proposal).length > 0) {
+      row(t('decisionWorkflow.classificationProposal'), [proposal.priority, proposal.urgency].filter((value): value is string => !!value).map((value) => value.startsWith('P') ? value : label(value)).join(' · '));
+    }
+    if (result.nextAction) row(t('decisionWorkflow.nextAction'), label(result.nextAction));
+    if (result.execution) row(t('decisionWorkflow.executionLabel'), label(result.execution));
+    if (result.contribution) row(t('decisionWorkflow.contribution'), label(result.contribution));
+    if (result.attention) row(t('decisionWorkflow.attention'), label(result.attention));
+    if (result.sla) row(t('decisionWorkflow.due'), new Date(result.sla.dueAt).toLocaleString());
+    if (result.authorization) row(t('decisionWorkflow.authorizationLabel'), label(result.authorization));
+    const missing = missingEvidence(result);
+    if (missing.length) row(t('decisionWorkflow.missing'), missing.map(label).join(', '));
+    for (const source of result.sources ?? []) row(t('decisionWorkflow.sources'), `${t('decisionWorkflow.version')}: ${source.version}`, source.content);
+    return [head, ...typed];
+  });
+
+  return (
+    <EvidencePanel
+      title={t('decisionWorkflow.title')}
+      summary={loaded && !failed && !decisions.length ? t('decisionWorkflow.empty') : undefined}
+      confidenceLabel={t('decisionWorkflow.title')}
+      rows={rows}
+      expanded={expanded || failed}
+      onToggle={() => setExpanded((value) => !value)}
+      loading={!loaded}
+      error={failed ? { message: t('decisionWorkflow.error'), retryLabel: t('decisionWorkflow.retry'), onRetry: () => setRefresh((value) => value + 1) } : undefined}
+      footer={{ engine: t('decisionWorkflow.engine'), note: t('decisionWorkflow.note') }}
+    />
+  );
 }

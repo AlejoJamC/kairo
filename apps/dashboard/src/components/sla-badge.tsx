@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Text } from "@kairo/ui";
+import { SlaIndicator } from "@kairo/ui";
 
 /**
  * Contractual SLA of a ticket (from its plan tier): remaining time, or
@@ -33,21 +33,11 @@ export function SlaBadge({ slaDate, breached = false }: { slaDate: string | null
   if (!label) return null;
 
   return (
-    <Text
+    <SlaIndicator
+      variant="compact"
+      status={label.breached ? "overdue" : "onTime"}
+      time={label.text}
       title={t("ticketCard.slaTooltip", "SLA contractual según el plan del cliente")}
-      fontSize={10}
-      fontWeight={600}
-      paddingVertical={2}
-      paddingHorizontal={6}
-      borderRadius={4}
-      backgroundColor={label.breached ? "var(--kairo-color-bad-soft)" : "var(--kairo-color-hover)"}
-      color={label.breached ? "var(--kairo-color-bad-ink)" : "var(--kairo-color-faint)"}
-      textTransform={label.breached ? "uppercase" : undefined}
-      letterSpacing={label.breached ? 0.3 : undefined}
-      whiteSpace="nowrap"
-      flexShrink={0}
-    >
-      {label.text}
-    </Text>
+    />
   );
 }

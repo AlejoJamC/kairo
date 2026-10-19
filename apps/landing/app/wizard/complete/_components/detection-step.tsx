@@ -2,19 +2,11 @@
 
 import { useClassificationProgress, type ClassificationProgress } from "@/lib/hooks/useClassificationProgress";
 import { useTranslation } from "@/lib/i18n";
-import { Box, Button, Chip, Icon, KpiStrip, Spinner, Text } from "@kairo/ui";
+import { Box, Button, CategoryChip, Icon, KpiStrip, Spinner, Text } from "@kairo/ui";
 
 interface DetectionStepProps {
   onContinue: () => void;
 }
-
-const CATEGORY_COLORS: Record<string, string> = {
-  technical:      "var(--kairo-color-bad)",
-  billing:        "var(--kairo-color-accent)",
-  account:        "var(--kairo-color-warn)",
-  general:        "var(--kairo-color-ok)",
-  not_applicable: "var(--kairo-color-faint)",
-};
 
 function CategoryPills({
   categories, labels,
@@ -26,9 +18,7 @@ function CategoryPills({
   return (
     <Box display="flex" gap={6} flexWrap="wrap" marginBottom={28}>
       {entries.map(([key, count]) => (
-        <Chip key={key} icon={<Box width={6} height={6} circle flexShrink={0} backgroundColor={CATEGORY_COLORS[key]} />}>
-          {`${labels[key] ?? key} ${count}`}
-        </Chip>
+        <CategoryChip key={key} scale="category" value={key} label={`${labels[key] ?? key} ${count}`} />
       ))}
     </Box>
   );

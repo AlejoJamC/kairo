@@ -2,9 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { getPlatform } from "@kairo/client-core/config";
-import { Box, Icon, Pressable, Skeleton, Text, getInitials } from "@kairo/ui";
-
-const initials = (name: string | null) => getInitials(name);
+import { Avatar, Box, Button, Icon, Skeleton, Text } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // Skeleton — exported so parent can compose it
@@ -75,12 +73,10 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
 
       {/* Avatar + name + draft badge */}
       <Box display="flex" alignItems="center" gap={10}>
-        <Text tag="div" width={36} height={36} borderRadius={999} flexShrink={0} display="flex" alignItems="center" justifyContent="center" backgroundColor="var(--k-accent-subtle)" color="var(--k-accent)" fontSize={13} fontWeight={600}>
-          {initials(name)}
-        </Text>
+        <Avatar soft size={38} name={name} email={email} />
         <Box minWidth={0} flexGrow={1} flexShrink={1} flexBasis="0%">
           <Box display="flex" alignItems="center" gap={6} flexWrap="wrap">
-            <Text tag="p" fontSize={13} fontWeight={600} color="var(--k-text-primary)" lineHeight={16.9} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
+            <Text tag="p" fontSize={14} fontWeight={600} color="var(--k-text-primary)" lineHeight={18.2} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
               {name ?? email ?? t("clientProfile.unknown")}
             </Text>
             {/* KAI-227 — surface draft origin so the agent knows this profile came from
@@ -109,13 +105,9 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
 
       {/* Phone copy */}
       {phone && (
-        <Pressable onClick={handleCopyPhone} hoverStyle={{ backgroundColor: "var(--k-surface-2)" }} display="flex" width="100%" alignItems="center" gap={6} borderRadius={6} paddingVertical={5} paddingHorizontal={8} fontSize={12} color="var(--k-text-secondary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" transition="background 0.1s">
-          <Icon name="phone" size={11} color="var(--k-text-tertiary)" />
-          <Text flexGrow={1} flexShrink={1} flexBasis="0%" textAlign="left" font="mono">{phone}</Text>
-          {copied
-            ? <Icon name="check" size={11} color="var(--kairo-color-ok)" />
-            : <Icon name="copy" size={11} color="var(--k-text-tertiary)" />}
-        </Pressable>
+        <Button variant="ghost" full icon={<Icon name="phone" size={11} color="var(--kairo-color-faint)" />} iconEnd={copied ? <Icon name="check" size={11} color="var(--kairo-color-ok)" /> : <Icon name="copy" size={11} color="var(--kairo-color-faint)" />} onPress={handleCopyPhone}>
+          {phone}
+        </Button>
       )}
 
       {/* KAI-168 — operational SLA history for this client (own domain, separate

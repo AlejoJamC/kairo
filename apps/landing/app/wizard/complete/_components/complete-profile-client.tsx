@@ -8,7 +8,7 @@ import { useTranslation } from "@/lib/i18n";
 import { WizardChrome } from "@/components/wizard-chrome";
 import { WizardSteps } from "@/components/wizard-steps";
 import { DetectionStep } from "./detection-step";
-import { Box, Button, Chip, Field, FieldInput, Icon, KpiStrip, PermissionList, Spinner, Text } from "@kairo/ui";
+import { Box, Button, CategoryChip, Field, FieldInput, Icon, KpiStrip, PermissionList, Spinner, Text } from "@kairo/ui";
 
 interface UserData {
   id: string;
@@ -26,12 +26,12 @@ const SCAN_DURATION = 1800;
 const SCAN_TARGETS = { tickets: 234, threads: 89, customers: 47 };
 
 const STATIC_CATEGORIES = [
-  { label: "Facturación", count: 47, color: "var(--kairo-color-accent)" },
-  { label: "API · Bugs", count: 38, color: "var(--kairo-color-bad)" },
-  { label: "Configuración", count: 31, color: "var(--kairo-color-warn)" },
-  { label: "Ventas", count: 24, color: "var(--kairo-color-ok)" },
-  { label: "Producto · Feedback", count: 18, color: "var(--kairo-color-violet)" },
-  { label: "Spam", count: 76, color: "var(--kairo-color-faint)" },
+  { label: "Facturación", count: 47, value: "billing" },
+  { label: "API · Bugs", count: 38, value: "technical" },
+  { label: "Configuración", count: 31, value: "account" },
+  { label: "Ventas", count: 24, value: "general" },
+  { label: "Producto · Feedback", count: 18, value: "general" },
+  { label: "Spam", count: 76, value: "not_applicable" },
 ];
 
 async function redirectToDashboard() {
@@ -214,9 +214,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
             </Text>
             <Box display="flex" gap={6} flexWrap="wrap" marginBottom={28}>
               {STATIC_CATEGORIES.map((cat) => (
-                <Chip key={cat.label} icon={<Box width={6} height={6} circle flexShrink={0} backgroundColor={cat.color} />}>
-                  {`${cat.label} ${cat.count}`}
-                </Chip>
+                <CategoryChip key={cat.label} scale="category" value={cat.value} label={`${cat.label} ${cat.count}`} />
               ))}
             </Box>
 

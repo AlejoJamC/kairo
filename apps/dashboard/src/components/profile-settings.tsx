@@ -4,7 +4,7 @@ import { useAuth } from "@kairo/client-core/auth";
 import { updateProfileName } from "@kairo/client-core/queries";
 import { getOperationalSlaConfig, saveOperationalSlaConfig } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
-import { Avatar, Box, Callout, Icon, IntegrationCard, type IntegrationStatus, PlainInput, PlainSelect, Pressable, Spinner, Switch, Text, type IconName } from "@kairo/ui";
+import { Avatar, Box, Button, Callout, Card, CardContent, Chip, EmptyState, Field, FieldInput, FieldRange, FieldSelect, Icon, IconButton, IntegrationCard, type IntegrationStatus, NavItem, SlaScale, Spinner, Switch, Text, type IconName } from "@kairo/ui";
 
 interface Props {
   onViewChange: (view: AppView) => void;
@@ -69,40 +69,45 @@ function WorkspaceSection() {
     <div>
       <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} marginTop={0} marginHorizontal={0} marginBottom={24} font="display" color="var(--k-text-primary)" display="block">{t("dashboard:settings.workspace.title")}</Text>
 
-      <Box padding={24} borderWidth={1} borderColor="var(--k-border)" borderRadius={12} backgroundColor="var(--k-bg)" marginBottom={12} borderStyle="solid">
-        <Box display="flex" gap={14} alignItems="center" marginBottom={20}>
-          <Text tag="div" width={56} height={56} borderRadius={12} backgroundColor="var(--kairo-color-text)" color="white" display="flex" alignItems="center" justifyContent="center" fontSize={20} fontWeight={600} flexShrink={0}>
-            {(name || "W")[0].toUpperCase()}
-          </Text>
-          <Box flexGrow={1} flexShrink={1} flexBasis="0%">
-            <Text tag="label" display="block" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" marginBottom={6} textTransform="uppercase" letterSpacing={0.48}>{t("dashboard:settings.workspace.nameLabel")}</Text>
-            <PlainInput value={name} onChange={(e) => setName(e.target.value)} placeholder={t("dashboard:settings.companyPlaceholder")} width="100%" height={36} paddingVertical={0} paddingHorizontal={10} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--k-surface)" color="var(--k-text-primary)" fontSize={13} outlineWidth={0} borderStyle="solid" />
+      <Card marginBottom={12}>
+        <CardContent>
+          <Box display="flex" gap={14} alignItems="flex-end" marginBottom={20}>
+            <Avatar name={name || "W"} seed={name || "workspace"} size={56} />
+            <Box flexGrow={1} flexShrink={1} flexBasis="0%">
+              <Field label={t("dashboard:settings.workspace.nameLabel")}>
+                <FieldInput value={name} onChangeText={setName} placeholder={t("dashboard:settings.companyPlaceholder")} />
+              </Field>
+            </Box>
           </Box>
-        </Box>
-        <Box grid gridTemplateColumns="1fr 1fr" gap={16}>
-          <div>
-            <Text tag="label" display="block" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" marginBottom={6} textTransform="uppercase" letterSpacing={0.48}>{t("dashboard:settings.workspace.urlLabel")}</Text>
-            <PlainInput placeholder={t("dashboard:settings.workspace.urlPlaceholder")} readOnly width="100%" height={36} paddingVertical={0} paddingHorizontal={10} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--k-surface)" color="var(--k-text-tertiary)" fontSize={13} outlineWidth={0} borderStyle="solid" />
-          </div>
-          <div>
-            <Text tag="label" display="block" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" marginBottom={6} textTransform="uppercase" letterSpacing={0.48}>{t("dashboard:settings.workspace.timezoneLabel")}</Text>
-            <PlainInput placeholder={t("dashboard:settings.workspace.timezonePlaceholder")} readOnly width="100%" height={36} paddingVertical={0} paddingHorizontal={10} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--k-surface)" color="var(--k-text-tertiary)" fontSize={13} outlineWidth={0} borderStyle="solid" />
-          </div>
-        </Box>
-      </Box>
+          <Box grid gridTemplateColumns="1fr 1fr" gap={16}>
+            <Field label={t("dashboard:settings.workspace.urlLabel")}>
+              <FieldInput readOnly placeholder={t("dashboard:settings.workspace.urlPlaceholder")} />
+            </Field>
+            <Field label={t("dashboard:settings.workspace.timezoneLabel")}>
+              <FieldInput readOnly placeholder={t("dashboard:settings.workspace.timezonePlaceholder")} />
+            </Field>
+          </Box>
+        </CardContent>
+      </Card>
 
-      <Box padding={24} borderWidth={1} borderColor="var(--k-border)" borderRadius={12} backgroundColor="var(--k-bg)" display="flex" alignItems="center" gap={16} marginBottom={24} borderStyle="solid">
-        <Icon name="globe" size={16} color="var(--k-text-tertiary)" />
-        <Box flexGrow={1} flexShrink={1} flexBasis="0%">
-          <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{t("dashboard:settings.workspace.langTitle")}</Text>
-          <Text tag="div" fontSize={13} color="var(--k-text-tertiary)" display="block">{t("dashboard:settings.workspace.langDesc")}</Text>
-        </Box>
-        <PlainSelect paddingVertical={6} paddingHorizontal={10} borderWidth={1} borderColor="var(--k-border)" borderRadius={6} fontSize={13} backgroundColor="var(--k-surface)" color="var(--k-text-primary)" borderStyle="solid">
-          <option>{t("dashboard:settings.workspace.langLatam")}</option>
-          <option>{t("dashboard:settings.workspace.langSpain")}</option>
-          <option>{t("dashboard:settings.workspace.langEnglish")}</option>
-        </PlainSelect>
-      </Box>
+      <Card marginBottom={24}>
+        <CardContent>
+          <Box display="flex" alignItems="center" gap={16}>
+            <Icon name="globe" size={16} color="var(--kairo-color-faint)" />
+            <Box flexGrow={1} flexShrink={1} flexBasis="0%">
+              <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{t("dashboard:settings.workspace.langTitle")}</Text>
+              <Text tag="div" fontSize={13} color="var(--k-text-tertiary)" display="block">{t("dashboard:settings.workspace.langDesc")}</Text>
+            </Box>
+            <Field label={t("dashboard:settings.workspace.langTitle")} hideLabel>
+              <FieldSelect minWidth={180}>
+                <option>{t("dashboard:settings.workspace.langLatam")}</option>
+                <option>{t("dashboard:settings.workspace.langSpain")}</option>
+                <option>{t("dashboard:settings.workspace.langEnglish")}</option>
+              </FieldSelect>
+            </Field>
+          </Box>
+        </CardContent>
+      </Card>
 
       {msg && (
         <Box marginBottom={16}>
@@ -111,11 +116,8 @@ function WorkspaceSection() {
       )}
 
       <Box display="flex" justifyContent="flex-end" gap={8} paddingTop={20} borderTopWidth={1} borderTopColor="var(--k-border)" borderStyle="solid">
-        <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={14} borderRadius={8} backgroundColor="transparent" color="var(--k-text-secondary)" fontSize={13} fontWeight={500} borderWidth={1} borderColor="var(--k-border)" cursor="pointer" borderStyle="solid">{t("dashboard:settings.discard")}</Pressable>
-        <Pressable onClick={save} disabled={saving} display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={16} borderRadius={8} backgroundColor="var(--k-accent)" color="white" fontSize={13} fontWeight={500} borderWidth={0} cursor="pointer">
-          {saving && <Spinner />}
-          {saving ? t("dashboard:settings.savingState") : t("dashboard:settings.saveChanges")}
-        </Pressable>
+        <Button>{t("dashboard:settings.discard")}</Button>
+        <Button variant="primary" loading={saving} loadingLabel={t("dashboard:settings.savingState")} onPress={save}>{t("dashboard:settings.saveChanges")}</Button>
       </Box>
     </div>
   );
@@ -124,9 +126,9 @@ function WorkspaceSection() {
 // ── Team ──────────────────────────────────────────────────────────────────────
 
 const TEAM_MEMBERS = [
-  { name: "Valentina Castro", email: "valentina@empresa.io", role: "Owner", status: "online", initials: "VC", gradient: "linear-gradient(135deg,var(--kairo-color-avatar-coral),var(--kairo-color-bad))" },
-  { name: "Mateo Ríos", email: "mateo@empresa.io", role: "Admin", status: "online", initials: "MR", gradient: "linear-gradient(135deg,var(--kairo-color-avatar-blue),var(--kairo-color-accent))" },
-  { name: "Lucía Bermúdez", email: "lucia@empresa.io", role: "Agente", status: "away", initials: "LB", gradient: "linear-gradient(135deg,var(--kairo-color-avatar-lilac),var(--kairo-color-violet))" },
+  { name: "Valentina Castro", email: "valentina@empresa.io", role: "Owner", status: "online" },
+  { name: "Mateo Ríos", email: "mateo@empresa.io", role: "Admin", status: "online" },
+  { name: "Lucía Bermúdez", email: "lucia@empresa.io", role: "Agente", status: "away" },
 ];
 
 function TeamSection() {
@@ -135,9 +137,7 @@ function TeamSection() {
     <div>
       <Box display="flex" alignItems="baseline" justifyContent="space-between" marginBottom={6}>
         <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} margin={0} font="display" color="var(--k-text-primary)" display="block">{t("dashboard:settings.team.title")}</Text>
-        <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={16} borderRadius={8} backgroundColor="var(--k-accent)" color="white" fontSize={13} fontWeight={500} borderWidth={0} cursor="pointer">
-          <Icon name="plus" size={13} /> {t("dashboard:settings.team.invite")}
-        </Pressable>
+        <Button variant="primary" icon={<Icon name="plus" size={13} color="var(--kairo-color-on-accent)" />}>{t("dashboard:settings.team.invite")}</Button>
       </Box>
       <Text tag="p" fontSize={14} color="var(--k-text-tertiary)" marginTop={8} marginHorizontal={0} marginBottom={24} display="block">
         {t("dashboard:settings.team.seats", { used: 3, total: 5, plan: "Pro" })}
@@ -146,10 +146,7 @@ function TeamSection() {
         {TEAM_MEMBERS.map((m, i) => (
           <Box key={m.email} grid gridTemplateColumns="2fr 1fr 1fr 30px" paddingVertical={14} paddingHorizontal={18} alignItems="center" borderBottomWidth={i < TEAM_MEMBERS.length - 1 ? 1 : 0} borderBottomColor="var(--k-border)" backgroundColor="var(--k-bg)" borderStyle="solid">
             <Box display="flex" gap={12} alignItems="center">
-              <Box position="relative">
-                <Avatar name={m.name} seed={m.name} size={32} />
-                <Text position="absolute" bottom={-1} right={-1} width={9} height={9} circle backgroundColor={m.status === "online" ? "var(--kairo-color-ok)" : "var(--kairo-color-warn)"} borderWidth={2} borderColor="var(--k-bg)" borderStyle="solid" />
-              </Box>
+              <Avatar name={m.name} seed={m.name} size={32} presence={m.status === "online" ? "online" : "away"} />
               <div>
                 <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{m.name}</Text>
                 <Text tag="div" fontSize={12} color="var(--k-text-tertiary)" display="block">{m.email}</Text>
@@ -159,9 +156,9 @@ function TeamSection() {
             <Text fontSize={12} color="var(--k-text-tertiary)" font="mono">
               {m.status === "online" ? t("dashboard:settings.team.statusActive") : t("dashboard:settings.team.statusAway")}
             </Text>
-            <Pressable color="var(--k-text-tertiary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={4}>
-              <Icon name="more" size={14} />
-            </Pressable>
+            <IconButton label={t("dashboard:settings.team.more", "More")}>
+              <Icon name="more" size={14} color="var(--kairo-color-faint)" />
+            </IconButton>
           </Box>
         ))}
       </Box>
@@ -215,15 +212,17 @@ function IntegrationsSection({ onViewChange }: { onViewChange: (view: AppView) =
         <Text tag="h2" fontSize={14} fontWeight={600} color="var(--k-text-primary)" marginTop={0} marginHorizontal={0} marginBottom={12} display="block">
           Support Channels
         </Text>
-        <Box padding={16} borderWidth={1} borderColor="var(--k-border)" borderRadius={10} display="flex" alignItems="center" justifyContent="space-between" backgroundColor="var(--k-bg)" borderStyle="solid">
-          <div>
-            <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">Email inboxes</Text>
-            <Text tag="div" fontSize={12} color="var(--k-text-tertiary)" marginTop={2} display="block">Gmail and other email channels connected to this account</Text>
-          </div>
-          <Pressable onClick={() => onViewChange("channels")} fontSize={12} fontWeight={500} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer">
-            Manage →
-          </Pressable>
-        </Box>
+        <Card>
+          <CardContent>
+            <Box display="flex" alignItems="center" justifyContent="space-between">
+              <div>
+                <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">Email inboxes</Text>
+                <Text tag="div" fontSize={12} color="var(--k-text-tertiary)" marginTop={2} display="block">Gmail and other email channels connected to this account</Text>
+              </div>
+              <Button variant="link" iconEnd={<Icon name="right" size={12} color="var(--kairo-color-accent-ink)" />} onPress={() => onViewChange("channels")}>Manage</Button>
+            </Box>
+          </CardContent>
+        </Card>
       </Box>
     </div>
   );
@@ -271,66 +270,69 @@ function TriageSection() {
         {TIER_DATA.map((tier, i) => {
           const col = TIER_COLORS[tier.tier];
           return (
-            <Box key={tier.tier} display="flex" alignItems="center" gap={16} paddingVertical={14} paddingHorizontal={16} borderWidth={1} borderColor="var(--k-border)" borderRadius={10} marginBottom={8} backgroundColor="var(--k-bg)" borderStyle="solid">
-              <Text tag="div" width={32} height={32} borderRadius={8} backgroundColor={col + "20"} color={col} display="flex" alignItems="center" justifyContent="center" font="mono" fontSize={12} fontWeight={600} flexShrink={0}>
-                T{tier.tier}
-              </Text>
-              <Box flexGrow={1} flexShrink={1} flexBasis="0%">
-                <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{t(`dashboard:settings.triage.${tier.nameKey}`)}</Text>
-                <Text tag="div" fontSize={13} color="var(--k-text-tertiary)" display="block">{t(`dashboard:settings.triage.${tier.descKey}`)}</Text>
-              </Box>
-              <Switch
-                checked={tiers[i]}
-                label={t(`dashboard:settings.triage.${tier.nameKey}`)}
-                onCheckedChange={() => setTiers((p) => p.map((v, j) => j === i ? !v : v))}
-              />
-            </Box>
+            <Card key={tier.tier} marginBottom={8}>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={16}>
+                  <Text tag="div" width={32} height={32} borderRadius={8} backgroundColor={`color-mix(in srgb, ${col} 14%, transparent)`} color={col} display="flex" alignItems="center" justifyContent="center" font="mono" fontSize={12} fontWeight={600} flexShrink={0}>
+                    T{tier.tier}
+                  </Text>
+                  <Box flexGrow={1} flexShrink={1} flexBasis="0%">
+                    <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{t(`dashboard:settings.triage.${tier.nameKey}`)}</Text>
+                    <Text tag="div" fontSize={13} color="var(--k-text-tertiary)" display="block">{t(`dashboard:settings.triage.${tier.descKey}`)}</Text>
+                  </Box>
+                  <Switch
+                    checked={tiers[i]}
+                    label={t(`dashboard:settings.triage.${tier.nameKey}`)}
+                    onCheckedChange={() => setTiers((p) => p.map((v, j) => j === i ? !v : v))}
+                  />
+                </Box>
+              </CardContent>
+            </Card>
           );
         })}
       </Box>
 
       {/* Confidence slider */}
-      <Box marginBottom={32} padding={18} borderWidth={1} borderColor="var(--k-border)" borderRadius={10} backgroundColor="var(--k-bg)" borderStyle="solid">
-        <Box display="flex" justifyContent="space-between" alignItems="baseline" marginBottom={6}>
-          <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{t("dashboard:settings.triage.confidenceTitle")}</Text>
-          <Text font="mono" fontSize={16} color="var(--k-accent)" fontWeight={500}>{confidence.toFixed(2)}</Text>
-        </Box>
-        <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" marginTop={0} marginHorizontal={0} marginBottom={14} display="block">
-          {t("dashboard:settings.triage.confidenceDesc", { threshold: confidence.toFixed(2) })}
-        </Text>
-        <PlainInput type="range" min={0.5} max={1} step={0.01} value={confidence} onChange={(e) => setConfidence(parseFloat(e.target.value))} width="100%" accentColor="var(--k-accent)" />
-        <Text tag="div" display="flex" justifyContent="space-between" fontSize={11} font="mono" color="var(--k-text-tertiary)" marginTop={6}>
-          <span>{t("dashboard:settings.triage.confidenceLow")}</span>
-          <span>{t("dashboard:settings.triage.confidenceHigh")}</span>
-        </Text>
-      </Box>
+      <Card marginBottom={32}>
+        <CardContent>
+          <FieldRange
+            label={t("dashboard:settings.triage.confidenceTitle")}
+            value={confidence}
+            min={0.5}
+            max={1}
+            step={0.01}
+            onValueChange={setConfidence}
+            format={(value) => value.toFixed(2)}
+            startLabel={t("dashboard:settings.triage.confidenceLow")}
+            endLabel={t("dashboard:settings.triage.confidenceHigh")}
+            hint={t("dashboard:settings.triage.confidenceDesc", { threshold: confidence.toFixed(2) })}
+          />
+        </CardContent>
+      </Card>
 
       {/* Custom categories */}
       <Box marginBottom={32}>
         <Box display="flex" justifyContent="space-between" alignItems="center" marginBottom={12}>
-          <Text tag="div" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" font="mono" textTransform="uppercase" letterSpacing={0.6} marginBottom={12} display="block">{t("dashboard:settings.triage.categoriesLabel")}</Text>
-          <Box display="flex" gap={6}>
-            <PlainInput placeholder={t("dashboard:settings.triage.categoryPlaceholder")} value={newCat} onChange={(e) => setNewCat(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addCat()} width={140} height={36} paddingVertical={4} paddingHorizontal={10} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--k-surface)" color="var(--k-text-primary)" fontSize={12} outlineWidth={0} borderStyle="solid" />
-            <Pressable onClick={addCat} display="flex" alignItems="center" gap={4} paddingVertical={4} paddingHorizontal={10} borderRadius={8} backgroundColor="transparent" color="var(--k-text-secondary)" fontSize={12} fontWeight={500} borderWidth={1} borderColor="var(--k-border)" cursor="pointer" borderStyle="solid">
-              <Icon name="plus" size={12} /> {t("dashboard:settings.triage.addCategory")}
-            </Pressable>
+          <Text tag="div" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" font="mono" textTransform="uppercase" letterSpacing={0.6} display="block">{t("dashboard:settings.triage.categoriesLabel")}</Text>
+          <Box display="flex" gap={6} alignItems="center">
+            <Field label={t("dashboard:settings.triage.categoriesLabel")} hideLabel>
+              <FieldInput placeholder={t("dashboard:settings.triage.categoryPlaceholder")} value={newCat} onChangeText={setNewCat} onKeyPress={(e) => e.nativeEvent.key === "Enter" && addCat()} width={160} />
+            </Field>
+            <Button icon={<Icon name="plus" size={12} />} onPress={addCat}>{t("dashboard:settings.triage.addCategory")}</Button>
           </Box>
         </Box>
         <Box display="flex" gap={8} flexWrap="wrap">
           {categories.map((c) => (
-            <Text key={c} paddingVertical={5} paddingHorizontal={10} fontSize={12} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" display="flex" alignItems="center" gap={6} color="var(--k-text-primary)" backgroundColor="var(--k-bg)" borderStyle="solid">
+            <Chip key={c} icon={<Icon name="x" size={11} />} onPress={() => setCategories((p) => p.filter((x) => x !== c))}>
               {c}
-              <Pressable onClick={() => setCategories((p) => p.filter((x) => x !== c))} color="var(--k-text-tertiary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={0} display="flex">
-                <Icon name="x" size={11} />
-              </Pressable>
-            </Text>
+            </Chip>
           ))}
         </Box>
       </Box>
 
       <Box display="flex" justifyContent="flex-end" gap={8} paddingTop={20} borderTopWidth={1} borderTopColor="var(--k-border)" borderStyle="solid">
-        <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={14} borderRadius={8} backgroundColor="transparent" color="var(--k-text-secondary)" fontSize={13} fontWeight={500} borderWidth={1} borderColor="var(--k-border)" cursor="pointer" borderStyle="solid">{t("dashboard:settings.discard")}</Pressable>
-        <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={16} borderRadius={8} backgroundColor="var(--k-accent)" color="white" fontSize={13} fontWeight={500} borderWidth={0} cursor="pointer">{t("dashboard:settings.saveChanges")}</Pressable>
+        <Button>{t("dashboard:settings.discard")}</Button>
+        <Button variant="primary">{t("dashboard:settings.saveChanges")}</Button>
       </Box>
     </div>
   );
@@ -426,32 +428,42 @@ function OperationalSlaSection() {
       {PRIORITY_ORDER.map((priority) => {
         const row = rows.find((r) => r.priority === priority);
         if (!row) return null;
+        const minutes = {
+          minimum: secondsToMinutes(row.minResponseSeconds),
+          alert: secondsToMinutes(row.riskAlertSeconds),
+          escalation: secondsToMinutes(row.escalationSeconds),
+          maximum: secondsToMinutes(row.maxResponseSeconds),
+        };
+        const ordered = minutes.minimum < minutes.alert && minutes.alert < minutes.escalation && minutes.escalation < minutes.maximum;
         return (
-          <Box key={priority} padding={24} borderWidth={1} borderColor="var(--k-border)" borderRadius={12} backgroundColor="var(--k-bg)" marginBottom={12} borderStyle="solid">
-            <Text tag="div" fontSize={14} fontWeight={600} color="var(--k-text-primary)" marginBottom={12} display="block">
-              {t(`dashboard:settings.sla.priority${priority}`)}
-            </Text>
-            <Box grid gridTemplateColumns="1fr 1fr 1fr 1fr" gap={16}>
-              {SLA_FIELDS.map((field) => (
-                <div key={field.key}>
-                  {/* Fixed height (not minHeight) fits 2 lines so every column in the
-                      row has the exact same label height regardless of whether its
-                      own text wraps to 1 or 2 lines (ES labels are longer than EN) —
-                      a minHeight only floors the shortest column, it doesn't force
-                      the 1-line and 2-line columns to match each other. */}
-                  <Text tag="label" display="flex" fontSize={12} fontWeight={500} color="var(--k-text-secondary)" marginBottom={6} textTransform="uppercase" letterSpacing={0.48} height={32} lineHeight={16} alignItems="flex-end">
-                    {t(field.labelKey)}
-                  </Text>
-                  <Box position="relative">
-                    <PlainInput type="number" min={1} value={secondsToMinutes(row[field.key])} onChange={(e) => updateField(priority, field.key, Number(e.target.value))} width="100%" height={36} paddingVertical={0} paddingHorizontal={10} borderRadius={8} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--k-surface)" color="var(--k-text-primary)" fontSize={13} outlineWidth={0} paddingRight={40} borderStyle="solid" />
-                    <Text position="absolute" right={10} top="50%" transform="translateY(-50%)" fontSize={12} color="var(--k-text-tertiary)" pointerEvents="none">
-                      {t("dashboard:settings.sla.unitMinutes")}
-                    </Text>
-                  </Box>
-                </div>
-              ))}
-            </Box>
-          </Box>
+          <Card key={priority} marginBottom={12}>
+            <CardContent>
+              <Text tag="div" fontSize={14} fontWeight={600} color="var(--k-text-primary)" marginBottom={12} display="block">
+                {t(`dashboard:settings.sla.priority${priority}`)}
+              </Text>
+              <Box grid gridTemplateColumns="1fr 1fr 1fr 1fr" gap={16}>
+                {SLA_FIELDS.map((field) => (
+                  <Field key={field.key} label={t(field.labelKey)} unit={t("dashboard:settings.sla.unitMinutes")}>
+                    <FieldInput inputMode="numeric" value={String(secondsToMinutes(row[field.key]))} onChangeText={(value) => updateField(priority, field.key, Number(value))} />
+                  </Field>
+                ))}
+              </Box>
+              <Box marginTop={16}>
+                <SlaScale
+                  alert={minutes.alert}
+                  escalation={minutes.escalation}
+                  maximum={minutes.maximum}
+                  labels={{
+                    minimum: `${minutes.minimum}m`,
+                    alert: `${minutes.alert}m`,
+                    escalation: `${minutes.escalation}m`,
+                    breach: `${minutes.maximum}m`,
+                  }}
+                  orderError={ordered ? undefined : t("dashboard:settings.sla.orderError")}
+                />
+              </Box>
+            </CardContent>
+          </Card>
         );
       })}
 
@@ -462,10 +474,7 @@ function OperationalSlaSection() {
       )}
 
       <Box display="flex" justifyContent="flex-end" gap={8} paddingTop={20} borderTopWidth={1} borderTopColor="var(--k-border)" borderStyle="solid">
-        <Pressable onClick={save} disabled={saving} display="inline-flex" alignItems="center" gap={6} paddingVertical={7} paddingHorizontal={16} borderRadius={8} backgroundColor="var(--k-accent)" color="white" fontSize={13} fontWeight={500} borderWidth={0} cursor="pointer">
-          {saving && <Spinner />}
-          {saving ? t("dashboard:settings.savingState") : t("dashboard:settings.saveChanges")}
-        </Pressable>
+        <Button variant="primary" loading={saving} loadingLabel={t("dashboard:settings.savingState")} onPress={save}>{t("dashboard:settings.saveChanges")}</Button>
       </Box>
     </div>
   );
@@ -482,7 +491,7 @@ function SecuritySection({ onViewChange }: { onViewChange: (view: AppView) => vo
     <div>
       <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} marginTop={0} marginHorizontal={0} marginBottom={24} font="display" color="var(--k-text-primary)" display="block">{t("dashboard:settings.security.title")}</Text>
 
-      <Box borderWidth={1} borderColor="var(--k-border)" borderRadius={12} overflow="hidden" backgroundColor="var(--k-bg)" borderStyle="solid">
+      <Card>
         <Box paddingVertical={18} paddingHorizontal={20} display="flex" alignItems="center" justifyContent="space-between" borderBottomWidth={1} borderBottomColor="var(--k-border)" borderStyle="solid">
           <div>
             <Text tag="div" fontSize={14} fontWeight={500} color="var(--k-text-primary)" display="block">{t("dashboard:settings.security.passwordLabel")}</Text>
@@ -492,11 +501,11 @@ function SecuritySection({ onViewChange }: { onViewChange: (view: AppView) => vo
                 : t("dashboard:settings.security.passwordNoneDesc")}
             </Text>
           </div>
-          <Pressable onClick={() => onViewChange("change-password")} fontSize={13} fontWeight={500} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer">
+          <Button variant="link" onPress={() => onViewChange("change-password")}>
             {hasPassword
               ? t("dashboard:settings.security.changePassword")
               : t("dashboard:settings.security.setPassword")}
-          </Pressable>
+          </Button>
         </Box>
 
         <Box paddingVertical={18} paddingHorizontal={20} display="flex" alignItems="center" justifyContent="space-between">
@@ -506,7 +515,7 @@ function SecuritySection({ onViewChange }: { onViewChange: (view: AppView) => vo
           </div>
           <Text fontSize={11} color="var(--k-text-tertiary)" font="mono">{t("dashboard:settings.security.comingSoon")}</Text>
         </Box>
-      </Box>
+      </Card>
     </div>
   );
 }
@@ -518,9 +527,7 @@ function ComingSoonSection({ title }: { title: string }) {
   return (
     <div>
       <Text tag="h1" fontSize={26} fontWeight={600} letterSpacing={-0.52} marginTop={0} marginHorizontal={0} marginBottom={24} font="display" color="var(--k-text-primary)" display="block">{title}</Text>
-      <Text tag="div" padding={40} borderWidth={1} borderColor="var(--k-border)" borderRadius={12} color="var(--k-text-tertiary)" fontSize={14} textAlign="center" display="block" borderStyle="dashed">
-        {t("dashboard:settings.comingSoon")}
-      </Text>
+      <EmptyState icon="layers" title={t("dashboard:settings.comingSoon")} />
     </div>
   );
 }
@@ -551,15 +558,11 @@ export function ProfileSettings({ onViewChange }: Props) {
         <Text tag="div" fontSize={11} fontWeight={600} color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.88} paddingVertical={0} paddingHorizontal={10} marginBottom={12} display="block">
           {t("dashboard:settings.navHeading")}
         </Text>
-        {navItems.map((item) => {
-          const active = section === item.id;
-          return (
-            <Pressable key={item.id} onClick={() => setSection(item.id)} display="flex" alignItems="center" gap={10} paddingVertical={7} paddingHorizontal={10} borderRadius={6} width="100%" textAlign="left" backgroundColor={active ? "var(--kairo-color-hover)" : "transparent"} color={active ? "var(--k-text-primary)" : "var(--k-text-secondary)"} fontSize={13} fontWeight={active ? 500 : 400} marginBottom={1} borderWidth={0} cursor="pointer">
-              <Icon name={item.icon} size={14} />
-              <span>{item.label}</span>
-            </Pressable>
-          );
-        })}
+        {navItems.map((item) => (
+          <Box key={item.id} marginBottom={1}>
+            <NavItem variant="settings" icon={item.icon} label={item.label} active={section === item.id} onPress={() => setSection(item.id)} />
+          </Box>
+        ))}
       </Box>
 
       {/* Content */}

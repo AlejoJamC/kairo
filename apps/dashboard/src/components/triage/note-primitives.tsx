@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Box, Chip, Icon, Pressable, Skeleton, Text } from "@kairo/ui";
+import { Box, Button, Chip, Icon, Skeleton, Text } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // KAI-232 — small shared pieces of the internal-notes surface. Kept here (not
@@ -27,9 +27,11 @@ export function NotesHeader({ count, onNewNote }: { count: number; onNewNote?: (
         {t("notes.count", { count, defaultValue: "{{count}} notes · this ticket" })}
       </Text>
       {onNewNote && (
-        <Pressable type="button" onClick={onNewNote} marginLeft="auto" display="flex" alignItems="center" gap={4} fontSize={11} paddingVertical={4} paddingHorizontal={8} borderRadius={5} borderWidth={1} borderColor="var(--k-note-border)" backgroundColor="var(--k-note-bg)" color="var(--k-note-label)" fontWeight={500} cursor="pointer" borderStyle="solid">
-          + {t("notes.new", "New note")}
-        </Pressable>
+        <Box marginLeft="auto">
+          <Button size="sm" icon={<Icon name="plus" size={11} />} onPress={onNewNote}>
+            {t("notes.new", "New note")}
+          </Button>
+        </Box>
       )}
     </Box>
   );

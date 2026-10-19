@@ -98,12 +98,18 @@ function Layer({ onClose, query, onQueryChange, sections, activeId, onSelect, se
             value={query}
             placeholder={labels.placeholder}
             onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return
+              const first = sections.find((section) => !section.loading && !section.error && section.items.length > 0)?.items[0]
+              if (first) onSelect(first.id)
+            }}
             flexGrow={1}
             borderWidth={0}
             backgroundColor="transparent"
             fontSize={15}
             color={tokens['text.primary']}
             outlineWidth={0}
+            focusStyle={{ outlineWidth: 0 }}
           />
           {searching && <Spinner />}
         </Box>

@@ -18,25 +18,26 @@ describe('ticket decision evidence', () => {
     } };
     vi.mocked(apiCall).mockImplementation(async url => new Response(url.endsWith('/viewed') ? null : JSON.stringify({ decisions: [initial] }), { status: url.endsWith('/viewed') ? 204 : 200 }));
     render(<TicketDecisions ticketId="ticket" />);
-    await screen.findByText('Access help requested.');
+    fireEvent.click(await screen.findByRole('button', { name: /decisionWorkflow.title/ }));
+    await screen.findByText('decisionWorkflow.values.unknown');
     expect(screen.getByText(/decisionWorkflow.values.full_body/)).toBeInTheDocument();
     expect(screen.getByText(/decisionWorkflow.values.truncated_body/)).toBeInTheDocument();
-    expect(screen.getByText('decisionWorkflow.values.unknown')).toBeInTheDocument();
     expect(screen.queryByText('decisionWorkflow.accept')).not.toBeInTheDocument();
   });
   it('records the human view and distinguishes a proposed contribution from an executed action', async () => {
     render(<TicketDecisions ticketId="ticket" />);
-    await screen.findByText('A recovery procedure is available.');
+    fireEvent.click(await screen.findByRole('button', { name: /decisionWorkflow.title/ }));
+    await screen.findByText('decisionWorkflow.values.not_executed');
     expect(apiCall).toHaveBeenCalledWith('/api/v1/workflow/tickets/ticket/viewed',{method:'POST'});
     expect(screen.getByText('decisionWorkflow.values.not_executed')).toBeInTheDocument();
     expect(screen.getByText(/The account reference is missing/)).toBeInTheDocument();
-    expect(screen.getAllByText('Use account recovery.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Use account recovery\./).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByText('decisionWorkflow.accept'));
     await waitFor(() => expect(apiCall).toHaveBeenCalledWith('/api/v1/workflow/tickets/ticket/decisions/decision/review',{method:'POST',body:JSON.stringify({accept:true})}));
   });
   it('refreshes on focus without recording another human view', async () => {
     render(<TicketDecisions ticketId="ticket" />);
-    await screen.findByText('A recovery procedure is available.');
+    await waitFor(() => expect(vi.mocked(apiCall).mock.calls.filter(([url]) => url === '/api/v1/workflow/tickets/ticket')).toHaveLength(1));
     fireEvent.focus(window);
     await waitFor(() => expect(vi.mocked(apiCall).mock.calls.filter(([url]) => url === '/api/v1/workflow/tickets/ticket')).toHaveLength(2));
     expect(vi.mocked(apiCall).mock.calls.filter(([url]) => url.endsWith('/viewed'))).toHaveLength(1);

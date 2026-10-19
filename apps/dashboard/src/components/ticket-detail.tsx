@@ -2,14 +2,14 @@ import { TicketDecisions } from './ticket-decisions';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
-import { TicketHeader } from "./ticket-header";
+import { TicketClassification, TicketHeader } from "./ticket-header";
 import { isTriageActive, isTicketReadOnly } from "@kairo/client-core/triage-status";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { useTicketThread, type ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, Box, Chip, Icon, Pressable, Text, ThreadMessage as ThreadMessageView } from "@kairo/ui";
+import { Avatar, Box, Chip, Icon, Pressable, SlaIndicator, Text, ThreadMessage as ThreadMessageView } from "@kairo/ui";
 import { startGmailConnect } from "@kairo/client-core/endpoints";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
@@ -36,12 +36,6 @@ const HIGHLIGHT_DURATION_MS = 2000;
 // longer collapses when the window is narrowed (unlike the ticket-list
 // column, fixed at 360px, and the right panel, floored at 340px).
 const CENTER_PANEL_MIN_WIDTH = 520;
-
-const PRIORITY_SLA_BAR_COLOR: Record<"ok" | "at_risk" | "breached", string> = {
-  ok: "var(--kairo-color-ok)",
-  at_risk: "var(--kairo-color-mood)",
-  breached: "var(--kairo-color-bad)",
-};
 
 // "Xd Xh Xm" — always shows the largest unit down to minutes so nothing
 // renders as an unreadable "1171h 25m"; drops leading zero units instead of
@@ -71,15 +65,13 @@ function PrioritySlaBar({ ticket }: { ticket: Ticket }) {
         ? t("prioritySla.detailDueSoon", { duration })
         : t("prioritySla.detailOverdue", { duration });
 
-  const barWidth = Math.min(100, sla.percentUsed);
-
   return (
-    <Box display="flex" flexDirection="column" gap={4}>
-      <Box height={6} borderRadius={3} backgroundColor="var(--k-border-subtle)" overflow="hidden">
-        <Box height="100%" width={`${barWidth}%`} backgroundColor={PRIORITY_SLA_BAR_COLOR[sla.status]} borderRadius={3} transition="width 0.2s ease" />
-      </Box>
-      <Text fontSize={12} color={PRIORITY_SLA_BAR_COLOR[sla.status]} fontWeight={500}>{detail}</Text>
-    </Box>
+    <SlaIndicator
+      variant="full"
+      status={sla.status === "ok" ? "onTime" : sla.status === "at_risk" ? "atRisk" : "overdue"}
+      label={detail}
+      progress={Math.min(100, sla.percentUsed) / 100}
+    />
   );
 }
 
@@ -286,89 +278,80 @@ export function TicketDetail() {
       <TicketHeader ticket={ticket} readOnly={isReadOnly} />
 
       {/* Scrollable body */}
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll paddingVertical={20} paddingHorizontal={28} display="flex" flexDirection="column" gap={14}>
-        {/* Subject h1 */}
-        <Text tag="h1" fontSize={18} fontWeight={700} color="var(--k-text-primary)" margin={0} lineHeight={23.4} letterSpacing={-0.36} display="block">
-          {ticket.subject ?? t("ticketDetail.noSubject", "(Sin asunto)")}
-        </Text>
-
-        <PrioritySlaBar ticket={ticket} />
-        <TicketDecisions ticketId={ticket.id} />
-
-        {/* AI reasoning banner */}
-        {ticket.ai_reasoning && (
-          <Box display="flex" gap={8} alignItems="flex-start" paddingVertical={8} paddingHorizontal={10} backgroundColor="var(--k-accent-subtle)" borderRadius={6} borderWidth={1} borderColor="var(--kairo-color-accent-line)" borderStyle="solid">
-            <Icon name="spark" size={13} color="var(--k-accent)" marginTop={1} />
-            <Text tag="div" fontSize={12} color="var(--k-text-secondary)" flexGrow={1} flexShrink={1} flexBasis="0%" lineHeight={18} display="block">
-              <Text color="var(--k-accent)" fontWeight={500}>
-                Triage Intelligence
-              </Text>{" "}
-              {ticket.ai_reasoning}
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll>
+        <Box maxWidth={780} display="flex" flexDirection="column" gap={22} paddingTop={28} paddingHorizontal={32} paddingBottom={32}>
+          <Box display="flex" flexDirection="column" gap={12}>
+            <Text tag="h2" fontSize={22} fontWeight={600} color="var(--k-text-primary)" margin={0} lineHeight={27.5} letterSpacing={-0.33} display="block">
+              {ticket.subject ?? t("ticketDetail.noSubject", "(Sin asunto)")}
             </Text>
+            <TicketClassification ticket={ticket} readOnly={isReadOnly} />
+            <PrioritySlaBar ticket={ticket} />
           </Box>
-        )}
 
-        {/* Thread: render message cards if available, fallback to legacy body_plain */}
-        {threadLoading ? (
-          /* Skeleton while loading */
-          <Box backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={12} paddingVertical={18} paddingHorizontal={20} opacity={0.5} borderStyle="solid">
-            <Box height={14} backgroundColor="var(--k-border)" borderRadius={4} marginBottom={8} width="60%" />
-            <Box height={14} backgroundColor="var(--k-border)" borderRadius={4} width="90%" />
-          </Box>
-        ) : messages.length > 0 ? (
-          /* Thread view — N message cards in chronological order */
-          <Box display="flex" flexDirection="column" gap={16}>
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                ref={(el) => {
-                  if (el) messageRefs.current.set(msg.id, el);
-                  else messageRefs.current.delete(msg.id);
-                }}
-                // KAI-232 spec B5: outline + amber halo fading out over 1.6s.
-                // Driven by a CSS class so the animation cannot drift from the
-                // token values (see .note-jump-highlight in index.css).
-                className={highlightedMessageId === msg.id ? "note-jump-highlight" : undefined}
-              >
-                <MessageCard message={msg} jumped={highlightedMessageId === msg.id} />
-              </div>
-            ))}
-          </Box>
-        ) : (
-          /* Fallback — pre-backfill safety net: render legacy body_plain */
-          <>
-            {/* Sender row (legacy) */}
-            <Box display="flex" alignItems="flex-start" gap={10}>
-              <SenderAvatar name={ticket.from_name} email={ticket.from_email} />
-              <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
-                <Text tag="p" fontSize={13} fontWeight={600} color="var(--k-text-primary)" marginTop={0} marginHorizontal={0} marginBottom={2} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
-                  {ticket.from_name ?? ticket.from_email ?? t("ticketDetail.unknownSender", "Unknown sender")}
-                </Text>
-                <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" margin={0} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
-                  {ticket.from_email && ticket.from_name ? `<${ticket.from_email}>` : ""}
-                  {receivedDate ? ` · ${receivedDate}` : ""}
+          <TicketDecisions ticketId={ticket.id} />
+
+          {/* Thread: render message cards if available, fallback to legacy body_plain */}
+          {threadLoading ? (
+            /* Skeleton while loading */
+            <Box backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={12} paddingVertical={18} paddingHorizontal={20} opacity={0.5} borderStyle="solid">
+              <Box height={14} backgroundColor="var(--k-border)" borderRadius={4} marginBottom={8} width="60%" />
+              <Box height={14} backgroundColor="var(--k-border)" borderRadius={4} width="90%" />
+            </Box>
+          ) : messages.length > 0 ? (
+            /* Thread view — N message cards in chronological order */
+            <Box display="flex" flexDirection="column" gap={16}>
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  ref={(el) => {
+                    if (el) messageRefs.current.set(msg.id, el);
+                    else messageRefs.current.delete(msg.id);
+                  }}
+                  // KAI-232 spec B5: outline + amber halo fading out over 1.6s.
+                  // Driven by a CSS class so the animation cannot drift from the
+                  // token values (see .note-jump-highlight in index.css).
+                  className={highlightedMessageId === msg.id ? "note-jump-highlight" : undefined}
+                >
+                  <MessageCard message={msg} jumped={highlightedMessageId === msg.id} />
+                </div>
+              ))}
+            </Box>
+          ) : (
+            /* Fallback — pre-backfill safety net: render legacy body_plain */
+            <>
+              {/* Sender row (legacy) */}
+              <Box display="flex" alignItems="flex-start" gap={10}>
+                <SenderAvatar name={ticket.from_name} email={ticket.from_email} />
+                <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
+                  <Text tag="p" fontSize={13} fontWeight={600} color="var(--k-text-primary)" marginTop={0} marginHorizontal={0} marginBottom={2} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
+                    {ticket.from_name ?? ticket.from_email ?? t("ticketDetail.unknownSender", "Unknown sender")}
+                  </Text>
+                  <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" margin={0} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
+                    {ticket.from_email && ticket.from_name ? `<${ticket.from_email}>` : ""}
+                    {receivedDate ? ` · ${receivedDate}` : ""}
+                  </Text>
+                </Box>
+              </Box>
+
+              {/* Email body card (legacy) */}
+              <Box backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={12} overflow="hidden" borderStyle="solid">
+                <Text tag="div" paddingTop={18} paddingHorizontal={20} paddingBottom={22} fontSize={14} color="var(--k-text-primary)" lineHeight={23.1} display="block">
+                  {ticket.body_plain ? (
+                    <Text tag="pre" display="block" fontSize={14} lineHeightRatio={1.65} whiteSpace="pre-wrap" wordBreak="break-word" overflowX="hidden" color="var(--k-text-primary)" margin={0}>
+                      {ticket.body_plain}
+                    </Text>
+                  ) : ticket.snippet ? (
+                    <Text tag="p" margin={0} lineHeightRatio={1.65} display="block">{ticket.snippet}</Text>
+                  ) : (
+                    <Text tag="p" margin={0} fontStyle="italic" color="var(--k-text-tertiary)" display="block">
+                      {t("ticketDetail.noBody", "No email body available.")}
+                    </Text>
+                  )}
                 </Text>
               </Box>
-            </Box>
-
-            {/* Email body card (legacy) */}
-            <Box backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={12} overflow="hidden" borderStyle="solid">
-              <Text tag="div" paddingTop={18} paddingHorizontal={20} paddingBottom={22} fontSize={14} color="var(--k-text-primary)" lineHeight={23.1} display="block">
-                {ticket.body_plain ? (
-                  <Text tag="pre" display="block" fontSize={14} lineHeightRatio={1.65} whiteSpace="pre-wrap" wordBreak="break-word" overflowX="hidden" color="var(--k-text-primary)" margin={0}>
-                    {ticket.body_plain}
-                  </Text>
-                ) : ticket.snippet ? (
-                  <Text tag="p" margin={0} lineHeightRatio={1.65} display="block">{ticket.snippet}</Text>
-                ) : (
-                  <Text tag="p" margin={0} fontStyle="italic" color="var(--k-text-tertiary)" display="block">
-                    {t("ticketDetail.noBody", "No email body available.")}
-                  </Text>
-                )}
-              </Text>
-            </Box>
-          </>
-        )}
+            </>
+          )}
+        </Box>
       </Box>
 
       {/* Fixed bottom reply bar — hidden for read-only historical tickets */}

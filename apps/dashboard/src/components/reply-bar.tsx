@@ -13,7 +13,7 @@ import {
   removeMentionToken,
 } from "@kairo/client-core/note-mentions";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, Box, Composer, ComposerPill, Icon, MentionList, PlainTextarea, Pressable, Text, type PressableProps, type SendOption } from "@kairo/ui";
+import { Avatar, Box, Button, Chip, Composer, ComposerPill, Icon, IconButton, MentionList, PlainTextarea, Text, type SendOption } from "@kairo/ui";
 import { useAuth } from "@kairo/client-core/auth";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import type { TicketStatus } from "@kairo/types";
@@ -43,32 +43,10 @@ type TicketAction = "reconocer" | "resolver";
 
 const ACTION_CONFIG: Record<
   TicketAction,
-  { labelKey: string; defaultLabel: string; status: TicketStatus; style: PressableProps }
+  { labelKey: string; defaultLabel: string; status: TicketStatus; icon: "check" | "resolve"; iconColor: string }
 > = {
-  reconocer: {
-    labelKey: "replyBar.actionReconocer",
-    defaultLabel: "Acknowledge",
-    status: "in_progress",
-    style: {
-      backgroundColor: "var(--kairo-color-accent-soft)",
-      color: "var(--kairo-color-accent)",
-      borderWidth: 1,
-      borderStyle: "solid",
-      borderColor: "var(--kairo-color-accent-line)",
-    },
-  },
-  resolver: {
-    labelKey: "replyBar.actionResolver",
-    defaultLabel: "Resolve",
-    status: "resolved",
-    style: {
-      backgroundColor: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)",
-      color: "var(--kairo-color-ok-ink)",
-      borderWidth: 1,
-      borderStyle: "solid",
-      borderColor: "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)",
-    },
-  },
+  reconocer: { labelKey: "replyBar.actionReconocer", defaultLabel: "Acknowledge", status: "in_progress", icon: "check",   iconColor: "var(--kairo-color-accent)" },
+  resolver:  { labelKey: "replyBar.actionResolver",  defaultLabel: "Resolve",     status: "resolved",    icon: "resolve", iconColor: "var(--kairo-color-ok)" },
 };
 
 // KAI-191 — statuses in which the Escalate action is offered. Exhaustive
@@ -104,17 +82,17 @@ function SelectedMentionChip({
   onRemove: (userId: string) => void;
 }) {
   const { t } = useTranslation("dashboard");
-  const [hovered, setHovered] = React.useState(false);
   const label = member.name ?? member.email ?? member.user_id;
 
   return (
-    <Text onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} title={member.email ?? undefined} display="inline-flex" alignItems="center" gap={5} paddingTop={2} paddingRight={5} paddingBottom={2} paddingLeft={3} borderRadius={999} backgroundColor={hovered ? "var(--kairo-color-accent-soft)" : "var(--k-mention-bg)"} borderWidth={1} borderColor={hovered ? "var(--k-accent-border)" : "var(--k-mention-border)"} color="var(--k-accent)" fontSize={11} fontWeight={500} borderStyle="solid">
-      <Avatar name={member.name} email={member.email} seed={member.user_id} size={15} />
-      @{label}
-      <Pressable type="button" onClick={() => onRemove(member.user_id)} aria-label={t("mention.removeChip", { name: label, defaultValue: "Remove mention of {{name}}" })} width={13} height={13} borderRadius={999} display="flex" alignItems="center" justifyContent="center" borderWidth={0} padding={0} cursor="pointer" backgroundColor={hovered ? "var(--k-mention-solid)" : "transparent"} color={hovered ? "white" : "var(--kairo-color-inverse-link)"}>
-        <Icon name="x" size={8} strokeWidth={3} />
-      </Pressable>
-    </Text>
+    <Chip
+      tone="mention"
+      icon={<Avatar name={member.name} email={member.email} seed={member.user_id} size={15} />}
+      aria-label={t("mention.removeChip", { name: label, defaultValue: "Remove mention of {{name}}" })}
+      onPress={() => onRemove(member.user_id)}
+    >
+      @{label} <Icon name="x" size={8} strokeWidth={3} />
+    </Chip>
   );
 }
 
@@ -534,17 +512,12 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
           </Text>
         </Box>
         <Box display="flex" alignItems="center" gap={4}>
-          <Pressable type="button" onClick={() => {
-              setDraft("");
-              clearSuggestedReply();
-              setShowAiBanner(false);
-            }} display="flex" alignItems="center" gap={3} fontSize={11} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer" paddingVertical={2} paddingHorizontal={4} borderRadius={4}>
-            <Icon name="refresh" size={10} />
+          <Button variant="link" size="sm" icon={<Icon name="refresh" size={10} color="var(--kairo-color-accent-ink)" />} onPress={() => { setDraft(""); clearSuggestedReply(); setShowAiBanner(false); }}>
             {t("replyBar.regenerate", "Regenerate")}
-          </Pressable>
-          <Pressable type="button" onClick={() => setShowAiBanner(false)} aria-label={t("replyBar.dismissSuggestion")} backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={2} color="var(--k-text-tertiary)" display="flex" alignItems="center" borderRadius={3}>
-            <Icon name="x" size={13} />
-          </Pressable>
+          </Button>
+          <IconButton label={t("replyBar.dismissSuggestion")} onPress={() => setShowAiBanner(false)}>
+            <Icon name="x" size={13} color="var(--kairo-color-faint)" />
+          </IconButton>
         </Box>
       </Box>
 
@@ -566,20 +539,20 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         <Text fontSize={12} fontWeight={600} color="var(--kairo-color-sla-escalate-ink)">
           {t("replyBar.escalateTitle", "Escalate ticket")}
         </Text>
-        <Pressable type="button" onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }} aria-label={t("replyBar.escalateCancel", "Cancel")} marginLeft="auto" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={2} color="var(--k-text-tertiary)" display="flex" alignItems="center">
-          <Icon name="x" size={12} />
-        </Pressable>
+        <Box marginLeft="auto">
+          <IconButton label={t("replyBar.escalateCancel", "Cancel")} onPress={() => { setShowEscalatePanel(false); setEscalateReason(""); }}>
+            <Icon name="x" size={12} color="var(--kairo-color-faint)" />
+          </IconButton>
+        </Box>
       </Box>
       <PlainTextarea placeholder={t("replyBar.escalateReasonPlaceholder", "Reason for escalation (optional)…")} value={escalateReason} onChange={(e) => setEscalateReason(e.target.value)} rows={2} width="100%" resize="none" borderRadius={6} borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" focusStyle={{ borderColor: "var(--kairo-color-mood)" }} backgroundColor="var(--kairo-color-surface)" paddingVertical={7} paddingHorizontal={10} fontSize={12} lineHeight={18.6} color="var(--k-text-primary)" outlineWidth={0} marginBottom={8} borderStyle="solid" />
       <Box display="flex" gap={6} justifyContent="flex-end">
-        <Pressable type="button" onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={10} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" backgroundColor="var(--kairo-color-surface)" color="var(--k-text-secondary)" cursor="pointer" borderStyle="solid">
+        <Button size="sm" onPress={() => { setShowEscalatePanel(false); setEscalateReason(""); }}>
           {t("replyBar.escalateCancel", "Cancel")}
-        </Pressable>
-        <Pressable type="button" disabled={escalating} onClick={handleEscalateConfirm} fontSize={11} fontWeight={600} paddingVertical={4} paddingHorizontal={12} borderRadius={6} borderWidth={0} backgroundColor={escalating ? "var(--k-border)" : "var(--kairo-color-sla-escalate-ink)"} color={escalating ? "var(--k-text-tertiary)" : "white"} cursor={escalating ? "wait" : "pointer"} transition="background 0.1s ease">
-          {escalating
-            ? t("replyBar.escalating", "Escalating…")
-            : t("replyBar.escalateConfirm", "Confirm escalation")}
-        </Pressable>
+        </Button>
+        <Button size="sm" variant="primary" loading={escalating} loadingLabel={t("replyBar.escalating", "Escalating…")} onPress={handleEscalateConfirm}>
+          {t("replyBar.escalateConfirm", "Confirm escalation")}
+        </Button>
       </Box>
     </Box>
   ) : undefined;
@@ -590,15 +563,15 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         const cfg = ACTION_CONFIG[action];
         const loading = actionLoading === action;
         return (
-          <Pressable key={action} type="button" disabled={!!actionLoading} onClick={() => handleAction(action)} {...cfg.style} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={11} borderRadius={999} cursor={actionLoading ? "wait" : "pointer"} opacity={actionLoading && !loading ? 0.5 : 1} transition="opacity 0.1s ease">
+          <Button key={action} icon={<Icon name={cfg.icon} size={13} color={cfg.iconColor} />} disabled={!!actionLoading} onPress={() => handleAction(action)}>
             {loading ? "…" : t(cfg.labelKey, cfg.defaultLabel)}
-          </Pressable>
+          </Button>
         );
       })}
       {canEscalate && (
-        <Pressable type="button" disabled={showEscalatePanel} onClick={() => setShowEscalatePanel(true)} fontSize={11} fontWeight={500} paddingVertical={4} paddingHorizontal={11} borderRadius={999} cursor="pointer" backgroundColor="color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)" color="var(--kairo-color-sla-escalate-ink)" borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" transition="opacity 0.1s ease" borderStyle="solid">
+        <Button icon={<Icon name="escalate" size={13} color="var(--kairo-color-mood)" />} onPress={() => setShowEscalatePanel(true)}>
           {t("replyBar.actionEscalar", "Escalate")}
-        </Pressable>
+        </Button>
       )}
     </>
   ) : undefined;

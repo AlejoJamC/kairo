@@ -69,7 +69,8 @@
     "bulkConfirmModalTitle": "Confirmar borradores de {{org}}",
     "bulkConfirmModalBody": "Se confirmarán {{count}} borradores. Esta acción no se puede deshacer desde la UI normal.",
     "bulkConfirmSuccess": "Confirmados {{count}} borradores",
-    "externalReadOnly": "Datos sincronizados desde {{source}}. Edición no disponible."
+    "externalReadOnly": "Datos sincronizados desde {{source}}. Edición no disponible.",
+    "close": "Cerrar"
   },
   "empty": {
     "noClients": "No se encontraron clientes",

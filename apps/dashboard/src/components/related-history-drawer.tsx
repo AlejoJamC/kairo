@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Box, Drawer, EmptyState, Pressable, Skeleton, Text } from "@kairo/ui";
+import { Drawer, EmptyState, Skeleton, SourceList } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // Historical context drawer: up to 3 past RESOLVED tickets related to the
@@ -54,31 +54,17 @@ export function RelatedHistoryDrawer({ open, loading, items, lang, onClose, onSe
       ) : items.length === 0 ? (
         <EmptyState title={t("relatedHistory.empty")} />
       ) : (
-        items.slice(0, 3).map((item) => {
-          const simLabel = formatSimilarity(item.similarity);
-          return (
-            <Pressable key={item.id} onClick={() => onSelectTicket(item.id)} hoverStyle={{ backgroundColor: "var(--k-surface)" }} display="flex" flexDirection="column" gap={4} padding={12} borderWidth={1} borderColor="var(--k-border)" borderRadius={8} backgroundColor="white" cursor="pointer" textAlign="left" transition="background 0.1s ease" borderStyle="solid">
-              <Box display="flex" alignItems="center" justifyContent="space-between" gap={8}>
-                <Text font="mono" fontSize={11} color="var(--k-text-tertiary)">
-                  {t("relatedHistory.ticketNumber", { number: item.ticket_number })}
-                </Text>
-                {simLabel && (
-                  <Text font="mono" fontSize={11} color="var(--kairo-color-ok)" flexShrink={0}>
-                    {t("ai.similarity")}: {simLabel}
-                  </Text>
-                )}
-              </Box>
-              {item.subject && (
-                <Text tag="p" fontSize={13} fontWeight={500} color="var(--k-text-primary)" lineHeight={17.55} margin={0} display="block">
-                  {item.subject}
-                </Text>
-              )}
-              <Text tag="p" fontSize={11} font="mono" color="var(--k-text-tertiary)" margin={0} display="block">
-                {t("relatedHistory.resolvedOn")} {formatResolvedDate(item.resolved_at, lang)}
-              </Text>
-            </Pressable>
-          );
-        })
+        <SourceList
+          title={t("relatedHistory.title")}
+          items={items.slice(0, 3).map((item) => ({
+            id: item.id,
+            kind: "similar" as const,
+            code: t("relatedHistory.ticketNumber", { number: item.ticket_number }),
+            title: item.subject ?? `${t("relatedHistory.resolvedOn")} ${formatResolvedDate(item.resolved_at, lang)}`,
+            meta: formatSimilarity(item.similarity) ?? undefined,
+            onOpen: () => onSelectTicket(item.id),
+          }))}
+        />
       )}
     </Drawer>
   );

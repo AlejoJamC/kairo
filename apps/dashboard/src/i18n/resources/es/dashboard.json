@@ -66,8 +66,7 @@
     "detailOverdue": "ANS vencido hace {{duration}} sin primera respuesta"
   },
   "ticketList": {
-    "header": "Tickets",
-    "classifyAll": "Clasificar todo",
+    "header": "Triage",
     "classifying": "Clasificando...",
     "scanning": "Escaneando correos... {{count}} ticket clasificado",
     "scanning_other": "Escaneando correos... {{count}} tickets clasificados",
@@ -94,7 +93,8 @@
     "similarSuggestion_other": "{{count}} tickets parecen referirse al mismo problema. ¿Agruparlos?",
     "similarAccept": "Agrupar",
     "similarDismiss": "Descartar",
-    "filterLabel": "Filtrar por prioridad"
+    "filterLabel": "Filtrar por prioridad",
+    "classify": "Clasificar"
   },
   "tickets": {
     "title": "Tickets Abiertos",
@@ -117,41 +117,42 @@
     "aiReview": "Clasificación IA",
     "knowledge": "Conocimiento",
     "resolved": "Resuelto",
-    "clients": "Clientes"
+    "clients": "Clientes",
+    "workspace": "Espacio de trabajo"
   },
   "topChrome": {
-    "searchPlaceholder": "Buscar tickets, clientes, KB…",
+    "searchPlaceholder": "Buscar o ejecutar un comando…",
     "notifications": {
       "title": "Actividad",
       "unreadCount": "{{count}} sin leer",
       "markRead": "Marcar leídas",
       "tabAll": "Todas",
-      "tabUnread": "No leídas",
       "tabMentions": "@menciones",
-      "empty": "◌ sin notificaciones",
-      "liveStream": "stream en vivo",
-      "viewAll": "Ver toda la actividad →"
+      "empty": "◌ sin notificaciones"
     },
     "account": {
-      "roleBadge": "Agente · Soporte",
       "statusSection": "Estado",
       "statusOnline": "En línea",
       "statusBusy": "En llamada",
       "statusAway": "Ausente",
       "statusOffline": "Invisible",
-      "workspaceSection": "Workspace",
-      "workspaceName": "Kairo Workspace",
-      "workspacePlan": "plan Pro",
-      "workspaceChange": "cambiar",
-      "menuProfile": "Mi perfil",
       "menuSettings": "Configuración",
-      "menuShortcuts": "Atajos de teclado",
-      "menuDocs": "Documentación",
       "appearanceSection": "Apariencia",
       "themeLight": "Claro",
-      "themeAuto": "Auto",
       "themeDark": "Oscuro",
       "signOut": "Cerrar sesión"
+    },
+    "palette": {
+      "searchTitle": "Paleta de comandos",
+      "searchLabel": "Buscar",
+      "ticketsSection": "Tickets",
+      "goToSection": "Ir a",
+      "runFirst": "ejecutar el primero",
+      "close": "cerrar",
+      "ticketPrefix": "KAI-",
+      "notifications": "Notificaciones",
+      "account": "Cuenta",
+      "toggleSidebar": "Mostrar u ocultar la barra lateral"
     }
   },
   "awaitingView": {
@@ -275,7 +276,8 @@
       "fieldMin": "Tiempo mínimo de respuesta",
       "fieldRisk": "Alerta de riesgo",
       "fieldEscalation": "Escalamiento automático",
-      "unitMinutes": "min"
+      "unitMinutes": "min",
+      "orderError": "El orden debe ser mínimo < alerta < escalamiento < máximo"
     },
     "workspace": {
       "title": "Workspace",
@@ -295,7 +297,8 @@
       "seats": "{{used}} / {{total}} asientos usados en el plan {{plan}}.",
       "invite": "Invitar",
       "statusActive": "activo",
-      "statusAway": "ausente"
+      "statusAway": "ausente",
+      "more": "Más"
     },
     "integrations": {
       "title": "Integraciones",
@@ -402,7 +405,8 @@
     "assignToMe": "Asignar a mí",
     "assigning": "Asignando…",
     "assigned": "Asignado",
-    "readOnlyBadge": "Solo lectura"
+    "readOnlyBadge": "Solo lectura",
+    "escalated": "ESCALADO"
   },
   "replyBar": {
     "textareaLabel": "Mensaje",
@@ -599,7 +603,8 @@
     "assistantOperation_failed": "Fallido",
     "assistantRequestFailed": "Asistente no disponible. Inténtalo de nuevo.",
     "assistantWaiting": "Consultando el ticket…",
-    "contextTabs": "Contexto"
+    "contextTabs": "Contexto",
+    "account": "Cuenta"
   },
   "relatedHistory": {
     "title": "Historial relacionado",
@@ -609,6 +614,11 @@
     "ticketNumber": "Ticket #{{number}}"
   },
   "decisionWorkflow": {
+    "executionLabel": "Ejecución",
+    "authorizationLabel": "Autorización",
+    "retry": "Reintentar",
+    "engine": "Triage Intelligence",
+    "note": "decisión tipada · sin texto de razonamiento generado",
     "title": "Decisiones y evidencia",
     "error": "No se pudo registrar la vista o cargar el historial. Se reintentará.",
     "empty": "Todavía no hay historial de decisiones disponible.",
@@ -735,5 +745,9 @@
     "disconnect": "Desconectar",
     "soon": "Próximamente",
     "back": "Volver"
+  },
+  "statusBar": {
+    "commands": "comandos",
+    "open": "kairo · {{count}} abiertos"
   }
 }

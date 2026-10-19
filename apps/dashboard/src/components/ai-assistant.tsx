@@ -11,7 +11,7 @@ import { useResizablePanel } from "@/hooks/use-resizable-panel";
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
 import { NotesPanel } from "@/components/triage/NotesPanel";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
-import { Box, Button, Field, FieldTextarea, Icon, Pressable, Resizer, Skeleton, Tab, Tabs, Text } from "@kairo/ui";
+import { Box, Button, Chip, Field, FieldTextarea, Icon, PropRow, Resizer, Skeleton, Tab, Tabs, Text } from "@kairo/ui";
 
 const RESIZE_MIN = 340;
 
@@ -155,54 +155,35 @@ function ClientTab({ loading }: { loading: boolean }) {
     );
   }
 
-  const PLAN_STYLE: Record<string, { bg: string; color: string; border: string }> = {
-    enterprise: { bg: "color-mix(in srgb, var(--kairo-color-violet) 8%, transparent)", color: "var(--kairo-color-violet)", border: "color-mix(in srgb, var(--kairo-color-violet) 24%, transparent)" },
-    pro:        { bg: "var(--kairo-color-accent-soft)", color: "var(--kairo-color-accent)", border: "var(--kairo-color-accent-line)" },
-    starter:    { bg: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok-ink)", border: "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" },
-    unknown:    { bg: "var(--k-surface-2)", color: "var(--k-text-tertiary)", border: "var(--k-border)" },
-  };
-
   const ticketsTooltip = clientProfile
     ? t("ai.kpiTicketsTooltip", { total: clientProfile.totalTickets, month: clientProfile.ticketsLast30Days })
     : undefined;
 
-  const kpis: { label: string; value: string; isBadge?: boolean; tooltip?: string; accent?: boolean }[] = [
-    { label: t("ai.kpiPlan"),    value: clientProfile?.clientType ?? "unknown", isBadge: true },
-    { label: t("ai.kpiMrr"),     value: "—" },
-    { label: t("ai.kpiSince"),   value: clientProfile?.clientSince
-        ? new Date(clientProfile.clientSince).toLocaleDateString(i18n.language === "en" ? "en-US" : "es-ES", { month: "short", year: "numeric" })
-        : "—" },
-    { label: t("ai.kpiTickets"), value: clientProfile ? String(clientProfile.totalTickets) : "—", accent: true, tooltip: ticketsTooltip },
-    { label: t("ai.kpiCsat"),    value: "—" },
-    { label: t("ai.kpiNps"),     value: "—" },
-  ];
+  const plan = clientProfile?.clientType ?? "unknown";
+  const since = clientProfile?.clientSince
+    ? new Date(clientProfile.clientSince).toLocaleDateString(i18n.language === "en" ? "en-US" : "es-ES", { month: "short", year: "numeric" })
+    : null;
 
   return (
     <Box display="flex" flexDirection="column" gap={14}>
       <ClientProfileCard />
 
-      {/* KPI grid */}
+      {/* Account properties */}
       {clientProfile && (
-        <Box grid gridTemplateColumns="1fr 1fr" gap={1} backgroundColor="var(--k-border-subtle)" borderWidth={1} borderColor="var(--k-border)" borderRadius={8} overflow="hidden" borderStyle="solid">
-          {kpis.map((kpi) => {
-            const planStyle = PLAN_STYLE[kpi.value] ?? PLAN_STYLE.unknown;
-            return (
-              <Box key={kpi.label} backgroundColor="white" padding={10}>
-                <Text tag="div" fontSize={10} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.5} display="block">
-                  {kpi.label}
-                </Text>
-                {kpi.isBadge ? (
-                  <Text display="inline-flex" alignItems="center" borderRadius={999} marginTop={4} paddingVertical={2} paddingHorizontal={8} fontSize={10} fontWeight={600} textTransform="uppercase" letterSpacing={0.4} backgroundColor={planStyle.bg} color={planStyle.color} borderWidth={1} borderColor={planStyle.border} borderStyle="solid">
-                    {kpi.value}
-                  </Text>
-                ) : (
-                  <Text tag="div" title={kpi.tooltip} fontSize={14} fontWeight={500} marginTop={2} color={kpi.accent ? "var(--k-accent)" : "var(--k-text-primary)"} cursor={kpi.tooltip ? "default" : undefined} display="block">
-                    {kpi.value}
-                  </Text>
-                )}
-              </Box>
-            );
-          })}
+        <Box>
+          <Text tag="div" paddingBottom={4} fontSize={10} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.5} display="block">
+            {t("ai.account")}
+          </Text>
+          <PropRow label={t("ai.kpiPlan")}>
+            <Chip size="sm">{plan.charAt(0).toUpperCase() + plan.slice(1)}</Chip>
+          </PropRow>
+          <PropRow label={t("ai.kpiMrr")} mono />
+          <PropRow label={t("ai.kpiSince")}>{since}</PropRow>
+          <PropRow label={t("ai.kpiTickets")} mono>
+            <Text title={ticketsTooltip} color="var(--k-accent)">{String(clientProfile.totalTickets)}</Text>
+          </PropRow>
+          <PropRow label={t("ai.kpiCsat")} mono />
+          <PropRow label={t("ai.kpiNps")} mono last />
         </Box>
       )}
 
@@ -305,18 +286,17 @@ function SimilarTab({ ticketId, lang }: { ticketId: string | null; lang: string 
           )}
           {c.resolution_summary && (
             <>
-              <Pressable onClick={() => setExpandedCase((p) => (p === c.id ? null : c.id))} fontSize={11} fontWeight={500} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={0} textAlign="left">
-                {expandedCase === c.id ? t("ai.hideResolution") : t("ai.viewResolution")} →
-              </Pressable>
+              <Button variant="link" size="sm" iconEnd={<Icon name="right" size={11} color="var(--kairo-color-accent-ink)" />} onPress={() => setExpandedCase((p) => (p === c.id ? null : c.id))}>
+                {expandedCase === c.id ? t("ai.hideResolution") : t("ai.viewResolution")}
+              </Button>
               {expandedCase === c.id && (
                 <>
                   <Text tag="p" marginTop={4} borderRadius={6} backgroundColor="var(--k-surface)" paddingVertical={8} paddingHorizontal={10} fontSize={12} lineHeight={18.6} color="var(--k-text-secondary)" display="block">
                     {c.resolution_summary}
                   </Text>
-                  <Pressable onClick={() => setSuggestedReply(c.resolution_summary!)} fontSize={11} color="var(--k-accent)" fontWeight={500} backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={0} textAlign="left" display="flex" alignItems="center" gap={4}>
-                    <Icon name="note" size={12} />
+                  <Button variant="link" size="sm" icon={<Icon name="note" size={12} color="var(--kairo-color-accent-ink)" />} onPress={() => setSuggestedReply(c.resolution_summary!)}>
                     {t("ai.useInReply")}
-                  </Pressable>
+                  </Button>
                 </>
               )}
             </>
@@ -386,16 +366,13 @@ function ArticlesTab({ ticketId }: { ticketId: string | null }) {
           {article.tags && article.tags.length > 0 && (
             <Box display="flex" flexWrap="wrap" gap={4}>
               {article.tags.map((tag) => (
-                <Text key={tag} fontSize={10} paddingVertical={2} paddingHorizontal={6} borderRadius={999} backgroundColor="var(--k-surface-2)" color="var(--k-text-tertiary)">
-                  {tag}
-                </Text>
+                <Chip key={tag} size="sm">{tag}</Chip>
               ))}
             </Box>
           )}
-          <Pressable onClick={() => setSuggestedReply(article.content)} display="flex" alignItems="center" gap={4} fontSize={11} fontWeight={500} color="var(--k-accent)" backgroundColor="transparent" borderWidth={0} cursor="pointer" padding={0}>
-            <Icon name="note" size={12} />
+          <Button variant="link" size="sm" icon={<Icon name="note" size={12} color="var(--kairo-color-accent-ink)" />} onPress={() => setSuggestedReply(article.content)}>
             {t("ai.useInReply")}
-          </Pressable>
+          </Button>
         </Box>
       ))}
     </Box>
@@ -590,14 +567,14 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   const tabs = useMemo(
     () =>
       sortByTabOrder<{ id: TabId; label: string; disabled?: boolean; ai?: boolean }>([
-        ...(assistantTabEnabled ? [{ id: "assistant" as const, label: t("ai.tabAssistant"), ai: true }] : []),
         ...(clientTabEnabled ? [{ id: "client" as const, label: t("ai.tabClient") }] : []),
-        ...(similarTabEnabled ? [{ id: "similar" as const, label: t("ai.tabSimilar") }] : []),
-        ...(articlesTabEnabled ? [{ id: "articles" as const, label: t("ai.tabArticles") }] : []),
-        ...(escalateTabEnabled ? [{ id: "escalate" as const, label: t("ai.tabEscalate") }] : []),
+        ...(assistantTabEnabled ? [{ id: "assistant" as const, label: t("ai.tabAssistant"), ai: true }] : []),
         // KAI-232 — gated by the shared internal-notes flag, not a tab-specific
         // one: the whole internal-notes surface lives or dies together.
         ...(INTERNAL_NOTES_ENABLED ? [{ id: "notes" as const, label: t("ai.tabNotes") }] : []),
+        ...(escalateTabEnabled ? [{ id: "escalate" as const, label: t("ai.tabEscalate") }] : []),
+        ...(similarTabEnabled ? [{ id: "similar" as const, label: t("ai.tabSimilar") }] : []),
+        ...(articlesTabEnabled ? [{ id: "articles" as const, label: t("ai.tabArticles") }] : []),
       ]),
     [t]
   );
