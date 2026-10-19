@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sourceFragments } from '../knowledge/source-fragments';
 
 const Citation = z.object({ sourceId: z.string(), quote: z.string().min(1) });
 const Observation = z.object({
@@ -28,4 +29,35 @@ export function supportedNextAction(action: string | undefined, analysis: Workfl
   if (action === 'wait' && (!assignee || !analysis.waitingOn || !analysis.resumeWhen)) return 'request_information';
   if (action === 'resolve' && !analysis.observations.some(row => row.dimension === 'outcome' && row.status !== 'contradictory')) return 'request_information';
   return action ?? 'unknown';
+}
+
+export const ReferencedWorkflowAnalysisSchema = WorkflowAnalysisSchema.extend({
+  observations: z.array(Observation.omit({ citations: true }).extend({
+    evidenceIds: z.array(z.string().min(1)).min(1).max(10),
+  })).max(20),
+});
+
+export function workflowEvidenceFragments(sources: WorkflowSource[]) {
+  return sources.flatMap((source, index) => sourceFragments(source.text).map(fragment => ({
+    ...fragment, id: `s${index + 1}:${fragment.id}`, sourceId: source.id, authority: source.authority,
+  })));
+}
+
+export function resolveWorkflowEvidence(
+  analysis: z.infer<typeof ReferencedWorkflowAnalysisSchema>, sources: WorkflowSource[],
+): WorkflowAnalysis {
+  const fragments = new Map(workflowEvidenceFragments(sources).map(fragment => [fragment.id, fragment]));
+  const missing = [...analysis.missing];
+  const observations: WorkflowAnalysis['observations'] = [];
+  for (const { evidenceIds, ...observation } of analysis.observations) {
+    if (evidenceIds.some(id => !fragments.has(id))) {
+      missing.push(`unsupported_${observation.dimension}`);
+      continue;
+    }
+    observations.push({ ...observation, citations: [...new Set(evidenceIds)].map(id => {
+      const fragment = fragments.get(id)!;
+      return { sourceId: fragment.sourceId, quote: fragment.text };
+    }) });
+  }
+  return groundWorkflowAnalysis({ ...analysis, observations, missing }, sources);
 }

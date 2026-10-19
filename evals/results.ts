@@ -2,7 +2,7 @@ import { mkdir, readdir, rename, rmdir, stat } from 'node:fs/promises';
 import { resolve, relative } from 'node:path';
 import { privateRoot, privatePath, readPrivate, writePrivate } from './private-files';
 
-export const resultModes = ['classification', 'workflows', 'onboarding', 'tier2', 'tier2-classification', 'tier3', 'technical'] as const;
+export const resultModes = ['classification', 'workflows', 'onboarding', 'tier2', 'tier2-classification', 'tier3', 'incoming', 'enrichment', 'reply', 'technical'] as const;
 export const resultDatasets = ['main', 'coverage', 'synthetic', 'local'] as const;
 export type ResultMode = typeof resultModes[number];
 export type ResultDataset = typeof resultDatasets[number];

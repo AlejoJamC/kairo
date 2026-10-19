@@ -5,7 +5,7 @@ process.env['SUPABASE_SERVICE_ROLE_KEY'] ??= 'synthetic-service-role-key';
 delete process.env['EMBEDDING_SIMILARITY_THRESHOLD'];
 delete process.env['KNOWLEDGE_CANDIDATE_LIMIT'];
 const decide = mock(async (_request: Record<string, unknown>): Promise<{data:{value:Record<string,unknown>;modelVersion:string};llmCallId:string}> => ({ data:{ value:{ contribution:{choice:'solution'} },modelVersion:'decision-model' },llmCallId:'decision-call' }));
-const analyze = mock(async (_request: Record<string, unknown>) => ({ data:{ observations:[{dimension:'solution',statement:'Use the recovery procedure.',status:'supported',citations:[{sourceId:'version',quote:'Use account recovery.'}]}],missing:[],waitingOn:null,resumeWhen:null },model:'draft-model',promptVersion:'1.0.0',llmCallId:'draft-call' }));
+const analyze = mock(async (_request: Record<string, unknown>) => ({ data:{ observations:[{dimension:'solution',statement:'Use the recovery procedure.',status:'supported',...(_request.promptId === 'knowledge-impact' ? {evidenceIds: (JSON.parse((_request.vars as {sources:string}).sources) as {id:string;authority:string}[]).filter(row => row.authority === 'approved_knowledge' || row.authority === 'message').map(row => row.id)} : {citations:[{sourceId:'version',quote:'Use account recovery.'}]})}],missing:[],waitingOn:null,resumeWhen:null },model:'draft-model',promptVersion:'1.0.0',llmCallId:'draft-call' }));
 const propose = mock(async (_input: Record<string, unknown>) => ({status:'skipped',reason:'source_unavailable'}));
 const embed = mock(async (_text: string) => [0.1, 0.2]);
 const { processDecisionWork, recordWorkflowFailure } = await import('./decision-workflow');
@@ -56,6 +56,25 @@ describe('durable workflow execution',()=>{
     expect(saved[0]).toMatchObject({p_revision:2,p_version_id:'version',p_useful:true,p_result:{contribution:'solution',authorization:'human_review',sources:[{id:'article',version:'version'}]}});
     expect(analyze.mock.calls[0]?.[0]).toMatchObject({promptId:'knowledge-impact',modelRole:'evidence_analysis'});
   });
+  it('does not persist missing knowledge references as an evaluation without contribution', async () => {
+    for (const invalid of [false, true]) {
+      const {db,saved} = database();
+      const incomplete = async (request: Record<string, unknown>) => {
+        const fragments = JSON.parse((request.vars as {sources:string}).sources) as {id:string;authority:string}[];
+        return {data:{observations:[{dimension:'solution',statement:'Use recovery.',status:'supported',
+          evidenceIds: invalid ? ['unknown-fragment'] : [fragments.find(row => row.authority === 'message')!.id]}],
+          missing:[],waitingOn:null,resumeWhen:null},model:'evidence',promptVersion:'1.1.0',llmCallId:'call'};
+      };
+      await expect(processDecisionWork(work,db,inject({analyze:incomplete as unknown as Deps['analyze']}))).rejects.toMatchObject({retriable:true});
+      expect(saved).toHaveLength(0);
+    }
+  });
+  it('allows an explicit absence of applicable evidence without inventing a contribution', async () => {
+    const {db,saved}=database();
+    const empty = async () => ({data:{observations:[],missing:['applicability'],waitingOn:null,resumeWhen:null},model:'evidence',promptVersion:'1.1.0',llmCallId:'call'});
+    await processDecisionWork(work,db,inject({analyze:empty as unknown as Deps['analyze']}));
+    expect(saved[0]).toMatchObject({p_useful:false});
+  });
   it('evaluates an initial ticket using its content even when enrichment has no incoming message',async()=>{
     const {db,saved}=database();
     await processDecisionWork({...work,message_id:null},db,inject());
@@ -63,6 +82,14 @@ describe('durable workflow execution',()=>{
       subject:'Access',body:'Need account recovery.',messages:[{body_plain:'Need account recovery.'}],
     }}});
     expect(saved[0]).toMatchObject({p_useful:true,p_revision:2});
+    const context = JSON.parse((analyze.mock.calls[0]![0]['vars'] as {context:string}).context);
+    expect(context.case).toMatchObject({body:'Need account recovery.',status:'open'});
+    expect(context.case.messages).toHaveLength(1);
+    expect(context.approvedKnowledge).toHaveLength(1);
+    expect(context).not.toHaveProperty('identity');
+    expect(context).not.toHaveProperty('evidence');
+    expect(context).not.toHaveProperty('assignedTo');
+
     expect(propose).not.toHaveBeenCalled();
   });
   it('retries against fresh context after a concurrent case change',async()=>{
