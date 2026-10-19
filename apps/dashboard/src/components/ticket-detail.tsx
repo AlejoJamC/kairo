@@ -139,7 +139,7 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
             <TeamOnlyChip />
             {/* Only exists while the jump highlight is running. */}
             {jumped && (
-              <Text font="mono" fontSize={9.5} color="var(--k-note-label)" backgroundColor="rgba(245,158,11,0.16)" paddingVertical={2} paddingHorizontal={6} borderRadius={3} letterSpacing={0.38}>
+              <Text font="mono" fontSize={9.5} color="var(--k-note-label)" backgroundColor="color-mix(in srgb, var(--kairo-color-warn) 16%, transparent)" paddingVertical={2} paddingHorizontal={6} borderRadius={3} letterSpacing={0.38}>
                 ↳ {t("notes.jumpedFromNotes", "JUMPED FROM NOTES")}
               </Text>
             )}

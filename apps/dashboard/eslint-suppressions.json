@@ -3,9 +3,6 @@
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     },
-    "no-restricted-syntax": {
-      "count": 3
-    },
     "react-hooks/set-state-in-effect": {
       "count": 5
     },
@@ -23,9 +20,6 @@
   },
   "src/components/awaiting-customer-view.tsx": {
     "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "no-restricted-syntax": {
       "count": 1
     },
     "react-hooks/purity": {
@@ -56,17 +50,11 @@
     }
   },
   "src/components/profile-settings.tsx": {
-    "no-restricted-syntax": {
-      "count": 11
-    },
     "react-hooks/set-state-in-effect": {
       "count": 1
     }
   },
   "src/components/reply-bar.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
-    },
     "react-hooks/immutability": {
       "count": 1
     },
@@ -92,22 +80,9 @@
       "count": 1
     }
   },
-  "src/components/ticket-detail.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/components/ticket-list.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
-    },
     "react-hooks/set-state-in-effect": {
       "count": 3
-    }
-  },
-  "src/components/top-chrome.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
     }
   },
   "src/components/triage/AssistantPanel.tsx": {
@@ -115,18 +90,8 @@
       "count": 1
     }
   },
-  "src/components/triage/ClientProfileCard.tsx": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
   "src/components/triage/NotesPanel.tsx": {
     "react-hooks/set-state-in-effect": {
-      "count": 1
-    }
-  },
-  "src/components/triage/mention-dropdown.tsx": {
-    "no-restricted-syntax": {
       "count": 1
     }
   },

@@ -23,6 +23,7 @@ One ticket in the queue.
 ## Accessibility
 
 - `aria-label` "[ID] [subject]"; every signal carries `title`. The order of signals is fixed.
+- Tertiary text stays at 4.5:1 or more on `surface.hover` and on `accent.soft`, so labels and metadata keep AA contrast on hover, inside the segmented track and on selected rows.
 
 ## Domain value
 

@@ -88,7 +88,7 @@ export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCu
             {tickets.map((ticket) => {
               const isSelected = ticket.id === selectedTicketId;
               return (
-                <Box tag="li" key={ticket.id} onClick={() => openThread(ticket)} display="flex" alignItems="center" gap={16} borderRadius={10} borderWidth={1} borderColor={isSelected ? "var(--k-accent)" : "var(--k-border)"} backgroundColor={isSelected ? "var(--k-accent-subtle)" : "white"} paddingVertical={12} paddingHorizontal={16} boxShadow="0 1px 2px rgba(9,9,11,0.04)" cursor="pointer" transition="border-color 0.1s ease, background 0.1s ease" borderStyle="solid">
+                <Box tag="li" key={ticket.id} onClick={() => openThread(ticket)} display="flex" alignItems="center" gap={16} borderRadius={10} borderWidth={1} borderColor={isSelected ? "var(--k-accent)" : "var(--k-border)"} backgroundColor={isSelected ? "var(--k-accent-subtle)" : "white"} paddingVertical={12} paddingHorizontal={16} boxShadow="var(--kairo-shadow-xs)" cursor="pointer" transition="border-color 0.1s ease, background 0.1s ease" borderStyle="solid">
                   {/* Left: number + subject + client */}
                   <Box minWidth={0} flexGrow={1} flexShrink={1} flexBasis="0%">
                     <Box display="flex" alignItems="center" gap={6} marginBottom={2}>

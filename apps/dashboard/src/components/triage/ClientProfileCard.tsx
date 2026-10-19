@@ -145,7 +145,7 @@ export function ClientProfileCard({ loading = false }: ClientProfileCardProps) {
 // ---------------------------------------------------------------------------
 
 const DRAFT_BADGE_STYLE: Record<"proposed" | "confirmed" | "rejected", { bg: string; color: string; border: string }> = {
-  proposed:  { bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE" },
+  proposed:  { bg: "var(--kairo-color-accent-soft)", color: "var(--kairo-color-accent)", border: "var(--kairo-color-accent-line)" },
   confirmed: { bg: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok)", border: "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" },
   rejected:  { bg: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "var(--kairo-color-line)" },
 };

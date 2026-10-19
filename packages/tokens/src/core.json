@@ -39,7 +39,7 @@
     },
     "faint": {
       "$type": "color",
-      "$value": "#71717A"
+      "$value": "#6C6C75"
     },
     "accent": {
       "$type": "color",

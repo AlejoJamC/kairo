@@ -36,7 +36,7 @@ const T = {
   accentSubtle: "var(--k-accent-subtle)",
   mono:         "var(--k-font-mono)",
   display:      "var(--k-font-display)",
-  shadow:       "0 4px 24px rgba(9,9,11,.12), 0 1px 4px rgba(9,9,11,.07)",
+  shadow:       "var(--kairo-shadow-pop)",
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -401,7 +401,7 @@ function ProfilePopover({
         </Text>
         <Box display="flex" gap={2} padding={2} backgroundColor={T.surface} borderRadius={6} borderWidth={1} borderColor={T.border} borderStyle="solid">
           {THEME_OPTIONS.map(([id, label]) => (
-            <Pressable key={id} onClick={() => setTheme(id)} flexGrow={1} flexShrink={1} flexBasis="0%" paddingVertical={5} paddingHorizontal={0} fontSize={11} borderRadius={4} backgroundColor={theme === id ? T.bg : "transparent"} color={theme === id ? T.textPrimary : T.textTertiary} font="mono" fontWeight={theme === id ? 500 : 400} boxShadow={theme === id ? "0 1px 3px rgba(9,9,11,.08)" : "none"} borderWidth={0} cursor="pointer">
+            <Pressable key={id} onClick={() => setTheme(id)} flexGrow={1} flexShrink={1} flexBasis="0%" paddingVertical={5} paddingHorizontal={0} fontSize={11} borderRadius={4} backgroundColor={theme === id ? T.bg : "transparent"} color={theme === id ? T.textPrimary : T.textTertiary} font="mono" fontWeight={theme === id ? 500 : 400} boxShadow={theme === id ? "var(--kairo-shadow-xs)" : "none"} borderWidth={0} cursor="pointer">
               {label}
             </Pressable>
           ))}

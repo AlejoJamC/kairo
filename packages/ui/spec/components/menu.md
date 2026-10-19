@@ -22,6 +22,7 @@ List of options inside a popover.
 ## Accessibility
 
 - `role="menuitem"`; shortcut keys shown with Kbd on the right.
+- Tertiary text stays at 4.5:1 or more on `surface.hover` and on `accent.soft`, so labels and metadata keep AA contrast on hover, inside the segmented track and on selected rows.
 
 ## Domain value
 

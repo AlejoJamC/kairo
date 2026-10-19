@@ -20,6 +20,7 @@ Data table of a page.
 ## Accessibility
 
 - Header cells are visible text; the table scrolls inside its card, not the page.
+- Tertiary text stays at 4.5:1 or more on `surface.hover` and on `accent.soft`, so labels and metadata keep AA contrast on hover, inside the segmented track and on selected rows.
 
 ## Domain value
 

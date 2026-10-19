@@ -73,7 +73,7 @@ function IntegrationCard({ name, initial, tileColor, logo, status, description, 
           </Text>
           {dot && <Box width={7} height={7} circle backgroundColor={dot} pulse={status === 'connecting'} />}
           {beta && (
-            <Text font="mono" fontSize={9.5} fontWeight={600} paddingVertical={1} paddingHorizontal={5} borderRadius={4} backgroundColor={tokens['surface.hover']} color={tokens['text.tertiary']}>
+            <Text font="mono" fontSize={9.5} fontWeight={600} paddingVertical={1} paddingHorizontal={5} borderRadius={4} backgroundColor={tokens['accent.soft']} color={tokens['accent.ink']}>
               {labels.beta}
             </Text>
           )}

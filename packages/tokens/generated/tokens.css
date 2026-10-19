@@ -9,7 +9,7 @@
   --kairo-color-line-strong: #DCDCE1;
   --kairo-color-text: #09090B;
   --kairo-color-muted: #52525B;
-  --kairo-color-faint: #71717A;
+  --kairo-color-faint: #6C6C75;
   --kairo-color-accent: #2B5BFF;
   --kairo-color-accent-ink: #2B5BFF;
   --kairo-color-accent-soft: rgba(43,91,255,0.08);
@@ -242,7 +242,7 @@
   --kairo-surface-scrim: rgba(9,9,11,0.32);
   --kairo-text-primary: #09090B;
   --kairo-text-secondary: #52525B;
-  --kairo-text-tertiary: #71717A;
+  --kairo-text-tertiary: #6C6C75;
   --kairo-text-onAccent: #FFFFFF;
   --kairo-text-inverse: #FAFAFA;
   --kairo-text-link: #2B5BFF;
@@ -255,7 +255,7 @@
   --kairo-accent-soft: rgba(43,91,255,0.08);
   --kairo-accent-line: rgba(43,91,255,0.24);
   --kairo-accent-hover: #1E48E5;
-  --kairo-status-open: #71717A;
+  --kairo-status-open: #6C6C75;
   --kairo-status-awaiting_customer: #F59E0B;
   --kairo-status-resolved: #10B981;
   --kairo-status-escalated: #F97316;
@@ -268,7 +268,7 @@
   --kairo-priority-P3: #A1A1AA;
   --kairo-priority-track: #DCDCE1;
   --kairo-sentiment-frustrated: #F97316;
-  --kairo-sentiment-neutral: #71717A;
+  --kairo-sentiment-neutral: #6C6C75;
   --kairo-sentiment-positive: #10B981;
   --kairo-sentiment-aggressive: #EF4444;
   --kairo-sla-overdueText: #C9262C;
@@ -290,7 +290,7 @@
   --kairo-category-billing: #D97706;
   --kairo-category-account: #3B82F6;
   --kairo-category-general: #A1A1AA;
-  --kairo-category-not_applicable: #71717A;
+  --kairo-category-not_applicable: #6C6C75;
   --kairo-notes-background: #FFFBEB;
   --kairo-notes-border: #FDE68A;
   --kairo-notes-label: #B45309;
@@ -308,10 +308,10 @@
   --kairo-urgency-medium: #F59E0B;
   --kairo-urgency-low: #A1A1AA;
   --kairo-actionability-needs_action: #52525B;
-  --kairo-actionability-fyi: #71717A;
+  --kairo-actionability-fyi: #6C6C75;
   --kairo-subjectMatter-service: #52525B;
   --kairo-subjectMatter-commercial_demand: #64748B;
-  --kairo-subjectMatter-commercial_offer: #71717A;
+  --kairo-subjectMatter-commercial_offer: #6C6C75;
   --kairo-subjectMatter-admin: #A1A1AA;
   --kairo-provenance-tenant_mailbox: #2B5BFF;
   --kairo-provenance-same_company: #64748B;

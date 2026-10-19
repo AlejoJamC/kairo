@@ -435,7 +435,7 @@ export function TicketList() {
             </Pressable>
 
             {menuOpen && (
-              <Box position="absolute" top="calc(100% + 4px)" right={0} zIndex={50} backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={8} boxShadow="0 4px 12px rgba(0,0,0,0.10)" minWidth={180} overflow="hidden" borderStyle="solid">
+              <Box position="absolute" top="calc(100% + 4px)" right={0} zIndex={50} backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={8} boxShadow="var(--kairo-shadow-pop)" minWidth={180} overflow="hidden" borderStyle="solid">
                 <Pressable onClick={handleSyncGmail} hoverStyle={{ backgroundColor: "var(--k-surface)" }} display="flex" alignItems="center" gap={8} width="100%" paddingVertical={9} paddingHorizontal={14} fontSize={13} color="var(--k-text-primary)" backgroundColor="transparent" borderWidth={0} cursor="pointer" textAlign="left">
                   <Icon name="refresh" size={13} color="var(--k-text-tertiary)" />
                   {t("ticketList.syncGmail", "Sincronizar Gmail")}

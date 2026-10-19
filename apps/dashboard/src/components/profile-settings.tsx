@@ -4,7 +4,7 @@ import { useAuth } from "@kairo/client-core/auth";
 import { updateProfileName } from "@kairo/client-core/queries";
 import { getOperationalSlaConfig, saveOperationalSlaConfig } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
-import { Avatar, Box, Callout, Icon, PlainInput, PlainSelect, Pressable, Spinner, Switch, Text, type IconName } from "@kairo/ui";
+import { Avatar, Box, Callout, Icon, IntegrationCard, type IntegrationStatus, PlainInput, PlainSelect, Pressable, Spinner, Switch, Text, type IconName } from "@kairo/ui";
 
 interface Props {
   onViewChange: (view: AppView) => void;
@@ -124,9 +124,9 @@ function WorkspaceSection() {
 // ── Team ──────────────────────────────────────────────────────────────────────
 
 const TEAM_MEMBERS = [
-  { name: "Valentina Castro", email: "valentina@empresa.io", role: "Owner", status: "online", initials: "VC", gradient: "linear-gradient(135deg,#FFB199,var(--kairo-color-bad))" },
-  { name: "Mateo Ríos", email: "mateo@empresa.io", role: "Admin", status: "online", initials: "MR", gradient: "linear-gradient(135deg,#93C5FD,#60A5FA)" },
-  { name: "Lucía Bermúdez", email: "lucia@empresa.io", role: "Agente", status: "away", initials: "LB", gradient: "linear-gradient(135deg,#C4B5FD,#A855F7)" },
+  { name: "Valentina Castro", email: "valentina@empresa.io", role: "Owner", status: "online", initials: "VC", gradient: "linear-gradient(135deg,var(--kairo-color-avatar-coral),var(--kairo-color-bad))" },
+  { name: "Mateo Ríos", email: "mateo@empresa.io", role: "Admin", status: "online", initials: "MR", gradient: "linear-gradient(135deg,var(--kairo-color-avatar-blue),var(--kairo-color-accent))" },
+  { name: "Lucía Bermúdez", email: "lucia@empresa.io", role: "Agente", status: "away", initials: "LB", gradient: "linear-gradient(135deg,var(--kairo-color-avatar-lilac),var(--kairo-color-violet))" },
 ];
 
 function TeamSection() {
@@ -172,12 +172,12 @@ function TeamSection() {
 // ── Integrations ──────────────────────────────────────────────────────────────
 
 const INTEGRATIONS = [
-  { name: "Gmail", status: "connected", meta: "soporte@empresa.io · 2,341 mensajes", color: "#EA4335", letter: "G" },
-  { name: "Slack", status: "available", meta: "Notificaciones + crear tickets desde DM", color: "#4A154B", letter: "S" },
-  { name: "WhatsApp Business", status: "beta", meta: "Twilio + Meta WABA", color: "#25D366", letter: "W" },
-  { name: "Telegram", status: "soon", meta: "Q4 2026", color: "#26A5E4", letter: "T" },
-  { name: "Instagram DM", status: "soon", meta: "Q4 2026", color: "#E1306C", letter: "I" },
-  { name: "Zendesk", status: "available", meta: "Importar tickets históricos", color: "#03363D", letter: "Z" },
+  { name: "Gmail", status: "connected", meta: "soporte@empresa.io · 2,341 mensajes", color: "var(--kairo-color-avatar-coral)", letter: "G" },
+  { name: "Slack", status: "available", meta: "Notificaciones + crear tickets desde DM", color: "var(--kairo-color-avatar-violet)", letter: "S" },
+  { name: "WhatsApp Business", status: "beta", meta: "Twilio + Meta WABA", color: "var(--kairo-color-avatar-green)", letter: "W" },
+  { name: "Telegram", status: "soon", meta: "Q4 2026", color: "var(--kairo-color-avatar-blue)", letter: "T" },
+  { name: "Instagram DM", status: "soon", meta: "Q4 2026", color: "var(--kairo-color-avatar-lilac)", letter: "I" },
+  { name: "Zendesk", status: "available", meta: "Importar tickets históricos", color: "var(--kairo-color-faint)", letter: "Z" },
 ];
 
 function IntegrationsSection({ onViewChange }: { onViewChange: (view: AppView) => void }) {
@@ -190,35 +190,23 @@ function IntegrationsSection({ onViewChange }: { onViewChange: (view: AppView) =
       </Text>
       <Box grid gridTemplateColumns="1fr 1fr" gap={12}>
         {INTEGRATIONS.map((int) => (
-          <Box key={int.name} padding={16} borderWidth={1} borderColor="var(--k-border)" borderRadius={10} display="flex" gap={12} alignItems="center" backgroundColor="var(--k-bg)" borderStyle="solid">
-            <Text tag="div" width={38} height={38} borderRadius={8} backgroundColor={int.color} color="white" display="flex" alignItems="center" justifyContent="center" fontSize={16} fontWeight={600} flexShrink={0}>
-              {int.letter}
-            </Text>
-            <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
-              <Text tag="div" display="flex" alignItems="center" gap={6} fontSize={14} fontWeight={500} color="var(--k-text-primary)">
-                {int.name}
-                {int.status === "connected" && (
-                  <Text width={6} height={6} circle backgroundColor="var(--kairo-color-ok)" flexShrink={0} />
-                )}
-                {int.status === "beta" && (
-                  <Text fontSize={10} fontWeight={600} paddingVertical={1} paddingHorizontal={5} borderRadius={4} backgroundColor="rgba(43,91,255,.12)" color="var(--kairo-color-accent)">BETA</Text>
-                )}
-              </Text>
-              <Text tag="div" fontSize={12} color="var(--k-text-tertiary)" marginTop={2} display="block">{int.meta}</Text>
-            </Box>
-            {int.status === "connected" && (
-              <Pressable fontSize={12} color="var(--k-text-tertiary)" backgroundColor="transparent" borderWidth={0} cursor="pointer">{t("dashboard:settings.integrations.configure")}</Pressable>
-            )}
-            {int.status === "available" && (
-              <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={4} paddingHorizontal={10} borderRadius={8} backgroundColor="transparent" color="var(--k-text-secondary)" fontSize={12} fontWeight={500} borderWidth={1} borderColor="var(--k-border)" cursor="pointer" borderStyle="solid">{t("dashboard:settings.integrations.connect")}</Pressable>
-            )}
-            {int.status === "beta" && (
-              <Pressable display="inline-flex" alignItems="center" gap={6} paddingVertical={4} paddingHorizontal={10} borderRadius={8} backgroundColor="transparent" color="var(--k-text-secondary)" fontSize={12} fontWeight={500} borderWidth={1} borderColor="var(--k-border)" cursor="pointer" borderStyle="solid">{t("dashboard:settings.integrations.requestAccess")}</Pressable>
-            )}
-            {int.status === "soon" && (
-              <Text fontSize={11} color="var(--k-text-tertiary)" font="mono" whiteSpace="nowrap">{t("dashboard:settings.integrations.comingSoon")}</Text>
-            )}
-          </Box>
+          <IntegrationCard
+            key={int.name}
+            name={int.name}
+            initial={int.letter}
+            tileColor={int.color}
+            status={(int.status === "beta" ? "available" : int.status) as IntegrationStatus}
+            beta={int.status === "beta"}
+            description={int.meta}
+            labels={{
+              beta: "BETA",
+              soon: t("dashboard:settings.integrations.comingSoon"),
+              connect: int.status === "beta" ? t("dashboard:settings.integrations.requestAccess") : t("dashboard:settings.integrations.connect"),
+              connecting: "…",
+              reconnect: t("dashboard:settings.integrations.connect"),
+              disconnect: t("dashboard:settings.integrations.configure"),
+            }}
+          />
         ))}
       </Box>
 
@@ -566,7 +554,7 @@ export function ProfileSettings({ onViewChange }: Props) {
         {navItems.map((item) => {
           const active = section === item.id;
           return (
-            <Pressable key={item.id} onClick={() => setSection(item.id)} display="flex" alignItems="center" gap={10} paddingVertical={7} paddingHorizontal={10} borderRadius={6} width="100%" textAlign="left" backgroundColor={active ? "var(--k-surface-raised, rgba(0,0,0,0.06))" : "transparent"} color={active ? "var(--k-text-primary)" : "var(--k-text-secondary)"} fontSize={13} fontWeight={active ? 500 : 400} marginBottom={1} borderWidth={0} cursor="pointer">
+            <Pressable key={item.id} onClick={() => setSection(item.id)} display="flex" alignItems="center" gap={10} paddingVertical={7} paddingHorizontal={10} borderRadius={6} width="100%" textAlign="left" backgroundColor={active ? "var(--kairo-color-hover)" : "transparent"} color={active ? "var(--k-text-primary)" : "var(--k-text-secondary)"} fontSize={13} fontWeight={active ? 500 : 400} marginBottom={1} borderWidth={0} cursor="pointer">
               <Icon name={item.icon} size={14} />
               <span>{item.label}</span>
             </Pressable>

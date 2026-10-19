@@ -156,7 +156,7 @@ function ClientTab({ loading }: { loading: boolean }) {
   }
 
   const PLAN_STYLE: Record<string, { bg: string; color: string; border: string }> = {
-    enterprise: { bg: "#F3F0FF", color: "#6D28D9", border: "#DDD6FE" },
+    enterprise: { bg: "color-mix(in srgb, var(--kairo-color-violet) 8%, transparent)", color: "var(--kairo-color-violet)", border: "color-mix(in srgb, var(--kairo-color-violet) 24%, transparent)" },
     pro:        { bg: "var(--kairo-color-accent-soft)", color: "var(--kairo-color-accent)", border: "var(--kairo-color-accent-line)" },
     starter:    { bg: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok-ink)", border: "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" },
     unknown:    { bg: "var(--k-surface-2)", color: "var(--k-text-tertiary)", border: "var(--k-border)" },

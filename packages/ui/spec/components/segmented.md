@@ -23,6 +23,7 @@ Switches between two or three mutually exclusive modes in place.
 ## Accessibility
 
 - Use `role="tablist"`/`tab` for composer mode; `role="group"` with `aria-pressed` for language and billing period; links with `aria-current` for legal tabs.
+- Tertiary text stays at 4.5:1 or more on `surface.hover` and on `accent.soft`, so labels and metadata keep AA contrast on hover, inside the segmented track and on selected rows.
 
 ## Domain value
 
