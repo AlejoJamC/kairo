@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
@@ -580,6 +580,148 @@ export type Database = {
           },
         ]
       }
+      decision_work_breaker: {
+        Row: {
+          changed_at: string
+          half_open: boolean
+          id: boolean
+          level: number
+          open_until: string | null
+        }
+        Insert: {
+          changed_at?: string
+          half_open?: boolean
+          id?: boolean
+          level?: number
+          open_until?: string | null
+        }
+        Update: {
+          changed_at?: string
+          half_open?: boolean
+          id?: boolean
+          level?: number
+          open_until?: string | null
+        }
+        Relationships: []
+      }
+      decision_work_items: {
+        Row: {
+          account_id: string
+          attempts: number
+          available_at: string
+          contract: string
+          created_at: string
+          dedupe_key: string
+          first_failed_at: string | null
+          id: string
+          knowledge_version_id: string | null
+          last_error: string | null
+          message_id: string | null
+          requeued_at: string | null
+          requeued_by: string | null
+          status: string
+          ticket_id: string | null
+        }
+        Insert: {
+          account_id: string
+          attempts?: number
+          available_at?: string
+          contract: string
+          created_at?: string
+          dedupe_key: string
+          first_failed_at?: string | null
+          id?: string
+          knowledge_version_id?: string | null
+          last_error?: string | null
+          message_id?: string | null
+          requeued_at?: string | null
+          requeued_by?: string | null
+          status?: string
+          ticket_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          attempts?: number
+          available_at?: string
+          contract?: string
+          created_at?: string
+          dedupe_key?: string
+          first_failed_at?: string | null
+          id?: string
+          knowledge_version_id?: string | null
+          last_error?: string | null
+          message_id?: string | null
+          requeued_at?: string | null
+          requeued_by?: string | null
+          status?: string
+          ticket_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "decision_work_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_work_items_knowledge_version_id_fkey"
+            columns: ["knowledge_version_id"]
+            isOneToOne: false
+            referencedRelation: "current_knowledge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_work_items_knowledge_version_id_fkey"
+            columns: ["knowledge_version_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_work_items_knowledge_version_id_fkey"
+            columns: ["knowledge_version_id"]
+            isOneToOne: false
+            referencedRelation: "latest_knowledge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_work_items_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_work_items_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      decision_work_outcomes: {
+        Row: {
+          id: number
+          ok: boolean
+          outage_failure: boolean
+          recorded_at: string
+        }
+        Insert: {
+          id?: never
+          ok: boolean
+          outage_failure: boolean
+          recorded_at?: string
+        }
+        Update: {
+          id?: never
+          ok?: boolean
+          outage_failure?: boolean
+          recorded_at?: string
+        }
+        Relationships: []
+      }
       draft_contact: {
         Row: {
           account_id: string
@@ -808,6 +950,9 @@ export type Database = {
           embedding: string | null
           id: string
           is_published: boolean | null
+          review_status: string | null
+          reviewed_by: string | null
+          source_key: string | null
           tags: string[] | null
           title: string
           updated_at: string | null
@@ -819,6 +964,9 @@ export type Database = {
           embedding?: string | null
           id?: string
           is_published?: boolean | null
+          review_status?: string | null
+          reviewed_by?: string | null
+          source_key?: string | null
           tags?: string[] | null
           title: string
           updated_at?: string | null
@@ -830,6 +978,9 @@ export type Database = {
           embedding?: string | null
           id?: string
           is_published?: boolean | null
+          review_status?: string | null
+          reviewed_by?: string | null
+          source_key?: string | null
           tags?: string[] | null
           title?: string
           updated_at?: string | null
@@ -837,6 +988,174 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "kb_articles_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_candidate_runs: {
+        Row: {
+          account_id: string
+          candidate_limit: number
+          created_at: string
+          eligible_tickets: number
+          id: string
+          limit_reached: boolean
+          missing_knowledge_embedding: boolean
+          pending_without_embedding: number
+          selected_tickets: number
+          similarity_threshold: number
+          version_id: string
+        }
+        Insert: {
+          account_id: string
+          candidate_limit: number
+          created_at?: string
+          eligible_tickets: number
+          id?: string
+          limit_reached: boolean
+          missing_knowledge_embedding: boolean
+          pending_without_embedding: number
+          selected_tickets: number
+          similarity_threshold: number
+          version_id: string
+        }
+        Update: {
+          account_id?: string
+          candidate_limit?: number
+          created_at?: string
+          eligible_tickets?: number
+          id?: string
+          limit_reached?: boolean
+          missing_knowledge_embedding?: boolean
+          pending_without_embedding?: number
+          selected_tickets?: number
+          similarity_threshold?: number
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_candidate_runs_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_candidate_runs_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "current_knowledge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_candidate_runs_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_candidate_runs_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "latest_knowledge"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_embeddings: {
+        Row: {
+          account_id: string
+          created_at: string
+          embedding: string
+          source: string
+          version_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          embedding: string
+          source: string
+          version_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          embedding?: string
+          source?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_embeddings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_embeddings_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: true
+            referencedRelation: "current_knowledge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_embeddings_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: true
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_embeddings_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: true
+            referencedRelation: "latest_knowledge"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_versions: {
+        Row: {
+          account_id: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          revision: number
+          snapshot: Json
+          source_id: string
+          source_kind: string
+          status: string
+        }
+        Insert: {
+          account_id: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          revision?: never
+          snapshot: Json
+          source_id: string
+          source_kind: string
+          status: string
+        }
+        Update: {
+          account_id?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          revision?: never
+          snapshot?: Json
+          source_id?: string
+          source_kind?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_versions_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
@@ -1162,12 +1481,14 @@ export type Database = {
           account_id: string
           confidence: number | null
           created_at: string
+          evidence: Json
           id: string
           learning_type: string
           origin: string
           reviewed_at: string | null
           reviewed_by: string | null
           source_count: number
+          source_key: string | null
           status: string
           summary: string
           ticket_ids: string[]
@@ -1177,12 +1498,14 @@ export type Database = {
           account_id: string
           confidence?: number | null
           created_at?: string
+          evidence?: Json
           id?: string
           learning_type: string
           origin: string
           reviewed_at?: string | null
           reviewed_by?: string | null
           source_count?: number
+          source_key?: string | null
           status: string
           summary: string
           ticket_ids?: string[]
@@ -1192,12 +1515,14 @@ export type Database = {
           account_id?: string
           confidence?: number | null
           created_at?: string
+          evidence?: Json
           id?: string
           learning_type?: string
           origin?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
           source_count?: number
+          source_key?: string | null
           status?: string
           summary?: string
           ticket_ids?: string[]
@@ -1313,6 +1638,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "response_templates_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      semantic_indexes: {
+        Row: {
+          account_id: string
+          created_at: string
+          dimensions: number
+          embedding: string
+          model: string
+          preparation: string
+          provider: string
+          revision: string
+          source_id: string
+          source_kind: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          dimensions: number
+          embedding: string
+          model: string
+          preparation: string
+          provider: string
+          revision: string
+          source_id: string
+          source_kind: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          dimensions?: number
+          embedding?: string
+          model?: string
+          preparation?: string
+          provider?: string
+          revision?: string
+          source_id?: string
+          source_kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "semantic_indexes_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
@@ -1619,6 +1991,97 @@ export type Database = {
           },
           {
             foreignKeyName: "ticket_classification_history_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_decision_history: {
+        Row: {
+          account_id: string
+          actor_user_id: string | null
+          case_revision: number
+          contract: string
+          contract_version: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          knowledge_version_id: string | null
+          message_id: string | null
+          result: Json
+          status: string
+          ticket_id: string
+        }
+        Insert: {
+          account_id: string
+          actor_user_id?: string | null
+          case_revision: number
+          contract: string
+          contract_version: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          knowledge_version_id?: string | null
+          message_id?: string | null
+          result: Json
+          status: string
+          ticket_id: string
+        }
+        Update: {
+          account_id?: string
+          actor_user_id?: string | null
+          case_revision?: number
+          contract?: string
+          contract_version?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          knowledge_version_id?: string | null
+          message_id?: string | null
+          result?: Json
+          status?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_decision_history_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_decision_history_knowledge_version_id_fkey"
+            columns: ["knowledge_version_id"]
+            isOneToOne: false
+            referencedRelation: "current_knowledge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_decision_history_knowledge_version_id_fkey"
+            columns: ["knowledge_version_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_decision_history_knowledge_version_id_fkey"
+            columns: ["knowledge_version_id"]
+            isOneToOne: false
+            referencedRelation: "latest_knowledge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_decision_history_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_decision_history_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
@@ -2158,6 +2621,7 @@ export type Database = {
           auto_replied_out_of_hours: boolean
           body_html: string | null
           body_plain: string | null
+          case_revision: number
           category: string | null
           cc_emails: string[] | null
           channel: string
@@ -2173,12 +2637,15 @@ export type Database = {
           emotion: string | null
           emotion_confidence: number | null
           first_response_at: string | null
+          first_viewed_at: string | null
           from_email: string | null
           from_name: string | null
           gmail_message_id: string | null
           gmail_thread_id: string | null
           group_id: string | null
+          human_modified_at: string | null
           id: string
+          knowledge_context: Json
           last_response_at: string | null
           merged_into_ticket_id: string | null
           model_verdict: Json | null
@@ -2213,6 +2680,7 @@ export type Database = {
           auto_replied_out_of_hours?: boolean
           body_html?: string | null
           body_plain?: string | null
+          case_revision?: number
           category?: string | null
           cc_emails?: string[] | null
           channel?: string
@@ -2228,12 +2696,15 @@ export type Database = {
           emotion?: string | null
           emotion_confidence?: number | null
           first_response_at?: string | null
+          first_viewed_at?: string | null
           from_email?: string | null
           from_name?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
           group_id?: string | null
+          human_modified_at?: string | null
           id?: string
+          knowledge_context?: Json
           last_response_at?: string | null
           merged_into_ticket_id?: string | null
           model_verdict?: Json | null
@@ -2268,6 +2739,7 @@ export type Database = {
           auto_replied_out_of_hours?: boolean
           body_html?: string | null
           body_plain?: string | null
+          case_revision?: number
           category?: string | null
           cc_emails?: string[] | null
           channel?: string
@@ -2283,12 +2755,15 @@ export type Database = {
           emotion?: string | null
           emotion_confidence?: number | null
           first_response_at?: string | null
+          first_viewed_at?: string | null
           from_email?: string | null
           from_name?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
           group_id?: string | null
+          human_modified_at?: string | null
           id?: string
+          knowledge_context?: Json
           last_response_at?: string | null
           merged_into_ticket_id?: string | null
           model_verdict?: Json | null
@@ -2413,6 +2888,73 @@ export type Database = {
       }
     }
     Views: {
+      current_knowledge: {
+        Row: {
+          account_id: string | null
+          actor_user_id: string | null
+          created_at: string | null
+          id: string | null
+          revision: number | null
+          snapshot: Json | null
+          source_id: string | null
+          source_kind: string | null
+          status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_versions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_enrichment_coverage: {
+        Row: {
+          account_id: string | null
+          candidate_tickets: number | null
+          evaluated_current_tickets: number | null
+          evaluated_initial_tickets: number | null
+          initial_tickets: number | null
+          pending_without_embedding: number | null
+          resolved_with_contributions: number | null
+          selections_limit_reached: number | null
+          total_tickets: number | null
+          using_current_knowledge: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tickets_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      latest_knowledge: {
+        Row: {
+          account_id: string | null
+          actor_user_id: string | null
+          created_at: string | null
+          id: string | null
+          revision: number | null
+          snapshot: Json | null
+          source_id: string | null
+          source_kind: string | null
+          status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_versions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_lifecycle_timeline: {
         Row: {
           account_id: string | null
@@ -2472,6 +3014,32 @@ export type Database = {
           },
         ]
       }
+      workflow_metrics: {
+        Row: {
+          accepted: number | null
+          account_id: string | null
+          applied: number | null
+          contract: string | null
+          evaluations: number | null
+          no_contribution_latency_ms: number | null
+          no_contribution_tokens: number | null
+          pending_knowledge: number | null
+          proposed: number | null
+          rejected: number | null
+          superseded_evaluations: number | null
+          tickets_evaluated: number | null
+          without_contribution: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_decision_history_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _assert_draft_access: {
@@ -2509,6 +3077,32 @@ export type Database = {
         Args: { p_organization: string }
         Returns: number
       }
+      claim_decision_work: {
+        Args: { p_limit?: number; p_max_attempts?: number }
+        Returns: {
+          account_id: string
+          attempts: number
+          available_at: string
+          contract: string
+          created_at: string
+          dedupe_key: string
+          first_failed_at: string | null
+          id: string
+          knowledge_version_id: string | null
+          last_error: string | null
+          message_id: string | null
+          requeued_at: string | null
+          requeued_by: string | null
+          status: string
+          ticket_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "decision_work_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       confirm_draft_contact: {
         Args: { p_draft_id: string }
         Returns: {
@@ -2542,6 +3136,8 @@ export type Database = {
         }
       }
       current_account_id: { Args: never; Returns: string }
+      decision_breaker_delay: { Args: { p_level: number }; Returns: string }
+      decision_retry_offset: { Args: { p_retry: number }; Returns: string }
       edit_draft_contact: {
         Args: { p_draft_id: string; p_patch: Json }
         Returns: {
@@ -2574,6 +3170,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      embedding_dimensions: {
+        Args: never
+        Returns: {
+          dimensions: number
+          table_name: string
+        }[]
+      }
+      enqueue_knowledge_candidates: {
+        Args: { p_limit?: number; p_threshold?: number; p_version_id: string }
+        Returns: number
+      }
+      enqueue_pending_knowledge: {
+        Args: { p_account_id: string; p_limit?: number; p_threshold?: number }
+        Returns: number
+      }
       find_relevant_kb: {
         Args: {
           p_account_id: string
@@ -2604,6 +3215,32 @@ export type Database = {
           ticket_id: string
           ticket_number: number
         }[]
+      }
+      find_workflow_knowledge: {
+        Args: {
+          p_account_id: string
+          p_limit?: number
+          p_query_embedding: string
+          p_threshold?: number
+          p_ticket_id?: string
+        }
+        Returns: {
+          account_id: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          revision: number
+          snapshot: Json
+          source_id: string
+          source_kind: string
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_versions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_classification_accuracy: {
         Args: { p_account_id: string; p_window?: string }
@@ -2639,12 +3276,45 @@ export type Database = {
       is_account_admin: { Args: { p_account_id: string }; Returns: boolean }
       is_active_admin: { Args: never; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
+      mark_ticket_viewed: {
+        Args: { p_account_id: string; p_ticket_id: string; p_user_id: string }
+        Returns: undefined
+      }
       provision_account_for_user: {
         Args: {
           p_account_name?: string
           p_plan_code?: string
           p_seat_limit?: number
           p_user_id: string
+        }
+        Returns: string
+      }
+      read_semantic_ticket_vectors: {
+        Args: {
+          p_account_id: string
+          p_dimensions: number
+          p_ids: string[]
+          p_model: string
+          p_provider: string
+        }
+        Returns: {
+          embedding: string
+          id: string
+        }[]
+      }
+      record_decision_outcome: {
+        Args: { p_ok: boolean; p_outage_failure: boolean }
+        Returns: string
+      }
+      record_ticket_enrichment: {
+        Args: {
+          p_account_id: string
+          p_key: string
+          p_result: Json
+          p_revision: number
+          p_ticket_id: string
+          p_useful: boolean
+          p_version_id: string
         }
         Returns: string
       }
@@ -2679,6 +3349,109 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      release_decision_work: {
+        Args: {
+          p_consume_attempt?: boolean
+          p_error: string
+          p_id: string
+          p_max_attempts?: number
+          p_retriable: boolean
+        }
+        Returns: string
+      }
+      requeue_failed_decision_work: {
+        Args: {
+          p_account_id: string
+          p_contract?: string
+          p_ids?: string[]
+          p_limit?: number
+          p_user_id: string
+        }
+        Returns: number
+      }
+      retrieve_semantic_sources: {
+        Args: {
+          p_account_id: string
+          p_dimensions: number
+          p_exclude_same_group?: boolean
+          p_kind: string
+          p_knowledge_kind?: string
+          p_limit?: number
+          p_model: string
+          p_provider: string
+          p_purpose: string
+          p_query: string
+          p_status_filter?: string
+          p_threshold?: number
+          p_ticket_id?: string
+        }
+        Returns: Json
+      }
+      return_decision_work: { Args: { p_id: string }; Returns: undefined }
+      review_ticket_enrichment: {
+        Args: {
+          p_accept: boolean
+          p_account_id: string
+          p_decision_id: string
+          p_ticket_id: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      review_workflow_knowledge: {
+        Args: {
+          p_account_id: string
+          p_content?: string
+          p_decision: string
+          p_id: string
+          p_kind: string
+          p_title?: string
+          p_user_id: string
+          p_version_id: string
+        }
+        Returns: undefined
+      }
+      save_email_knowledge: {
+        Args: {
+          p_account_id: string
+          p_articles: Json
+          p_learnings: Json
+          p_message_id: string
+          p_ticket_id: string
+        }
+        Returns: string[]
+      }
+      save_reply_decision: {
+        Args: {
+          p_account_id: string
+          p_key: string
+          p_proposal: Json
+          p_result: Json
+          p_revision: number
+          p_ticket_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      semantic_revision: { Args: { p_source: Json }; Returns: string }
+      semantic_source: {
+        Args: { p_account_id: string; p_id: string; p_kind: string }
+        Returns: Json
+      }
+      store_semantic_index: {
+        Args: {
+          p_account_id: string
+          p_dimensions: number
+          p_embedding: string
+          p_id: string
+          p_kind: string
+          p_model: string
+          p_preparation: string
+          p_provider: string
+          p_revision: string
+        }
+        Returns: string
       }
       unreject_draft_contact: {
         Args: { p_draft_id: string }

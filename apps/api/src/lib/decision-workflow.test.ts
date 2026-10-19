@@ -13,13 +13,15 @@ type Deps = NonNullable<Parameters<typeof processDecisionWork>[2]>;
 // Collaborators are injected: a module mock would leak into every other suite of the run.
 const inject = (overrides: Partial<Deps> = {}): Deps => ({ decide: decide as unknown as Deps['decide'], analyze: analyze as unknown as Deps['analyze'],
   propose: propose as unknown as Deps['propose'], decisionProvider: () => ({ model: 'decision-model' }) as unknown as ReturnType<NonNullable<Deps['decisionProvider']>>,
-  embed, ...overrides });
+  embed, space: { provider: 'synthetic', model: 'acme', dimensions: 2 }, ...overrides });
 const version = { id:'version',source_id:'article',account_id:'account',source_kind:'article',revision:1,status:'approved',snapshot:{content:'Use account recovery.'} };
 const work = {id:'job',account_id:'account',ticket_id:'ticket',message_id:'message',knowledge_version_id:'version',contract:'knowledge_impact',dedupe_key:'job'};
 function database(options: { knowledge?:boolean; current?:boolean; existing?:boolean; persistStatus?:string; embedded?:boolean; clients?:Record<string,unknown>[]; contracts?:Record<string,unknown>[]; contacts?:Record<string,unknown>[] } = {}) {
   const saved: Record<string,unknown>[] = [];
   const rpc = mock(async (name:string,args:Record<string,unknown>) => {
-    if (name === 'find_workflow_knowledge') return {data:options.knowledge === false ? [] : [version],error:null};
+    if (name === 'retrieve_semantic_sources') return {data:{status:'ok',matches:options.knowledge === false ? [] : [{source:{kind:'knowledge_version',id:'article'},revision:'r1',version:'version',content:'Use account recovery.',authority:'approved_knowledge',method:'semantic',metadata:{knowledge:version}}]},error:null};
+    if (name === 'semantic_source') return {data:{reference:{kind:'knowledge_version',id:'version'},accountId:'account',revision:'r1',preparation:'v1',text:'Use account recovery.',...(options.embedded ? {index:{revision:'r1',preparation:'v1',space:{provider:'synthetic',model:'acme',dimensions:2}}} : {})},error:null};
+    if (name === 'store_semantic_index') { saved.push(args); return {data:'indexed',error:null}; }
     saved.push(args); return {data:options.persistStatus ?? 'enriched',error:null};
   });
   const from = (table:string) => {
@@ -42,6 +44,12 @@ function database(options: { knowledge?:boolean; current?:boolean; existing?:boo
 }
 beforeEach(()=>{decide.mockClear();analyze.mockClear();propose.mockClear();});
 describe('durable workflow execution',()=>{
+  it('regenerates queued source indices without running case inference', async () => {
+    const {db,rpc} = database();
+    await processDecisionWork({...work,contract:'semantic_index',ticket_id:null},db,inject());
+    expect(rpc).toHaveBeenCalledWith('store_semantic_index',expect.objectContaining({p_kind:'knowledge_version',p_id:'version',p_account_id:'account'}));
+    expect(decide).not.toHaveBeenCalled(); expect(analyze).not.toHaveBeenCalled(); expect(propose).not.toHaveBeenCalled();
+  });
   it('skips inference when that case and knowledge revision was already evaluated',async()=>{
     const {db}=database({existing:true});await processDecisionWork(work,db,inject());
     expect(decide).not.toHaveBeenCalled();expect(analyze).not.toHaveBeenCalled();
@@ -177,8 +185,8 @@ describe('durable workflow execution',()=>{
     const {db,saved,rpc}=database(); const vector=mock(async (_text: string)=>[0.3,0.4]);
     await processDecisionWork({...work,contract:'knowledge_change',ticket_id:null,message_id:null},db,inject({embed:vector}));
     expect(vector).toHaveBeenCalledWith('Use account recovery.');
-    expect(saved).toContainEqual(expect.objectContaining({version_id:'version',embedding:[0.3,0.4],source:'workflow'}));
-    expect(rpc).toHaveBeenCalledWith('enqueue_knowledge_candidates',{p_version_id:'version',p_threshold:0.8,p_limit:25});
+    expect(saved).toContainEqual(expect.objectContaining({p_id:'version',p_embedding:[0.3,0.4],p_model:'acme',p_revision:'r1'}));
+    expect(rpc).toHaveBeenCalledWith('enqueue_semantic_knowledge_candidates',{p_version_id:'version',p_threshold:0.8,p_limit:25});
   });
   it('does not embed a version that already has a vector',async()=>{
     const {db}=database({embedded:true}); const vector=mock(async (_text: string)=>[0.3]);

@@ -101,13 +101,14 @@ describe('synthesis tools', () => {
       { id: 'a1', embedding: '[1,0,0]' }, { id: 'a2', embedding: '[0.95,0.05,0]' },
       { id: 'b1', embedding: [0, 1, 0] }, { id: 'c1', embedding: null },
     ];
-    const db = { from: () => {
-      const chain = { select: () => chain, eq: () => chain, in: () => chain,
-        then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: rows, error: null }).then(resolve) };
-      return chain;
+    const calls: Record<string,unknown>[] = [];
+    const db = { rpc: async (name: string,args:Record<string,unknown>) => {
+      expect(name).toBe('read_semantic_ticket_vectors'); calls.push(args);
+      return {data:rows,error:null};
     } } as never;
     const result = await sharedAgentTools({ feature: 'business_synthesis', accountId: 'account' }, { db })
       .group_similar_tickets!.execute({ ticketIds: ['a1', 'a2', 'b1', 'c1'] });
+    expect(calls[0]).toMatchObject({p_account_id:'account',p_ids:['a1','a2','b1','c1']});
     expect(result).toMatchObject({ data: { groups: [['a1', 'a2']], alone: ['b1'], withoutEmbedding: ['c1'] }, missing: ['ticket_embeddings'] });
   });
 

@@ -5,10 +5,11 @@ import { ProviderError, type CompletionProvider } from '../providers/base';
 import { runLlmFeature, runLlmTextFeature, type LlmCallRecord } from './run-llm-feature';
 import { LlmFeatureError, fillTemplate, loadPromptTemplate, extractPromptVersion } from './template';
 
-// The reply-suggestion prompt is a real template with nine placeholders; using
+// The reply-suggestion prompt is a real template with named placeholders; using
 // it keeps these tests honest about the loader and the filler.
 const REPLY_VARS = {
   subject: 'Cannot log in',
+  ticket_body: 'Please restore access to the Acme account.',
   ticket_type: 'support',
   priority: 'P2',
   category: 'account',

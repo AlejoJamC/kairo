@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { supabase } from './supabase.js';
 import { env } from '@kairo/env';
-import { generateEmbedding, ProviderError } from '@kairo/intelligence';
+import { ProviderError, prepareKnowledgeEmbeddingText, type VectorSpace } from '@kairo/intelligence';
+import { createBackendSemanticService } from './semantic-service.js';
 
 export const KnowledgeVersionSchema = z.object({
   id: z.string(), account_id: z.string(), source_kind: z.enum(['article', 'learning']), source_id: z.string(),
@@ -15,6 +16,7 @@ const QUERY_MAX_CHARS = 2000;
 export interface KnowledgeSearchDeps {
   embed?: (text: string) => Promise<number[]>;
   threshold?: number;
+  space?: VectorSpace;
 }
 
 /**
@@ -23,18 +25,13 @@ export interface KnowledgeSearchDeps {
  * failed lookup, never an empty one.
  */
 export async function approvedWorkflowKnowledge(accountId: string, query: string, ticketId?: string, db = supabase, deps: KnowledgeSearchDeps = {}) {
-  let embedding: number[];
-  try {
-    embedding = await (deps.embed ?? ((text: string) => generateEmbedding(text, { accountId })))(query.slice(0, QUERY_MAX_CHARS));
-  } catch {
-    throw new ProviderError('Approved knowledge lookup failed', true);
-  }
-  const { data, error } = await db.rpc('find_workflow_knowledge', {
-    p_account_id: accountId, p_query_embedding: embedding, p_ticket_id: ticketId ?? null,
-    p_threshold: deps.threshold ?? env.EMBEDDING_SIMILARITY_THRESHOLD,
-  });
-  if (error) throw new ProviderError('Approved knowledge lookup failed', true);
-  return z.array(KnowledgeVersionSchema).parse(data ?? []).filter(version => version.status === 'approved' && version.account_id === accountId);
+  const service = createBackendSemanticService({ db, embed: deps.embed, space: deps.space,
+    scope: { accountId, actor: { kind: 'workflow', id: 'approved_knowledge' }, permissions: ['retrieve'], ticketId },
+    profile: { threshold: deps.threshold ?? env.EMBEDDING_SIMILARITY_THRESHOLD } });
+  const found = await service.retrieve({ purpose: 'approved_knowledge', query: { text: query.slice(0,QUERY_MAX_CHARS) }, sources: ['knowledge_version'] });
+  if (found.status !== 'ok') throw new ProviderError('Approved knowledge lookup failed', true);
+  return z.array(KnowledgeVersionSchema).parse(found.matches.map(match => match.metadata['knowledge']))
+    .filter(version => version.status === 'approved' && version.account_id === accountId);
 }
 export function knowledgeReferences(versions: KnowledgeVersion[]) {
   return versions.map(v => ({ id: v.source_id, version: v.id,
@@ -43,8 +40,23 @@ export function knowledgeReferences(versions: KnowledgeVersion[]) {
 
 /** The text a knowledge version is embedded from: what retrieval and candidate selection compare. */
 export function knowledgeEmbeddingText(version: Pick<KnowledgeVersion, 'snapshot'>): string {
-  const evidence = version.snapshot['evidence'] as { title?: unknown } | undefined;
-  const title = version.snapshot['title'] ?? evidence?.title ?? '';
-  const body = version.snapshot['content'] ?? version.snapshot['summary'] ?? '';
-  return `${String(title)}\n${String(body)}`.trim().slice(0, QUERY_MAX_CHARS);
+  return prepareKnowledgeEmbeddingText(version.snapshot);
+}
+
+/** The pipeline explicitly selects its account's sources; installing the schema schedules nothing. */
+export async function enqueuePendingSemanticKnowledge(accountId: string, db = supabase): Promise<void> {
+  let after: string | undefined;
+  for (;;) {
+    let request = db.from('current_knowledge').select('id').eq('account_id', accountId).order('id').limit(200);
+    if (after) request = request.gt('id', after);
+    const { data, error } = await request;
+    if (error) throw new ProviderError('Pending knowledge lookup failed', true);
+    for (const version of data ?? []) {
+      const result = await db.rpc('enqueue_semantic_knowledge_candidates', { p_version_id: version.id,
+        p_threshold: env.EMBEDDING_SIMILARITY_THRESHOLD, p_limit: env.KNOWLEDGE_CANDIDATE_LIMIT });
+      if (result.error) throw new ProviderError('Pending knowledge check failed', true);
+    }
+    if (!data || data.length < 200) return;
+    after = data[data.length - 1]!.id;
+  }
 }

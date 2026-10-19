@@ -1,3 +1,4 @@
+import { readCompatibleTicketVectors } from './semantic-ticket-search.js';
 import { z } from 'zod';
 import {
   askJudgments, classifyEmailWithMeta, JudgmentRequestSchema,
@@ -173,7 +174,7 @@ export function sharedAgentTools(scope: AgentToolScope, deps: AgentToolDeps = {}
       inputSchema: z.object({ ticketIds: z.array(z.string().min(1)).min(2).max(200), minSimilarity: z.number().min(0.5).max(0.99).optional() }).strict(),
       execute: async (input) => {
         const { ticketIds, minSimilarity } = input as { ticketIds: string[]; minSimilarity?: number };
-        const { data, error } = await db.from('tickets').select('id, embedding').eq('account_id', scope.accountId).in('id', ticketIds);
+        const { data, error } = await readCompatibleTicketVectors(db,scope.accountId,ticketIds);
         if (error) return failed(['ticket_embeddings']);
         const vectors = new Map<string, number[]>();
         for (const row of data ?? []) {

@@ -75,7 +75,7 @@ Kairo — AI support cockpit for support teams. Monorepo: dashboard (Vite+React1
 - If the user explicitly authorizes a specification correction, retain the original text with strikethrough, add the correction date and write the replacement. Never silently replace or delete the original specification. A user-authorized proposed acceptance criterion must remain unchecked and italicized until the user accepts it.
 - Inspect affected files before implementing. Resolve routine implementation choices from the code and existing context; ask about material ambiguity in product behavior.
 - Values compared across tables: read both column definitions in `supabase/schema.sql` (CHECK constraints, enums, casing) before comparing or joining them, reuse the existing normalizer (e.g. `normalizePlanTier`) instead of comparing raw values, and add a test that covers every allowed value.
-- Data the code reads must have a writer: before depending on a column or field (e.g. `tickets.client_id`), confirm something populates it, or add the writer in the same change together with a backfill for existing rows.
+- Data the code reads must have a writer: before depending on a column or field (e.g. `tickets.client_id`), confirm something populates it, or add the writer in the same change together with a backfill for existing rows. A backfill of business records or operational state requires the explicit data-migration authorization below; without it, stop and ask instead of preparing the backfill.
 - No placeholder literals where the specification requires a derived value (e.g. a fixed `'unknown'`). Derive it from the available sources, or report the field as missing.
 - Inspect Git status and preserve existing work. Do not create or switch branches, create worktrees, or start a Git flow unless the user explicitly instructs it. Never require a clean checkout by discarding changes.
 - All code, code comments and commit messages must be in English. User-facing strings must follow the project's EN/ES localization requirements.
@@ -116,6 +116,34 @@ One component library and one set of design values serve every client (web dashb
 All schema changes must go through the Supabase CLI workflow.
 Never write raw SQL and paste it into the Supabase dashboard.
 See `supabase/SKILL.md` for the full enforced workflow.
+
+### ⛔ Do not turn schema installation into operational data processing
+
+Schema migrations may define tables, relationships, constraints, indexes,
+permissions and callable persistence/query interfaces. Known column defaults,
+enum values and fixed reference catalogs are allowed when required by the
+approved schema. This rule does not prohibit normal application writes or
+synthetic fixtures inside isolated tests.
+
+**The forbidden case is scanning existing business records during schema
+installation to manufacture derived state or initiate operational work.**
+Examples include `INSERT ... SELECT` over tickets or knowledge to populate a
+job queue, bulk embedding/index generation, workflow replay, copying current
+business records into a new operational representation, or rewriting their
+processing state. Creating an empty index table does not authorize populating
+it, selecting sources for it or scheduling their processing.
+
+Do not hide these effects in `DO` blocks, function calls, seeds or helper
+scripts, or introduce triggers on existing tables that assume responsibility
+for scheduling business processing outside the approved consumer/pipeline
+contract. Defining a callable RPC does not authorize invoking it in a migration.
+
+**If this operational processing is needed, stop before writing or executing
+that part and ask the human to explicitly authorize a data migration.** State
+the affected tables, selection predicates and intended effects. Generic approval
+to implement, apply schema migrations or commit does not authorize it. Without
+that authorization, keep schema installation free of this processing and leave
+source selection and execution with the application's consumers and pipelines.
 
 ### ⛔ Nothing reaches the remote database before the commit is approved
 

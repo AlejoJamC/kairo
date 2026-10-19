@@ -92,6 +92,20 @@ $$;
 ALTER FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."advance_case_revision"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  IF ROW(NEW.assigned_to, NEW.priority, NEW.category, NEW.status, NEW.model_verdict, NEW.body_plain, NEW.human_modified_at)
+     IS DISTINCT FROM ROW(OLD.assigned_to, OLD.priority, OLD.category, OLD.status, OLD.model_verdict, OLD.body_plain, OLD.human_modified_at) THEN NEW.case_revision := OLD.case_revision + 1; END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."advance_case_revision"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") RETURNS TABLE("outcome" "text", "from_state" "text", "to_state" "text", "history_id" "uuid")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -218,9 +232,87 @@ $$;
 
 ALTER FUNCTION "public"."bulk_confirm_drafts_by_organization"("p_organization" "text") OWNER TO "postgres";
 
+
+CREATE OR REPLACE FUNCTION "public"."capture_ticket_decision"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE c text;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.model_verdict IS NOT DISTINCT FROM OLD.model_verdict THEN RETURN NEW; END IF;
+  END IF;
+  c := CASE WHEN NEW.classification_tier = 1 THEN 'onboarding_triage' WHEN NEW.classification_tier IN (2,3) THEN 'historical_learning' ELSE 'incoming_email_decision' END;
+  INSERT INTO ticket_decision_history(account_id, ticket_id, contract, contract_version, case_revision, status, result, idempotency_key)
+  VALUES (NEW.account_id, NEW.id, c, COALESCE(NEW.model_verdict->'workflow'->>'version','legacy'), NEW.case_revision,
+    'proposed', jsonb_build_object('verdict',NEW.model_verdict,'promptVersion',NEW.prompt_version,'derivationVersion',NEW.derivation_version,'missing',COALESCE(NEW.model_verdict->'evidence'->'missing','[]'::jsonb),'authorization','human_review'),
+    'classification:' || NEW.id || ':' || NEW.case_revision) ON CONFLICT DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."capture_ticket_decision"() OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."decision_work_items" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_id" "uuid",
+    "message_id" "uuid",
+    "knowledge_version_id" "uuid",
+    "contract" "text" NOT NULL,
+    "dedupe_key" "text" NOT NULL,
+    "status" "text" DEFAULT 'pending'::"text" NOT NULL,
+    "attempts" integer DEFAULT 0 NOT NULL,
+    "last_error" "text",
+    "first_failed_at" timestamp with time zone,
+    "requeued_at" timestamp with time zone,
+    "requeued_by" "uuid",
+    "available_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "decision_work_items_attempts_check" CHECK (("attempts" >= 0)),
+    CONSTRAINT "decision_work_items_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'running'::"text", 'done'::"text", 'failed'::"text"])))
+);
+
+
+ALTER TABLE "public"."decision_work_items" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."claim_decision_work"("p_limit" integer DEFAULT 10, "p_max_attempts" integer DEFAULT 6) RETURNS SETOF "public"."decision_work_items"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE b public.decision_work_breaker; batch integer := greatest(1,least(p_limit,50));
+BEGIN
+  SELECT * INTO b FROM decision_work_breaker FOR UPDATE;
+  -- During a mass outage nothing is claimed until the breaker's current step is due.
+  IF b.open_until IS NOT NULL AND b.open_until > now() THEN RETURN; END IF;
+  IF b.level > 0 THEN
+    -- Due step: probe with a small batch; the lease keeps further claims out until the probe reports.
+    batch := least(batch, 3);
+    UPDATE decision_work_breaker SET half_open=true, open_until=now()+interval '20 minutes', changed_at=now();
+  END IF;
+  -- A lease that expired after the last allowed attempt never completed: stop retrying it.
+  UPDATE decision_work_items SET status='failed', last_error=COALESCE(last_error,'attempts_exhausted')
+  WHERE status IN ('pending','running') AND available_at <= now() AND attempts >= greatest(1,p_max_attempts);
+  -- Mail arriving now is handled before knowledge fan-out and before history is incorporated.
+  RETURN QUERY
+  UPDATE decision_work_items SET status='running', attempts=attempts+1, available_at=now()+interval '20 minutes'
+  WHERE id IN (SELECT id FROM decision_work_items
+    WHERE status IN ('pending','running') AND available_at <= now() AND attempts < greatest(1,p_max_attempts)
+    ORDER BY CASE contract WHEN 'incoming_email_decision' THEN 0 WHEN 'knowledge_change' THEN 1 WHEN 'knowledge_impact' THEN 2 ELSE 3 END, available_at, created_at
+    FOR UPDATE SKIP LOCKED LIMIT batch)
+  RETURNING *;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."claim_decision_work"("p_limit" integer, "p_max_attempts" integer) OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."draft_contact" (
@@ -349,6 +441,26 @@ $$;
 ALTER FUNCTION "public"."current_account_id"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."decision_breaker_delay"("p_level" integer) RETURNS interval
+    LANGUAGE "sql" IMMUTABLE
+    AS $$
+  SELECT (ARRAY[interval '15 minutes', interval '3 hours', interval '6 hours'])[greatest(1,least(p_level,3))];
+$$;
+
+
+ALTER FUNCTION "public"."decision_breaker_delay"("p_level" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."decision_retry_offset"("p_retry" integer) RETURNS interval
+    LANGUAGE "sql" IMMUTABLE
+    AS $$
+  SELECT (ARRAY[interval '1 minute', interval '5 minutes', interval '15 minutes', interval '3 hours', interval '6 hours'])[greatest(1,least(p_retry,5))];
+$$;
+
+
+ALTER FUNCTION "public"."decision_retry_offset"("p_retry" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."edit_draft_contact"("p_draft_id" "uuid", "p_patch" "jsonb") RETURNS "public"."draft_contact"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -441,6 +553,113 @@ $$;
 ALTER FUNCTION "public"."edit_draft_contact"("p_draft_id" "uuid", "p_patch" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."embedding_dimensions"() RETURNS TABLE("table_name" "text", "dimensions" integer)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+ SELECT c.relname::text, a.atttypmod FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace ns ON ns.oid=c.relnamespace
+ WHERE ns.nspname='public' AND a.attname='embedding' AND NOT a.attisdropped AND c.relname IN ('tickets','kb_articles','knowledge_embeddings');
+$$;
+
+
+ALTER FUNCTION "public"."embedding_dimensions"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."enqueue_knowledge_candidates"("p_version_id" "uuid", "p_threshold" double precision DEFAULT 0.80, "p_limit" integer DEFAULT 25) RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE ki public.semantic_indexes; v public.knowledge_versions; emb extensions.vector; n integer; eligible integer; unembedded integer; cap integer := greatest(1,p_limit);
+BEGIN
+ SELECT * INTO v FROM knowledge_versions WHERE id=p_version_id;
+ IF v.id IS NULL THEN RETURN 0; END IF;
+ IF v.source_kind='article' THEN PERFORM 1 FROM kb_articles WHERE id=v.source_id FOR SHARE;
+ ELSE PERFORM 1 FROM operational_learning WHERE id=v.source_id FOR SHARE; END IF;
+ IF EXISTS(SELECT 1 FROM knowledge_versions WHERE account_id=v.account_id AND source_kind=v.source_kind AND source_id=v.source_id AND revision>v.revision) THEN RETURN 0; END IF;
+ IF v.status <> 'approved' THEN
+   INSERT INTO ticket_decision_history(account_id,ticket_id,contract,contract_version,case_revision,knowledge_version_id,status,result,idempotency_key)
+   SELECT account_id,id,'knowledge_impact','1.0.0',case_revision,v.id,'pending_knowledge',jsonb_build_object('missing',jsonb_build_array('approved_knowledge'),'withdrawnVersion',knowledge_context->v.source_id::text->>'versionId'),'withdrawal:'||id||':'||v.id
+   FROM tickets WHERE account_id=v.account_id AND knowledge_context ? v.source_id::text ON CONFLICT DO NOTHING;
+   UPDATE tickets SET knowledge_context=knowledge_context-v.source_id::text WHERE account_id=v.account_id AND knowledge_context ? v.source_id::text;
+   RETURN 0;
+ END IF;
+ SELECT * INTO ki FROM semantic_indexes WHERE account_id=v.account_id AND source_kind='knowledge_version' AND source_id=v.id
+  AND revision=semantic_revision(jsonb_build_array(v.id,v.revision)) AND preparation='knowledge:title-body:2000:v1';
+ emb:=ki.embedding;
+ -- Explicit ties always enter: the source ticket, listed tickets and tickets already using this knowledge.
+ -- Everything else must be pending, carry a vector and reach the threshold; the closest ones are queued up to the cap.
+ WITH explicit AS (
+   SELECT t.id, t.case_revision FROM tickets t WHERE t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL AND (
+     v.snapshot->'ticket_ids' @> jsonb_build_array(t.id::text) OR v.snapshot->'tags' @> jsonb_build_array('origin-ticket:'||t.id) OR t.knowledge_context ? v.source_id::text)),
+ nearest AS (
+   SELECT t.id, t.case_revision FROM tickets t JOIN semantic_indexes ti ON ti.account_id=t.account_id AND ti.source_kind='ticket' AND ti.source_id=t.id
+   AND ti.provider=ki.provider AND ti.model=ki.model AND ti.dimensions=ki.dimensions
+   AND ti.revision=semantic_revision(jsonb_build_array(t.subject,t.body_plain,t.snippet)) AND ti.preparation='ticket:subject-body:1000:v1'
+   WHERE emb IS NOT NULL AND t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
+     AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND ti.embedding IS NOT NULL
+     AND 1-(ti.embedding <=> emb) >= p_threshold AND t.id NOT IN (SELECT id FROM explicit)
+   ORDER BY ti.embedding <=> emb LIMIT cap)
+ INSERT INTO decision_work_items(account_id,ticket_id,knowledge_version_id,contract,dedupe_key)
+ SELECT v.account_id, c.id, v.id, 'knowledge_impact', 'impact:'||c.id||':'||c.case_revision||':'||v.id
+ FROM (SELECT * FROM explicit UNION ALL SELECT * FROM nearest) c
+ ON CONFLICT DO NOTHING;
+ GET DIAGNOSTICS n=ROW_COUNT;
+ SELECT count(*) INTO eligible FROM tickets t JOIN semantic_indexes ti ON ti.account_id=t.account_id AND ti.source_kind='ticket' AND ti.source_id=t.id
+   AND ti.provider=ki.provider AND ti.model=ki.model AND ti.dimensions=ki.dimensions
+   AND ti.revision=semantic_revision(jsonb_build_array(t.subject,t.body_plain,t.snippet)) AND ti.preparation='ticket:subject-body:1000:v1'
+ WHERE emb IS NOT NULL AND t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
+   AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND ti.embedding IS NOT NULL
+   AND 1-(ti.embedding <=> emb) >= p_threshold;
+ SELECT count(*) INTO unembedded FROM tickets t
+ WHERE t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
+   AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND NOT EXISTS(SELECT 1 FROM semantic_indexes ti WHERE ti.account_id=t.account_id AND ti.source_kind='ticket' AND ti.source_id=t.id AND ti.provider=ki.provider AND ti.model=ki.model AND ti.dimensions=ki.dimensions AND ti.revision=semantic_revision(jsonb_build_array(t.subject,t.body_plain,t.snippet)) AND ti.preparation='ticket:subject-body:1000:v1');
+ INSERT INTO knowledge_candidate_runs(account_id,version_id,similarity_threshold,candidate_limit,eligible_tickets,selected_tickets,limit_reached,pending_without_embedding,missing_knowledge_embedding)
+ VALUES (v.account_id, v.id, p_threshold, cap, eligible, n, eligible > cap, unembedded, emb IS NULL);
+ RETURN n;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."enqueue_knowledge_candidates"("p_version_id" "uuid", "p_threshold" double precision, "p_limit" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."enqueue_message_decision"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE t public.tickets; m public.messages;
+BEGIN
+  SELECT * INTO t FROM tickets WHERE id = NEW.ticket_id;
+  SELECT * INTO m FROM messages WHERE id = NEW.message_id AND account_id = t.account_id;
+  IF m.id IS NULL THEN RAISE EXCEPTION 'Message and ticket account mismatch'; END IF;
+  UPDATE tickets SET case_revision = case_revision + 1 WHERE id = t.id;
+  IF m.direction = 'inbound' AND COALESCE(m.processing_tier, 0) <> 1 THEN
+    INSERT INTO decision_work_items(account_id,ticket_id,message_id,contract,dedupe_key)
+    VALUES(t.account_id,t.id,m.id,CASE WHEN COALESCE(m.processing_tier,0) IN (2,3) THEN 'historical_learning' ELSE 'incoming_email_decision' END,'message:'||m.id) ON CONFLICT DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."enqueue_message_decision"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."enqueue_pending_knowledge"("p_account_id" "uuid", "p_threshold" double precision DEFAULT 0.80, "p_limit" integer DEFAULT 25) RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE v record; n integer:=0;
+BEGIN
+ FOR v IN SELECT id FROM current_knowledge WHERE account_id=p_account_id LOOP n:=n+enqueue_knowledge_candidates(v.id, p_threshold, p_limit); END LOOP;
+ RETURN n;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."enqueue_pending_knowledge"("p_account_id" "uuid", "p_threshold" double precision, "p_limit" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."ensure_account_on_signup"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -517,6 +736,39 @@ $$;
 
 
 ALTER FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text", "p_exclude_same_group" boolean) OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."knowledge_versions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "source_kind" "text" NOT NULL,
+    "source_id" "uuid" NOT NULL,
+    "revision" bigint NOT NULL,
+    "status" "text" NOT NULL,
+    "snapshot" "jsonb" NOT NULL,
+    "actor_user_id" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "knowledge_versions_source_kind_check" CHECK (("source_kind" = ANY (ARRAY['article'::"text", 'learning'::"text"]))),
+    CONSTRAINT "knowledge_versions_status_check" CHECK (("status" = ANY (ARRAY['pending_review'::"text", 'approved'::"text", 'rejected'::"text", 'withdrawn'::"text"])))
+);
+
+
+ALTER TABLE "public"."knowledge_versions" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."find_workflow_knowledge"("p_account_id" "uuid", "p_query_embedding" "extensions"."vector", "p_ticket_id" "uuid" DEFAULT NULL::"uuid", "p_threshold" double precision DEFAULT 0.80, "p_limit" integer DEFAULT 12) RETURNS SETOF "public"."knowledge_versions"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+ SELECT v.* FROM current_knowledge v LEFT JOIN knowledge_embeddings e ON e.version_id=v.id
+ WHERE v.account_id=p_account_id AND (
+  (e.embedding IS NOT NULL AND p_query_embedding IS NOT NULL AND 1-(e.embedding <=> p_query_embedding) >= p_threshold)
+  OR (p_ticket_id IS NOT NULL AND v.snapshot->'ticket_ids' @> jsonb_build_array(p_ticket_id::text)))
+ ORDER BY (e.embedding <=> p_query_embedding) NULLS LAST, v.revision DESC LIMIT greatest(1,least(p_limit,50));
+$$;
+
+
+ALTER FUNCTION "public"."find_workflow_knowledge"("p_account_id" "uuid", "p_query_embedding" "extensions"."vector", "p_ticket_id" "uuid", "p_threshold" double precision, "p_limit" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_classification_accuracy"("p_account_id" "uuid", "p_window" "text" DEFAULT '30d'::"text") RETURNS "jsonb"
@@ -730,6 +982,20 @@ $$;
 ALTER FUNCTION "public"."is_superadmin"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."mark_ticket_viewed"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM account_members WHERE account_id=p_account_id AND user_id=p_user_id AND status='active' AND role IN ('owner','admin','supervisor','agent')) THEN RAISE EXCEPTION 'Permission denied'; END IF;
+  UPDATE tickets SET first_viewed_at=COALESCE(first_viewed_at,now()) WHERE id=p_ticket_id AND account_id=p_account_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."mark_ticket_viewed"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text" DEFAULT NULL::"text", "p_plan_code" "text" DEFAULT 'starter'::"text", "p_seat_limit" integer DEFAULT NULL::integer) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -834,6 +1100,158 @@ $$;
 
 
 ALTER FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."queue_semantic_ticket"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+ IF TG_OP='UPDATE' AND ROW(NEW.subject,NEW.body_plain,NEW.snippet) IS NOT DISTINCT FROM ROW(OLD.subject,OLD.body_plain,OLD.snippet) THEN RETURN NEW; END IF;
+ INSERT INTO decision_work_items(account_id,ticket_id,contract,dedupe_key)
+ VALUES(NEW.account_id,NEW.id,'semantic_index','semantic:ticket:'||NEW.id||':'||txid_current())
+ ON CONFLICT DO NOTHING;
+ RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."queue_semantic_ticket"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."read_semantic_ticket_vectors"("p_account_id" "uuid", "p_ids" "uuid"[], "p_provider" "text", "p_model" "text", "p_dimensions" integer) RETURNS TABLE("id" "uuid", "embedding" "extensions"."vector")
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+ SELECT t.id,i.embedding FROM tickets t JOIN semantic_indexes i ON i.account_id=t.account_id AND i.source_kind='ticket' AND i.source_id=t.id
+ WHERE t.account_id=p_account_id AND t.id=ANY(p_ids) AND cardinality(p_ids)<=200
+  AND i.provider=p_provider AND i.model=p_model AND i.dimensions=p_dimensions
+  AND i.revision=semantic_revision(jsonb_build_array(t.subject,t.body_plain,t.snippet)) AND i.preparation='ticket:subject-body:1000:v1';
+$$;
+
+
+ALTER FUNCTION "public"."read_semantic_ticket_vectors"("p_account_id" "uuid", "p_ids" "uuid"[], "p_provider" "text", "p_model" "text", "p_dimensions" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."record_decision_outcome"("p_ok" boolean, "p_outage_failure" boolean) RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE b public.decision_work_breaker; total integer; failures integer; next_level integer;
+BEGIN
+  INSERT INTO decision_work_outcomes(ok, outage_failure) VALUES (p_ok, p_outage_failure);
+  DELETE FROM decision_work_outcomes WHERE recorded_at < now()-interval '1 day';
+  SELECT * INTO b FROM decision_work_breaker FOR UPDATE;
+  IF b.half_open THEN
+    IF p_ok THEN
+      UPDATE decision_work_breaker SET level=0, open_until=NULL, half_open=false, changed_at=now();
+      RETURN 'closed';
+    END IF;
+    IF NOT p_outage_failure THEN RETURN 'probing'; END IF;
+    IF b.level = 3 THEN
+      -- Six hours after their first failure, items that still fail stay failed.
+      UPDATE decision_work_items SET status='failed', last_error=COALESCE(last_error,'outage_exceeded_retry_window')
+      WHERE status IN ('pending','running') AND first_failed_at IS NOT NULL AND first_failed_at <= now()-interval '6 hours';
+    END IF;
+    next_level := least(b.level+1, 3);
+    UPDATE decision_work_breaker SET level=next_level, open_until=now()+decision_breaker_delay(next_level), half_open=false, changed_at=now();
+    RETURN 'open';
+  END IF;
+  IF b.level > 0 THEN RETURN 'open'; END IF;
+  -- Mass outage: at least 10 executions in 5 minutes, 80% of them provider or network failures.
+  SELECT count(*), count(*) FILTER (WHERE outage_failure) INTO total, failures FROM decision_work_outcomes
+  WHERE recorded_at > greatest(now()-interval '5 minutes', b.changed_at);
+  IF total >= 10 AND failures >= 0.8 * total THEN
+    UPDATE decision_work_breaker SET level=1, open_until=now()+decision_breaker_delay(1), half_open=false, changed_at=now();
+    RETURN 'open';
+  END IF;
+  RETURN 'closed';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."record_decision_outcome"("p_ok" boolean, "p_outage_failure" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."record_knowledge_version"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE row_data jsonb; version_id uuid; version_status text; kind text;
+BEGIN
+  row_data := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
+  IF TG_OP = 'UPDATE' AND (to_jsonb(OLD) - 'embedding' - 'updated_at') = (row_data - 'embedding' - 'updated_at') THEN
+    -- Only the vector changed: attach it to the article's latest version instead of creating one.
+    IF TG_TABLE_NAME = 'kb_articles' AND row_data->>'embedding' IS NOT NULL THEN
+      SELECT id INTO version_id FROM knowledge_versions WHERE source_kind='article' AND source_id=(row_data->>'id')::uuid ORDER BY revision DESC LIMIT 1;
+      IF version_id IS NOT NULL THEN
+        INSERT INTO knowledge_embeddings(version_id, account_id, embedding, source)
+        VALUES (version_id, (row_data->>'account_id')::uuid, (row_data->>'embedding')::extensions.vector, 'kb_articles.embedding')
+        ON CONFLICT ON CONSTRAINT knowledge_embeddings_pkey DO UPDATE SET embedding=EXCLUDED.embedding, source=EXCLUDED.source;
+      END IF;
+    END IF;
+    RETURN NEW;
+  END IF;
+  kind := CASE WHEN TG_TABLE_NAME = 'kb_articles' THEN 'article' ELSE 'learning' END;
+  version_status := CASE WHEN TG_OP = 'DELETE' THEN 'withdrawn' WHEN kind = 'article' THEN
+    CASE WHEN (row_data->>'is_published')::boolean THEN 'approved'
+      WHEN row_data->>'review_status'='approved' THEN 'withdrawn'
+      ELSE COALESCE(row_data->>'review_status','pending_review') END
+    ELSE row_data->>'status' END;
+  INSERT INTO knowledge_versions(account_id, source_kind, source_id, status, snapshot, actor_user_id)
+  VALUES ((row_data->>'account_id')::uuid, kind, (row_data->>'id')::uuid, version_status, row_data - 'embedding', (row_data->>'reviewed_by')::uuid)
+  RETURNING id INTO version_id;
+  IF kind = 'article' AND TG_OP <> 'DELETE' AND row_data->>'embedding' IS NOT NULL THEN
+    INSERT INTO knowledge_embeddings(version_id, account_id, embedding, source)
+    VALUES (version_id, (row_data->>'account_id')::uuid, (row_data->>'embedding')::extensions.vector, 'kb_articles.embedding');
+  END IF;
+  IF version_status = 'approved' OR TG_OP <> 'INSERT' THEN
+    INSERT INTO decision_work_items(account_id, knowledge_version_id, contract, dedupe_key)
+    VALUES ((row_data->>'account_id')::uuid, version_id, 'knowledge_change', 'knowledge:' || version_id::text) ON CONFLICT DO NOTHING;
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."record_knowledge_version"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."record_ticket_enrichment"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_revision" bigint, "p_version_id" "uuid", "p_result" "jsonb", "p_useful" boolean, "p_key" "text") RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE t public.tickets; v public.knowledge_versions; outcome text; touched boolean;
+BEGIN
+  SELECT * INTO v FROM knowledge_versions WHERE id=p_version_id AND account_id=p_account_id;
+  IF v.source_kind='article' THEN PERFORM 1 FROM kb_articles WHERE id=v.source_id FOR SHARE;
+  ELSE PERFORM 1 FROM operational_learning WHERE id=v.source_id FOR SHARE; END IF;
+  SELECT * INTO t FROM tickets WHERE id=p_ticket_id AND account_id=p_account_id FOR UPDATE;
+  IF t.id IS NULL THEN RAISE EXCEPTION 'Ticket not found'; END IF;
+  IF EXISTS(SELECT 1 FROM ticket_decision_history WHERE account_id=p_account_id AND idempotency_key=p_key) THEN RETURN 'already_evaluated'; END IF;
+  IF t.case_revision <> p_revision THEN RETURN 'stale_case'; END IF;
+  IF v.id IS NULL OR v.status <> 'approved' OR EXISTS(SELECT 1 FROM knowledge_versions WHERE account_id=p_account_id AND source_kind=v.source_kind AND source_id=v.source_id AND revision>v.revision) THEN RETURN 'stale_knowledge'; END IF;
+  touched := t.first_viewed_at IS NOT NULL OR t.human_modified_at IS NOT NULL OR EXISTS(SELECT 1 FROM ticket_state_history WHERE ticket_id=t.id AND actor_type='human') OR EXISTS(SELECT 1 FROM ticket_activity_log WHERE ticket_id=t.id AND actor_type='human') OR EXISTS(SELECT 1 FROM classification_feedback WHERE ticket_id=t.id) OR EXISTS(SELECT 1 FROM ticket_classification_history WHERE ticket_id=t.id AND actor_type='human') OR EXISTS(SELECT 1 FROM ticket_notes WHERE ticket_id=t.id);
+  outcome := CASE WHEN NOT p_useful THEN 'evaluated_without_contribution' WHEN touched THEN 'pending_human_review' ELSE 'enriched' END;
+  INSERT INTO ticket_decision_history(account_id,ticket_id,contract,contract_version,case_revision,knowledge_version_id,status,result,idempotency_key)
+  VALUES(p_account_id,t.id,'knowledge_impact','1.0.0',p_revision,v.id,outcome,p_result,p_key);
+  IF outcome='enriched' THEN UPDATE tickets SET knowledge_context=knowledge_context || jsonb_build_object(v.source_id::text,jsonb_build_object('versionId',v.id,'result',p_result)) WHERE id=t.id; END IF;
+  RETURN outcome;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."record_ticket_enrichment"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_revision" bigint, "p_version_id" "uuid", "p_result" "jsonb", "p_useful" boolean, "p_key" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."reject_decision_history_mutation"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN RAISE EXCEPTION 'Decision and knowledge history is append-only'; END;
+$$;
+
+
+ALTER FUNCTION "public"."reject_decision_history_mutation"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."reject_draft_contact"("p_draft_id" "uuid") RETURNS "public"."draft_contact"
@@ -973,6 +1391,297 @@ $$;
 ALTER FUNCTION "public"."reject_ticket_state_history_mutation"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."release_decision_work"("p_id" "uuid", "p_error" "text", "p_retriable" boolean, "p_consume_attempt" boolean DEFAULT true, "p_max_attempts" integer DEFAULT 6) RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE w public.decision_work_items; first timestamptz;
+BEGIN
+  SELECT * INTO w FROM decision_work_items WHERE id=p_id FOR UPDATE;
+  IF w.id IS NULL OR w.status <> 'running' THEN RETURN COALESCE(w.status,'missing'); END IF;
+  IF NOT p_retriable THEN
+    UPDATE decision_work_items SET status='failed', last_error=left(p_error,500) WHERE id=p_id;
+    RETURN 'failed';
+  END IF;
+  IF NOT p_consume_attempt THEN
+    -- A deployment fault says nothing about the item: it keeps its place on the ladder.
+    UPDATE decision_work_items SET status='pending', attempts=greatest(0,w.attempts-1), last_error=left(p_error,500),
+      available_at=now()+interval '15 minutes' WHERE id=p_id;
+    RETURN 'pending';
+  END IF;
+  first := COALESCE(w.first_failed_at, now());
+  IF w.attempts >= greatest(1,p_max_attempts) THEN
+    UPDATE decision_work_items SET status='failed', first_failed_at=first, last_error=left(p_error,500) WHERE id=p_id;
+    RETURN 'failed';
+  END IF;
+  UPDATE decision_work_items SET status='pending', first_failed_at=first, last_error=left(p_error,500),
+    available_at=first+decision_retry_offset(w.attempts) WHERE id=p_id;
+  RETURN 'pending';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."release_decision_work"("p_id" "uuid", "p_error" "text", "p_retriable" boolean, "p_consume_attempt" boolean, "p_max_attempts" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."requeue_failed_decision_work"("p_account_id" "uuid", "p_user_id" "uuid", "p_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_contract" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 500) RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE n integer;
+BEGIN
+  PERFORM 1 FROM account_members WHERE account_id=p_account_id AND user_id=p_user_id AND status='active' AND role='owner' FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Permission denied'; END IF;
+  UPDATE decision_work_items SET status='pending', attempts=0, first_failed_at=NULL, available_at=now(), requeued_at=now(), requeued_by=p_user_id
+  WHERE id IN (SELECT id FROM decision_work_items
+    WHERE account_id=p_account_id AND status='failed'
+      AND (p_ids IS NULL OR id = ANY(p_ids)) AND (p_contract IS NULL OR contract=p_contract)
+    ORDER BY created_at LIMIT greatest(1,least(p_limit,500)) FOR UPDATE SKIP LOCKED);
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."requeue_failed_decision_work"("p_account_id" "uuid", "p_user_id" "uuid", "p_ids" "uuid"[], "p_contract" "text", "p_limit" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."retrieve_semantic_sources"("p_account_id" "uuid", "p_kind" "text", "p_purpose" "text", "p_query" "extensions"."vector", "p_provider" "text", "p_model" "text", "p_dimensions" integer, "p_ticket_id" "uuid" DEFAULT NULL::"uuid", "p_threshold" double precision DEFAULT 0.75, "p_limit" integer DEFAULT 12, "p_status_filter" "text" DEFAULT NULL::"text", "p_exclude_same_group" boolean DEFAULT false, "p_knowledge_kind" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE ticket_group uuid;
+BEGIN
+ IF p_query IS NULL OR p_dimensions<>768 OR vector_dims(p_query)<>p_dimensions THEN
+  RETURN jsonb_build_object('status','unavailable','reason','index_incompatible','matches','[]'::jsonb); END IF;
+ IF NOT ((p_kind='ticket' AND p_purpose='similar_cases') OR (p_kind IN ('kb_article','knowledge_version') AND p_purpose='approved_knowledge')) THEN
+  RETURN jsonb_build_object('status','unavailable','reason','invalid_input','matches','[]'::jsonb); END IF;
+ IF p_ticket_id IS NOT NULL THEN
+  SELECT group_id INTO ticket_group FROM tickets WHERE id=p_ticket_id AND account_id=p_account_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('status','unavailable','reason','not_found','matches','[]'::jsonb); END IF;
+ END IF;
+ RETURN (
+ WITH candidates AS NOT MATERIALIZED (
+  SELECT t.id,semantic_revision(jsonb_build_array(t.subject,t.body_plain,t.snippet)) AS revision,
+   'ticket:subject-body:1000:v1'::text AS preparation,NULL::uuid AS version,
+   left(coalesce(t.resolution_summary,t.subject,''),4000) AS content,'historical_case'::text AS authority,
+   jsonb_build_object('ticketNumber',t.ticket_number,'subject',left(t.subject,500),'resolvedAt',t.resolved_at,
+    'resolutionSummary',left(t.resolution_summary,4000),'groupId',t.group_id) AS metadata,false AS linked,t.embedding IS NOT NULL AS legacy_indexed
+  FROM tickets t WHERE p_kind='ticket' AND t.account_id=p_account_id AND t.id IS DISTINCT FROM p_ticket_id
+   AND (p_status_filter IS NULL OR t.status=ANY(string_to_array(p_status_filter,',')))
+   AND (NOT p_exclude_same_group OR ticket_group IS NULL OR t.group_id IS DISTINCT FROM ticket_group)
+  UNION ALL
+  SELECT v.id,semantic_revision(jsonb_build_array(v.id,v.revision)),'knowledge:title-body:2000:v1',v.id,
+   left(coalesce(v.snapshot->>'content',v.snapshot->>'summary',''),4000),'approved_knowledge',
+   jsonb_build_object('knowledge',jsonb_build_object('id',v.id,'account_id',v.account_id,'source_kind',v.source_kind,
+    'source_id',v.source_id,'revision',v.revision,'status',v.status,'snapshot',jsonb_build_object(
+     'title',left(v.snapshot->>'title',500),'content',left(v.snapshot->>'content',4000),'summary',left(v.snapshot->>'summary',4000),
+     'learning_type',v.snapshot->>'learning_type','tags',v.snapshot->'tags'))),
+   p_ticket_id IS NOT NULL AND coalesce(v.snapshot->'ticket_ids' @> jsonb_build_array(p_ticket_id::text),false),
+   EXISTS(SELECT 1 FROM knowledge_embeddings e WHERE e.account_id=p_account_id AND e.version_id=v.id)
+  FROM current_knowledge v WHERE p_kind='knowledge_version' AND v.account_id=p_account_id
+   AND (p_knowledge_kind IS NULL OR v.source_kind=p_knowledge_kind)
+  UNION ALL
+  SELECT a.id,semantic_revision(jsonb_build_array(a.title,a.content,a.is_published,a.review_status)),
+   'article:title-content:v1',NULL::uuid,left(a.content,4000),'published_article',
+   jsonb_build_object('title',left(a.title,500),'tags',a.tags),false,a.embedding IS NOT NULL
+  FROM kb_articles a WHERE p_kind='kb_article' AND a.account_id=p_account_id AND a.is_published
+   AND NOT EXISTS(SELECT 1 FROM knowledge_versions v WHERE v.account_id=p_account_id AND v.source_kind='article' AND v.source_id=a.id)
+ ), indexed AS NOT MATERIALIZED (
+  SELECT c.*,i.embedding,i.source_id IS NOT NULL AS indexed,
+   coalesce(i.provider=p_provider AND i.model=p_model AND i.dimensions=p_dimensions AND i.revision=c.revision AND i.preparation=c.preparation,false) AS compatible
+  FROM candidates c LEFT JOIN semantic_indexes i ON i.account_id=p_account_id AND i.source_kind=p_kind AND i.source_id=c.id
+ ), coverage AS (
+  SELECT coalesce(bool_or(NOT indexed AND NOT legacy_indexed AND NOT linked),false) AS missing,
+   coalesce(bool_or(((indexed AND NOT compatible) OR (NOT indexed AND legacy_indexed)) AND NOT linked),false) AS incompatible FROM indexed
+ ), ranked AS (
+  SELECT jsonb_build_object('source',jsonb_build_object('kind',p_kind,'id',id),'revision',revision,'version',version,
+   'content',content,'authority',authority,'method',CASE WHEN linked THEN 'explicit_link' ELSE 'semantic' END,
+   'similarity',CASE WHEN compatible THEN 1-(embedding<=>p_query) END,'metadata',metadata) AS result,
+   CASE WHEN compatible THEN embedding<=>p_query END AS distance,id
+  FROM indexed WHERE linked OR (compatible AND 1-(embedding<=>p_query)>=p_threshold)
+  ORDER BY distance NULLS LAST,id LIMIT greatest(1,least(p_limit,50))
+ ) SELECT jsonb_build_object('status',CASE WHEN missing OR incompatible THEN 'unavailable' ELSE 'ok' END,
+   'reason',CASE WHEN incompatible THEN 'index_incompatible' WHEN missing THEN 'index_missing' END,
+   'matches',(SELECT coalesce(jsonb_agg(result ORDER BY distance NULLS LAST,id),'[]') FROM ranked)) FROM coverage
+ );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."retrieve_semantic_sources"("p_account_id" "uuid", "p_kind" "text", "p_purpose" "text", "p_query" "extensions"."vector", "p_provider" "text", "p_model" "text", "p_dimensions" integer, "p_ticket_id" "uuid", "p_threshold" double precision, "p_limit" integer, "p_status_filter" "text", "p_exclude_same_group" boolean, "p_knowledge_kind" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."return_decision_work"("p_id" "uuid") RETURNS "void"
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  UPDATE decision_work_items SET status='pending', attempts=greatest(0,attempts-1), available_at=now() WHERE id=p_id AND status='running';
+$$;
+
+
+ALTER FUNCTION "public"."return_decision_work"("p_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."review_ticket_enrichment"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid", "p_decision_id" "uuid", "p_accept" boolean) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE t public.tickets; d public.ticket_decision_history; v public.knowledge_versions; review_key text;
+BEGIN
+ PERFORM 1 FROM account_members WHERE account_id=p_account_id AND user_id=p_user_id AND status='active' AND role IN ('owner','admin','supervisor','agent') FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Permission denied'; END IF;
+ SELECT * INTO d FROM ticket_decision_history WHERE id=p_decision_id AND account_id=p_account_id AND ticket_id=p_ticket_id AND contract='knowledge_impact' AND status='pending_human_review';
+ IF d.id IS NULL THEN RAISE EXCEPTION 'Reviewable proposal not found'; END IF;
+ SELECT * INTO v FROM knowledge_versions WHERE id=d.knowledge_version_id AND account_id=p_account_id;
+ IF v.source_kind='article' THEN PERFORM 1 FROM kb_articles WHERE id=v.source_id FOR SHARE;
+ ELSE PERFORM 1 FROM operational_learning WHERE id=v.source_id FOR SHARE; END IF;
+ SELECT * INTO t FROM tickets WHERE id=p_ticket_id AND account_id=p_account_id FOR UPDATE;
+ review_key := 'review:'||d.id;
+ IF EXISTS(SELECT 1 FROM ticket_decision_history WHERE account_id=p_account_id AND idempotency_key=review_key) THEN RETURN; END IF;
+ SELECT * INTO v FROM current_knowledge WHERE id=d.knowledge_version_id AND account_id=p_account_id;
+ IF p_accept AND (v.id IS NULL OR t.case_revision <> d.case_revision) THEN RAISE EXCEPTION 'Proposal is stale; request a current solution'; END IF;
+ IF p_accept THEN UPDATE tickets SET human_modified_at=now(),knowledge_context=knowledge_context||jsonb_build_object(v.source_id::text,jsonb_build_object('versionId',v.id,'result',d.result)) WHERE id=t.id; END IF;
+ INSERT INTO ticket_decision_history(account_id,ticket_id,contract,contract_version,case_revision,knowledge_version_id,status,result,actor_user_id,idempotency_key)
+ VALUES(p_account_id,t.id,'knowledge_impact','1.0.0',t.case_revision,d.knowledge_version_id,CASE WHEN p_accept THEN 'approved' ELSE 'rejected' END,jsonb_build_object('reviewOf',d.id,'sources',d.result->'sources','authorization','human_review'),p_user_id,review_key);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."review_ticket_enrichment"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid", "p_decision_id" "uuid", "p_accept" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."review_workflow_knowledge"("p_account_id" "uuid", "p_user_id" "uuid", "p_kind" "text", "p_id" "uuid", "p_version_id" "uuid", "p_decision" "text", "p_title" "text" DEFAULT NULL::"text", "p_content" "text" DEFAULT NULL::"text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE current_id uuid;
+BEGIN
+  PERFORM 1 FROM account_members WHERE account_id=p_account_id AND user_id=p_user_id AND status='active' AND role IN ('owner','admin','supervisor','agent') FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Permission denied'; END IF;
+  IF p_decision NOT IN ('approved','rejected','pending_review') THEN RAISE EXCEPTION 'Invalid review decision'; END IF;
+  IF p_kind='article' THEN PERFORM 1 FROM kb_articles WHERE id=p_id AND account_id=p_account_id FOR UPDATE;
+  ELSIF p_kind='learning' THEN PERFORM 1 FROM operational_learning WHERE id=p_id AND account_id=p_account_id FOR UPDATE;
+  ELSE RAISE EXCEPTION 'Invalid knowledge kind'; END IF;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Knowledge not found'; END IF;
+  SELECT id INTO current_id FROM knowledge_versions WHERE account_id=p_account_id AND source_kind=p_kind AND source_id=p_id ORDER BY revision DESC LIMIT 1;
+  IF current_id IS DISTINCT FROM p_version_id THEN RAISE EXCEPTION 'Knowledge changed; refresh before reviewing'; END IF;
+  IF p_kind='article' THEN
+    UPDATE kb_articles SET title=COALESCE(p_title,title),content=COALESCE(p_content,content),is_published=(p_decision='approved'),review_status=p_decision,reviewed_by=p_user_id,updated_at=now() WHERE id=p_id;
+  ELSE
+    UPDATE operational_learning SET summary=COALESCE(p_content,summary),status=p_decision,reviewed_by=p_user_id,reviewed_at=now(),evidence=CASE WHEN p_title IS NULL THEN evidence ELSE evidence||jsonb_build_object('title',p_title) END WHERE id=p_id;
+  END IF;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."review_workflow_knowledge"("p_account_id" "uuid", "p_user_id" "uuid", "p_kind" "text", "p_id" "uuid", "p_version_id" "uuid", "p_decision" "text", "p_title" "text", "p_content" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."save_email_knowledge"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_message_id" "uuid", "p_articles" "jsonb", "p_learnings" "jsonb") RETURNS "uuid"[]
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE item jsonb; article_id uuid; ids uuid[] := '{}';
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM tickets t JOIN ticket_messages tm ON tm.ticket_id=t.id JOIN messages m ON m.id=tm.message_id WHERE t.id=p_ticket_id AND t.account_id=p_account_id AND m.id=p_message_id AND m.account_id=p_account_id) THEN RAISE EXCEPTION 'Knowledge source mismatch'; END IF;
+ FOR item IN SELECT * FROM jsonb_array_elements(p_articles) LOOP
+   INSERT INTO kb_articles(account_id,title,content,tags,is_published,source_key) VALUES(p_account_id,item->>'title',item->>'content',ARRAY(SELECT jsonb_array_elements_text(item->'tags')),false,item->>'source_key')
+   ON CONFLICT(account_id,source_key) DO NOTHING RETURNING id INTO article_id;
+   IF article_id IS NULL THEN SELECT id INTO article_id FROM kb_articles WHERE account_id=p_account_id AND source_key=item->>'source_key'; END IF;
+   IF article_id IS NOT NULL THEN ids:=array_append(ids,article_id); END IF;
+ END LOOP;
+ FOR item IN SELECT * FROM jsonb_array_elements(p_learnings) LOOP
+   INSERT INTO operational_learning(account_id,origin,status,learning_type,summary,ticket_ids,source_count,confidence,source_key,evidence)
+   VALUES(p_account_id,'system_derived','pending_review',item->>'learning_type',item->>'summary',ARRAY[p_ticket_id],1,NULL,item->>'source_key',item->'evidence') ON CONFLICT(account_id,source_key) DO NOTHING;
+ END LOOP;
+ RETURN ids;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."save_email_knowledge"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_message_id" "uuid", "p_articles" "jsonb", "p_learnings" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."save_reply_decision"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid", "p_revision" bigint, "p_proposal" "jsonb", "p_result" "jsonb", "p_key" "text") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE t public.tickets; proposal_id uuid; ref jsonb;
+BEGIN
+ PERFORM 1 FROM account_members WHERE account_id=p_account_id AND user_id=p_user_id AND status='active' AND role IN ('owner','admin','supervisor','agent') FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Permission denied'; END IF;
+ FOR ref IN SELECT * FROM jsonb_array_elements(p_result->'sources') ORDER BY value->>'id' LOOP
+   IF ref->>'kind'='article' THEN PERFORM 1 FROM kb_articles WHERE id=(ref->>'id')::uuid AND account_id=p_account_id FOR SHARE;
+   ELSE PERFORM 1 FROM operational_learning WHERE id=(ref->>'id')::uuid AND account_id=p_account_id FOR SHARE; END IF;
+ END LOOP;
+ SELECT * INTO t FROM tickets WHERE id=p_ticket_id AND account_id=p_account_id FOR UPDATE;
+ IF t.id IS NULL OR t.case_revision <> p_revision THEN RAISE EXCEPTION 'Case changed; request a new suggestion'; END IF;
+ SELECT (result->>'proposalId')::uuid INTO proposal_id FROM ticket_decision_history WHERE account_id=p_account_id AND idempotency_key=p_key;
+ IF proposal_id IS NOT NULL THEN RETURN proposal_id; END IF;
+ FOR ref IN SELECT * FROM jsonb_array_elements(p_result->'sources') LOOP
+   IF NOT EXISTS(SELECT 1 FROM current_knowledge WHERE account_id=p_account_id AND id=(ref->>'version')::uuid) THEN RAISE EXCEPTION 'Knowledge changed; request a new suggestion'; END IF;
+ END LOOP;
+ INSERT INTO ticket_proposals(ticket_id,conversation_id,message_ids,proposed_reply,referenced_kb_articles,confidence_score,model_version,raw_llm_output,status)
+ VALUES(t.id,t.conversation_id,'{}',p_proposal->>'proposed_reply',ARRAY(SELECT value::uuid FROM jsonb_array_elements_text(p_proposal->'referenced_kb_articles')), (p_proposal->>'confidence_score')::float,p_proposal->>'model_version',p_proposal->'raw_llm_output','pending') RETURNING id INTO proposal_id;
+ INSERT INTO ticket_decision_history(account_id,ticket_id,contract,contract_version,case_revision,status,result,actor_user_id,idempotency_key)
+ VALUES(p_account_id,t.id,'reply_suggestion','1.0.0',p_revision,'proposed',p_result||jsonb_build_object('proposalId',proposal_id),p_user_id,p_key);
+ RETURN proposal_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."save_reply_decision"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid", "p_revision" bigint, "p_proposal" "jsonb", "p_result" "jsonb", "p_key" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."semantic_revision"("p_source" "jsonb") RETURNS "text"
+    LANGUAGE "sql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+ SELECT encode(sha256(convert_to(p_source::text,'UTF8')),'hex');
+$$;
+
+
+ALTER FUNCTION "public"."semantic_revision"("p_source" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."semantic_source"("p_account_id" "uuid", "p_kind" "text", "p_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE r jsonb; txt text; rev text; prep text; idx jsonb;
+BEGIN
+ IF p_kind='ticket' THEN
+  SELECT to_jsonb(t) INTO r FROM tickets t WHERE id=p_id AND account_id=p_account_id;
+  txt:=left(concat_ws(E'\n\n',nullif(btrim(r->>'subject'),''),nullif(btrim(coalesce(nullif(r->>'body_plain',''),r->>'snippet')),'')),1000);
+  prep:='ticket:subject-body:1000:v1';
+ ELSIF p_kind='kb_article' THEN
+  SELECT to_jsonb(a) INTO r FROM kb_articles a WHERE id=p_id AND account_id=p_account_id;
+  txt:=concat_ws(E'\n\n',nullif(btrim(r->>'title'),''),nullif(btrim(r->>'content'),''));
+  prep:='article:title-content:v1';
+ ELSIF p_kind='knowledge_version' THEN
+  SELECT to_jsonb(v) INTO r FROM current_knowledge v WHERE id=p_id AND account_id=p_account_id;
+  txt:=left(btrim(coalesce(r->'snapshot'->>'title',r->'snapshot'->'evidence'->>'title','')||E'\n'||coalesce(r->'snapshot'->>'content',r->'snapshot'->>'summary','')),2000);
+  prep:='knowledge:title-body:2000:v1';
+ ELSE RETURN NULL;
+ END IF;
+ IF r IS NULL THEN RETURN NULL; END IF;
+ -- Revision includes authorization and source changes, but excludes vector writes.
+ rev:=semantic_revision(CASE WHEN p_kind='ticket' THEN jsonb_build_array(r->'subject',r->'body_plain',r->'snippet')
+  WHEN p_kind='kb_article' THEN jsonb_build_array(r->'title',r->'content',r->'is_published',r->'review_status')
+  ELSE jsonb_build_array(r->'id',r->'revision') END);
+ SELECT jsonb_build_object('revision',i.revision,'preparation',i.preparation,
+  'space',jsonb_build_object('provider',i.provider,'model',i.model,'dimensions',i.dimensions),'vector',i.embedding::text::jsonb) INTO idx
+ FROM semantic_indexes i WHERE account_id=p_account_id AND source_kind=p_kind AND source_id=p_id;
+ RETURN jsonb_build_object('reference',jsonb_build_object('kind',p_kind,'id',p_id),'accountId',p_account_id,
+  'revision',rev,'text',coalesce(txt,''),'preparation',prep,'index',idx,'input',CASE WHEN p_kind='knowledge_version' THEN r->'snapshot' WHEN p_kind='ticket' THEN jsonb_build_object('subject',r->'subject','body_plain',r->'body_plain','snippet',r->'snippet') ELSE jsonb_build_object('title',r->'title','content',r->'content') END);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."semantic_source"("p_account_id" "uuid", "p_kind" "text", "p_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."set_default_plan_id_on_accounts"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -989,6 +1698,41 @@ $$;
 
 
 ALTER FUNCTION "public"."set_default_plan_id_on_accounts"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."store_semantic_index"("p_account_id" "uuid", "p_kind" "text", "p_id" "uuid", "p_revision" "text", "p_preparation" "text", "p_provider" "text", "p_model" "text", "p_dimensions" integer, "p_embedding" "extensions"."vector") RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE current_source jsonb;
+BEGIN
+ IF p_dimensions<>768 OR vector_dims(p_embedding)<>p_dimensions THEN RAISE EXCEPTION 'Incompatible vector dimensions'; END IF;
+ IF p_kind='ticket' THEN PERFORM 1 FROM tickets WHERE id=p_id AND account_id=p_account_id FOR UPDATE;
+ ELSIF p_kind='kb_article' THEN PERFORM 1 FROM kb_articles WHERE id=p_id AND account_id=p_account_id FOR UPDATE;
+ ELSIF p_kind='knowledge_version' THEN
+  -- Serialize with publication/withdrawal, which locks the mutable source row first.
+  PERFORM 1 FROM kb_articles a JOIN knowledge_versions v ON v.source_kind='article' AND v.source_id=a.id
+   WHERE v.id=p_id AND v.account_id=p_account_id AND a.account_id=p_account_id FOR UPDATE OF a;
+  PERFORM 1 FROM operational_learning l JOIN knowledge_versions v ON v.source_kind='learning' AND v.source_id=l.id
+   WHERE v.id=p_id AND v.account_id=p_account_id AND l.account_id=p_account_id FOR UPDATE OF l;
+ ELSE RETURN 'revision_changed'; END IF;
+ current_source:=semantic_source(p_account_id,p_kind,p_id);
+ IF current_source IS NULL OR current_source->>'revision' IS DISTINCT FROM p_revision OR current_source->>'preparation' IS DISTINCT FROM p_preparation THEN RETURN 'revision_changed'; END IF;
+ INSERT INTO semantic_indexes(account_id,source_kind,source_id,revision,preparation,provider,model,dimensions,embedding)
+ VALUES(p_account_id,p_kind,p_id,p_revision,p_preparation,p_provider,p_model,p_dimensions,p_embedding)
+ ON CONFLICT(account_id,source_kind,source_id) DO UPDATE SET revision=EXCLUDED.revision,preparation=EXCLUDED.preparation,
+  provider=EXCLUDED.provider,model=EXCLUDED.model,dimensions=EXCLUDED.dimensions,embedding=EXCLUDED.embedding,created_at=now();
+ IF p_kind='ticket' THEN UPDATE tickets SET embedding=p_embedding,embedding_updated_at=now() WHERE id=p_id AND account_id=p_account_id;
+ ELSIF p_kind='kb_article' THEN UPDATE kb_articles SET embedding=p_embedding WHERE id=p_id AND account_id=p_account_id;
+ ELSE INSERT INTO knowledge_embeddings(version_id,account_id,embedding,source) VALUES(p_id,p_account_id,p_embedding,'semantic_service')
+  ON CONFLICT(version_id) DO UPDATE SET embedding=EXCLUDED.embedding,source=EXCLUDED.source;
+ END IF;
+ RETURN 'indexed';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."store_semantic_index"("p_account_id" "uuid", "p_kind" "text", "p_id" "uuid", "p_revision" "text", "p_preparation" "text", "p_provider" "text", "p_model" "text", "p_dimensions" integer, "p_embedding" "extensions"."vector") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."unreject_draft_contact"("p_draft_id" "uuid") RETURNS "public"."draft_contact"
@@ -1296,6 +2040,76 @@ CREATE TABLE IF NOT EXISTS "public"."csat_events" (
 ALTER TABLE "public"."csat_events" OWNER TO "postgres";
 
 
+CREATE OR REPLACE VIEW "public"."latest_knowledge" WITH ("security_invoker"='true') AS
+ SELECT DISTINCT ON ("account_id", "source_kind", "source_id") "id",
+    "account_id",
+    "source_kind",
+    "source_id",
+    "revision",
+    "status",
+    "snapshot",
+    "actor_user_id",
+    "created_at"
+   FROM "public"."knowledge_versions"
+  ORDER BY "account_id", "source_kind", "source_id", "revision" DESC;
+
+
+ALTER VIEW "public"."latest_knowledge" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "public"."current_knowledge" WITH ("security_invoker"='true') AS
+ SELECT "id",
+    "account_id",
+    "source_kind",
+    "source_id",
+    "revision",
+    "status",
+    "snapshot",
+    "actor_user_id",
+    "created_at"
+   FROM "public"."latest_knowledge"
+  WHERE ("status" = 'approved'::"text");
+
+
+ALTER VIEW "public"."current_knowledge" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."decision_work_breaker" (
+    "id" boolean DEFAULT true NOT NULL,
+    "level" integer DEFAULT 0 NOT NULL,
+    "open_until" timestamp with time zone,
+    "half_open" boolean DEFAULT false NOT NULL,
+    "changed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "decision_work_breaker_id_check" CHECK ("id"),
+    CONSTRAINT "decision_work_breaker_level_check" CHECK ((("level" >= 0) AND ("level" <= 3)))
+);
+
+
+ALTER TABLE "public"."decision_work_breaker" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."decision_work_outcomes" (
+    "id" bigint NOT NULL,
+    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "ok" boolean NOT NULL,
+    "outage_failure" boolean NOT NULL
+);
+
+
+ALTER TABLE "public"."decision_work_outcomes" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."decision_work_outcomes" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."decision_work_outcomes_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."draft_contact_audit_log" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "draft_id" "uuid" NOT NULL,
@@ -1357,11 +2171,230 @@ CREATE TABLE IF NOT EXISTS "public"."kb_articles" (
     "is_published" boolean DEFAULT true,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "account_id" "uuid" NOT NULL
+    "account_id" "uuid" NOT NULL,
+    "review_status" "text",
+    "reviewed_by" "uuid",
+    "source_key" "text"
 );
 
 
 ALTER TABLE "public"."kb_articles" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."knowledge_candidate_runs" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "version_id" "uuid" NOT NULL,
+    "similarity_threshold" double precision NOT NULL,
+    "candidate_limit" integer NOT NULL,
+    "eligible_tickets" integer NOT NULL,
+    "selected_tickets" integer NOT NULL,
+    "limit_reached" boolean NOT NULL,
+    "pending_without_embedding" integer NOT NULL,
+    "missing_knowledge_embedding" boolean NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."knowledge_candidate_runs" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."knowledge_embeddings" (
+    "version_id" "uuid" NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "embedding" "extensions"."vector"(768) NOT NULL,
+    "source" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."knowledge_embeddings" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."ticket_decision_history" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "message_id" "uuid",
+    "contract" "text" NOT NULL,
+    "contract_version" "text" NOT NULL,
+    "case_revision" bigint NOT NULL,
+    "knowledge_version_id" "uuid",
+    "status" "text" NOT NULL,
+    "result" "jsonb" NOT NULL,
+    "actor_user_id" "uuid",
+    "idempotency_key" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."ticket_decision_history" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."ticket_state_history" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "account_id" "uuid" NOT NULL,
+    "ticket_id" "uuid" NOT NULL,
+    "seq" bigint NOT NULL,
+    "from_state" "text",
+    "to_state" "text" NOT NULL,
+    "actor_type" "text" NOT NULL,
+    "actor_user_id" "uuid",
+    "actor_ref" "text",
+    "trigger" "text" NOT NULL,
+    "reason" "text",
+    "occurred_at" timestamp with time zone NOT NULL,
+    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "metadata" "jsonb",
+    "idempotency_key" "text",
+    CONSTRAINT "ticket_state_history_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
+    CONSTRAINT "ticket_state_history_from_state_check" CHECK ((("from_state" IS NULL) OR ("from_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))),
+    CONSTRAINT "ticket_state_history_to_state_check" CHECK (("to_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"]))),
+    CONSTRAINT "ticket_state_history_trigger_check" CHECK (("trigger" = ANY (ARRAY['ticket_created'::"text", 'manual_status_change'::"text", 'agent_reply'::"text", 'agent_reply_resolve'::"text", 'customer_reply'::"text", 'escalate_action'::"text", 'sla_escalation'::"text", 'external_domain_closure'::"text"])))
+);
+
+
+ALTER TABLE "public"."ticket_state_history" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."ticket_state_history" IS 'Append-only trail of ticket state transitions. account_id is denormalised on purpose so tenant scoping and metrics need no join back to tickets.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."tickets" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "originating_user_id" "uuid",
+    "gmail_message_id" "text",
+    "gmail_thread_id" "text",
+    "subject" "text" NOT NULL,
+    "from_email" "text",
+    "from_name" "text",
+    "to_email" "text",
+    "cc_emails" "text"[],
+    "received_at" timestamp with time zone,
+    "body_plain" "text",
+    "body_html" "text",
+    "snippet" "text",
+    "ticket_type" "text",
+    "priority" "text",
+    "category" "text",
+    "sentiment" "text",
+    "status" "text" DEFAULT 'open'::"text",
+    "assigned_to" "uuid",
+    "resolved_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "ticket_number" bigint NOT NULL,
+    "conversation_id" "uuid",
+    "parent_ticket_id" "uuid",
+    "merged_into_ticket_id" "uuid",
+    "channel" "text" DEFAULT 'email'::"text" NOT NULL,
+    "first_response_at" timestamp with time zone,
+    "sla_due_at" timestamp with time zone,
+    "sla_breached" boolean DEFAULT false NOT NULL,
+    "client_id" "uuid",
+    "ai_reasoning" "text",
+    "classified_at" timestamp with time zone,
+    "classification_confidence" numeric(3,2),
+    "classification_tier" integer,
+    "priority_score" numeric(4,3),
+    "emotion" "text",
+    "emotion_confidence" numeric(3,2),
+    "score_computed_at" timestamp with time zone,
+    "group_id" "uuid",
+    "resolution_summary" "text",
+    "last_response_at" timestamp with time zone,
+    "embedding" "extensions"."vector"(768),
+    "embedding_updated_at" timestamp with time zone,
+    "archived_at" timestamp with time zone,
+    "auto_replied_out_of_hours" boolean DEFAULT false NOT NULL,
+    "auto_replied_at" timestamp with time zone,
+    "account_id" "uuid" NOT NULL,
+    "short_id" "text" GENERATED ALWAYS AS ("substring"(("id")::"text", 1, 8)) STORED,
+    "model_verdict" "jsonb",
+    "derivation_version" "text",
+    "prompt_version" "text",
+    "abstain" boolean DEFAULT false NOT NULL,
+    "first_viewed_at" timestamp with time zone,
+    "human_modified_at" timestamp with time zone,
+    "case_revision" bigint DEFAULT 0 NOT NULL,
+    "knowledge_context" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    CONSTRAINT "chk_category" CHECK ((("category" IS NULL) OR ("category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
+    CONSTRAINT "chk_emotion" CHECK ((("emotion" IS NULL) OR ("emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
+    CONSTRAINT "chk_priority" CHECK ((("priority" IS NULL) OR ("priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
+    CONSTRAINT "chk_priority_score" CHECK ((("priority_score" IS NULL) OR (("priority_score" >= 0.000) AND ("priority_score" <= 1.000)))),
+    CONSTRAINT "chk_sentiment" CHECK ((("sentiment" IS NULL) OR ("sentiment" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
+    CONSTRAINT "chk_ticket_type" CHECK ((("ticket_type" IS NULL) OR ("ticket_type" = ANY (ARRAY['support'::"text", 'prospect'::"text", 'spam'::"text", 'internal'::"text", 'other'::"text"])))),
+    CONSTRAINT "tickets_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))
+);
+
+
+ALTER TABLE "public"."tickets" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."tickets"."short_id" IS 'First 8 hex chars of ticket UUID used as stable token [KAIRO-<shortid>] in outbound email subject/footer for broken-thread re-association (KAI-115)';
+
+
+
+COMMENT ON COLUMN "public"."tickets"."model_verdict" IS 'What the model answered for the current classification — the two axes and the other fields, before the derivation table — plus the ensemble''s second answer when one ran.';
+
+
+
+COMMENT ON COLUMN "public"."tickets"."derivation_version" IS 'DERIVATION_VERSION of the table that turned provenance and the axes into ticket_type.';
+
+
+
+COMMENT ON COLUMN "public"."tickets"."prompt_version" IS 'Rubric version the current classification was made with.';
+
+
+
+COMMENT ON COLUMN "public"."tickets"."abstain" IS 'The classification ensemble disagreed on the type. Such a ticket is never auto-approved.';
+
+
+
+CREATE OR REPLACE VIEW "public"."knowledge_enrichment_coverage" WITH ("security_invoker"='true') AS
+ SELECT "account_id",
+    "count"(*) AS "total_tickets",
+    "count"(*) FILTER (WHERE ("classification_tier" = 1)) AS "initial_tickets",
+    "count"(*) FILTER (WHERE (EXISTS ( SELECT 1
+           FROM ("public"."decision_work_items" "w"
+             JOIN "public"."current_knowledge" "v" ON (("v"."id" = "w"."knowledge_version_id")))
+          WHERE (("w"."ticket_id" = "t"."id") AND ("w"."contract" = 'knowledge_impact'::"text"))))) AS "candidate_tickets",
+    "count"(*) FILTER (WHERE (EXISTS ( SELECT 1
+           FROM ("public"."ticket_decision_history" "h"
+             JOIN "public"."current_knowledge" "v" ON (("v"."id" = "h"."knowledge_version_id")))
+          WHERE (("h"."ticket_id" = "t"."id") AND ("h"."case_revision" = "t"."case_revision") AND ("h"."contract" = 'knowledge_impact'::"text"))))) AS "evaluated_current_tickets",
+    "count"(*) FILTER (WHERE (EXISTS ( SELECT 1
+           FROM ("jsonb_each"("t"."knowledge_context") "ref"("key", "value")
+             JOIN "public"."current_knowledge" "v" ON ((("v"."id")::"text" = ("ref"."value" ->> 'versionId'::"text"))))))) AS "using_current_knowledge",
+    "count"(*) FILTER (WHERE (("classification_tier" = 1) AND (EXISTS ( SELECT 1
+           FROM "public"."ticket_decision_history" "h"
+          WHERE (("h"."ticket_id" = "t"."id") AND ("h"."contract" = 'knowledge_impact'::"text")))))) AS "evaluated_initial_tickets",
+    "count"(*) FILTER (WHERE ((EXISTS ( SELECT 1
+           FROM "public"."ticket_decision_history" "h"
+          WHERE (("h"."ticket_id" = "t"."id") AND ("h"."status" = ANY (ARRAY['approved'::"text", 'enriched'::"text"]))))) AND (EXISTS ( SELECT 1
+           FROM "public"."ticket_state_history" "h"
+          WHERE (("h"."ticket_id" = "t"."id") AND ("h"."to_state" = 'resolved'::"text") AND ("h"."actor_type" = 'human'::"text")))))) AS "resolved_with_contributions",
+    "count"(*) FILTER (WHERE (("embedding" IS NULL) AND ("merged_into_ticket_id" IS NULL) AND (COALESCE("status", 'open'::"text") <> ALL (ARRAY['resolved'::"text", 'ai_resolved'::"text", 'closed'::"text"])))) AS "pending_without_embedding",
+    ( SELECT "count"(*) AS "count"
+           FROM "public"."knowledge_candidate_runs" "r"
+          WHERE (("r"."account_id" = "t"."account_id") AND "r"."limit_reached")) AS "selections_limit_reached"
+   FROM "public"."tickets" "t"
+  GROUP BY "account_id";
+
+
+ALTER VIEW "public"."knowledge_enrichment_coverage" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."knowledge_versions" ALTER COLUMN "revision" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."knowledge_versions_revision_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."llm_calls" (
@@ -1509,11 +2542,13 @@ CREATE TABLE IF NOT EXISTS "public"."operational_learning" (
     "reviewed_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "evidence" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "source_key" "text",
     CONSTRAINT "chk_operational_learning_confidence" CHECK ((("confidence" IS NULL) OR (("confidence" >= (0)::double precision) AND ("confidence" <= (1)::double precision)))),
     CONSTRAINT "chk_operational_learning_origin" CHECK (("origin" = ANY (ARRAY['human_correction'::"text", 'system_derived'::"text"]))),
     CONSTRAINT "chk_operational_learning_source_count" CHECK (("source_count" >= 0)),
     CONSTRAINT "chk_operational_learning_status" CHECK (("status" = ANY (ARRAY['approved'::"text", 'pending_review'::"text", 'rejected'::"text"]))),
-    CONSTRAINT "chk_operational_learning_type" CHECK (("learning_type" = ANY (ARRAY['resolution'::"text", 'diagnostic_pattern'::"text", 'routing_rule'::"text", 'policy'::"text", 'exception'::"text", 'evaluation_example'::"text"])))
+    CONSTRAINT "chk_operational_learning_type" CHECK (("learning_type" = ANY (ARRAY['business_fact'::"text", 'resolution'::"text", 'diagnostic_pattern'::"text", 'routing_rule'::"text", 'policy'::"text", 'exception'::"text", 'evaluation_example'::"text"])))
 );
 
 
@@ -1592,6 +2627,25 @@ ALTER TABLE "public"."response_templates" OWNER TO "postgres";
 
 COMMENT ON COLUMN "public"."response_templates"."content_html" IS 'HTML version of template content (optional; derived from content if null) (KAI-115)';
 
+
+
+CREATE TABLE IF NOT EXISTS "public"."semantic_indexes" (
+    "account_id" "uuid" NOT NULL,
+    "source_kind" "text" NOT NULL,
+    "source_id" "uuid" NOT NULL,
+    "revision" "text" NOT NULL,
+    "preparation" "text" NOT NULL,
+    "provider" "text" NOT NULL,
+    "model" "text" NOT NULL,
+    "dimensions" integer NOT NULL,
+    "embedding" "extensions"."vector"(768) NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "semantic_indexes_dimensions_check" CHECK (("dimensions" = 768)),
+    CONSTRAINT "semantic_indexes_source_kind_check" CHECK (("source_kind" = ANY (ARRAY['ticket'::"text", 'kb_article'::"text", 'knowledge_version'::"text"])))
+);
+
+
+ALTER TABLE "public"."semantic_indexes" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."support_channels" (
@@ -1787,36 +2841,6 @@ ALTER TABLE "public"."ticket_notes" OWNER TO "postgres";
 
 
 COMMENT ON TABLE "public"."ticket_notes" IS 'Internal notes on a ticket, visible only to agents. Content, not an event trail: UPDATE/DELETE stay open for the author. account_id is denormalised on purpose so tenant scoping needs no join back to tickets.';
-
-
-
-CREATE TABLE IF NOT EXISTS "public"."ticket_state_history" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "account_id" "uuid" NOT NULL,
-    "ticket_id" "uuid" NOT NULL,
-    "seq" bigint NOT NULL,
-    "from_state" "text",
-    "to_state" "text" NOT NULL,
-    "actor_type" "text" NOT NULL,
-    "actor_user_id" "uuid",
-    "actor_ref" "text",
-    "trigger" "text" NOT NULL,
-    "reason" "text",
-    "occurred_at" timestamp with time zone NOT NULL,
-    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "metadata" "jsonb",
-    "idempotency_key" "text",
-    CONSTRAINT "ticket_state_history_actor_type_check" CHECK (("actor_type" = ANY (ARRAY['human'::"text", 'ai'::"text", 'customer'::"text", 'system'::"text"]))),
-    CONSTRAINT "ticket_state_history_from_state_check" CHECK ((("from_state" IS NULL) OR ("from_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))),
-    CONSTRAINT "ticket_state_history_to_state_check" CHECK (("to_state" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"]))),
-    CONSTRAINT "ticket_state_history_trigger_check" CHECK (("trigger" = ANY (ARRAY['ticket_created'::"text", 'manual_status_change'::"text", 'agent_reply'::"text", 'agent_reply_resolve'::"text", 'customer_reply'::"text", 'escalate_action'::"text", 'sla_escalation'::"text", 'external_domain_closure'::"text"])))
-);
-
-
-ALTER TABLE "public"."ticket_state_history" OWNER TO "postgres";
-
-
-COMMENT ON TABLE "public"."ticket_state_history" IS 'Append-only trail of ticket state transitions. account_id is denormalised on purpose so tenant scoping and metrics need no join back to tickets.';
 
 
 
@@ -2086,93 +3110,6 @@ COMMENT ON COLUMN "public"."ticket_type_auto_approval"."min_precision" IS 'Preci
 
 
 
-CREATE TABLE IF NOT EXISTS "public"."tickets" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "originating_user_id" "uuid",
-    "gmail_message_id" "text",
-    "gmail_thread_id" "text",
-    "subject" "text" NOT NULL,
-    "from_email" "text",
-    "from_name" "text",
-    "to_email" "text",
-    "cc_emails" "text"[],
-    "received_at" timestamp with time zone,
-    "body_plain" "text",
-    "body_html" "text",
-    "snippet" "text",
-    "ticket_type" "text",
-    "priority" "text",
-    "category" "text",
-    "sentiment" "text",
-    "status" "text" DEFAULT 'open'::"text",
-    "assigned_to" "uuid",
-    "resolved_at" timestamp with time zone,
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    "ticket_number" bigint NOT NULL,
-    "conversation_id" "uuid",
-    "parent_ticket_id" "uuid",
-    "merged_into_ticket_id" "uuid",
-    "channel" "text" DEFAULT 'email'::"text" NOT NULL,
-    "first_response_at" timestamp with time zone,
-    "sla_due_at" timestamp with time zone,
-    "sla_breached" boolean DEFAULT false NOT NULL,
-    "client_id" "uuid",
-    "ai_reasoning" "text",
-    "classified_at" timestamp with time zone,
-    "classification_confidence" numeric(3,2),
-    "classification_tier" integer,
-    "priority_score" numeric(4,3),
-    "emotion" "text",
-    "emotion_confidence" numeric(3,2),
-    "score_computed_at" timestamp with time zone,
-    "group_id" "uuid",
-    "resolution_summary" "text",
-    "last_response_at" timestamp with time zone,
-    "embedding" "extensions"."vector"(768),
-    "embedding_updated_at" timestamp with time zone,
-    "archived_at" timestamp with time zone,
-    "auto_replied_out_of_hours" boolean DEFAULT false NOT NULL,
-    "auto_replied_at" timestamp with time zone,
-    "account_id" "uuid" NOT NULL,
-    "short_id" "text" GENERATED ALWAYS AS ("substring"(("id")::"text", 1, 8)) STORED,
-    "model_verdict" "jsonb",
-    "derivation_version" "text",
-    "prompt_version" "text",
-    "abstain" boolean DEFAULT false NOT NULL,
-    CONSTRAINT "chk_category" CHECK ((("category" IS NULL) OR ("category" = ANY (ARRAY['technical'::"text", 'billing'::"text", 'account'::"text", 'general'::"text", 'not_applicable'::"text"])))),
-    CONSTRAINT "chk_emotion" CHECK ((("emotion" IS NULL) OR ("emotion" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
-    CONSTRAINT "chk_priority" CHECK ((("priority" IS NULL) OR ("priority" = ANY (ARRAY['P1'::"text", 'P2'::"text", 'P3'::"text"])))),
-    CONSTRAINT "chk_priority_score" CHECK ((("priority_score" IS NULL) OR (("priority_score" >= 0.000) AND ("priority_score" <= 1.000)))),
-    CONSTRAINT "chk_sentiment" CHECK ((("sentiment" IS NULL) OR ("sentiment" = ANY (ARRAY['aggressive'::"text", 'frustrated'::"text", 'neutral'::"text", 'positive'::"text"])))),
-    CONSTRAINT "chk_ticket_type" CHECK ((("ticket_type" IS NULL) OR ("ticket_type" = ANY (ARRAY['support'::"text", 'prospect'::"text", 'spam'::"text", 'internal'::"text", 'other'::"text"])))),
-    CONSTRAINT "tickets_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))
-);
-
-
-ALTER TABLE "public"."tickets" OWNER TO "postgres";
-
-
-COMMENT ON COLUMN "public"."tickets"."short_id" IS 'First 8 hex chars of ticket UUID used as stable token [KAIRO-<shortid>] in outbound email subject/footer for broken-thread re-association (KAI-115)';
-
-
-
-COMMENT ON COLUMN "public"."tickets"."model_verdict" IS 'What the model answered for the current classification — the two axes and the other fields, before the derivation table — plus the ensemble''s second answer when one ran.';
-
-
-
-COMMENT ON COLUMN "public"."tickets"."derivation_version" IS 'DERIVATION_VERSION of the table that turned provenance and the axes into ticket_type.';
-
-
-
-COMMENT ON COLUMN "public"."tickets"."prompt_version" IS 'Rubric version the current classification was made with.';
-
-
-
-COMMENT ON COLUMN "public"."tickets"."abstain" IS 'The classification ensemble disagreed on the type. Such a ticket is never auto-approved.';
-
-
-
 ALTER TABLE "public"."tickets" ALTER COLUMN "ticket_number" ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME "public"."tickets_ticket_number_seq"
     START WITH 1
@@ -2207,6 +3144,30 @@ ALTER TABLE "public"."worker_runs" OWNER TO "postgres";
 
 COMMENT ON TABLE "public"."worker_runs" IS 'Observabilidad genérica de runs de workers Inngest. Una fila por ejecución. Worker-agnóstica. KAI-225.';
 
+
+
+CREATE OR REPLACE VIEW "public"."workflow_metrics" WITH ("security_invoker"='true') AS
+ SELECT "h"."account_id",
+    "h"."contract",
+    "count"(*) AS "evaluations",
+    "count"(DISTINCT "h"."ticket_id") AS "tickets_evaluated",
+    "count"(*) FILTER (WHERE ("h"."status" = 'pending_knowledge'::"text")) AS "pending_knowledge",
+    "count"(*) FILTER (WHERE ("h"."status" = 'evaluated_without_contribution'::"text")) AS "without_contribution",
+    "count"(*) FILTER (WHERE ("h"."status" = 'enriched'::"text")) AS "applied",
+    "count"(*) FILTER (WHERE ("h"."status" = 'approved'::"text")) AS "accepted",
+    "count"(*) FILTER (WHERE ("h"."status" = 'rejected'::"text")) AS "rejected",
+    "count"(*) FILTER (WHERE ("h"."status" = 'pending_human_review'::"text")) AS "proposed",
+    "count"(*) FILTER (WHERE (("h"."knowledge_version_id" IS NOT NULL) AND (NOT (EXISTS ( SELECT 1
+           FROM "public"."current_knowledge" "k"
+          WHERE ("k"."id" = "h"."knowledge_version_id")))))) AS "superseded_evaluations",
+    "sum"(("c"."prompt_tokens" + "c"."completion_tokens")) FILTER (WHERE ("h"."status" = 'evaluated_without_contribution'::"text")) AS "no_contribution_tokens",
+    "sum"("c"."latency_ms") FILTER (WHERE ("h"."status" = 'evaluated_without_contribution'::"text")) AS "no_contribution_latency_ms"
+   FROM ("public"."ticket_decision_history" "h"
+     LEFT JOIN "public"."llm_calls" "c" ON (((("c"."id")::"text" = ("h"."result" ->> 'callId'::"text")) AND ("c"."account_id" = "h"."account_id"))))
+  GROUP BY "h"."account_id", "h"."contract";
+
+
+ALTER VIEW "public"."workflow_metrics" OWNER TO "postgres";
 
 
 ALTER TABLE ONLY "public"."account_invitations"
@@ -2299,6 +3260,26 @@ ALTER TABLE ONLY "public"."csat_events"
 
 
 
+ALTER TABLE ONLY "public"."decision_work_breaker"
+    ADD CONSTRAINT "decision_work_breaker_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."decision_work_items"
+    ADD CONSTRAINT "decision_work_items_account_id_dedupe_key_key" UNIQUE ("account_id", "dedupe_key");
+
+
+
+ALTER TABLE ONLY "public"."decision_work_items"
+    ADD CONSTRAINT "decision_work_items_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."decision_work_outcomes"
+    ADD CONSTRAINT "decision_work_outcomes_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."draft_contact_audit_log"
     ADD CONSTRAINT "draft_contact_audit_log_pkey" PRIMARY KEY ("id");
 
@@ -2321,6 +3302,21 @@ ALTER TABLE ONLY "public"."escalations"
 
 ALTER TABLE ONLY "public"."kb_articles"
     ADD CONSTRAINT "kb_articles_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."knowledge_candidate_runs"
+    ADD CONSTRAINT "knowledge_candidate_runs_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."knowledge_embeddings"
+    ADD CONSTRAINT "knowledge_embeddings_pkey" PRIMARY KEY ("version_id");
+
+
+
+ALTER TABLE ONLY "public"."knowledge_versions"
+    ADD CONSTRAINT "knowledge_versions_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2384,6 +3380,11 @@ ALTER TABLE ONLY "public"."response_templates"
 
 
 
+ALTER TABLE ONLY "public"."semantic_indexes"
+    ADD CONSTRAINT "semantic_indexes_pkey" PRIMARY KEY ("account_id", "source_kind", "source_id");
+
+
+
 ALTER TABLE ONLY "public"."support_channels"
     ADD CONSTRAINT "support_channels_account_email_unique" UNIQUE ("account_id", "email_address");
 
@@ -2441,6 +3442,16 @@ ALTER TABLE ONLY "public"."ticket_classification_history"
 
 ALTER TABLE ONLY "public"."ticket_classification_history"
     ADD CONSTRAINT "ticket_classification_history_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_decision_history"
+    ADD CONSTRAINT "ticket_decision_history_account_id_idempotency_key_key" UNIQUE ("account_id", "idempotency_key");
+
+
+
+ALTER TABLE ONLY "public"."ticket_decision_history"
+    ADD CONSTRAINT "ticket_decision_history_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2541,6 +3552,14 @@ ALTER TABLE ONLY "public"."tickets"
 
 ALTER TABLE ONLY "public"."worker_runs"
     ADD CONSTRAINT "worker_runs_pkey" PRIMARY KEY ("id");
+
+
+
+CREATE INDEX "decision_work_outcomes_recent" ON "public"."decision_work_outcomes" USING "btree" ("recorded_at");
+
+
+
+CREATE INDEX "decision_work_pending" ON "public"."decision_work_items" USING "btree" ("status", "available_at");
 
 
 
@@ -2940,6 +3959,34 @@ CREATE INDEX "idx_worker_runs_status_running" ON "public"."worker_runs" USING "b
 
 
 
+CREATE UNIQUE INDEX "kb_articles_source_key" ON "public"."kb_articles" USING "btree" ("account_id", "source_key");
+
+
+
+CREATE INDEX "knowledge_candidate_runs_account" ON "public"."knowledge_candidate_runs" USING "btree" ("account_id", "created_at" DESC);
+
+
+
+CREATE INDEX "knowledge_embeddings_vector" ON "public"."knowledge_embeddings" USING "hnsw" ("embedding" "extensions"."vector_cosine_ops") WITH ("m"='16', "ef_construction"='64');
+
+
+
+CREATE INDEX "knowledge_versions_source" ON "public"."knowledge_versions" USING "btree" ("account_id", "source_kind", "source_id", "revision" DESC);
+
+
+
+CREATE UNIQUE INDEX "operational_learning_source_key" ON "public"."operational_learning" USING "btree" ("account_id", "source_key");
+
+
+
+CREATE INDEX "semantic_indexes_vectors" ON "public"."semantic_indexes" USING "hnsw" ("embedding" "extensions"."vector_cosine_ops");
+
+
+
+CREATE INDEX "ticket_decision_history_ticket" ON "public"."ticket_decision_history" USING "btree" ("account_id", "ticket_id", "created_at" DESC);
+
+
+
 CREATE INDEX "tickets_account_short_id_idx" ON "public"."tickets" USING "btree" ("account_id", "short_id");
 
 
@@ -2949,6 +3996,26 @@ CREATE INDEX "tickets_group_id_idx" ON "public"."tickets" USING "btree" ("group_
 
 
 CREATE OR REPLACE TRIGGER "guard_tickets_status_change" BEFORE UPDATE ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."guard_tickets_status_change"();
+
+
+
+CREATE OR REPLACE TRIGGER "kb_version" AFTER INSERT OR DELETE OR UPDATE ON "public"."kb_articles" FOR EACH ROW EXECUTE FUNCTION "public"."record_knowledge_version"();
+
+
+
+CREATE OR REPLACE TRIGGER "knowledge_versions_immutable" BEFORE DELETE OR UPDATE ON "public"."knowledge_versions" FOR EACH ROW EXECUTE FUNCTION "public"."reject_decision_history_mutation"();
+
+
+
+CREATE OR REPLACE TRIGGER "knowledge_versions_no_truncate" BEFORE TRUNCATE ON "public"."knowledge_versions" FOR EACH STATEMENT EXECUTE FUNCTION "public"."reject_decision_history_mutation"();
+
+
+
+CREATE OR REPLACE TRIGGER "learning_version" AFTER INSERT OR DELETE OR UPDATE ON "public"."operational_learning" FOR EACH ROW EXECUTE FUNCTION "public"."record_knowledge_version"();
+
+
+
+CREATE OR REPLACE TRIGGER "message_decision_enqueue" AFTER INSERT ON "public"."ticket_messages" FOR EACH ROW EXECUTE FUNCTION "public"."enqueue_message_decision"();
 
 
 
@@ -2992,11 +4059,31 @@ CREATE OR REPLACE TRIGGER "on_tickets_updated" BEFORE UPDATE ON "public"."ticket
 
 
 
+CREATE OR REPLACE TRIGGER "semantic_ticket_changed" AFTER INSERT OR UPDATE OF "subject", "body_plain", "snippet" ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."queue_semantic_ticket"();
+
+
+
 CREATE OR REPLACE TRIGGER "ticket_activity_log_append_only" BEFORE DELETE OR UPDATE ON "public"."ticket_activity_log" FOR EACH ROW EXECUTE FUNCTION "public"."reject_ticket_activity_log_mutation"();
 
 
 
+CREATE OR REPLACE TRIGGER "ticket_case_revision" BEFORE UPDATE ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."advance_case_revision"();
+
+
+
 CREATE OR REPLACE TRIGGER "ticket_classification_history_append_only" BEFORE DELETE OR UPDATE ON "public"."ticket_classification_history" FOR EACH ROW EXECUTE FUNCTION "public"."reject_ticket_classification_history_mutation"();
+
+
+
+CREATE OR REPLACE TRIGGER "ticket_decision_capture" AFTER INSERT OR UPDATE ON "public"."tickets" FOR EACH ROW EXECUTE FUNCTION "public"."capture_ticket_decision"();
+
+
+
+CREATE OR REPLACE TRIGGER "ticket_decision_history_immutable" BEFORE DELETE OR UPDATE ON "public"."ticket_decision_history" FOR EACH ROW EXECUTE FUNCTION "public"."reject_decision_history_mutation"();
+
+
+
+CREATE OR REPLACE TRIGGER "ticket_decisions_no_truncate" BEFORE TRUNCATE ON "public"."ticket_decision_history" FOR EACH STATEMENT EXECUTE FUNCTION "public"."reject_decision_history_mutation"();
 
 
 
@@ -3101,6 +4188,31 @@ ALTER TABLE ONLY "public"."csat_events"
 
 
 
+ALTER TABLE ONLY "public"."decision_work_items"
+    ADD CONSTRAINT "decision_work_items_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id");
+
+
+
+ALTER TABLE ONLY "public"."decision_work_items"
+    ADD CONSTRAINT "decision_work_items_knowledge_version_id_fkey" FOREIGN KEY ("knowledge_version_id") REFERENCES "public"."knowledge_versions"("id");
+
+
+
+ALTER TABLE ONLY "public"."decision_work_items"
+    ADD CONSTRAINT "decision_work_items_message_id_fkey" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id");
+
+
+
+ALTER TABLE ONLY "public"."decision_work_items"
+    ADD CONSTRAINT "decision_work_items_requeued_by_fkey" FOREIGN KEY ("requeued_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."decision_work_items"
+    ADD CONSTRAINT "decision_work_items_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id");
+
+
+
 ALTER TABLE ONLY "public"."draft_contact"
     ADD CONSTRAINT "draft_contact_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
@@ -3148,6 +4260,41 @@ ALTER TABLE ONLY "public"."escalations"
 
 ALTER TABLE ONLY "public"."kb_articles"
     ADD CONSTRAINT "kb_articles_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."kb_articles"
+    ADD CONSTRAINT "kb_articles_reviewed_by_fkey" FOREIGN KEY ("reviewed_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."knowledge_candidate_runs"
+    ADD CONSTRAINT "knowledge_candidate_runs_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."knowledge_candidate_runs"
+    ADD CONSTRAINT "knowledge_candidate_runs_version_id_fkey" FOREIGN KEY ("version_id") REFERENCES "public"."knowledge_versions"("id");
+
+
+
+ALTER TABLE ONLY "public"."knowledge_embeddings"
+    ADD CONSTRAINT "knowledge_embeddings_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."knowledge_embeddings"
+    ADD CONSTRAINT "knowledge_embeddings_version_id_fkey" FOREIGN KEY ("version_id") REFERENCES "public"."knowledge_versions"("id");
+
+
+
+ALTER TABLE ONLY "public"."knowledge_versions"
+    ADD CONSTRAINT "knowledge_versions_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id");
+
+
+
+ALTER TABLE ONLY "public"."knowledge_versions"
+    ADD CONSTRAINT "knowledge_versions_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "auth"."users"("id");
 
 
 
@@ -3226,6 +4373,11 @@ ALTER TABLE ONLY "public"."response_templates"
 
 
 
+ALTER TABLE ONLY "public"."semantic_indexes"
+    ADD CONSTRAINT "semantic_indexes_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."support_channels"
     ADD CONSTRAINT "support_channels_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE CASCADE;
 
@@ -3283,6 +4435,31 @@ ALTER TABLE ONLY "public"."ticket_classification_history"
 
 ALTER TABLE ONLY "public"."ticket_classification_history"
     ADD CONSTRAINT "ticket_classification_history_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ticket_decision_history"
+    ADD CONSTRAINT "ticket_decision_history_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_decision_history"
+    ADD CONSTRAINT "ticket_decision_history_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_decision_history"
+    ADD CONSTRAINT "ticket_decision_history_knowledge_version_id_fkey" FOREIGN KEY ("knowledge_version_id") REFERENCES "public"."knowledge_versions"("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_decision_history"
+    ADD CONSTRAINT "ticket_decision_history_message_id_fkey" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id");
+
+
+
+ALTER TABLE ONLY "public"."ticket_decision_history"
+    ADD CONSTRAINT "ticket_decision_history_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id");
 
 
 
@@ -3579,6 +4756,15 @@ CREATE POLICY "csat_events_access_by_account" ON "public"."csat_events" USING ((
 
 
 
+ALTER TABLE "public"."decision_work_breaker" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."decision_work_items" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."decision_work_outcomes" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."draft_contact" ENABLE ROW LEVEL SECURITY;
 
 
@@ -3621,6 +4807,19 @@ ALTER TABLE "public"."kb_articles" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "kb_articles_access_by_account" ON "public"."kb_articles" USING (("account_id" = "public"."current_account_id"()));
+
+
+
+ALTER TABLE "public"."knowledge_candidate_runs" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."knowledge_embeddings" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."knowledge_versions" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "knowledge_versions_read" ON "public"."knowledge_versions" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -3676,6 +4875,9 @@ ALTER TABLE "public"."response_templates" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "response_templates_access_by_account" ON "public"."response_templates" USING (("account_id" = "public"."current_account_id"()));
 
+
+
+ALTER TABLE "public"."semantic_indexes" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "superadmin_audit_log_manage" ON "public"."admin_audit_log" USING (("auth"."uid"() IN ( SELECT "admin_users"."auth_uid"
@@ -3735,6 +4937,13 @@ CREATE POLICY "ticket_classification_history_insert_by_account" ON "public"."tic
 
 
 CREATE POLICY "ticket_classification_history_select_by_account" ON "public"."ticket_classification_history" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
+
+
+
+ALTER TABLE "public"."ticket_decision_history" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ticket_decision_history_read" ON "public"."ticket_decision_history" FOR SELECT USING (("account_id" = "public"."current_account_id"()));
 
 
 
@@ -3865,6 +5074,12 @@ GRANT ALL ON FUNCTION "public"."account_effective_seat_limit"("p_account_id" "uu
 
 
 
+GRANT ALL ON FUNCTION "public"."advance_case_revision"() TO "anon";
+GRANT ALL ON FUNCTION "public"."advance_case_revision"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."advance_case_revision"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "p_to_state" "text", "p_actor_type" "text", "p_actor_user_id" "uuid", "p_actor_ref" "text", "p_trigger" "text", "p_reason" "text", "p_metadata" "jsonb", "p_idempotency_key" "text") TO "authenticated";
@@ -3875,6 +5090,21 @@ GRANT ALL ON FUNCTION "public"."apply_ticket_transition"("p_ticket_id" "uuid", "
 GRANT ALL ON FUNCTION "public"."bulk_confirm_drafts_by_organization"("p_organization" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."bulk_confirm_drafts_by_organization"("p_organization" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."bulk_confirm_drafts_by_organization"("p_organization" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."capture_ticket_decision"() TO "anon";
+GRANT ALL ON FUNCTION "public"."capture_ticket_decision"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."capture_ticket_decision"() TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."decision_work_items" TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."claim_decision_work"("p_limit" integer, "p_max_attempts" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."claim_decision_work"("p_limit" integer, "p_max_attempts" integer) TO "service_role";
 
 
 
@@ -3896,9 +5126,42 @@ GRANT ALL ON FUNCTION "public"."current_account_id"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."decision_breaker_delay"("p_level" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."decision_breaker_delay"("p_level" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."decision_breaker_delay"("p_level" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."decision_retry_offset"("p_retry" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."decision_retry_offset"("p_retry" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."decision_retry_offset"("p_retry" integer) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."edit_draft_contact"("p_draft_id" "uuid", "p_patch" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."edit_draft_contact"("p_draft_id" "uuid", "p_patch" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."edit_draft_contact"("p_draft_id" "uuid", "p_patch" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."embedding_dimensions"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."embedding_dimensions"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."enqueue_knowledge_candidates"("p_version_id" "uuid", "p_threshold" double precision, "p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."enqueue_knowledge_candidates"("p_version_id" "uuid", "p_threshold" double precision, "p_limit" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."enqueue_message_decision"() TO "anon";
+GRANT ALL ON FUNCTION "public"."enqueue_message_decision"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."enqueue_message_decision"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."enqueue_pending_knowledge"("p_account_id" "uuid", "p_threshold" double precision, "p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."enqueue_pending_knowledge"("p_account_id" "uuid", "p_threshold" double precision, "p_limit" integer) TO "service_role";
 
 
 
@@ -3917,6 +5180,16 @@ GRANT ALL ON FUNCTION "public"."find_relevant_kb"("p_query_embedding" "extension
 GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text", "p_exclude_same_group" boolean) TO "anon";
 GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text", "p_exclude_same_group" boolean) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."find_similar_tickets"("p_ticket_id" "uuid", "p_account_id" "uuid", "p_limit" integer, "p_threshold" double precision, "p_status_filter" "text", "p_exclude_same_group" boolean) TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."knowledge_versions" TO "service_role";
+GRANT SELECT ON TABLE "public"."knowledge_versions" TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."find_workflow_knowledge"("p_account_id" "uuid", "p_query_embedding" "extensions"."vector", "p_ticket_id" "uuid", "p_threshold" double precision, "p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."find_workflow_knowledge"("p_account_id" "uuid", "p_query_embedding" "extensions"."vector", "p_ticket_id" "uuid", "p_threshold" double precision, "p_limit" integer) TO "service_role";
 
 
 
@@ -3986,10 +5259,47 @@ GRANT ALL ON FUNCTION "public"."is_superadmin"() TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."mark_ticket_viewed"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."mark_ticket_viewed"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."provision_account_for_user"("p_user_id" "uuid", "p_account_name" "text", "p_plan_code" "text", "p_seat_limit" integer) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."queue_semantic_ticket"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."queue_semantic_ticket"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."read_semantic_ticket_vectors"("p_account_id" "uuid", "p_ids" "uuid"[], "p_provider" "text", "p_model" "text", "p_dimensions" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."read_semantic_ticket_vectors"("p_account_id" "uuid", "p_ids" "uuid"[], "p_provider" "text", "p_model" "text", "p_dimensions" integer) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."record_decision_outcome"("p_ok" boolean, "p_outage_failure" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."record_decision_outcome"("p_ok" boolean, "p_outage_failure" boolean) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."record_knowledge_version"() TO "anon";
+GRANT ALL ON FUNCTION "public"."record_knowledge_version"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."record_knowledge_version"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."record_ticket_enrichment"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_revision" bigint, "p_version_id" "uuid", "p_result" "jsonb", "p_useful" boolean, "p_key" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."record_ticket_enrichment"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_revision" bigint, "p_version_id" "uuid", "p_result" "jsonb", "p_useful" boolean, "p_key" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."reject_decision_history_mutation"() TO "anon";
+GRANT ALL ON FUNCTION "public"."reject_decision_history_mutation"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reject_decision_history_mutation"() TO "service_role";
 
 
 
@@ -4017,9 +5327,64 @@ GRANT ALL ON FUNCTION "public"."reject_ticket_state_history_mutation"() TO "serv
 
 
 
+REVOKE ALL ON FUNCTION "public"."release_decision_work"("p_id" "uuid", "p_error" "text", "p_retriable" boolean, "p_consume_attempt" boolean, "p_max_attempts" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."release_decision_work"("p_id" "uuid", "p_error" "text", "p_retriable" boolean, "p_consume_attempt" boolean, "p_max_attempts" integer) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."requeue_failed_decision_work"("p_account_id" "uuid", "p_user_id" "uuid", "p_ids" "uuid"[], "p_contract" "text", "p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."requeue_failed_decision_work"("p_account_id" "uuid", "p_user_id" "uuid", "p_ids" "uuid"[], "p_contract" "text", "p_limit" integer) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."retrieve_semantic_sources"("p_account_id" "uuid", "p_kind" "text", "p_purpose" "text", "p_query" "extensions"."vector", "p_provider" "text", "p_model" "text", "p_dimensions" integer, "p_ticket_id" "uuid", "p_threshold" double precision, "p_limit" integer, "p_status_filter" "text", "p_exclude_same_group" boolean, "p_knowledge_kind" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."retrieve_semantic_sources"("p_account_id" "uuid", "p_kind" "text", "p_purpose" "text", "p_query" "extensions"."vector", "p_provider" "text", "p_model" "text", "p_dimensions" integer, "p_ticket_id" "uuid", "p_threshold" double precision, "p_limit" integer, "p_status_filter" "text", "p_exclude_same_group" boolean, "p_knowledge_kind" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."return_decision_work"("p_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."return_decision_work"("p_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."review_ticket_enrichment"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid", "p_decision_id" "uuid", "p_accept" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."review_ticket_enrichment"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid", "p_decision_id" "uuid", "p_accept" boolean) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."review_workflow_knowledge"("p_account_id" "uuid", "p_user_id" "uuid", "p_kind" "text", "p_id" "uuid", "p_version_id" "uuid", "p_decision" "text", "p_title" "text", "p_content" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."review_workflow_knowledge"("p_account_id" "uuid", "p_user_id" "uuid", "p_kind" "text", "p_id" "uuid", "p_version_id" "uuid", "p_decision" "text", "p_title" "text", "p_content" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."save_email_knowledge"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_message_id" "uuid", "p_articles" "jsonb", "p_learnings" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."save_email_knowledge"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_message_id" "uuid", "p_articles" "jsonb", "p_learnings" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."save_reply_decision"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid", "p_revision" bigint, "p_proposal" "jsonb", "p_result" "jsonb", "p_key" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."save_reply_decision"("p_account_id" "uuid", "p_ticket_id" "uuid", "p_user_id" "uuid", "p_revision" bigint, "p_proposal" "jsonb", "p_result" "jsonb", "p_key" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."semantic_revision"("p_source" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."semantic_revision"("p_source" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."semantic_source"("p_account_id" "uuid", "p_kind" "text", "p_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."semantic_source"("p_account_id" "uuid", "p_kind" "text", "p_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."set_default_plan_id_on_accounts"() TO "anon";
 GRANT ALL ON FUNCTION "public"."set_default_plan_id_on_accounts"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."set_default_plan_id_on_accounts"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."store_semantic_index"("p_account_id" "uuid", "p_kind" "text", "p_id" "uuid", "p_revision" "text", "p_preparation" "text", "p_provider" "text", "p_model" "text", "p_dimensions" integer, "p_embedding" "extensions"."vector") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."store_semantic_index"("p_account_id" "uuid", "p_kind" "text", "p_id" "uuid", "p_revision" "text", "p_preparation" "text", "p_provider" "text", "p_model" "text", "p_dimensions" integer, "p_embedding" "extensions"."vector") TO "service_role";
 
 
 
@@ -4107,6 +5472,32 @@ GRANT ALL ON TABLE "public"."csat_events" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."latest_knowledge" TO "anon";
+GRANT ALL ON TABLE "public"."latest_knowledge" TO "authenticated";
+GRANT ALL ON TABLE "public"."latest_knowledge" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."current_knowledge" TO "anon";
+GRANT ALL ON TABLE "public"."current_knowledge" TO "authenticated";
+GRANT ALL ON TABLE "public"."current_knowledge" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."decision_work_breaker" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."decision_work_outcomes" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."decision_work_outcomes_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."decision_work_outcomes_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."decision_work_outcomes_id_seq" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."draft_contact_audit_log" TO "anon";
 GRANT ALL ON TABLE "public"."draft_contact_audit_log" TO "authenticated";
 GRANT ALL ON TABLE "public"."draft_contact_audit_log" TO "service_role";
@@ -4128,6 +5519,41 @@ GRANT ALL ON TABLE "public"."escalations" TO "service_role";
 GRANT ALL ON TABLE "public"."kb_articles" TO "anon";
 GRANT ALL ON TABLE "public"."kb_articles" TO "authenticated";
 GRANT ALL ON TABLE "public"."kb_articles" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."knowledge_candidate_runs" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."knowledge_embeddings" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_decision_history" TO "service_role";
+GRANT SELECT ON TABLE "public"."ticket_decision_history" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "anon";
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "authenticated";
+GRANT ALL ON TABLE "public"."ticket_state_history" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."tickets" TO "anon";
+GRANT ALL ON TABLE "public"."tickets" TO "authenticated";
+GRANT ALL ON TABLE "public"."tickets" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."knowledge_enrichment_coverage" TO "anon";
+GRANT ALL ON TABLE "public"."knowledge_enrichment_coverage" TO "authenticated";
+GRANT ALL ON TABLE "public"."knowledge_enrichment_coverage" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."knowledge_versions_revision_seq" TO "service_role";
 
 
 
@@ -4176,6 +5602,10 @@ GRANT ALL ON TABLE "public"."profiles" TO "service_role";
 GRANT ALL ON TABLE "public"."response_templates" TO "anon";
 GRANT ALL ON TABLE "public"."response_templates" TO "authenticated";
 GRANT ALL ON TABLE "public"."response_templates" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."semantic_indexes" TO "service_role";
 
 
 
@@ -4251,12 +5681,6 @@ GRANT ALL ON TABLE "public"."ticket_notes" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."ticket_state_history" TO "anon";
-GRANT ALL ON TABLE "public"."ticket_state_history" TO "authenticated";
-GRANT ALL ON TABLE "public"."ticket_state_history" TO "service_role";
-
-
-
 GRANT ALL ON TABLE "public"."ticket_lifecycle_timeline" TO "anon";
 GRANT ALL ON TABLE "public"."ticket_lifecycle_timeline" TO "authenticated";
 GRANT ALL ON TABLE "public"."ticket_lifecycle_timeline" TO "service_role";
@@ -4323,12 +5747,6 @@ GRANT ALL ON TABLE "public"."ticket_type_auto_approval" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."tickets" TO "anon";
-GRANT ALL ON TABLE "public"."tickets" TO "authenticated";
-GRANT ALL ON TABLE "public"."tickets" TO "service_role";
-
-
-
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "service_role";
@@ -4338,6 +5756,12 @@ GRANT ALL ON SEQUENCE "public"."tickets_ticket_number_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."worker_runs" TO "anon";
 GRANT ALL ON TABLE "public"."worker_runs" TO "authenticated";
 GRANT ALL ON TABLE "public"."worker_runs" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."workflow_metrics" TO "anon";
+GRANT ALL ON TABLE "public"."workflow_metrics" TO "authenticated";
+GRANT ALL ON TABLE "public"."workflow_metrics" TO "service_role";
 
 
 

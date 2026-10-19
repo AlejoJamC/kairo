@@ -142,6 +142,17 @@ const CONTEXT_WITH_KB: TicketContext = {
 };
 
 describe("suggestReply", () => {
+  it('does not generate or save a draft while a required retrieval source is unavailable', async () => {
+    const { db, proposals, decisions } = fakeDb({ ticket: TICKET });
+    const run = mock(async () => { throw new Error('must not generate'); });
+    const retrieveApproved = mock(async () => []);
+    await expect(suggestReply({ ticketId:TICKET.id, accountId:'acc', userId:'u' }, {
+      supabase:db, run, retrieveApproved,
+      retrieve:async()=>({ ...EMPTY_CONTEXT, degraded:['kb_rpc_failed'] }),
+    })).rejects.toMatchObject({ retriable:true });
+    expect(run).not.toHaveBeenCalled(); expect(retrieveApproved).not.toHaveBeenCalled();
+    expect(proposals).toHaveLength(0); expect(decisions).toHaveLength(0);
+  });
   it("returns null for a ticket outside the account", async () => {
     const { db } = fakeDb({ ticket: null });
     const run = mock(async () => {
