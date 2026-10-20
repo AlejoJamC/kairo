@@ -605,6 +605,16 @@ describe('PermissionList', () => {
   })
 })
 
+describe('StatusBar shortcuts', () => {
+  it('shows combined keys as separate keys and keeps the pinned shortcuts', () => {
+    renderUi(<StatusBar shortcuts={[{ keys: 'J K', label: 'navigate' }]} pinned={[{ keys: '⌘K', label: 'commands' }, { keys: '?', label: 'shortcuts' }]} status="kairo · 3 open" />)
+    expect(screen.getByText('J')).toBeTruthy()
+    expect(screen.getByText('K')).toBeTruthy()
+    expect(screen.getByText('commands')).toBeTruthy()
+    expect(screen.getByText('shortcuts')).toBeTruthy()
+  })
+})
+
 describe('StatusBar and StatusPanel', () => {
   it('shows the engine offline without a pulse', () => {
     renderUi(<StatusBar shortcuts={[{ keys: 'J', label: 'next' }]} status="engine offline" offline />)

@@ -28,5 +28,5 @@ Work email, for example support@acme.com.
 ## Platforms
 
 - **web**: Public web (no session).
-- **desktop**: Not part of the desktop app design.
+- **desktop**: Sign-in window of the desktop app: auth-card desktop variant, with the continue-in-your-browser state for Google and SSO and no link to start free.
 - **mobile**: Designed. Below 720px the page margin is 16px, grids collapse to one column and hide-sm elements are hidden.

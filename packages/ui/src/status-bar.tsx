@@ -8,14 +8,30 @@ import { Box, Text } from './layout'
 type StatusBarShortcut = { keys: string; label: string }
 
 type StatusBarProps = {
+  /** Shortcuts of the current view. They are the first to be cut when space is short. */
   shortcuts: readonly StatusBarShortcut[]
+  /** Shortcuts that are never cut (⌘K commands, ? shortcuts). */
+  pinned?: readonly StatusBarShortcut[]
   /** Engine status text, for example "engine · 12 open". */
   status: string
   /** Engine offline: red dot without pulse and red text. */
   offline?: boolean
 }
 
-function StatusBar({ shortcuts, status, offline }: StatusBarProps) {
+function Shortcut({ shortcut }: { shortcut: StatusBarShortcut }) {
+  return (
+    <Box display="flex" alignItems="center" gap={5} flexShrink={0}>
+      <Box display="flex" alignItems="center" gap={3}>
+        {shortcut.keys.split(' ').map((key) => (
+          <Kbd key={key}>{key}</Kbd>
+        ))}
+      </Box>
+      <Text fontSize={11.5} color={tokens['text.tertiary']} whiteSpace="nowrap">{shortcut.label}</Text>
+    </Box>
+  )
+}
+
+function StatusBar({ shortcuts, pinned = [], status, offline }: StatusBarProps) {
   return (
     <Box
       display="flex"
@@ -29,12 +45,14 @@ function StatusBar({ shortcuts, status, offline }: StatusBarProps) {
       borderTopColor={tokens['border.default']}
       backgroundColor={tokens['surface.sidebar']}
     >
-      <Box display="flex" alignItems="center" gap={14} overflow="hidden">
-        {shortcuts.map((shortcut) => (
-          <Box key={shortcut.keys} display="flex" alignItems="center" gap={5}>
-            <Kbd>{shortcut.keys}</Kbd>
-            <Text fontSize={11.5} color={tokens['text.tertiary']}>{shortcut.label}</Text>
-          </Box>
+      <Box display="flex" alignItems="center" gap={14} minWidth={0} flexGrow={1} flexShrink={1} flexBasis="0%">
+        <Box display="flex" alignItems="center" gap={14} minWidth={0} flexShrink={1} overflowX="hidden" overflowY="hidden">
+          {shortcuts.map((shortcut) => (
+            <Shortcut key={shortcut.keys} shortcut={shortcut} />
+          ))}
+        </Box>
+        {pinned.map((shortcut) => (
+          <Shortcut key={shortcut.keys} shortcut={shortcut} />
         ))}
       </Box>
       <Box display="flex" alignItems="center" gap={6} flexShrink={0}>

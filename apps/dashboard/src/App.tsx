@@ -105,7 +105,7 @@ function AppContent() {
         </Box>
       </Box>
 
-      <AppStatusBar counts={counts} />
+      <AppStatusBar counts={counts} view={activeView} />
     </Box>
   );
 }

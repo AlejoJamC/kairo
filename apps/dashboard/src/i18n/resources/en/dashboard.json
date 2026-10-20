@@ -841,7 +841,13 @@
   },
   "statusBar": {
     "commands": "commands",
-    "open": "kairo · {{count}} open"
+    "open": "kairo · {{count}} open",
+    "navigate": "navigate",
+    "acknowledge": "acknowledge",
+    "resolve": "resolve",
+    "escalate": "escalate",
+    "note": "internal note",
+    "shortcuts": "shortcuts"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",

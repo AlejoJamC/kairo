@@ -13,6 +13,8 @@ First column of the app shell: brand, notifications, search, navigation, languag
 - Navigation: two groups of nav-item with a 2px gap, separated by `.sb-div` (1px `border.default`, 6px side margin). Group 1: Triage, Awaiting customer, Resolved, Escalated, AI Classification, Knowledge. Group 2: Clients, Settings.
 - Footer (6px gap): language select (`.sb-lang`, `size.control`, globe icon + native select, Español / English) and account button (`.nav.sb-box.sb-acct`, 40px): 24px avatar with an 8px presence dot, workspace name 12.5px/500 with ellipsis, up chevron in `text.tertiary`. Opens account-menu.
 - Collapsed (`.sb.collapsed`, `layout.sidebar-collapsed`): labels (`.lbl`) hidden; the header stacks in a column (brand, bell, expand); search and nav items become centered 30px icon buttons with `title`; language becomes an icon button with the globe that opens a 160px popover with Español / English; account shows only the avatar (40px). Width transition 160ms.
+- Collapsed language: the globe always opens the 160px popover with Español / English (`menuitemradio`, the current one `.on`). A click never switches the language of the whole interface without showing the options; the popover shows the active one and holds more languages without changing the piece.
+- Desktop (`.sb.desk`, macOS): at the very top, a 20px `.win-row` with the slot of the system window controls (see window-chrome), which is also a drag area; top padding 14px and the header 14px below that row. The activity popover of the bell opens 80px from the top instead of 46px so it does not cover the controls. Collapsed, the row keeps the slot with a −6px side margin, because the controls (52px) are wider than the 40px content. The bell count is also the counter of dock-badge.
 
 ## States
 
@@ -37,5 +39,5 @@ The agent of Acme Support reaches every queue, the knowledge base, clients and s
 ## Platforms
 
 - **web**: Triage app in the browser. Below `layout.breakpoint` the sidebar goes full width, always expanded, and the collapse button is hidden.
-- **desktop**: Triage desktop app, same component.
+- **desktop**: Triage desktop app. macOS uses the desktop variant; Windows and Linux, with the native frame, use the web layout.
 - **mobile**: Not designed.

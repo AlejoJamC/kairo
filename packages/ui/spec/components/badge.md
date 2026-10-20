@@ -6,7 +6,7 @@ Small status or count marker. The badge family.
 
 ## Variants
 
-- Count (`.badge`): 16px pill, `accent.default`, mono 10px/600. The notification bell uses 15px on `color.bad` (`.bell-count`, see sidebar).
+- Count (`.badge`): 16px pill, `accent.default`, mono 10px/600. The notification bell uses 15px on `color.bad` (`.bell-count`, see sidebar); the same number is the desktop app icon counter (see dock-badge).
 - Team only (`.team`): mono 9.5px/500 uppercase on `notes.background` with a lock icon. As a button (`button.team`, `size.chip`, 10.5px) for "+ NEW NOTE" in note-card and "1 NOTE" in ticket-bar.
 - AI (`.aibadge`): mono 9.5px/500 uppercase on `accent.soft` in `accent.ink` with the spark (DRAFT, NEW).
 - Draft client (`.tag.draft`): "draft" in lowercase, mono 10.5px, `notes.label` on `notes.background` with `notes.border` inset.
