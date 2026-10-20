@@ -1,23 +1,21 @@
 import * as React from "react";
-import { Paperclip, Send, X, Zap, RefreshCw, Lock, AlertTriangle, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
-import { useTriageStore } from "@/stores/triage-store";
-import { apiCall } from "@/lib/api-client";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { replyToTicket, addTicketNote, setTicketStatus } from "@kairo/client-core/endpoints";
 import { isFlagEnabled } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
-import { useAccountMembers, filterMembers, type AccountMember } from "@/hooks/use-account-members";
+import { useAccountMembers, filterMembers, type AccountMember } from "@kairo/client-core/hooks/use-account-members";
 import {
   findActiveMentionQuery,
   insertMentionToken,
   extractMentionUserIds,
   removeMentionToken,
-} from "@/lib/note-mentions";
-import { MentionDropdown } from "./triage/mention-dropdown";
+} from "@kairo/client-core/note-mentions";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar } from "./ui/avatar";
-import { useAuth } from "@/contexts/auth-context";
-import type { ThreadMessage } from "@/hooks/use-ticket-thread";
+import { Box, Button, Composer, Icon, IconButton, MentionChip, MentionMenu, PlainTextarea, Text, type SendOption } from "@kairo/ui";
+import { useAuth } from "@kairo/client-core/auth";
+import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import type { TicketStatus } from "@kairo/types";
 
 // KAI-232 — how many member suggestions the @mention dropdown shows at once.
@@ -45,28 +43,10 @@ type TicketAction = "reconocer" | "resolver";
 
 const ACTION_CONFIG: Record<
   TicketAction,
-  { labelKey: string; defaultLabel: string; status: TicketStatus; style: React.CSSProperties }
+  { labelKey: string; defaultLabel: string; status: TicketStatus; icon: "check" | "resolve"; iconColor: string; keyHint: string }
 > = {
-  reconocer: {
-    labelKey: "replyBar.actionReconocer",
-    defaultLabel: "Acknowledge",
-    status: "in_progress",
-    style: {
-      background: "#EEF2FF",
-      color: "#2B5BFF",
-      border: "1px solid #C7D2FE",
-    },
-  },
-  resolver: {
-    labelKey: "replyBar.actionResolver",
-    defaultLabel: "Resolve",
-    status: "resolved",
-    style: {
-      background: "#ECFDF5",
-      color: "#047857",
-      border: "1px solid #A7F3D0",
-    },
-  },
+  reconocer: { labelKey: "replyBar.actionReconocer", defaultLabel: "Acknowledge", status: "in_progress", icon: "check",   iconColor: "var(--kairo-color-accent)", keyHint: "A" },
+  resolver:  { labelKey: "replyBar.actionResolver",  defaultLabel: "Resolve",     status: "resolved",    icon: "resolve", iconColor: "var(--kairo-color-ok)", keyHint: "R" },
 };
 
 // KAI-191 — statuses in which the Escalate action is offered. Exhaustive
@@ -89,67 +69,6 @@ const ESCALATABLE_STATUSES: TicketStatus[] = (
   .map(([status]) => status);
 
 // ---------------------------------------------------------------------------
-// KAI-232 · design spec C7/C8 — a selected mention, removable.
-// Removing the chip also removes the token from the note body: the chip row is
-// a view of the text, never a second source of truth.
-// ---------------------------------------------------------------------------
-
-function SelectedMentionChip({
-  member,
-  onRemove,
-}: {
-  member: AccountMember;
-  onRemove: (userId: string) => void;
-}) {
-  const { t } = useTranslation("dashboard");
-  const [hovered, setHovered] = React.useState(false);
-  const label = member.name ?? member.email ?? member.user_id;
-
-  return (
-    <span
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      title={member.email ?? undefined}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        padding: "2px 5px 2px 3px",
-        borderRadius: 999,
-        background: hovered ? "#E0E7FF" : "var(--k-mention-bg)",
-        border: `1px solid ${hovered ? "var(--k-accent-border)" : "var(--k-mention-border)"}`,
-        color: "var(--k-accent)",
-        fontSize: 11,
-        fontWeight: 500,
-      }}
-    >
-      <Avatar name={member.name} email={member.email} seed={member.user_id} size={15} />
-      @{label}
-      <button
-        type="button"
-        onClick={() => onRemove(member.user_id)}
-        aria-label={t("mention.removeChip", { name: label, defaultValue: "Remove mention of {{name}}" })}
-        style={{
-          width: 13,
-          height: 13,
-          borderRadius: 999,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          border: "none",
-          padding: 0,
-          cursor: "pointer",
-          background: hovered ? "var(--k-mention-solid)" : "transparent",
-          color: hovered ? "white" : "#9BB0FF",
-        }}
-      >
-        <X style={{ width: 8, height: 8 }} strokeWidth={3} />
-      </button>
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // ReplyBar
 // ---------------------------------------------------------------------------
 
@@ -166,6 +85,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const aiSuggestedReply = useTriageStore((s) => s.aiSuggestedReply);
   const clearSuggestedReply = useTriageStore((s) => s.clearSuggestedReply);
   const updateClassification = useTriageStore((s) => s.updateClassification);
+  const requestPanelTab = useTriageStore((s) => s.requestPanelTab);
 
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
   const currentStatus = ticket?.status ?? "open";
@@ -187,26 +107,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const [sendSuccess, setSendSuccess] = React.useState(false);
   const [showAiBanner, setShowAiBanner] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState<TicketAction | null>(null);
-  const [textareaHeight, setTextareaHeight] = React.useState(80);
-  const dragRef = React.useRef<{ startY: number; startHeight: number } | null>(null);
-  const [sendMenuOpen, setSendMenuOpen] = React.useState(false);
-  const [resolving, setResolving] = React.useState(false);
-  const sendMenuRef = React.useRef<HTMLDivElement>(null);
-
-  // Send split-button menu — click-outside / Escape to close.
-  React.useEffect(() => {
-    if (!sendMenuOpen) return;
-    function onDown(e: MouseEvent) {
-      if (sendMenuRef.current && !sendMenuRef.current.contains(e.target as Node)) setSendMenuOpen(false);
-    }
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setSendMenuOpen(false); }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [sendMenuOpen]);
 
   // ---------------------------------------------------------------------------
   // KAI-232 — @mention autocomplete (note mode only)
@@ -225,7 +125,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     if (composeNoteRequests === 0 || !INTERNAL_NOTES_ENABLED) return;
     setMode("note");
     setShowAiBanner(false);
-    setShowEscalatePanel(false);
     textareaRef.current?.focus();
   }, [composeNoteRequests]);
 
@@ -294,16 +193,21 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   }
 
   // ---------------------------------------------------------------------------
-  // Escalation inline flow (KAI-221)
-  // ---------------------------------------------------------------------------
-  const [showEscalatePanel, setShowEscalatePanel] = React.useState(false);
-  const [escalateReason, setEscalateReason] = React.useState("");
-  const [escalating, setEscalating] = React.useState(false);
-
-  // ---------------------------------------------------------------------------
   // AI banner
   // ---------------------------------------------------------------------------
+  const composerPrefill = useTriageStore((s) => s.composerPrefill);
+  const setComposerPrefill = useTriageStore((s) => s.setComposerPrefill);
   React.useEffect(() => {
+    // The Awaiting customer view opens a ticket with a follow-up already written.
+    if (composerPrefill !== null) {
+      setMode("reply");
+      setDraft(composerPrefill);
+      setShowAiBanner(false);
+      setSendError(null);
+      setSendSuccess(false);
+      setComposerPrefill(null);
+      return;
+    }
     if (!aiSuggestedReply?.trim()) return;
     setDraft(aiSuggestedReply);
     setShowAiBanner(true);
@@ -312,7 +216,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     clearSuggestedReply();
     // AI drafts are always for reply mode
     setMode("reply");
-  }, [aiSuggestedReply, clearSuggestedReply]);
+  }, [aiSuggestedReply, clearSuggestedReply, composerPrefill, setComposerPrefill]);
 
   // Reset draft + error when switching between different tickets.
   // Uses a ref to compare previous vs current so we only reset on actual ticket
@@ -328,8 +232,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       setSendError(null);
       setSendSuccess(false);
       setShowAiBanner(false);
-      setShowEscalatePanel(false);
-      setEscalateReason("");
       setMode("reply");
     }
   }, [selectedTicketId]);
@@ -362,10 +264,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     setSendSuccess(false);
 
     try {
-      const res = await apiCall(`/api/v1/tickets/${selectedTicketId}/reply`, {
-        method: "POST",
-        body: JSON.stringify({ body: draft, intent: resolveAfter ? "resolve" : "reply" }),
-      });
+      const res = await replyToTicket(selectedTicketId, draft, resolveAfter ? "resolve" : "reply");
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -410,10 +309,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     setSendSuccess(false);
 
     try {
-      const res = await apiCall(`/api/v1/tickets/${selectedTicketId}/notes`, {
-        method: "POST",
-        body: JSON.stringify({ body: draft }),
-      });
+      const res = await addTicketNote(selectedTicketId, draft);
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -440,10 +336,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     if (!selectedTicketId) return;
     const ticketId = selectedTicketId;
     try {
-      const res = await apiCall(`/api/v1/tickets/${ticketId}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
+      const res = await setTicketStatus(ticketId, status);
       if (res.ok) {
         // Deselect-after-delay lives in TicketDetail, not here — this
         // component unmounts the instant status goes read-only.
@@ -465,45 +358,10 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     setActionLoading(null);
   }
 
-  // "Resolver" option in the send split-button — same status-only resolve as
-  // the Resolver lifecycle action (patchStatus), just reached from the send
-  // menu instead of the row above the composer. Never sends an email.
-  async function handleResolveOnly() {
-    if (!selectedTicketId || resolving) return;
-    setSendMenuOpen(false);
-    setResolving(true);
-    await patchStatus("resolved");
-    setResolving(false);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Escalation flow (KAI-221: reason dialog → POST /escalate)
-  // ---------------------------------------------------------------------------
-  async function handleEscalateConfirm() {
-    if (!selectedTicketId || escalating) return;
-    setEscalating(true);
-    try {
-      const res = await apiCall(`/api/v1/tickets/${selectedTicketId}/escalate`, {
-        method: "POST",
-        body: JSON.stringify({ reason: escalateReason.trim() || undefined }),
-      });
-      if (res.ok) {
-        const body = await res.json() as { ticket?: { status?: string } };
-        if (body.ticket?.status) updateClassification(selectedTicketId, body.ticket as never);
-      }
-    } catch {
-      // silent — best-effort
-    } finally {
-      setEscalating(false);
-      setShowEscalatePanel(false);
-      setEscalateReason("");
-    }
-  }
-
   // ---------------------------------------------------------------------------
   // Keyboard
   // ---------------------------------------------------------------------------
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+  function handleKeyDown(e: { key: string; preventDefault: () => void }) {
     // KAI-232: while the mention dropdown is open it owns the arrow keys,
     // Enter/Tab (select) and Escape (dismiss) — send shortcuts still work.
     if (mentionOpen) {
@@ -529,35 +387,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         return;
       }
     }
-
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      if (isNote) {
-        handleSendNote();
-      } else {
-        handleSend(false);
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Drag handle
-  // ---------------------------------------------------------------------------
-  function handleDragStart(e: React.MouseEvent) {
-    e.preventDefault();
-    dragRef.current = { startY: e.clientY, startHeight: textareaHeight };
-    function onMove(ev: MouseEvent) {
-      if (!dragRef.current) return;
-      const delta = dragRef.current.startY - ev.clientY;
-      setTextareaHeight(Math.min(300, Math.max(60, dragRef.current.startHeight + delta)));
-    }
-    function onUp() {
-      dragRef.current = null;
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    }
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
   }
 
   // ---------------------------------------------------------------------------
@@ -583,697 +412,186 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     !isNote &&
     ESCALATABLE_STATUSES.includes(currentStatus as (typeof ESCALATABLE_STATUSES)[number]);
 
-  // Accent / left stripe based on mode
-  const modeAccentGradient = isNote
-    ? "linear-gradient(180deg, #F59E0B, #D97706)"
-    : "linear-gradient(180deg, var(--k-accent), var(--k-accent-2))";
-
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+  // A and R from the keyboard (or the command palette) act on the open ticket,
+  // unless the action does not apply to its current status. The subscription
+  // is renewed on every render so it always sees the current status.
+  React.useEffect(
+    () =>
+      useTriageStore.subscribe((state, previous) => {
+        const request = state.ticketActionRequest;
+        if (!request || request === previous.ticketActionRequest) return;
+        const action: TicketAction = request.action === "acknowledge" ? "reconocer" : "resolver";
+        state.clearTicketActionRequest();
+        if (visibleActions.includes(action)) void handleAction(action);
+      }),
+  );
+
+  const sendOptions: SendOption[] = [
+    { id: "send-resolve", label: t("replyBar.sendAndResolve", "Send & Resolve"), shortcut: "⌘⇧↵", disabled: !canSend, onSelect: () => handleSend(true) },
+  ];
+
+  const aiBanner = showAiBanner && !isNote ? (
+    <Box marginBottom={10} borderWidth={1} borderColor="var(--kairo-color-accent-line)" borderRadius={10} overflow="hidden" backgroundColor="var(--k-accent-subtle)" borderStyle="solid">
+      {/* Card header */}
+      <Box display="flex" alignItems="center" justifyContent="space-between" paddingTop={7} paddingHorizontal={10} paddingBottom={6} borderBottomWidth={1} borderBottomColor="var(--kairo-color-accent-line)" borderStyle="solid">
+        <Box display="flex" alignItems="center" gap={8}>
+          <Text fontSize={10} fontWeight={700} paddingVertical={2} paddingHorizontal={7} borderRadius={999} backgroundColor="var(--k-accent)" color="white" letterSpacing={0.5}>
+            ✦ {t("replyBar.aiBadge", "AI DRAFT")}
+          </Text>
+          <Text fontSize={11} color="var(--k-text-tertiary)">
+            {t("replyBar.aiDraftSource", "generated from similar cases + KB")}
+          </Text>
+        </Box>
+        <Box display="flex" alignItems="center" gap={4}>
+          <Button variant="link" size="sm" icon={<Icon name="refresh" size={10} color="var(--kairo-color-accent-ink)" />} onPress={() => { setDraft(""); clearSuggestedReply(); setShowAiBanner(false); }}>
+            {t("replyBar.regenerate", "Regenerate")}
+          </Button>
+          <IconButton label={t("replyBar.dismissSuggestion")} onPress={() => setShowAiBanner(false)}>
+            <Icon name="x" size={13} color="var(--kairo-color-faint)" />
+          </IconButton>
+        </Box>
+      </Box>
+
+      {/* Editable draft text */}
+      <PlainTextarea value={draft} onChange={(e) => {
+          setDraft(e.target.value);
+          if (sendError) setSendError(null);
+          if (sendSuccess) setSendSuccess(false);
+        }} onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void handleSend(false); }
+        }} width="100%" rows={4} resize="none" borderWidth={0} backgroundColor="transparent" paddingVertical={10} paddingHorizontal={12} fontSize={13} lineHeight={20.8} color="var(--k-text-primary)" outlineWidth={0} />
+    </Box>
+  ) : undefined;
+
+  const lifecycleActions = visibleActions.length > 0 || canEscalate ? (
+    <>
+      {visibleActions.map((action) => {
+        const cfg = ACTION_CONFIG[action];
+        const loading = actionLoading === action;
+        return (
+          <Button key={action} keyHint={cfg.keyHint} icon={<Icon name={cfg.icon} size={13} color={cfg.iconColor} />} disabled={!!actionLoading} onPress={() => handleAction(action)}>
+            {loading ? "…" : t(cfg.labelKey, cfg.defaultLabel)}
+          </Button>
+        );
+      })}
+      {canEscalate && (
+        <Button keyHint="E" icon={<Icon name="escalate" size={13} color="var(--kairo-color-mood)" />} onPress={() => requestPanelTab("escalate")}>
+          {t("replyBar.actionEscalar", "Escalate")}
+        </Button>
+      )}
+    </>
+  ) : undefined;
+
+  const clientName = ticket?.from_name ?? ticket?.from_email ?? "";
+  const hint = isNote
+    ? t("replyBar.hintNote")
+    : t("replyBar.hintReply", { to: ticket?.from_email ?? "" });
+
   return (
-    <div
-      style={{
-        position: "relative",
-        borderTop: "1px solid var(--k-border)",
-        background: "white",
-        padding: "0 16px 10px",
-        flexShrink: 0,
+    <Composer
+      mode={isNote ? "note" : "reply"}
+      onModeChange={INTERNAL_NOTES_ENABLED ? (next) => {
+        setMode(next);
+        setSendError(null);
+        setSendSuccess(false);
+        if (next === "note") setShowAiBanner(false);
+      } : undefined}
+      value={draft}
+      onChange={(value, caret) => {
+        setDraft(value);
+        syncMentionQuery(value, caret);
+        if (sendError) setSendError(null);
+        if (sendSuccess) setSendSuccess(false);
       }}
-    >
-      {/* Left accent stripe — changes color per mode */}
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 2,
-          background: modeAccentGradient,
-          transition: "background 0.2s ease",
-        }}
-      />
-
-      {/* Drag handle */}
-      <div
-        onMouseDown={handleDragStart}
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          padding: "6px 0 4px",
-          cursor: "ns-resize",
-          userSelect: "none",
-        }}
-      >
-        <div
-          style={{
-            width: 32,
-            height: 4,
-            borderRadius: 999,
-            background: "var(--k-border)",
-            transition: "background 0.15s ease",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-text-tertiary)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--k-border)"; }}
-        />
-      </div>
-
-      {/* ── DIMENSION 1: Mode selector ─────────────────────────────────── */}
-      {/* KAI-232: the reply/note switch only exists when internal notes are on. */}
-      {INTERNAL_NOTES_ENABLED && (
-      <div
-        style={{
-          display: "flex",
-          gap: 2,
-          marginBottom: 8,
-          background: "var(--k-surface)",
-          borderRadius: 8,
-          padding: 3,
-          border: "1px solid var(--k-border-subtle)",
-          width: "fit-content",
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => { setMode("reply"); setSendError(null); setSendSuccess(false); }}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 11,
-            fontWeight: mode === "reply" ? 600 : 400,
-            padding: "4px 10px",
-            borderRadius: 6,
-            border: "none",
-            background: mode === "reply" ? "white" : "transparent",
-            color: mode === "reply" ? "var(--k-text-primary)" : "var(--k-text-tertiary)",
-            cursor: "pointer",
-            boxShadow: mode === "reply" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-            transition: "all 0.1s ease",
-          }}
-        >
-          <Send style={{ width: 10, height: 10 }} />
-          {t("replyBar.modeReply", "Reply")}
-        </button>
-        <button
-          type="button"
-          onClick={() => { setMode("note"); setShowAiBanner(false); setSendError(null); setSendSuccess(false); setShowEscalatePanel(false); }}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 11,
-            fontWeight: mode === "note" ? 600 : 400,
-            padding: "4px 10px",
-            borderRadius: 6,
-            border: "none",
-            background: mode === "note" ? "#FFFBEB" : "transparent",
-            color: mode === "note" ? "#92400E" : "var(--k-text-tertiary)",
-            cursor: "pointer",
-            boxShadow: mode === "note" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-            transition: "all 0.1s ease",
-          }}
-        >
-          <Lock style={{ width: 10, height: 10 }} />
-          {t("replyBar.modeNote", "Internal note")}
-        </button>
-      </div>
-      )}
-
-      {/* Tool buttons row */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-        {!isNote && (
-          <TemplatePicker onSelect={handleTemplateSelect} previewVars={templatePreviewVars}>
-            <button
-              type="button"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                fontSize: 11,
-                padding: "4px 9px",
-                border: "1px solid var(--k-border)",
-                borderRadius: 999,
-                color: "var(--k-text-secondary)",
-                background: "white",
-                cursor: "pointer",
-              }}
-            >
-              <Zap style={{ width: 11, height: 11 }} />
-              {t("ticketDetail.quickReply")}
-            </button>
-          </TemplatePicker>
-        )}
-        {isNote && <TeamOnlyChip />}
-        {/* KAI-232 spec C7: who this note will notify. The body stores opaque
-            tokens, so these chips are the only readable confirmation. */}
-        {isNote && draftMentions.map((member) => (
-          <SelectedMentionChip key={member.user_id} member={member} onRemove={removeMention} />
-        ))}
-        {isNote && draftMentions.length > 0 && (
-          <span style={{ fontSize: 10.5, color: "var(--k-note-label)", opacity: 0.75, marginLeft: 2 }}>
-            {t("mention.willNotify", { count: draftMentions.length, defaultValue: "will be notified" })}
-          </span>
-        )}
-        <button
-          type="button"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 11,
-            padding: "4px 9px",
-            border: "1px solid var(--k-border)",
-            borderRadius: 999,
-            color: "var(--k-text-secondary)",
-            background: "white",
-            cursor: "pointer",
-          }}
-        >
-          <Paperclip style={{ width: 11, height: 11 }} />
-          {t("ticketDetail.attach")}
-        </button>
-      </div>
-
-      {/* ── DIMENSION 2: Composer ──────────────────────────────────────── */}
-
-      {/* BORRADOR IA card (reply mode only) */}
-      {showAiBanner && !isNote ? (
-        <div
-          style={{
-            marginBottom: 10,
-            border: "1px solid #C7D2FE",
-            borderRadius: 10,
-            overflow: "hidden",
-            background: "var(--k-accent-subtle)",
-          }}
-        >
-          {/* Card header */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "7px 10px 6px",
-              borderBottom: "1px solid #DBE3FF",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  padding: "2px 7px",
-                  borderRadius: 999,
-                  background: "var(--k-accent)",
-                  color: "white",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                ✦ {t("replyBar.aiBadge", "AI DRAFT")}
-              </span>
-              <span style={{ fontSize: 11, color: "var(--k-text-tertiary)" }}>
-                {t("replyBar.aiDraftSource", "generated from similar cases + KB")}
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setDraft("");
-                  clearSuggestedReply();
-                  setShowAiBanner(false);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 3,
-                  fontSize: 11,
-                  color: "var(--k-accent)",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "2px 4px",
-                  borderRadius: 4,
-                }}
-              >
-                <RefreshCw style={{ width: 10, height: 10 }} />
-                {t("replyBar.regenerate", "Regenerate")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAiBanner(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 2,
-                  color: "var(--k-text-tertiary)",
-                  display: "flex",
-                  alignItems: "center",
-                  borderRadius: 3,
-                }}
-                aria-label={t("replyBar.dismissSuggestion")}
-              >
-                <X style={{ width: 13, height: 13 }} />
-              </button>
-            </div>
-          </div>
-
-          {/* Editable draft text */}
-          <textarea
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              if (sendError) setSendError(null);
-              if (sendSuccess) setSendSuccess(false);
-            }}
-            onKeyDown={handleKeyDown}
-            style={{
-              width: "100%",
-              height: textareaHeight,
-              resize: "none",
-              border: "none",
-              background: "transparent",
-              padding: "10px 12px",
-              fontSize: 13,
-              lineHeight: 1.6,
-              color: "var(--k-text-primary)",
-              outline: "none",
-              fontFamily: "inherit",
-              boxSizing: "border-box",
-            }}
-          />
-        </div>
-      ) : (
-        /* Standard composer textarea */
-        <div style={{ position: "relative" }}>
-        {mentionOpen && (
-          <MentionDropdown
-            members={mentionMatches}
-            totalCount={mentionPool.length}
-            query={mentionQuery?.query ?? ""}
-            activeIndex={mentionIndex}
-            // Skeletons only on the very first open of the session (spec C5) —
-            // once the list is cached, a refresh must not blank the rows.
-            loading={membersLoading && members.length === 0}
-            onPick={applyMention}
-            onHover={setMentionIndex}
-          />
-        )}
-        <textarea
-          ref={textareaRef}
-          placeholder={
-            isNote
-              ? t("replyBar.notePlaceholder", "Write a note for your team… use @ to mention")
-              : t("ticketDetail.replyPlaceholder")
-          }
-          // Note bodies are capped server-side too (InternalNoteSchema).
-          maxLength={isNote ? NOTE_MAX_LENGTH : undefined}
-          value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            syncMentionQuery(e.target.value, e.target.selectionStart ?? 0);
-            if (sendError) setSendError(null);
-            if (sendSuccess) setSendSuccess(false);
-          }}
-          // Caret moves (click / arrow keys) can leave or enter a mention
-          // context without the text changing at all.
-          onSelect={(e) => {
-            const el = e.currentTarget;
-            syncMentionQuery(el.value, el.selectionStart ?? 0);
-          }}
-          onKeyDown={handleKeyDown}
-          style={{
-            width: "100%",
-            height: textareaHeight,
-            resize: "none",
-            borderRadius: 8,
-            border: isNote ? "1px solid #FDE68A" : "1px solid var(--k-border)",
-            background: isNote ? "#FFFBEB" : "var(--k-surface)",
-            padding: "10px 12px",
-            fontSize: 14,
-            lineHeight: 1.6,
-            color: isNote ? "#78350F" : "var(--k-text-primary)",
-            outline: "none",
-            fontFamily: "inherit",
-            boxSizing: "border-box",
-            marginBottom: 8,
-            transition: "border-color 0.1s ease, background 0.1s ease",
-          }}
-          onFocus={(e) => {
-            if (isNote) {
-              e.currentTarget.style.borderColor = "#F59E0B";
-              e.currentTarget.style.boxShadow = "0 0 0 2px #FEF3C7";
-            } else {
-              e.currentTarget.style.borderColor = "var(--k-accent)";
-              e.currentTarget.style.boxShadow = "0 0 0 2px #EEF2FF";
-            }
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = isNote ? "#FDE68A" : "var(--k-border)";
-            e.currentTarget.style.boxShadow = "none";
-          }}
-        />
-        </div>
-      )}
-
-      {/* ── DIMENSION 3: Lifecycle actions ────────────────────────────── */}
-
-      {/* Escalation inline panel (KAI-221) */}
-      {showEscalatePanel && (
-        <div
-          style={{
-            marginBottom: 8,
-            border: "1px solid #FED7AA",
-            borderRadius: 8,
-            background: "#FFF7ED",
-            padding: "10px 12px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-            <AlertTriangle style={{ width: 12, height: 12, color: "#C2410C", flexShrink: 0 }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#C2410C" }}>
-              {t("replyBar.escalateTitle", "Escalate ticket")}
-            </span>
-            <button
-              type="button"
-              onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }}
-              style={{
-                marginLeft: "auto",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 2,
-                color: "var(--k-text-tertiary)",
-                display: "flex",
-                alignItems: "center",
-              }}
-              aria-label={t("replyBar.escalateCancel", "Cancel")}
-            >
-              <X style={{ width: 12, height: 12 }} />
-            </button>
-          </div>
-          <textarea
-            placeholder={t("replyBar.escalateReasonPlaceholder", "Reason for escalation (optional)…")}
-            value={escalateReason}
-            onChange={(e) => setEscalateReason(e.target.value)}
-            rows={2}
-            style={{
-              width: "100%",
-              resize: "none",
-              borderRadius: 6,
-              border: "1px solid #FED7AA",
-              background: "white",
-              padding: "7px 10px",
-              fontSize: 12,
-              lineHeight: 1.55,
-              color: "var(--k-text-primary)",
-              outline: "none",
-              fontFamily: "inherit",
-              boxSizing: "border-box",
-              marginBottom: 8,
-            }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "#F97316"; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = "#FED7AA"; }}
-          />
-          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              onClick={() => { setShowEscalatePanel(false); setEscalateReason(""); }}
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                padding: "4px 10px",
-                borderRadius: 6,
-                border: "1px solid var(--k-border)",
-                background: "white",
-                color: "var(--k-text-secondary)",
-                cursor: "pointer",
-              }}
-            >
-              {t("replyBar.escalateCancel", "Cancel")}
-            </button>
-            <button
-              type="button"
-              disabled={escalating}
-              onClick={handleEscalateConfirm}
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                padding: "4px 12px",
-                borderRadius: 6,
-                border: "none",
-                background: escalating ? "var(--k-border)" : "#C2410C",
-                color: escalating ? "var(--k-text-tertiary)" : "white",
-                cursor: escalating ? "wait" : "pointer",
-                transition: "background 0.1s ease",
-              }}
-            >
-              {escalating
-                ? t("replyBar.escalating", "Escalating…")
-                : t("replyBar.escalateConfirm", "Confirm escalation")}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Lifecycle buttons row: Reconocer, Resolver, Escalar */}
-      {(visibleActions.length > 0 || canEscalate) && !showEscalatePanel && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-          {visibleActions.map((action) => {
-            const cfg = ACTION_CONFIG[action];
-            const loading = actionLoading === action;
+      onFieldSelect={syncMentionQuery}
+      onFieldKeyDown={handleKeyDown}
+      fieldRef={textareaRef}
+      onSend={isNote ? handleSendNote : () => handleSend(false)}
+      sending={sending}
+      error={sendError}
+      onRetry={() => void (isNote ? handleSendNote() : handleSend(false))}
+      hint={hint}
+      status={sendError || !sendSuccess ? undefined : { tone: "success", text: isNote ? t("replyBar.noteSuccess", "Note added.") : t("replyBar.sendSuccess") }}
+      tools={
+        <>
+          {!isNote && (
+            <TemplatePicker onSelect={handleTemplateSelect} previewVars={templatePreviewVars}>
+              <IconButton label={t("ticketDetail.quickReply")}>
+                <Icon name="zap" size={14} color="var(--kairo-color-faint)" />
+              </IconButton>
+            </TemplatePicker>
+          )}
+          <IconButton label={t("ticketDetail.attach")}>
+            <Icon name="clip" size={14} color="var(--kairo-color-faint)" />
+          </IconButton>
+        </>
+      }
+      noteRow={
+        <>
+          <TeamOnlyChip />
+          {/* KAI-232 spec C7: who this note will notify. The body stores opaque
+              tokens, so these chips are the only readable confirmation. */}
+          {draftMentions.map((member) => {
+            const name = member.name ?? member.email ?? member.user_id;
             return (
-              <button
-                key={action}
-                type="button"
-                disabled={!!actionLoading}
-                onClick={() => handleAction(action)}
-                style={{
-                  ...cfg.style,
-                  fontSize: 11,
-                  fontWeight: 500,
-                  padding: "4px 11px",
-                  borderRadius: 999,
-                  cursor: actionLoading ? "wait" : "pointer",
-                  opacity: actionLoading && !loading ? 0.5 : 1,
-                  transition: "opacity 0.1s ease",
-                }}
-              >
-                {loading ? "…" : t(cfg.labelKey, cfg.defaultLabel)}
-              </button>
+              <MentionChip
+                key={member.user_id}
+                name={name}
+                email={member.email}
+                seed={member.user_id}
+                removeLabel={t("mention.removeChip", { name, defaultValue: "Remove {{name}}" })}
+                onRemove={() => removeMention(member.user_id)}
+              />
             );
           })}
-          {canEscalate && (
-            <button
-              type="button"
-              disabled={showEscalatePanel}
-              onClick={() => setShowEscalatePanel(true)}
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                padding: "4px 11px",
-                borderRadius: 999,
-                cursor: "pointer",
-                background: "#FFF7ED",
-                color: "#C2410C",
-                border: "1px solid #FED7AA",
-                transition: "opacity 0.1s ease",
-              }}
-            >
-              {t("replyBar.actionEscalar", "Escalate")}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Send buttons row */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: 8,
-        }}
-      >
-        {/* KAI-232 rule F.9 — only surfaces near the cap, not while writing. */}
-        {isNote && draft.length >= NOTE_COUNTER_THRESHOLD && (
-          <span
-            style={{
-              marginRight: "auto",
-              fontFamily: "var(--k-font-mono)",
-              fontSize: 11,
-              color: draft.length >= NOTE_MAX_LENGTH ? "#EF4444" : "var(--k-note-label)",
-            }}
-          >
-            {draft.length} / {NOTE_MAX_LENGTH}
-          </span>
-        )}
-        {isNote ? (
-          /* Note mode: single "Add note" button */
-          <button
-            type="button"
-            disabled={!canSend}
-            onClick={handleSendNote}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: 12,
-              fontWeight: 600,
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "none",
-              background: canSend ? "#F59E0B" : "var(--k-border)",
-              color: canSend ? "white" : "var(--k-text-tertiary)",
-              cursor: canSend ? "pointer" : "not-allowed",
-              transition: "background 0.1s ease",
-            }}
-          >
-            <Lock style={{ width: 11, height: 11 }} />
-            {sending ? t("replyBar.sendingNote", "Saving…") : t("replyBar.sendNote", "Add note")}
-          </button>
-        ) : (
-          /* Reply mode: send split-button — primary "Enviar", dropdown has
-             "Enviar y resolver" and "Resolver" (status-only, no email). */
-          <div ref={sendMenuRef} style={{ position: "relative", display: "flex" }}>
-            <button
-              type="button"
-              disabled={!canSend}
-              onClick={() => handleSend(false)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                fontSize: 12,
-                fontWeight: 500,
-                padding: "6px 14px",
-                borderRadius: "6px 0 0 6px",
-                border: "none",
-                background: canSend ? "var(--k-accent)" : "var(--k-border)",
-                color: canSend ? "white" : "var(--k-text-tertiary)",
-                cursor: canSend ? "pointer" : "not-allowed",
-                transition: "background 0.1s ease",
-              }}
-            >
-              <Send style={{ width: 12, height: 12 }} />
-              {sending ? t("replyBar.sending") : t("ticketDetail.send")}
-            </button>
-
-            <button
-              type="button"
-              disabled={!canSend}
-              onClick={() => setSendMenuOpen((v) => !v)}
-              aria-label={t("replyBar.sendOptionsLabel", "More send options")}
-              aria-expanded={sendMenuOpen}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 26,
-                padding: 0,
-                borderRadius: "0 6px 6px 0",
-                borderLeft: canSend ? "1px solid rgba(255,255,255,0.3)" : "1px solid var(--k-border)",
-                borderTop: "none",
-                borderRight: "none",
-                borderBottom: "none",
-                background: canSend ? "var(--k-accent)" : "var(--k-border)",
-                color: canSend ? "white" : "var(--k-text-tertiary)",
-                cursor: canSend ? "pointer" : "not-allowed",
-                transition: "background 0.1s ease",
-              }}
-            >
-              <ChevronDown style={{ width: 13, height: 13 }} />
-            </button>
-
-            {sendMenuOpen && (
-              <div
-                data-testid="send-split-menu"
-                style={{
-                  position: "absolute",
-                  bottom: "calc(100% + 6px)",
-                  right: 0,
-                  minWidth: 180,
-                  background: "white",
-                  border: "1px solid var(--k-border)",
-                  borderRadius: 8,
-                  boxShadow: "0 4px 16px rgba(9,9,11,0.12)",
-                  overflow: "hidden",
-                  zIndex: 20,
-                }}
-              >
-                <button
-                  type="button"
-                  disabled={!canSend}
-                  onClick={() => { setSendMenuOpen(false); handleSend(true); }}
-                  style={{
-                    display: "flex",
-                    width: "100%",
-                    alignItems: "center",
-                    padding: "8px 12px",
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: canSend ? "var(--k-text-primary)" : "var(--k-text-tertiary)",
-                    background: "none",
-                    border: "none",
-                    borderBottom: "1px solid var(--k-border-subtle)",
-                    cursor: canSend ? "pointer" : "not-allowed",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--k-surface-2)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                >
-                  {t("replyBar.sendAndResolve", "Send & Resolve")}
-                </button>
-                <button
-                  type="button"
-                  disabled={resolving}
-                  onClick={handleResolveOnly}
-                  style={{
-                    display: "flex",
-                    width: "100%",
-                    alignItems: "center",
-                    padding: "8px 12px",
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: resolving ? "var(--k-text-tertiary)" : "var(--k-text-primary)",
-                    background: "none",
-                    border: "none",
-                    cursor: resolving ? "wait" : "pointer",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => { if (!resolving) e.currentTarget.style.background = "var(--k-surface-2)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                >
-                  {resolving ? "…" : t(ACTION_CONFIG.resolver.labelKey, ACTION_CONFIG.resolver.defaultLabel)}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Status messages */}
-      {sendError ? (
-        <p style={{ marginTop: 6, fontSize: 12, color: "#EF4444" }}>{sendError}</p>
-      ) : sendSuccess ? (
-        <p style={{ marginTop: 6, fontSize: 12, color: isNote ? "#D97706" : "#10B981" }}>
-          {isNote ? t("replyBar.noteSuccess", "Note added.") : t("replyBar.sendSuccess")}
-        </p>
-      ) : (
-        <p
-          style={{
-            marginTop: 6,
-            fontSize: 11,
-            fontFamily: "var(--k-font-mono)",
-            color: "var(--k-text-tertiary)",
+          <Text fontSize={11.5} color="var(--k-text-tertiary)">
+            {t("replyBar.typeAt")}
+          </Text>
+        </>
+      }
+      banner={aiBanner}
+      actions={lifecycleActions}
+      sendOptions={sendOptions}
+      counter={isNote && draft.length >= NOTE_COUNTER_THRESHOLD ? { text: `${draft.length} / ${NOTE_MAX_LENGTH}`, over: draft.length >= NOTE_MAX_LENGTH } : undefined}
+      popover={mentionOpen ? (
+        <MentionMenu
+          testId="mention-dropdown"
+          title={t("mention.header", "Mention")}
+          query={mentionQuery?.query ?? ""}
+          options={mentionMatches.map((member) => ({ id: member.user_id, name: member.name ?? member.email ?? member.user_id, email: member.email, role: member.role }))}
+          activeIndex={mentionIndex}
+          // Searching row only on the very first open of the session (spec C5) —
+          // once the list is cached, a refresh must not blank the rows.
+          loading={membersLoading && members.length === 0}
+          onPick={(id) => { const picked = mentionMatches.find((member) => member.user_id === id); if (picked) applyMention(picked); }}
+          onHover={setMentionIndex}
+          labels={{
+            counter: t("mention.counter", { shown: mentionMatches.length, total: mentionPool.length, defaultValue: "{{shown}} of {{total}}" }),
+            empty: t("mention.empty"),
+            searching: t("mention.searching"),
+            keyInsert: t("mention.keyInsert", "insert"),
+            keyClose: t("mention.keyClose", "close"),
           }}
-        >
-          {t("ticketDetail.sendHint")}
-        </p>
-      )}
-    </div>
+        />
+      ) : undefined}
+      placeholder={isNote
+        ? t("replyBar.notePlaceholder")
+        : t("replyBar.replyPlaceholder", { name: clientName })}
+      maxLength={isNote ? NOTE_MAX_LENGTH : undefined}
+      labels={{
+        modeGroup: t("replyBar.modeLabel", "Composer mode"),
+        reply: t("replyBar.modeReply", "Reply"),
+        note: t("replyBar.modeNote", "Internal note"),
+        textarea: isNote ? t("replyBar.modeNote", "Internal note") : t("replyBar.modeReply", "Reply"),
+        placeholder: "",
+        send: isNote ? t("replyBar.sendNote", "Add note") : t("ticketDetail.send"),
+        sending: isNote ? t("replyBar.sendingNote", "Saving…") : t("replyBar.sending"),
+        retry: t("replyBar.retry"),
+        sendOptions: t("replyBar.sendOptionsLabel", "More send options"),
+      }}
+    />
   );
 }

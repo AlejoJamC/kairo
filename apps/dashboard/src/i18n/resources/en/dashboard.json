@@ -2,7 +2,7 @@
   "title": "Dashboard",
   "correction": {
     "triggerLabel": "Wrong classification?",
-    "dialogTitle": "Correct Classification",
+    "dialogTitle": "Correct the classification",
     "dialogSubtitle": "Select the correct values. You only need to change what's wrong.",
     "fieldPriority": "Priority",
     "fieldType": "Ticket Type",
@@ -16,7 +16,16 @@
     "errorEmpty": "Select at least one field to correct",
     "errorGeneric": "Failed to save correction. Try again.",
     "correctedBadge": "Corrected",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "tones": {
+      "aggressive": "aggressive",
+      "frustrated": "frustrated",
+      "neutral": "neutral",
+      "positive": "positive"
+    },
+    "explanation": "Pick the labels that fit. Triage learns from every correction.",
+    "categories": "Categories",
+    "save": "Save correction"
   },
   "ticketCard": {
     "slaBreached": "OVERDUE",
@@ -60,8 +69,7 @@
     "detailOverdue": "SLA overdue by {{duration}} with no first response"
   },
   "ticketList": {
-    "header": "Tickets",
-    "classifyAll": "Classify All",
+    "header": "Triage",
     "classifying": "Classifying...",
     "scanning": "Scanning emails... {{count}} ticket classified",
     "scanning_other": "Scanning emails... {{count}} tickets classified",
@@ -73,7 +81,7 @@
     "filterAll": "All",
     "moreActions": "More actions",
     "syncGmail": "Sync Gmail",
-    "syncing": "Syncing...",
+    "syncing": "Syncing…",
     "syncSuccess": "{{created}} new · {{skipped}} skipped",
     "syncError": "Sync failed",
     "selectedCount_one": "{{count}} selected",
@@ -87,7 +95,10 @@
     "similarSuggestion_one": "{{count}} ticket seems to be about the same issue. Group them?",
     "similarSuggestion_other": "{{count}} tickets seem to be about the same issue. Group them?",
     "similarAccept": "Group",
-    "similarDismiss": "Dismiss"
+    "similarDismiss": "Dismiss",
+    "filterLabel": "Filter by priority",
+    "classify": "Classify",
+    "countLabel": "{{shown}} of {{open}} open tickets"
   },
   "tickets": {
     "title": "Open Tickets",
@@ -110,65 +121,80 @@
     "aiReview": "AI Classification",
     "knowledge": "Knowledge",
     "resolved": "Resolved",
-    "clients": "Clients"
+    "clients": "Clients",
+    "workspace": "Workspace",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "ticketsCount_one": "{{count}} ticket",
+    "ticketsCount_other": "{{count}} tickets"
   },
   "topChrome": {
-    "searchPlaceholder": "Search tickets, clients, KB…",
+    "searchPlaceholder": "Search or run a command…",
     "notifications": {
       "title": "Activity",
       "unreadCount": "{{count}} unread",
       "markRead": "Mark read",
       "tabAll": "All",
-      "tabUnread": "Unread",
       "tabMentions": "@mentions",
-      "empty": "◌ no notifications",
-      "liveStream": "live stream",
-      "viewAll": "View all activity →"
+      "empty": "◌ no notifications"
     },
     "account": {
-      "roleBadge": "Agent · Support",
       "statusSection": "Status",
       "statusOnline": "Online",
       "statusBusy": "On call",
       "statusAway": "Away",
       "statusOffline": "Invisible",
-      "workspaceSection": "Workspace",
-      "workspaceName": "Kairo Workspace",
-      "workspacePlan": "Pro plan",
-      "workspaceChange": "change",
-      "menuProfile": "My profile",
       "menuSettings": "Settings",
-      "menuShortcuts": "Keyboard shortcuts",
-      "menuDocs": "Documentation",
       "appearanceSection": "Appearance",
       "themeLight": "Light",
-      "themeAuto": "Auto",
       "themeDark": "Dark",
-      "signOut": "Sign out"
+      "signOut": "Sign out",
+      "menuShortcuts": "Keyboard shortcuts",
+      "title": "Account"
+    },
+    "palette": {
+      "searchTitle": "Command palette",
+      "searchLabel": "Search",
+      "ticketsSection": "Tickets",
+      "goToSection": "Go to",
+      "runFirst": "run first",
+      "close": "close",
+      "ticketPrefix": "KAI-",
+      "notifications": "Notifications",
+      "account": "Account",
+      "toggleSidebar": "Toggle sidebar",
+      "actionsSection": "Actions"
     }
   },
   "awaitingView": {
     "title": "Awaiting Reply",
-    "subtitle": "Tickets where you sent a reply and are waiting for the client to respond.",
-    "empty": "No tickets waiting for a client response. Great work! 🎉",
+    "subtitle": "Tickets where you sent a reply and the customer has not answered yet.",
+    "empty": "Nothing awaiting.",
     "lastReply": "Last reply",
     "followUp": "Follow up",
     "openTicket": "View ticket",
-    "ticketNumber": "#{{number}}"
+    "ticketNumber": "#{{number}}",
+    "countLabel_one": "{{count}} ticket awaiting the customer",
+    "countLabel_other": "{{count}} tickets awaiting the customer",
+    "emptyHint": "When you reply to a ticket, it stays here until the customer answers.",
+    "followUpDraft": "Hi {{name}}, did you get a chance to review our previous reply? We are here to help."
   },
   "resolvedView": {
     "title": "Resolved",
-    "subtitle": "Closed tickets, shown in read-only mode.",
+    "subtitle": "Closed tickets, in read-only mode.",
     "empty": "No resolved tickets yet.",
-    "ticketNumber": "#{{number}}"
+    "ticketNumber": "#{{number}}",
+    "countLabel_one": "{{count}} resolved ticket",
+    "countLabel_other": "{{count}} resolved tickets",
+    "emptyHint": "Tickets you resolve appear here in read-only mode."
   },
   "aiReviewView": {
     "title": "AI Classification",
     "subtitle": "What the AI classified on each ticket. Confirming or rejecting each proposal is how Kairo learns when it can act on its own.",
     "tabPending": "To review",
-    "tabAutoApproved": "Approved by AI",
-    "emptyPending": "No classifications to review.",
-    "emptyAutoApproved": "No AI-approved classifications waiting to be verified.",
+    "tabAutoApproved": "Approved by the AI",
+    "emptyPending": "Nothing to review.",
+    "emptyAutoApproved": "None yet.",
     "proposalTitle": "AI proposal",
     "fieldType": "Type",
     "fieldCategory": "Category",
@@ -178,11 +204,14 @@
     "fieldModel": "Model",
     "confirm": "Confirm",
     "reject": "Reject",
-    "error": "The review could not be saved."
+    "error": "The review could not be saved.",
+    "filters": "Proposals",
+    "emptyPendingHint": "Every AI proposal has an answer.",
+    "emptyAutoApprovedHint": "No ticket reaches the auto-resolution threshold. Adjust it in Settings › Triage Engine."
   },
   "knowledgeView": {
     "title": "Knowledge",
-    "subtitle": "Business facts and articles proposed from emails and resolved tickets. Review them before publishing.",
+    "subtitle": "Articles Kairo can cite in drafts and assistant answers.",
     "evidenceTitle": "Source and validation",
     "validationScope": "These checks apply to the original AI proposal. Review any edits before publishing.",
     "evidenceUnavailable": "Source evidence could not be loaded. Verify the original email before approving.",
@@ -219,13 +248,44 @@
     "save": "Save",
     "discard": "Discard",
     "delete": "Delete",
-    "error": "The action could not be completed."
+    "error": "The action could not be completed.",
+    "countLabel_one": "{{count}} article",
+    "countLabel_other": "{{count}} articles",
+    "editArticle": "Edit article",
+    "titlePlaceholder": "Article title",
+    "contentPlaceholder": "Write the content. Kairo uses it as a source when answering.",
+    "published": "Published",
+    "review": "Review",
+    "states": {
+      "published": "published",
+      "draft": "draft",
+      "review": "to review",
+      "reviewed": "reviewed"
+    },
+    "tags": "Tags",
+    "updated": "Updated",
+    "note": "Kairo cites an article only when it is published and relevant to the ticket (threshold 0.80).",
+    "discardChanges": "Discard",
+    "discardChangesAsk": "Discard the changes?",
+    "filterAll": "All",
+    "filters": "Status",
+    "search": "Search articles",
+    "colArticle": "Article",
+    "colState": "State",
+    "add": "Add article",
+    "loadError": "The articles could not be loaded.",
+    "emptyTitle": "No articles yet",
+    "emptyDescription": "Kairo cites published articles when they pass the relevance threshold (0.80). Proposals appear here as it learns from your tickets.",
+    "noResults": "No article matches these filters."
   },
   "escalatedView": {
     "title": "Escalated",
     "subtitle": "Tickets that were escalated and need priority attention.",
-    "empty": "No escalated tickets right now.",
-    "ticketNumber": "#{{number}}"
+    "empty": "Nothing escalated.",
+    "ticketNumber": "#{{number}}",
+    "countLabel_one": "{{count}} escalated ticket",
+    "countLabel_other": "{{count}} escalated tickets",
+    "emptyHint": "Escalate a ticket from Triage (E) and it appears here."
   },
   "settings": {
     "title": "Profile Settings",
@@ -268,7 +328,12 @@
       "fieldMin": "Minimum response time",
       "fieldRisk": "Risk alert",
       "fieldEscalation": "Automatic escalation",
-      "unitMinutes": "min"
+      "unitMinutes": "min",
+      "orderError": "The order must be minimum < alert < escalation < maximum",
+      "legendMin": "min",
+      "legendAlert": "alert",
+      "legendEscalation": "escalation",
+      "legendBreach": "breach"
     },
     "workspace": {
       "title": "Workspace",
@@ -288,7 +353,20 @@
       "seats": "{{used}} / {{total}} seats used in {{plan}} plan.",
       "invite": "Invite",
       "statusActive": "active",
-      "statusAway": "away"
+      "statusAway": "away",
+      "more": "More",
+      "person": "Person",
+      "role": "Role",
+      "state": "State",
+      "options": "Options",
+      "you": "(you)",
+      "statusInvited": "invited",
+      "roles": {
+        "owner": "Owner",
+        "admin": "Admin",
+        "supervisor": "Supervisor",
+        "agent": "Agent"
+      }
     },
     "integrations": {
       "title": "Integrations",
@@ -296,7 +374,20 @@
       "configure": "Configure",
       "connect": "Connect",
       "requestAccess": "Request access",
-      "comingSoon": "COMING SOON"
+      "comingSoon": "COMING SOON",
+      "requested": "Requested",
+      "gmailDescription": "Connect your Gmail inbox.",
+      "channelsTitle": "Support channels",
+      "emailInboxes": "Email inboxes",
+      "emailInboxesDesc": "Email channels connected to this account.",
+      "manage": "Manage",
+      "catalog": {
+        "slack": "Notifications and tickets from direct messages",
+        "whatsapp": "Twilio and Meta WABA",
+        "telegram": "Coming soon",
+        "instagram": "Coming soon",
+        "zendesk": "Import historical tickets"
+      }
     },
     "triage": {
       "title": "Triage Engine",
@@ -359,7 +450,14 @@
     "updating": "Updating…",
     "updateButton": "Update Password",
     "setButton": "Set Password",
-    "error": "Failed to update password. Please try again."
+    "error": "Failed to update password. Please try again.",
+    "strength": {
+      "0": "—",
+      "1": "weak",
+      "2": "fair",
+      "3": "good",
+      "4": "strong"
+    }
   },
   "ticketDetail": {
     "customer": "Customer",
@@ -388,9 +486,20 @@
     "assignToMe": "Assign to me",
     "assigning": "Assigning…",
     "assigned": "Assigned",
-    "readOnlyBadge": "Read-only"
+    "readOnlyBadge": "Read-only",
+    "escalated": "ESCALATED",
+    "statusMenu": "Change status",
+    "viewNotes_one": "View {{count}} internal note",
+    "viewNotes_other": "View {{count}} internal notes",
+    "path": "Path",
+    "position": "Ticket {{index}} of {{total}}",
+    "previous": "Previous ticket",
+    "next": "Next ticket"
   },
   "replyBar": {
+    "textareaLabel": "Message",
+    "retry": "Retry",
+    "resize": "Resize composer",
     "sending": "Sending...",
     "sendSuccess": "Reply sent successfully.",
     "aiSuggestionBanner": "Kairo suggested this reply. You can edit it before sending.",
@@ -408,7 +517,7 @@
     "actionEscalar": "Escalate",
     "modeReply": "Reply",
     "modeNote": "Internal note",
-    "notePlaceholder": "Write an internal note… (only visible to your team)",
+    "notePlaceholder": "Add an internal note — type @ to mention…",
     "noteVisibilityHint": "Visible only to your team",
     "sendNote": "Add note",
     "sendingNote": "Saving…",
@@ -418,7 +527,12 @@
     "escalateConfirm": "Confirm escalation",
     "escalateCancel": "Cancel",
     "escalating": "Escalating…",
-    "mentionChipLabel": "Mentioned: {{name}}"
+    "mentionChipLabel": "Mentioned: {{name}}",
+    "modeLabel": "Composer mode",
+    "hintReply": "Sends to {{to}}",
+    "hintNote": "Visible only to your team",
+    "typeAt": "Type @ to mention a teammate",
+    "replyPlaceholder": "Write your reply to {{name}}…"
   },
   "notes": {
     "loading": "loading notes…",
@@ -449,13 +563,14 @@
     "header": "Mention",
     "counter": "{{shown}} of {{total}}",
     "more": "+{{count}} more · keep typing to filter",
-    "empty": "No members found",
+    "empty": "No teammates match",
     "willNotify": "will be notified",
     "willNotify_plural": "will be notified",
     "removeChip": "Remove mention of {{name}}",
     "keyNavigate": "navigate",
     "keyInsert": "insert",
-    "keyClose": "close"
+    "keyClose": "close",
+    "searching": "Searching…"
   },
   "templatePicker": {
     "searchPlaceholder": "Search template...",
@@ -554,6 +669,11 @@
     "assistantStarterDraft": "Draft a refund reply for the customer",
     "assistantStarterSimilar": "Find similar resolved cases",
     "assistantThinking": "Thinking…",
+    "assistantWriting": "Writing…",
+    "assistantSend": "Send",
+    "assistantStop": "Stop",
+    "assistantRetry": "Retry",
+    "assistantQuestionLabel": "Ask Kairo Assistant",
     "assistantReasoned": "Reasoned · {{count}} steps",
     "assistantSources": "Sources",
     "assistantDraftBadge": "DRAFT",
@@ -575,7 +695,9 @@
     "assistantOperation_proposed": "Requires human review",
     "assistantOperation_failed": "Failed",
     "assistantRequestFailed": "Assistant unavailable. Try again.",
-    "assistantWaiting": "Consulting the ticket…"
+    "assistantWaiting": "Consulting the ticket…",
+    "contextTabs": "Context",
+    "account": "Account"
   },
   "relatedHistory": {
     "title": "Related history",
@@ -585,6 +707,11 @@
     "ticketNumber": "Ticket #{{number}}"
   },
   "decisionWorkflow": {
+    "executionLabel": "Execution",
+    "authorizationLabel": "Authorization",
+    "retry": "Retry",
+    "engine": "Triage Intelligence",
+    "note": "typed decision · no generated reasoning text",
     "title": "Decisions and evidence",
     "error": "Could not record your view or load the history. Retrying.",
     "empty": "No decision history is available yet.",
@@ -677,5 +804,134 @@
     "reject": "Discard this contribution",
     "classificationProposal": "Proposed classification change",
     "unsupported": "Unsupported evidence: {{dimension}}"
+  },
+  "ticketTypes": {
+    "support": "support",
+    "prospect": "prospect",
+    "spam": "spam",
+    "internal": "internal",
+    "other": "other"
+  },
+  "ticketCategories": {
+    "technical": "technical",
+    "billing": "billing",
+    "account": "account",
+    "general": "general",
+    "not_applicable": "n/a"
+  },
+  "channelsSettings": {
+    "title": "Support Channels",
+    "subtitle": "Email inboxes connected to this account as support channels.",
+    "loadError": "Could not load channels.",
+    "disconnectError": "Failed to disconnect channel.",
+    "emptyTitle": "No channels connected yet.",
+    "emptyBody": "Connect a Gmail inbox to start receiving support tickets.",
+    "connectedOn": "{{type}} · Connected {{date}}",
+    "primary": "Primary",
+    "gmailName": "Gmail",
+    "gmailDescription": "Connect a Gmail inbox to receive support email.",
+    "outlookName": "Outlook",
+    "outlookDescription": "Outlook, IMAP and custom channels coming soon.",
+    "connect": "Connect",
+    "connecting": "Connecting…",
+    "reconnect": "Reconnect",
+    "disconnect": "Disconnect",
+    "soon": "Coming soon",
+    "back": "Back"
+  },
+  "statusBar": {
+    "commands": "commands",
+    "open": "kairo · {{count}} open"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "footer": "On Windows and Linux, ⌘ is Ctrl.",
+    "ticketOnly": "ticket only",
+    "groups": {
+      "navigation": "Navigation",
+      "ticket": "Ticket",
+      "general": "General"
+    },
+    "rows": {
+      "queue": "Move through the queue",
+      "commands": "Commands",
+      "settings": "Settings",
+      "send": "Send",
+      "shortcuts": "Keyboard shortcuts",
+      "close": "Close"
+    }
+  },
+  "ticketStatus": {
+    "open": "Open",
+    "in_progress": "Acknowledged",
+    "awaiting_customer": "Awaiting customer",
+    "resolved": "Resolved",
+    "ai_resolved": "Resolved by AI",
+    "escalated": "Escalated",
+    "reopened": "Reopened",
+    "closed": "Closed"
+  },
+  "ticketHeading": {
+    "priorityChip": "Priority {{priority}}, change",
+    "priorityMenu": "Priority",
+    "classifying": "Classifying"
+  },
+  "sla": {
+    "compactIn": "in {{time}}",
+    "noResponse": "no first response",
+    "title": {
+      "onTime": "SLA on time: {{time}} left",
+      "atRisk": "SLA at risk: {{time}} left",
+      "escalating": "SLA almost breached: {{time}} left",
+      "overdue": "SLA overdue by {{time}}"
+    },
+    "full": {
+      "onTime": "SLA: reply in {{time}}",
+      "atRisk": "SLA at risk · {{time}} left",
+      "escalating": "SLA almost breached · escalates in {{time}}",
+      "overdue": "SLA overdue by {{time}}"
+    }
+  },
+  "clientPanel": {
+    "draftBadge": "draft",
+    "draftNotice": "Draft detected automatically. Confirm, reject and edit actions will be available soon.",
+    "account": "Account",
+    "plan": "Plan",
+    "mrr": "MRR",
+    "since": "Since",
+    "tickets": "Tickets",
+    "csat": "CSAT",
+    "nps": "NPS",
+    "otherTickets": "Other tickets",
+    "similarTickets": "Similar tickets",
+    "unavailable": "Client data unavailable.",
+    "sameIssue": "same issue",
+    "awaiting": "awaiting",
+    "resolved": "resolved"
+  },
+  "escalatePanel": {
+    "priority": "Priority",
+    "slaLabel": "SLA",
+    "sentimentLabel": "Sentiment",
+    "confidenceLabel": "Confidence",
+    "sla": {
+      "onTime": "on time · {{time}}",
+      "atRisk": "at risk · {{time}}",
+      "escalating": "escalating · {{time}}",
+      "overdue": "overdue {{time}}"
+    },
+    "sentiment": {
+      "frustrated": "frustrated",
+      "aggressive": "aggressive",
+      "neutral": "neutral",
+      "positive": "positive"
+    },
+    "explanation": "Signals detected on this ticket. Consider escalating to a senior.",
+    "reason": "Reason",
+    "reasonPlaceholder": "What does the next person need to know?",
+    "submit": "Escalate {{id}}",
+    "note": "Alerts the on-call senior by SMS.",
+    "escalated": "This ticket is escalated.",
+    "error": "The ticket could not be escalated. Try again."
   }
 }

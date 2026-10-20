@@ -28,11 +28,11 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/lib/api-client", () => ({
+vi.mock("@kairo/client-core/api-client", () => ({
   apiCall: (...args: unknown[]) => apiCallMock(...args),
 }));
 
-vi.mock("@/contexts/auth-context", () => ({
+vi.mock("@kairo/client-core/auth", () => ({
   useAuth: () => ({ user: { id: "author-1" } }),
 }));
 
@@ -57,7 +57,7 @@ async function renderNoteComposer() {
   // instance and setting state on it would not reach the component.
   const [{ ReplyBar }, { useTriageStore: store }] = await Promise.all([
     import("./reply-bar"),
-    import("@/stores/triage-store"),
+    import("@kairo/client-core/stores/triage-store"),
   ]);
 
   renderWithProviders(<ReplyBar />);

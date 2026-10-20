@@ -1,7 +1,8 @@
 import { JSDOM } from "jsdom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { renderWithProviders } from "@/test/render-with-providers";
 import { TemplatePicker } from "./template-picker";
 
 const apiCallMock = vi.fn();
@@ -19,7 +20,7 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/lib/api-client", () => ({
+vi.mock("@kairo/client-core/api-client", () => ({
   apiCall: (...args: unknown[]) => apiCallMock(...args),
 }));
 
@@ -27,7 +28,7 @@ describe("TemplatePicker", () => {
   it("shows dummy template when /api/v1/templates fails", async () => {
     apiCallMock.mockRejectedValueOnce(new Error("network error"));
 
-    render(
+    renderWithProviders(
       <TemplatePicker onSelect={() => {}}>
         <button type="button">Open templates</button>
       </TemplatePicker>

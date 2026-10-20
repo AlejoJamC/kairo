@@ -1,0 +1,26 @@
+{
+  "name": "@kairo/tokens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./generated/tokens.ts",
+  "types": "./generated/tokens.ts",
+  "exports": {
+    ".": "./generated/tokens.ts",
+    "./tokens.css": "./generated/tokens.css",
+    "./core.json": "./src/core.json",
+    "./semantic.json": "./src/semantic.json"
+  },
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "check": "bun scripts/build.ts --check",
+    "typecheck": "bun scripts/build.ts --check && tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@kairo/types": "workspace:*",
+    "@types/node": "^25.6.0",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.5"
+  }
+}

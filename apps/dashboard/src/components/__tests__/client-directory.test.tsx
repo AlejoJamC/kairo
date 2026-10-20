@@ -17,6 +17,7 @@ vi.mock("react-i18next", () => ({
         "filters.statusDrafts":    "Borradores",
         "filters.statusConfirmed": "Confirmados",
         "filters.statusRejected":  "Rechazados",
+        "filters.allOrganizations": "Todas las organizaciones",
         "badges.draft":            "Borrador",
         "badges.confirmed":        "Confirmado",
         "badges.rejected":         "Rechazado",
@@ -35,6 +36,7 @@ vi.mock("react-i18next", () => ({
         "actions.edit":            "Editar",
         "actions.save":            "Guardar",
         "actions.cancel":          "Cancelar",
+        "actions.close":           "Cerrar",
         "actions.reactivate":      "Re-activar",
         "actions.confirmedOn":     `Confirmado el ${opts?.date ?? ""}`,
         "actions.bulkConfirmButton": `Confirmar todos los de ${opts?.org ?? ""}`,
@@ -66,7 +68,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 // Mock auth context
-vi.mock("@/contexts/auth-context", () => ({
+vi.mock("@kairo/client-core/auth", () => ({
   useAuth: () => ({
     user: { id: "user-1" },
     accountId: "acct-1",
@@ -81,14 +83,14 @@ vi.mock("@/contexts/auth-context", () => ({
 
 // Mock apiCall for clients
 const apiCallMock = vi.fn();
-vi.mock("@/lib/api-client", () => ({
+vi.mock("@kairo/client-core/api-client", () => ({
   apiCall: (...args: unknown[]) => apiCallMock(...args),
 }));
 
 // Mock useDraftContacts hook
 const retryDraftsMock = vi.fn();
 const useDraftContactsMock = vi.fn();
-vi.mock("@/hooks/use-draft-contacts", () => ({
+vi.mock("@kairo/client-core/hooks/use-draft-contacts", () => ({
   useDraftContacts: (...args: unknown[]) => useDraftContactsMock(...args),
 }));
 
@@ -104,7 +106,7 @@ const unrejectDraftMock   = vi.fn().mockResolvedValue({ id: "draft-rejected-1", 
 const editDraftMock       = vi.fn().mockResolvedValue({ id: "draft-proposed-1", status: "proposed" });
 const bulkConfirmMock     = vi.fn().mockResolvedValue(2);
 
-vi.mock("@/lib/draft-actions", () => ({
+vi.mock("@kairo/client-core/draft-actions", () => ({
   confirmDraft:                 (...args: unknown[]) => confirmDraftMock(...args),
   rejectDraft:                  (...args: unknown[]) => rejectDraftMock(...args),
   unrejectDraft:                (...args: unknown[]) => unrejectDraftMock(...args),
@@ -595,7 +597,7 @@ describe("ClientDirectory", () => {
     });
 
     // Close drawer
-    await userEvent.click(screen.getByLabelText("Close"));
+    await userEvent.click(screen.getByLabelText("Cerrar"));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });

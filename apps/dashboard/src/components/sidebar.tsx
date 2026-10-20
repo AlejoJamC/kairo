@@ -1,233 +1,107 @@
-// Sidebar — collapsible nav panel.
-// Visual design: cockpit.jsx lines 139–187 (packages/claude_design).
-// Toggle button moved to TopChrome; sidebar only receives collapsed state.
+// Sidebar — wires the library sidebar to the session: navigation counts, the
+// bell, the account menu, the language, the command palette (⌘K) and the
+// shortcuts dialog (?).
 
-import { useRef, useState, useEffect } from "react";
-import {
-  Inbox,
-  Clock,
-  CircleCheck,
-  ArrowUpCircle,
-  Sparkles,
-  BookOpen,
-  Users,
-  Settings,
-} from "lucide-react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LanguageSwitcher } from "@/components/language-switcher";
-import { UserMenu } from "@/components/user-menu";
-import { useAuth } from "@/contexts/auth-context";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { useSidebarCounts, VIEW_TO_STATUS } from "@/hooks/useSidebarCounts";
+import { useAuth } from "@kairo/client-core/auth";
+import type { SidebarCounts } from "@kairo/client-core/hooks/use-sidebar-counts";
+import { AccountMenu } from "@/components/account-menu";
+import { CommandPaletteHost } from "@/components/command-palette-host";
+import { NotificationsBell } from "@/components/notifications-bell";
+import { ShortcutsHost } from "@/components/shortcuts-host";
+import { useLocale } from "@/hooks/useLocale";
+import { VIEW_TO_STATUS } from "@/lib/sidebar-view-status";
+import type { SupportedLanguage } from "@/i18n/types";
 import type { AppView } from "@/types";
+import { Sidebar as SidebarPiece, type IconName, type SidebarEntry } from "@kairo/ui";
 
-// ---------------------------------------------------------------------------
-// NavBadge — count pill / collapsed dot
-// ---------------------------------------------------------------------------
-
-function NavBadge({
-  count,
-  collapsed,
-  isActive = false,
-}: {
-  count: number;
-  collapsed: boolean;
-  isActive?: boolean;
-}) {
-  const prevRef = useRef(count);
-  const [flashPulse, setFlashPulse] = useState(false);
-
-  useEffect(() => {
-    if (prevRef.current !== count && count > 0) {
-      setFlashPulse(true);
-      const t = setTimeout(() => setFlashPulse(false), 600);
-      prevRef.current = count;
-      return () => clearTimeout(t);
-    }
-    prevRef.current = count;
-  }, [count]);
-
-  if (count === 0) return null;
-
-  if (collapsed) {
-    const collapsedLabel = count > 9 ? "9+" : String(count);
-    return (
-      <span
-        className={`absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[9px] font-bold text-white leading-none ${
-          flashPulse ? "animate-pulse" : ""
-        }`}
-        style={{ background: "var(--k-accent)" }}
-      >
-        {collapsedLabel}
-      </span>
-    );
-  }
-
-  const label = count > 99 ? "99+" : String(count);
-
-  return (
-    <span
-      className="ml-auto flex items-center gap-1 tabular-nums"
-      style={{ fontFamily: "var(--k-font-mono)", fontSize: 11, color: "var(--k-text-tertiary)" }}
-    >
-      {isActive && (
-        <span
-          className="animate-pulse inline-block rounded-full shrink-0"
-          style={{ width: 5, height: 5, background: "var(--k-accent)" }}
-        />
-      )}
-      {label}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sidebar
-// ---------------------------------------------------------------------------
-
-type NavItem = {
-  icon: typeof Inbox;
-  label: string;
-  view: AppView;
-};
+type NavDefinition = { icon: IconName; label: string; view: AppView };
 
 interface SidebarProps {
   collapsed: boolean;
-  onToggle: () => void; // kept for interface compat; toggle renders in TopChrome
+  onToggle: () => void;
   activeView: AppView;
   onViewChange: (view: AppView) => void;
+  counts: SidebarCounts | null;
 }
 
-export function Sidebar({ collapsed, activeView, onViewChange }: SidebarProps) {
-  const { t } = useTranslation(["dashboard"]);
+export function Sidebar({ collapsed, onToggle, activeView, onViewChange, counts }: SidebarProps) {
+  const { t } = useTranslation(["dashboard", "common"]);
   const { isAdmin } = useAuth();
-  const counts = useSidebarCounts();
+  const { language, setLanguage, supportedLanguages, languageMeta } = useLocale();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
-  const mainNavItems: NavItem[] = [
-    { icon: Inbox,         label: t("dashboard:sidebar.triage"),         view: "triage" },
-    { icon: Clock,         label: t("dashboard:sidebar.pendingClient"),  view: "awaiting" },
-    { icon: CircleCheck,   label: t("dashboard:sidebar.resolved"),       view: "resolved" },
-    { icon: ArrowUpCircle, label: t("dashboard:sidebar.escalation"),     view: "escalated" },
-    { icon: Sparkles,      label: t("dashboard:sidebar.aiReview"),       view: "ai-review" },
-    { icon: BookOpen,      label: t("dashboard:sidebar.knowledge"),      view: "knowledge" },
-  ];
+  // ⌘K / Ctrl+K opens the palette from anywhere.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
-  const adminNavItems: NavItem[] = [
-    { icon: Users,    label: t("dashboard:sidebar.clients"),  view: "clients" },
-    { icon: Settings, label: t("dashboard:sidebar.settings"), view: "settings" },
-  ];
-
-  const getCount = (view: AppView): number => {
+  const getCount = (view: AppView): number | undefined => {
     const statuses = VIEW_TO_STATUS[view];
-    if (!statuses || !counts) return 0;
-    return statuses.reduce((sum, status) => sum + (counts[status] ?? 0), 0);
+    if (!statuses || !counts) return undefined;
+    const total = statuses.reduce((sum, status) => sum + (counts[status] ?? 0), 0);
+    return total > 0 ? total : undefined;
   };
 
-  const renderItem = (item: NavItem) => {
-    const isActive = item.view === activeView;
-    const count = getCount(item.view);
+  const mainNav: NavDefinition[] = [
+    { icon: "triage", label: t("dashboard:sidebar.triage"), view: "triage" },
+    { icon: "awaiting", label: t("dashboard:sidebar.pendingClient"), view: "awaiting" },
+    { icon: "resolved", label: t("dashboard:sidebar.resolved"), view: "resolved" },
+    { icon: "escalated", label: t("dashboard:sidebar.escalation"), view: "escalated" },
+    { icon: "spark", label: t("dashboard:sidebar.aiReview"), view: "ai-review" },
+    { icon: "knowledge", label: t("dashboard:sidebar.knowledge"), view: "knowledge" },
+  ];
+  const adminNav: NavDefinition[] = [
+    { icon: "clients", label: t("dashboard:sidebar.clients"), view: "clients" },
+    { icon: "settings", label: t("dashboard:sidebar.settings"), view: "settings" },
+  ];
 
-    const btn = (
-      <button
-        onClick={() => onViewChange(item.view)}
-        style={{
-          display: "flex",
-          width: "100%",
-          alignItems: "center",
-          gap: 10,
-          padding: collapsed ? "8px" : "7px 10px",
-          borderRadius: 6,
-          cursor: "pointer",
-          marginBottom: 1,
-          background: isActive ? "var(--k-bg)" : "transparent",
-          border: isActive ? "1px solid var(--k-border)" : "1px solid transparent",
-          color: isActive ? "var(--k-text-primary)" : "var(--k-text-secondary)",
-          fontSize: 13,
-          fontWeight: isActive ? 500 : 400,
-          justifyContent: collapsed ? "center" : "flex-start",
-          transition: "background 0.12s ease, color 0.12s ease",
-        }}
-        onMouseEnter={(e) => {
-          if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "var(--k-surface-2)";
-        }}
-        onMouseLeave={(e) => {
-          if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-        }}
-      >
-        <span className="relative shrink-0">
-          <item.icon style={{ width: 16, height: 16 }} />
-          {collapsed && <NavBadge count={count} collapsed isActive={isActive} />}
-        </span>
-        {!collapsed && (
-          <>
-            <span style={{ flex: 1, textAlign: "left" }}>{item.label}</span>
-            <NavBadge count={count} collapsed={false} isActive={isActive} />
-          </>
-        )}
-      </button>
-    );
-
-    if (!collapsed) return <div key={item.view}>{btn}</div>;
-
-    return (
-      <Tooltip key={item.view} delayDuration={200}>
-        <TooltipTrigger asChild>{btn}</TooltipTrigger>
-        <TooltipContent side="right">{item.label}</TooltipContent>
-      </Tooltip>
-    );
+  const entry = ({ icon, label, view }: NavDefinition): SidebarEntry => {
+    const count = getCount(view);
+    return {
+      id: view,
+      icon,
+      label,
+      active: view === activeView,
+      count,
+      countLabel: count !== undefined ? t("dashboard:sidebar.ticketsCount", { count }) : undefined,
+      live: view === activeView && count !== undefined,
+      onSelect: () => onViewChange(view),
+    };
   };
 
   return (
-    <TooltipProvider>
-      <aside
-        style={{
-          width: collapsed ? 56 : 240,
-          flexShrink: 0,
-          borderRight: "1px solid var(--k-border)",
-          background: "var(--k-surface)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          transition: "width 0.18s ease",
+    <>
+      <SidebarPiece
+        collapsed={collapsed}
+        onToggleCollapsed={onToggle}
+        bell={<NotificationsBell onViewChange={onViewChange} />}
+        search={{ label: t("dashboard:topChrome.searchPlaceholder"), shortcut: "⌘K", onOpen: () => setPaletteOpen(true) }}
+        groups={[mainNav.map(entry), ...(isAdmin ? [adminNav.map(entry)] : [])]}
+        language={{
+          value: language,
+          options: supportedLanguages.map((lang: SupportedLanguage) => ({ value: lang, label: languageMeta[lang].nativeLabel })),
+          onChange: (value) => setLanguage(value as SupportedLanguage),
         }}
-      >
-        {/* Nav items */}
-        <nav style={{ padding: 8, flex: 1 }}>
-          {mainNavItems.map(renderItem)}
-
-          {isAdmin && (
-            <>
-              <div
-                style={{
-                  margin: "8px 0",
-                  borderTop: "1px solid var(--k-border)",
-                }}
-              />
-              {adminNavItems.map(renderItem)}
-            </>
-          )}
-        </nav>
-
-        {/* Sidebar bottom — language switcher + user menu */}
-        <div
-          style={{
-            borderTop: "1px solid var(--k-border)",
-            padding: collapsed ? "8px" : "8px 12px",
-          }}
-        >
-          {!collapsed && (
-            <div style={{ marginBottom: 4 }}>
-              <LanguageSwitcher />
-            </div>
-          )}
-          <UserMenu collapsed={collapsed} />
-        </div>
-      </aside>
-    </TooltipProvider>
+        account={<AccountMenu collapsed={collapsed} onViewChange={onViewChange} onOpenShortcuts={() => setShortcutsOpen(true)} />}
+        labels={{
+          nav: t("dashboard:sidebar.workspace"),
+          collapse: t("dashboard:sidebar.collapse"),
+          expand: t("dashboard:sidebar.expand"),
+          language: t("common:language"),
+        }}
+      />
+      <CommandPaletteHost open={paletteOpen} onClose={() => setPaletteOpen(false)} onViewChange={onViewChange} />
+      <ShortcutsHost open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+    </>
   );
 }

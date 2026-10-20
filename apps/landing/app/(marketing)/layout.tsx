@@ -1,3 +1,6 @@
+"use client";
+
+import { Box } from "@kairo/ui";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 
@@ -9,7 +12,9 @@ export default function MarketingLayout({
   return (
     <>
       <Header />
-      <main className="flex-1">{children}</main>
+      <Box tag="main" flexGrow={1} flexShrink={1} flexBasis="auto">
+        {children}
+      </Box>
       <Footer />
     </>
   );

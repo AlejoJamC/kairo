@@ -7,6 +7,8 @@ export const en = {
     navDocs: "Docs",
     navChangelog: "Changelog",
     getStarted: "Get started",
+    language: "Language",
+    navLabel: "Main",
   },
   hero: {
     titlePrefix: "Resolve tickets in",
@@ -121,6 +123,15 @@ export const en = {
     testimonialRole: "Head of Support · LATAM",
   },
   wizard: {
+    rulesLabel: "Initial rules",
+    ruleOptional: "optional",
+    ruleRequired: "required",
+    channelLegend: "Channel",
+    channelAvailable: "available",
+    channelSoon: "coming soon",
+    channelsNoted: "Telegram and Instagram are also on the way.",
+    stepperLabel: "Setup progress",
+    back: "Back",
     title: "Welcome to Kairo",
     subtitle: "Connect your support inbox to get started",
     googleButton: "Continue with Google",
@@ -285,6 +296,7 @@ export const en = {
     heroTitle: "Honest pricing. No surprises.",
     heroSubtitle:
       "Start free. Move to Pro when your team needs more hands. Cancel anytime.",
+    billingLabel: "Billing period",
     billingAnnual: "Annual · -20%",
     billingMonthly: "Monthly",
     plans: {

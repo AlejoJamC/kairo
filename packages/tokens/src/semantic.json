@@ -1,0 +1,477 @@
+{
+  "$description": "Kairo semantic tokens. Light theme. Every value references core.json.",
+  "surface": {
+    "page": {
+      "$type": "color",
+      "$value": "{color.bg}",
+      "$description": "App background and ticket pane; public web page background."
+    },
+    "panel": {
+      "$type": "color",
+      "$value": "{color.surface}",
+      "$description": "Queue, context panel, cards, popovers, secondary buttons."
+    },
+    "sidebar": {
+      "$type": "color",
+      "$value": "{color.side}",
+      "$description": "App sidebar and status bar; alternate public web sections."
+    },
+    "sunken": {
+      "$type": "color",
+      "$value": "{color.sunk}",
+      "$description": "Inputs, card footers, keyboard keys."
+    },
+    "hover": {
+      "$type": "color",
+      "$value": "{color.hover}",
+      "$description": "Row, nav and icon-button hover; segmented control track."
+    },
+    "inverse": {
+      "$type": "color",
+      "$value": "{color.inverse-bg}",
+      "$description": "Toast background."
+    },
+    "glass": {
+      "$type": "color",
+      "$value": "{color.glass}",
+      "$description": "Public web navigation bar, with backdrop blur."
+    },
+    "scrim": {
+      "$type": "color",
+      "$value": "{color.scrim}",
+      "$description": "Overlay behind the command palette."
+    }
+  },
+  "text": {
+    "primary": {
+      "$type": "color",
+      "$value": "{color.text}",
+      "$description": "Primary text on every surface."
+    },
+    "secondary": {
+      "$type": "color",
+      "$value": "{color.muted}",
+      "$description": "Secondary text: sender, assistant body, nav labels, web body copy."
+    },
+    "tertiary": {
+      "$type": "color",
+      "$value": "{color.faint}",
+      "$description": "Metadata, counts, IDs, timestamps, placeholders. Lightest allowed text color."
+    },
+    "onAccent": {
+      "$type": "color",
+      "$value": "{color.on-accent}",
+      "$description": "Text and icons on accent fills and avatars."
+    },
+    "inverse": {
+      "$type": "color",
+      "$value": "{color.inverse-text}",
+      "$description": "Text on the toast."
+    },
+    "link": {
+      "$type": "color",
+      "$value": "{color.accent-ink}",
+      "$description": "Links and accent text."
+    },
+    "linkHover": {
+      "$type": "color",
+      "$value": "{color.accent-hover}",
+      "$description": "Link hover."
+    }
+  },
+  "border": {
+    "default": {
+      "$type": "color",
+      "$value": "{color.line}",
+      "$description": "1px dividers, cards, chips, buttons."
+    },
+    "strong": {
+      "$type": "color",
+      "$value": "{color.line-strong}",
+      "$description": "Hover borders, keyboard keys, dashed empty states, inactive tracks."
+    },
+    "focus": {
+      "$type": "color",
+      "$value": "{color.focus-ring}",
+      "$description": "2px focus outline with 1px offset."
+    }
+  },
+  "accent": {
+    "default": {
+      "$type": "color",
+      "$value": "{color.accent}",
+      "$description": "The single brand color: primary button, active tab, selection, AI signal."
+    },
+    "ink": {
+      "$type": "color",
+      "$value": "{color.accent-ink}",
+      "$description": "Accent used as text or icon."
+    },
+    "soft": {
+      "$type": "color",
+      "$value": "{color.accent-soft}",
+      "$description": "Selection fill: active row, active chip, mention."
+    },
+    "line": {
+      "$type": "color",
+      "$value": "{color.accent-line}",
+      "$description": "Inset border of accent-soft fills; focused input border."
+    },
+    "hover": {
+      "$type": "color",
+      "$value": "{color.accent-hover}",
+      "$description": "Accent link hover."
+    }
+  },
+  "status": {
+    "open": {
+      "$type": "color",
+      "$value": "{color.faint}",
+      "$description": "Ticket status glyph: Open."
+    },
+    "awaiting_customer": {
+      "$type": "color",
+      "$value": "{color.warn}",
+      "$description": "Ticket status glyph: Awaiting reply."
+    },
+    "resolved": {
+      "$type": "color",
+      "$value": "{color.ok}",
+      "$description": "Ticket status glyph: Resolved."
+    },
+    "escalated": {
+      "$type": "color",
+      "$value": "{color.mood}",
+      "$description": "Escalated badge and escalate arrow."
+    },
+    "in_progress": {
+      "$type": "color",
+      "$value": "{color.accent}",
+      "$description": "Ticket status glyph: in progress."
+    },
+    "ai_resolved": {
+      "$type": "color",
+      "$value": "{color.ok-ink}",
+      "$description": "Ticket status glyph: resolved by the AI. Darker than resolved so the two differ in lightness."
+    },
+    "reopened": {
+      "$type": "color",
+      "$value": "{color.cat-billing}",
+      "$description": "Ticket status glyph: reopened."
+    },
+    "closed": {
+      "$type": "color",
+      "$value": "{color.p3}",
+      "$description": "Ticket status glyph: closed."
+    }
+  },
+  "escalation": {
+    "text": {
+      "$type": "color",
+      "$value": "{color.mood-ink}",
+      "$description": "Text and arrow of the Escalated pill. 5.18:1 on surface.panel."
+    },
+    "border": {
+      "$type": "color",
+      "$value": "{color.mood-line}",
+      "$description": "1px inset ring of the Escalated pill."
+    }
+  },
+  "priority": {
+    "P1": {
+      "$type": "color",
+      "$value": "{color.p1}",
+      "$description": "Priority glyph, three filled bars."
+    },
+    "P2": {
+      "$type": "color",
+      "$value": "{color.p2}",
+      "$description": "Priority glyph, two filled bars."
+    },
+    "P3": {
+      "$type": "color",
+      "$value": "{color.p3}",
+      "$description": "Priority glyph, one filled bar."
+    },
+    "track": {
+      "$type": "color",
+      "$value": "{color.line-strong}",
+      "$description": "Unfilled bars of the priority glyph."
+    }
+  },
+  "sentiment": {
+    "frustrated": {
+      "$type": "color",
+      "$value": "{color.mood}",
+      "$description": "Sentiment face, frustrated."
+    },
+    "neutral": {
+      "$type": "color",
+      "$value": "{color.faint}",
+      "$description": "Sentiment face, neutral."
+    },
+    "positive": {
+      "$type": "color",
+      "$value": "{color.ok}",
+      "$description": "Sentiment face, positive."
+    },
+    "aggressive": {
+      "$type": "color",
+      "$value": "{color.bad}",
+      "$description": "Sentiment face, aggressive. Stronger than frustrated."
+    }
+  },
+  "sla": {
+    "overdueText": {
+      "$type": "color",
+      "$value": "{color.bad-ink}",
+      "$description": "Overdue SLA text and clock icon."
+    },
+    "overdueBar": {
+      "$type": "color",
+      "$value": "{color.bad}",
+      "$description": "Overdue SLA bar."
+    },
+    "atRiskText": {
+      "$type": "color",
+      "$value": "{color.sla-alert-ink}",
+      "$description": "At-risk SLA text and clock icon."
+    },
+    "escalationText": {
+      "$type": "color",
+      "$value": "{color.sla-escalate-ink}",
+      "$description": "SLA text and clock icon between the automatic escalation threshold and the breach."
+    },
+    "track": {
+      "$type": "color",
+      "$value": "{color.hover}",
+      "$description": "SLA scale track."
+    },
+    "onTime": {
+      "$type": "color",
+      "$value": "{color.sla-on-time}",
+      "$description": "SLA scale, on-time segment (accent at 45%)."
+    },
+    "atRisk": {
+      "$type": "color",
+      "$value": "{color.warn}",
+      "$description": "SLA scale, at-risk segment."
+    },
+    "escalation": {
+      "$type": "color",
+      "$value": "{color.mood}",
+      "$description": "SLA scale, escalation segment."
+    },
+    "minimumMarker": {
+      "$type": "color",
+      "$value": "{color.text}",
+      "$description": "SLA scale, 2px minimum response marker."
+    },
+    "alertLabel": {
+      "$type": "color",
+      "$value": "{color.sla-alert-ink}",
+      "$description": "SLA scale legend, alert threshold."
+    },
+    "escalationLabel": {
+      "$type": "color",
+      "$value": "{color.sla-escalate-ink}",
+      "$description": "SLA scale legend, escalation threshold."
+    },
+    "breachLabel": {
+      "$type": "color",
+      "$value": "{color.bad-ink}",
+      "$description": "SLA scale legend, breach threshold."
+    }
+  },
+  "ticketType": {
+    "support": {
+      "$type": "color",
+      "$value": "{color.violet}",
+      "$description": "Type dot inside a neutral chip."
+    },
+    "prospect": {
+      "$type": "color",
+      "$value": "{color.ok}",
+      "$description": "Type dot inside a neutral chip; labeled Lead."
+    },
+    "spam": {
+      "$type": "color",
+      "$value": "{color.p3}",
+      "$description": "Type dot inside a neutral chip."
+    },
+    "internal": {
+      "$type": "color",
+      "$value": "{color.cat-internal}",
+      "$description": "Type dot inside a neutral chip."
+    },
+    "other": {
+      "$type": "color",
+      "$value": "{color.muted}",
+      "$description": "Type dot inside a neutral chip."
+    }
+  },
+  "category": {
+    "technical": {
+      "$type": "color",
+      "$value": "{color.teal}",
+      "$description": "Category dot inside a neutral chip."
+    },
+    "billing": {
+      "$type": "color",
+      "$value": "{color.cat-billing}",
+      "$description": "Category dot inside a neutral chip."
+    },
+    "account": {
+      "$type": "color",
+      "$value": "{color.cat-account}",
+      "$description": "Category dot inside a neutral chip."
+    },
+    "general": {
+      "$type": "color",
+      "$value": "{color.p3}",
+      "$description": "Category dot inside a neutral chip."
+    },
+    "not_applicable": {
+      "$type": "color",
+      "$value": "{color.faint}",
+      "$description": "Category dot inside a neutral chip."
+    }
+  },
+  "notes": {
+    "background": {
+      "$type": "color",
+      "$value": "{color.note-soft}",
+      "$description": "Internal note, note-mode composer, draft-client notice."
+    },
+    "border": {
+      "$type": "color",
+      "$value": "{color.note-line}",
+      "$description": "Inset border of every note-soft surface."
+    },
+    "label": {
+      "$type": "color",
+      "$value": "{color.note}",
+      "$description": "Team-only labels, note timestamps, draft badge."
+    },
+    "text": {
+      "$type": "color",
+      "$value": "{color.note-ink}",
+      "$description": "Note body and author."
+    },
+    "sendAction": {
+      "$type": "color",
+      "$value": "{color.note-action}",
+      "$description": "Send button in internal-note mode."
+    }
+  },
+  "mentions": {
+    "chipBackground": {
+      "$type": "color",
+      "$value": "{color.accent-soft}",
+      "$description": "Mention chip fill."
+    },
+    "chipBorder": {
+      "$type": "color",
+      "$value": "{color.accent-line}",
+      "$description": "Mention chip inset border."
+    },
+    "chipText": {
+      "$type": "color",
+      "$value": "{color.accent-ink}",
+      "$description": "Mention chip text."
+    },
+    "selfBackground": {
+      "$type": "color",
+      "$value": "{color.accent}",
+      "$description": "Mention of the current user."
+    },
+    "selfText": {
+      "$type": "color",
+      "$value": "{color.on-accent}",
+      "$description": "Text of a mention of the current user."
+    },
+    "unreadDot": {
+      "$type": "color",
+      "$value": "{color.accent}",
+      "$description": "Unread mention dot in rows, tabs and the bell."
+    },
+    "badgeBackground": {
+      "$type": "color",
+      "$value": "{color.accent}",
+      "$description": "Mentioned-you badge."
+    },
+    "badgeText": {
+      "$type": "color",
+      "$value": "{color.on-accent}",
+      "$description": "Mentioned-you badge text."
+    }
+  },
+  "urgency": {
+    "high": {
+      "$type": "color",
+      "$value": "{color.p1}",
+      "$description": "Urgency high. Same scale as priority."
+    },
+    "medium": {
+      "$type": "color",
+      "$value": "{color.p2}",
+      "$description": "Urgency medium."
+    },
+    "low": {
+      "$type": "color",
+      "$value": "{color.p3}",
+      "$description": "Urgency low."
+    }
+  },
+  "actionability": {
+    "needs_action": {
+      "$type": "color",
+      "$value": "{color.muted}",
+      "$description": "Neutral. Not rendered today."
+    },
+    "fyi": {
+      "$type": "color",
+      "$value": "{color.faint}",
+      "$description": "Neutral. Not rendered today."
+    }
+  },
+  "subjectMatter": {
+    "service": {
+      "$type": "color",
+      "$value": "{color.muted}",
+      "$description": "Neutral. Not rendered today."
+    },
+    "commercial_demand": {
+      "$type": "color",
+      "$value": "{color.cat-internal}",
+      "$description": "Neutral. Not rendered today."
+    },
+    "commercial_offer": {
+      "$type": "color",
+      "$value": "{color.faint}",
+      "$description": "Neutral. Not rendered today."
+    },
+    "admin": {
+      "$type": "color",
+      "$value": "{color.p3}",
+      "$description": "Neutral. Not rendered today."
+    }
+  },
+  "provenance": {
+    "tenant_mailbox": {
+      "$type": "color",
+      "$value": "{color.accent-ink}",
+      "$description": "Message from the connected mailbox."
+    },
+    "same_company": {
+      "$type": "color",
+      "$value": "{color.cat-internal}",
+      "$description": "Message from the same company."
+    },
+    "external": {
+      "$type": "color",
+      "$value": "{color.muted}",
+      "$description": "Message from outside the company."
+    }
+  }
+}

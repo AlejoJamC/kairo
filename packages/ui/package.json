@@ -10,28 +10,35 @@
       "react-native": "./src/index.native.ts",
       "default": "./src/index.ts"
     },
-    "./lib/utils": "./src/lib/utils.ts",
     "./tamagui.config": "./tamagui.config.ts"
   },
   "scripts": {
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit && tsc --noEmit -p tsconfig.native.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.native.json",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@kairo/tokens": "workspace:*",
     "@kairo/types": "workspace:*",
     "@tamagui/config": "^1.144.3",
     "@tamagui/core": "^1.144.3",
-    "@tamagui/input": "^1.144.3",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^3.5.0"
+    "@tamagui/input": "^1.144.3"
   },
   "peerDependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-native": "*"
+    "react-native": "*",
+    "react-native-svg": "^15.0.0"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "typescript": "~6.0.3"
+    "jsdom": "^29.1.1",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-native-svg": "15.15.3",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.5"
   }
 }

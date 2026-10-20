@@ -1,7 +1,11 @@
 import { useState } from "react";
+import { Navigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { AuthProvider, useAuth } from "@/contexts/auth-context";
-import { TopChrome } from "@/components/top-chrome";
+import { AuthProvider, useAuth } from "@kairo/client-core/auth";
+import { getPlatform } from "@kairo/client-core/config";
+import { useSidebarCounts } from "@kairo/client-core/hooks/use-sidebar-counts";
+import { SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS } from "@/lib/poll-intervals";
+import { AppStatusBar } from "@/components/app-status-bar";
 import { Sidebar } from "@/components/sidebar";
 import { Inbox } from "@/components/inbox";
 import { ClientDirectory } from "@/components/client-directory";
@@ -14,6 +18,9 @@ import { AiReviewView } from "@/components/ai-review-view";
 import { KnowledgeView } from "@/components/knowledge-view";
 import { ChannelsSettings } from "@/components/channels-settings";
 import type { AppView } from "@/types";
+import { useActiveView } from "@/hooks/useActiveView";
+import { pathForView } from "@/routes";
+import { Box, Spinner, Text } from "@kairo/ui";
 
 const COMING_SOON_VIEWS: AppView[] = ["in-progress"];
 
@@ -24,59 +31,42 @@ function ComingSoon({ view }: { view: AppView }) {
     view === "resolved" ? "dashboard:sidebar.resolved" :
     "dashboard:sidebar.escalation";
   return (
-    <div
-      style={{
-        display: "flex",
-        flex: 1,
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        background: "var(--k-bg)",
-      }}
-    >
-      <p style={{ color: "var(--k-text-primary)", fontSize: 15, fontWeight: 600 }}>
+    <Box display="flex" flexGrow={1} flexShrink={1} flexBasis="0%" flexDirection="column" alignItems="center" justifyContent="center" gap={8} backgroundColor="var(--k-bg)">
+      <Text tag="p" color="var(--k-text-primary)" fontSize={15} fontWeight={600} display="block">
         {t(titleKey)}
-      </p>
-      <p style={{ color: "var(--k-text-tertiary)", fontSize: 13 }}>
+      </Text>
+      <Text tag="p" color="var(--k-text-tertiary)" fontSize={13} display="block">
         {t("dashboard:settings.comingSoon")}
-      </p>
-    </div>
+      </Text>
+    </Box>
   );
 }
 
 function AppContent() {
   const { loading } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => localStorage.getItem("sidebar-collapsed") === "true"
+    () => getPlatform().storage.getItem("sidebar-collapsed") === "true"
   );
-  const [activeView, setActiveView] = useState<AppView>("triage");
+  const [routedView, setActiveView] = useActiveView();
+  const counts = useSidebarCounts(SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS);
 
   const handleToggle = () => {
     setSidebarCollapsed((c) => {
       const next = !c;
-      localStorage.setItem("sidebar-collapsed", String(next));
+      getPlatform().storage.setItem("sidebar-collapsed", String(next));
       return next;
     });
   };
 
+  if (routedView === null) return <Navigate to={pathForView("triage")} replace />;
+  const activeView = routedView;
+
   if (loading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100vh",
-          flexDirection: "column",
-          gap: 12,
-          background: "var(--k-bg)",
-        }}
-      >
-        {/* kairo-spinner defined in index.css — uses --k-accent */}
-        <div className="kairo-spinner" />
-        <p style={{ color: "var(--k-text-tertiary)", fontSize: 13 }}>Loading Kairo…</p>
-      </div>
+      <Box display="flex" alignItems="center" justifyContent="center" height="100vh" flexDirection="column" gap={12} backgroundColor="var(--k-bg)">
+        <Spinner size="lg" />
+        <Text tag="p" color="var(--k-text-tertiary)" fontSize={13} display="block">Loading Kairo…</Text>
+      </Box>
     );
   }
 
@@ -96,36 +86,27 @@ function AppContent() {
   };
 
   return (
-    <div
-      style={{
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--k-bg)",
-        overflow: "hidden",
-      }}
-    >
-      {/* Top chrome — 56 px: logo/toggle | search | bell + avatar */}
-      <TopChrome collapsed={sidebarCollapsed} onToggle={handleToggle} onViewChange={setActiveView} />
-
-      {/* Body — sidebar + main content */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+    <Box height="100vh" display="flex" flexDirection="column" backgroundColor="var(--k-bg)" overflow="hidden">
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" overflow="hidden">
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={handleToggle}
           activeView={activeView}
           onViewChange={setActiveView}
+          counts={counts}
         />
         {/* overflowX: auto (not hidden) so the combined min-widths of the ticket
             list (360px fixed), center panel (520px min — see ticket-detail.tsx),
             and right panel (340px floor — see use-resizable-panel.ts) become a
             real supported minimum: below that sum the row scrolls horizontally
             instead of clipping/squishing the center column. */}
-        <main style={{ flex: 1, overflowY: "hidden", overflowX: "auto", display: "flex" }}>
+        <Box tag="main" flexGrow={1} flexShrink={1} flexBasis="0%" overflowY="hidden" overflowX="auto" display="flex">
           {renderView()}
-        </main>
-      </div>
-    </div>
+        </Box>
+      </Box>
+
+      <AppStatusBar counts={counts} />
+    </Box>
   );
 }
 

@@ -1,17 +1,16 @@
+"use client";
+
 import { WizardChrome } from "@/components/wizard-chrome";
-import { WizardStepper } from "@/components/wizard-stepper";
+import { WizardSteps } from "@/components/wizard-steps";
 import { DetectPageClient } from "./_client";
+import { Box } from "@kairo/ui";
 
 export default function DetectPage() {
   return (
-    <WizardChrome>
-      <WizardStepper
-        steps={["Conectar", "Detectar", "Triage"]}
-        current={1}
-      />
-      <div style={{ background: "white", border: "1px solid var(--border)", borderRadius: 14, padding: 40 }}>
+    <WizardChrome stepper={<WizardSteps current="detect" />}>
+      <Box backgroundColor="var(--kairo-color-surface)" borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" borderRadius={14} padding={40}>
         <DetectPageClient />
-      </div>
+      </Box>
     </WizardChrome>
   );
 }

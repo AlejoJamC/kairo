@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022"],
+    "customConditions": ["react-native"],
+    // Relative imports resolve to the .native variant, as Metro does.
+    "moduleSuffixes": [".native", ""],
+    "noEmit": true
+  },
+  "include": ["src/index.native.ts", "src/**/*.native.ts", "src/**/*.native.tsx"]
+}

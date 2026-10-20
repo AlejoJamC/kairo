@@ -2,7 +2,7 @@
   "title": "Panel",
   "correction": {
     "triggerLabel": "¿Clasificación incorrecta?",
-    "dialogTitle": "Corregir clasificación",
+    "dialogTitle": "Corregir la clasificación",
     "dialogSubtitle": "Selecciona los valores correctos. Solo cambia lo que está mal.",
     "fieldPriority": "Prioridad",
     "fieldType": "Tipo de ticket",
@@ -16,7 +16,16 @@
     "errorEmpty": "Selecciona al menos un campo para corregir",
     "errorGeneric": "No se pudo guardar la corrección. Intenta de nuevo.",
     "correctedBadge": "Corregido",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "tones": {
+      "aggressive": "agresivo",
+      "frustrated": "frustrado",
+      "neutral": "neutral",
+      "positive": "positivo"
+    },
+    "explanation": "Elija las etiquetas que correspondan. Triage aprende de cada corrección.",
+    "categories": "Categorías",
+    "save": "Guardar corrección"
   },
   "ticketCard": {
     "slaBreached": "VENCIDO",
@@ -60,8 +69,7 @@
     "detailOverdue": "ANS vencido hace {{duration}} sin primera respuesta"
   },
   "ticketList": {
-    "header": "Tickets",
-    "classifyAll": "Clasificar todo",
+    "header": "Triage",
     "classifying": "Clasificando...",
     "scanning": "Escaneando correos... {{count}} ticket clasificado",
     "scanning_other": "Escaneando correos... {{count}} tickets clasificados",
@@ -73,7 +81,7 @@
     "filterAll": "Todos",
     "moreActions": "Más acciones",
     "syncGmail": "Sincronizar Gmail",
-    "syncing": "Sincronizando...",
+    "syncing": "Sincronizando…",
     "syncSuccess": "{{created}} nuevos · {{skipped}} omitidos",
     "syncError": "Error al sincronizar",
     "selectedCount_one": "{{count}} seleccionado",
@@ -87,7 +95,10 @@
     "similarSuggestion_one": "{{count}} ticket parece referirse al mismo problema. ¿Agruparlos?",
     "similarSuggestion_other": "{{count}} tickets parecen referirse al mismo problema. ¿Agruparlos?",
     "similarAccept": "Agrupar",
-    "similarDismiss": "Descartar"
+    "similarDismiss": "Descartar",
+    "filterLabel": "Filtrar por prioridad",
+    "classify": "Clasificar",
+    "countLabel": "{{shown}} de {{open}} tickets abiertos"
   },
   "tickets": {
     "title": "Tickets Abiertos",
@@ -110,65 +121,80 @@
     "aiReview": "Clasificación IA",
     "knowledge": "Conocimiento",
     "resolved": "Resuelto",
-    "clients": "Clientes"
+    "clients": "Clientes",
+    "workspace": "Espacio de trabajo",
+    "collapse": "Colapsar barra lateral",
+    "expand": "Expandir barra lateral",
+    "ticketsCount_one": "{{count}} ticket",
+    "ticketsCount_other": "{{count}} tickets"
   },
   "topChrome": {
-    "searchPlaceholder": "Buscar tickets, clientes, KB…",
+    "searchPlaceholder": "Buscar o ejecutar un comando…",
     "notifications": {
       "title": "Actividad",
       "unreadCount": "{{count}} sin leer",
       "markRead": "Marcar leídas",
       "tabAll": "Todas",
-      "tabUnread": "No leídas",
       "tabMentions": "@menciones",
-      "empty": "◌ sin notificaciones",
-      "liveStream": "stream en vivo",
-      "viewAll": "Ver toda la actividad →"
+      "empty": "◌ sin notificaciones"
     },
     "account": {
-      "roleBadge": "Agente · Soporte",
       "statusSection": "Estado",
       "statusOnline": "En línea",
       "statusBusy": "En llamada",
       "statusAway": "Ausente",
       "statusOffline": "Invisible",
-      "workspaceSection": "Workspace",
-      "workspaceName": "Kairo Workspace",
-      "workspacePlan": "plan Pro",
-      "workspaceChange": "cambiar",
-      "menuProfile": "Mi perfil",
       "menuSettings": "Configuración",
-      "menuShortcuts": "Atajos de teclado",
-      "menuDocs": "Documentación",
       "appearanceSection": "Apariencia",
       "themeLight": "Claro",
-      "themeAuto": "Auto",
       "themeDark": "Oscuro",
-      "signOut": "Cerrar sesión"
+      "signOut": "Cerrar sesión",
+      "menuShortcuts": "Atajos de teclado",
+      "title": "Cuenta"
+    },
+    "palette": {
+      "searchTitle": "Paleta de comandos",
+      "searchLabel": "Buscar",
+      "ticketsSection": "Tickets",
+      "goToSection": "Ir a",
+      "runFirst": "ejecutar el primero",
+      "close": "cerrar",
+      "ticketPrefix": "KAI-",
+      "notifications": "Notificaciones",
+      "account": "Cuenta",
+      "toggleSidebar": "Mostrar u ocultar la barra lateral",
+      "actionsSection": "Acciones"
     }
   },
   "awaitingView": {
     "title": "En espera del cliente",
-    "subtitle": "Tickets donde enviaste una respuesta y el cliente aún no ha contestado.",
-    "empty": "No hay tickets esperando respuesta del cliente. ¡Buen trabajo! 🎉",
+    "subtitle": "Tickets donde envió una respuesta y el cliente aún no contesta.",
+    "empty": "Nada en espera.",
     "lastReply": "Última respuesta",
     "followUp": "Seguimiento",
     "openTicket": "Ver ticket",
-    "ticketNumber": "#{{number}}"
+    "ticketNumber": "#{{number}}",
+    "countLabel_one": "{{count}} ticket en espera del cliente",
+    "countLabel_other": "{{count}} tickets en espera del cliente",
+    "emptyHint": "Cuando responda un ticket, permanece aquí hasta que el cliente conteste.",
+    "followUpDraft": "Hola {{name}}, ¿tuvo oportunidad de revisar nuestra respuesta anterior? Estamos para ayudarle."
   },
   "resolvedView": {
     "title": "Resueltos",
     "subtitle": "Tickets cerrados, en modo solo lectura.",
-    "empty": "Todavía no hay tickets resueltos.",
-    "ticketNumber": "#{{number}}"
+    "empty": "Aún no hay tickets resueltos.",
+    "ticketNumber": "#{{number}}",
+    "countLabel_one": "{{count}} ticket resuelto",
+    "countLabel_other": "{{count}} tickets resueltos",
+    "emptyHint": "Los tickets que resuelva aparecen aquí en modo solo lectura."
   },
   "aiReviewView": {
     "title": "Clasificación IA",
     "subtitle": "Lo que la IA clasificó en cada ticket. Confirmar o rechazar cada propuesta es lo que le enseña a Kairo cuándo puede actuar sola.",
     "tabPending": "Por revisar",
     "tabAutoApproved": "Aprobadas por la IA",
-    "emptyPending": "No hay clasificaciones por revisar.",
-    "emptyAutoApproved": "No hay clasificaciones aprobadas por la IA pendientes de verificar.",
+    "emptyPending": "Nada por revisar.",
+    "emptyAutoApproved": "Ninguna todavía.",
     "proposalTitle": "Propuesta de la IA",
     "fieldType": "Tipo",
     "fieldCategory": "Categoría",
@@ -178,11 +204,14 @@
     "fieldModel": "Modelo",
     "confirm": "Confirmar",
     "reject": "Rechazar",
-    "error": "No se pudo guardar la revisión."
+    "error": "No se pudo guardar la revisión.",
+    "filters": "Propuestas",
+    "emptyPendingHint": "Toda propuesta de la IA tiene respuesta.",
+    "emptyAutoApprovedHint": "Ningún ticket alcanza el umbral de resolución automática. Ajústelo en Configuración › Motor de triage."
   },
   "knowledgeView": {
     "title": "Conocimiento",
-    "subtitle": "Hechos del negocio y artículos propuestos desde correos y tickets resueltos. Revísalos antes de publicar.",
+    "subtitle": "Artículos que Kairo puede citar en borradores y respuestas del asistente.",
     "evidenceTitle": "Fuente y validación",
     "validationScope": "Estas comprobaciones corresponden a la propuesta original de la IA. Revisa cualquier edición antes de publicar.",
     "evidenceUnavailable": "No se pudo cargar la evidencia. Verifica el correo original antes de aprobar.",
@@ -219,13 +248,44 @@
     "save": "Guardar",
     "discard": "Descartar",
     "delete": "Eliminar",
-    "error": "No se pudo completar la acción."
+    "error": "No se pudo completar la acción.",
+    "countLabel_one": "{{count}} artículo",
+    "countLabel_other": "{{count}} artículos",
+    "editArticle": "Editar artículo",
+    "titlePlaceholder": "Título del artículo",
+    "contentPlaceholder": "Escriba el contenido. Kairo lo usa como fuente al responder.",
+    "published": "Publicado",
+    "review": "Revisión",
+    "states": {
+      "published": "publicado",
+      "draft": "borrador",
+      "review": "por revisar",
+      "reviewed": "revisado"
+    },
+    "tags": "Etiquetas",
+    "updated": "Actualizado",
+    "note": "Kairo cita un artículo solo cuando está publicado y es relevante para el ticket (umbral 0.80).",
+    "discardChanges": "Descartar",
+    "discardChangesAsk": "¿Descartar los cambios?",
+    "filterAll": "Todos",
+    "filters": "Estado",
+    "search": "Buscar artículos",
+    "colArticle": "Artículo",
+    "colState": "Estado",
+    "add": "Agregar artículo",
+    "loadError": "No se pudieron cargar los artículos.",
+    "emptyTitle": "Aún no hay artículos",
+    "emptyDescription": "Kairo cita los artículos publicados cuando superan el umbral de relevancia (0.80). Las propuestas aparecen aquí a medida que aprende de sus tickets.",
+    "noResults": "Ningún artículo coincide con estos filtros."
   },
   "escalatedView": {
     "title": "Escalados",
-    "subtitle": "Tickets que fueron escalados y requieren atención prioritaria.",
-    "empty": "No hay tickets escalados por ahora.",
-    "ticketNumber": "#{{number}}"
+    "subtitle": "Tickets que se escalaron y requieren atención prioritaria.",
+    "empty": "Nada escalado.",
+    "ticketNumber": "#{{number}}",
+    "countLabel_one": "{{count}} ticket escalado",
+    "countLabel_other": "{{count}} tickets escalados",
+    "emptyHint": "Escale un ticket desde Triage (E) y aparece aquí."
   },
   "settings": {
     "title": "Configuración de Perfil",
@@ -268,7 +328,12 @@
       "fieldMin": "Tiempo mínimo de respuesta",
       "fieldRisk": "Alerta de riesgo",
       "fieldEscalation": "Escalamiento automático",
-      "unitMinutes": "min"
+      "unitMinutes": "min",
+      "orderError": "El orden debe ser mínimo < alerta < escalamiento < máximo",
+      "legendMin": "mín.",
+      "legendAlert": "alerta",
+      "legendEscalation": "escalamiento",
+      "legendBreach": "vencimiento"
     },
     "workspace": {
       "title": "Workspace",
@@ -288,7 +353,20 @@
       "seats": "{{used}} / {{total}} asientos usados en el plan {{plan}}.",
       "invite": "Invitar",
       "statusActive": "activo",
-      "statusAway": "ausente"
+      "statusAway": "ausente",
+      "more": "Más",
+      "person": "Persona",
+      "role": "Rol",
+      "state": "Estado",
+      "options": "Opciones",
+      "you": "(usted)",
+      "statusInvited": "invitado",
+      "roles": {
+        "owner": "Propietario",
+        "admin": "Administrador",
+        "supervisor": "Supervisor",
+        "agent": "Agente"
+      }
     },
     "integrations": {
       "title": "Integraciones",
@@ -296,7 +374,20 @@
       "configure": "Configurar",
       "connect": "Conectar",
       "requestAccess": "Solicitar acceso",
-      "comingSoon": "PRÓXIMAMENTE"
+      "comingSoon": "PRÓXIMAMENTE",
+      "requested": "Solicitado",
+      "gmailDescription": "Conecte su bandeja de Gmail.",
+      "channelsTitle": "Canales de soporte",
+      "emailInboxes": "Bandejas de correo",
+      "emailInboxesDesc": "Canales de correo conectados a esta cuenta.",
+      "manage": "Administrar",
+      "catalog": {
+        "slack": "Notificaciones y tickets desde mensajes directos",
+        "whatsapp": "Twilio y Meta WABA",
+        "telegram": "Próximamente",
+        "instagram": "Próximamente",
+        "zendesk": "Importar tickets históricos"
+      }
     },
     "triage": {
       "title": "Triage Engine",
@@ -359,7 +450,14 @@
     "updating": "Actualizando…",
     "updateButton": "Actualizar Contraseña",
     "setButton": "Establecer Contraseña",
-    "error": "Error al actualizar la contraseña. Inténtalo de nuevo."
+    "error": "Error al actualizar la contraseña. Inténtalo de nuevo.",
+    "strength": {
+      "0": "—",
+      "1": "débil",
+      "2": "media",
+      "3": "buena",
+      "4": "fuerte"
+    }
   },
   "ticketDetail": {
     "customer": "Cliente",
@@ -388,9 +486,20 @@
     "assignToMe": "Asignar a mí",
     "assigning": "Asignando…",
     "assigned": "Asignado",
-    "readOnlyBadge": "Solo lectura"
+    "readOnlyBadge": "Solo lectura",
+    "escalated": "ESCALADO",
+    "statusMenu": "Cambiar estado",
+    "viewNotes_one": "Ver {{count}} nota interna",
+    "viewNotes_other": "Ver {{count}} notas internas",
+    "path": "Ruta",
+    "position": "Ticket {{index}} de {{total}}",
+    "previous": "Ticket anterior",
+    "next": "Ticket siguiente"
   },
   "replyBar": {
+    "textareaLabel": "Mensaje",
+    "retry": "Reintentar",
+    "resize": "Cambiar tamaño del editor",
     "sending": "Enviando...",
     "sendSuccess": "Respuesta enviada correctamente.",
     "aiSuggestionBanner": "Kairo sugirió esta respuesta. Puedes editarla antes de enviar.",
@@ -408,7 +517,7 @@
     "actionEscalar": "Escalar",
     "modeReply": "Respuesta",
     "modeNote": "Nota interna",
-    "notePlaceholder": "Escribe una nota interna… (solo visible para tu equipo)",
+    "notePlaceholder": "Agregue una nota interna — escriba @ para mencionar…",
     "noteVisibilityHint": "Solo visible para tu equipo",
     "sendNote": "Agregar nota",
     "sendingNote": "Guardando…",
@@ -418,7 +527,12 @@
     "escalateConfirm": "Confirmar escalación",
     "escalateCancel": "Cancelar",
     "escalating": "Escalando…",
-    "mentionChipLabel": "Mencionado: {{name}}"
+    "mentionChipLabel": "Mencionado: {{name}}",
+    "modeLabel": "Modo del compositor",
+    "hintReply": "Se envía a {{to}}",
+    "hintNote": "Solo la ve su equipo",
+    "typeAt": "Escriba @ para mencionar a un compañero",
+    "replyPlaceholder": "Escriba su respuesta a {{name}}…"
   },
   "notes": {
     "loading": "cargando notas…",
@@ -449,13 +563,14 @@
     "header": "Mencionar a",
     "counter": "{{shown}} de {{total}}",
     "more": "+{{count}} más · sigue escribiendo para filtrar",
-    "empty": "No hay miembros que coincidan",
+    "empty": "Ningún compañero coincide",
     "willNotify": "será notificada",
     "willNotify_plural": "serán notificados",
     "removeChip": "Quitar la mención de {{name}}",
     "keyNavigate": "navegar",
     "keyInsert": "insertar",
-    "keyClose": "cerrar"
+    "keyClose": "cerrar",
+    "searching": "Buscando…"
   },
   "templatePicker": {
     "searchPlaceholder": "Buscar plantilla...",
@@ -554,6 +669,11 @@
     "assistantStarterDraft": "Redacta una respuesta de reembolso para el cliente",
     "assistantStarterSimilar": "Busca casos similares ya resueltos",
     "assistantThinking": "Pensando…",
+    "assistantWriting": "Escribiendo…",
+    "assistantSend": "Enviar",
+    "assistantStop": "Detener",
+    "assistantRetry": "Reintentar",
+    "assistantQuestionLabel": "Preguntar al asistente de Kairo",
     "assistantReasoned": "Razonó · {{count}} pasos",
     "assistantSources": "Fuentes",
     "assistantDraftBadge": "BORRADOR",
@@ -575,7 +695,9 @@
     "assistantOperation_proposed": "Requiere revisión humana",
     "assistantOperation_failed": "Fallido",
     "assistantRequestFailed": "Asistente no disponible. Inténtalo de nuevo.",
-    "assistantWaiting": "Consultando el ticket…"
+    "assistantWaiting": "Consultando el ticket…",
+    "contextTabs": "Contexto",
+    "account": "Cuenta"
   },
   "relatedHistory": {
     "title": "Historial relacionado",
@@ -585,6 +707,11 @@
     "ticketNumber": "Ticket #{{number}}"
   },
   "decisionWorkflow": {
+    "executionLabel": "Ejecución",
+    "authorizationLabel": "Autorización",
+    "retry": "Reintentar",
+    "engine": "Triage Intelligence",
+    "note": "decisión tipada · sin texto de razonamiento generado",
     "title": "Decisiones y evidencia",
     "error": "No se pudo registrar la vista o cargar el historial. Se reintentará.",
     "empty": "Todavía no hay historial de decisiones disponible.",
@@ -677,5 +804,134 @@
     "reject": "Descartar este aporte",
     "classificationProposal": "Cambio de clasificación propuesto",
     "unsupported": "Evidencia sin respaldo: {{dimension}}"
+  },
+  "ticketTypes": {
+    "support": "soporte",
+    "prospect": "prospecto",
+    "spam": "spam",
+    "internal": "interno",
+    "other": "otro"
+  },
+  "ticketCategories": {
+    "technical": "técnica",
+    "billing": "facturación",
+    "account": "cuenta",
+    "general": "general",
+    "not_applicable": "n/a"
+  },
+  "channelsSettings": {
+    "title": "Canales de soporte",
+    "subtitle": "Buzones de correo conectados a esta cuenta como canales de soporte.",
+    "loadError": "No se pudieron cargar los canales.",
+    "disconnectError": "No se pudo desconectar el canal.",
+    "emptyTitle": "Aún no hay canales conectados.",
+    "emptyBody": "Conecte un buzón de Gmail para empezar a recibir tickets de soporte.",
+    "connectedOn": "{{type}} · Conectado el {{date}}",
+    "primary": "Principal",
+    "gmailName": "Gmail",
+    "gmailDescription": "Conecte un buzón de Gmail para recibir el correo de soporte.",
+    "outlookName": "Outlook",
+    "outlookDescription": "Outlook, IMAP y canales personalizados estarán disponibles próximamente.",
+    "connect": "Conectar",
+    "connecting": "Conectando…",
+    "reconnect": "Reconectar",
+    "disconnect": "Desconectar",
+    "soon": "Próximamente",
+    "back": "Volver"
+  },
+  "statusBar": {
+    "commands": "comandos",
+    "open": "kairo · {{count}} abiertos"
+  },
+  "shortcuts": {
+    "title": "Atajos de teclado",
+    "footer": "En Windows y Linux, ⌘ es Ctrl.",
+    "ticketOnly": "solo en ticket",
+    "groups": {
+      "navigation": "Navegación",
+      "ticket": "Ticket",
+      "general": "General"
+    },
+    "rows": {
+      "queue": "Moverse por la cola",
+      "commands": "Comandos",
+      "settings": "Configuración",
+      "send": "Enviar",
+      "shortcuts": "Atajos de teclado",
+      "close": "Cerrar"
+    }
+  },
+  "ticketStatus": {
+    "open": "Abierto",
+    "in_progress": "Reconocido",
+    "awaiting_customer": "En espera del cliente",
+    "resolved": "Resuelto",
+    "ai_resolved": "Resuelto por la IA",
+    "escalated": "Escalado",
+    "reopened": "Reabierto",
+    "closed": "Cerrado"
+  },
+  "ticketHeading": {
+    "priorityChip": "Prioridad {{priority}}, cambiar",
+    "priorityMenu": "Prioridad",
+    "classifying": "Clasificando"
+  },
+  "sla": {
+    "compactIn": "en {{time}}",
+    "noResponse": "sin primera respuesta",
+    "title": {
+      "onTime": "ANS a tiempo: quedan {{time}}",
+      "atRisk": "ANS en riesgo: quedan {{time}}",
+      "escalating": "ANS a punto de vencer: quedan {{time}}",
+      "overdue": "ANS vencido hace {{time}}"
+    },
+    "full": {
+      "onTime": "ANS: responder en {{time}}",
+      "atRisk": "ANS en riesgo · quedan {{time}}",
+      "escalating": "ANS a punto de vencer · escala en {{time}}",
+      "overdue": "ANS vencido hace {{time}}"
+    }
+  },
+  "clientPanel": {
+    "draftBadge": "borrador",
+    "draftNotice": "Borrador detectado automáticamente. Las acciones de confirmar, rechazar y editar estarán disponibles pronto.",
+    "account": "Cuenta",
+    "plan": "Plan",
+    "mrr": "MRR",
+    "since": "Desde",
+    "tickets": "Tickets",
+    "csat": "CSAT",
+    "nps": "NPS",
+    "otherTickets": "Otros tickets",
+    "similarTickets": "Tickets similares",
+    "unavailable": "Datos del cliente no disponibles.",
+    "sameIssue": "mismo problema",
+    "awaiting": "en espera",
+    "resolved": "resuelto"
+  },
+  "escalatePanel": {
+    "priority": "Prioridad",
+    "slaLabel": "ANS",
+    "sentimentLabel": "Ánimo",
+    "confidenceLabel": "Confianza",
+    "sla": {
+      "onTime": "a tiempo · {{time}}",
+      "atRisk": "en riesgo · {{time}}",
+      "escalating": "escalando · {{time}}",
+      "overdue": "vencido {{time}}"
+    },
+    "sentiment": {
+      "frustrated": "frustrado",
+      "aggressive": "agresivo",
+      "neutral": "neutral",
+      "positive": "positivo"
+    },
+    "explanation": "Señales detectadas en este ticket. Considere escalarlo a un responsable sénior.",
+    "reason": "Motivo",
+    "reasonPlaceholder": "¿Qué necesita saber la siguiente persona?",
+    "submit": "Escalar {{id}}",
+    "note": "Avisa por SMS al responsable de guardia.",
+    "escalated": "Este ticket está escalado.",
+    "error": "No se pudo escalar el ticket. Intente de nuevo."
   }
 }

@@ -1,19 +1,69 @@
-// Native barrel — TypeScript resolves this when customConditions includes "react-native".
-// Metro also resolves this file automatically at bundle time.
-//
-// Components shared between web and RN (no DOM APIs) are imported from the
-// same source. Components with platform splits import from the .native.tsx stub
-// so TypeScript sees RN-safe types only.
+// Native barrel, resolved by Metro for React Native. Relative imports resolve to
+// the .native variant when one exists (tsconfig.native.json sets moduleSuffixes).
 export * from './badge'
 export * from './button'
 export * from './card'
-export * from './triage-tokens'
-export * from './collapsible'
-export * from './input'
-export * from './separator'
-// Platform-split — import .native.tsx explicitly so TypeScript never traverses the DOM-using .tsx files
-export * from './scroll-area.native'
-export * from './sheet.native'
-export * from './dropdown-menu.native'
-export * from './table.native'
-export { cn } from './lib/utils'
+export * from './provider'
+export * from './priority-glyph'
+export * from './chip'
+export * from './category-chip'
+export * from './avatar'
+export * from './loading'
+export * from './kbd'
+export * from './switch'
+export * from './empty-state'
+export * from './tooltip'
+export * from './icon'
+export * from './popover'
+export * from './dialog'
+export * from './drawer'
+export * from './menu'
+export * from './field'
+export * from './resizer'
+export * from './layout'
+export * from './plain'
+export * from './tabs'
+export * from './segmented'
+export * from './nav-item'
+export * from './kpi-strip'
+export * from './prop-row'
+export * from './callout'
+export * from './sentiment-face'
+export * from './confidence-ring'
+export * from './progress-bar'
+export * from './password-strength'
+export * from './toast'
+export * from './source-list'
+export * from './prompt-suggestions'
+export * from './status-chip'
+export * from './sla-indicator'
+export * from './rich-text'
+export * from './ticket-row'
+export * from './note-card'
+export * from './thread-message'
+export * from './notification-row'
+export * from './draft-card'
+export * from "./stepper";
+export * from "./choice-card";
+export * from "./progress-steps";
+export * from "./ai-proposal";
+export * from "./ask-box";
+export * from "./assistant-turn";
+export * from "./composer";
+export * from "./mention-menu";
+export * from "./data-table";
+export * from "./evidence-panel";
+export * from "./command-palette";
+export * from "./integration-card";
+export * from "./permission-list";
+export * from "./status-bar";
+export * from "./status-panel";
+export * from "./auth-card";
+export * from "./faq";
+export * from "./feature-card";
+export * from "./footer";
+export * from "./plan-card";
+export * from "./pricing-table";
+export * from "./product-frame";
+export * from "./section";
+export * from "./top-nav";

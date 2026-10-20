@@ -1,5 +1,8 @@
+'use client';
+
 import type { ReactNode } from 'react';
 import type { AdminUser } from '@kairo/types';
+import { Avatar, Box, Button, Icon, Text } from '@kairo/ui';
 import { signOut } from '@/lib/auth/actions';
 
 interface AdminShellProps {
@@ -9,53 +12,48 @@ interface AdminShellProps {
 
 export function AdminShell({ admin, children }: AdminShellProps) {
   return (
-    <div className="flex min-h-screen bg-gray-950">
+    <Box display="flex" minHeight="100vh" backgroundColor="var(--kairo-color-bg)">
       {/* Sidebar — placeholder for Phase 2 navigation */}
-      <aside className="w-60 shrink-0 border-r border-gray-800 bg-gray-900 flex flex-col">
-        <div className="p-5 border-b border-gray-800">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">K</span>
-            </div>
-            <span className="font-semibold text-white text-sm">Kelan</span>
-          </div>
-        </div>
+      <Box tag="aside" width={240} flexShrink={0} borderRightWidth={1} borderStyle="solid" borderRightColor="var(--kairo-color-line)" backgroundColor="var(--kairo-color-sunk)" display="flex" flexDirection="column">
+        <Box padding={20} borderBottomWidth={1} borderStyle="solid" borderBottomColor="var(--kairo-color-line)" display="flex" alignItems="center" gap={8}>
+          <Box width={28} height={28} borderRadius={8} backgroundColor="var(--kairo-color-accent)" display="flex" alignItems="center" justifyContent="center">
+            <Icon name="zap" size={14} color="var(--kairo-color-on-accent)" />
+          </Box>
+          <Text fontSize={14} fontWeight={600} color="var(--kairo-color-text)">Kelan</Text>
+        </Box>
 
-        <nav className="flex-1 p-3">
+        <Box tag="nav" flexGrow={1} flexShrink={1} flexBasis="0%" padding={12}>
           {/* Phase 2 navigation items go here */}
-          <p className="px-3 py-2 text-xs text-gray-500 font-medium uppercase tracking-wide">
+          <Text tag="p" display="block" margin={0} paddingVertical={8} paddingHorizontal={12} fontSize={12} fontWeight={500} textTransform="uppercase" letterSpacing={0.6} color="var(--kairo-color-faint)">
             Navigation — Phase 2
-          </p>
-        </nav>
+          </Text>
+        </Box>
 
         {/* Admin identity + sign out */}
-        <div className="p-4 border-t border-gray-800">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 rounded-full bg-indigo-700 flex items-center justify-center shrink-0">
-              <span className="text-white text-xs font-medium">
-                {admin.display_name.charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-white truncate">
+        <Box padding={16} borderTopWidth={1} borderStyle="solid" borderTopColor="var(--kairo-color-line)">
+          <Box display="flex" alignItems="center" gap={12} marginBottom={12}>
+            <Avatar name={admin.display_name} email={admin.email} seed={admin.email} size={32} />
+            <Box minWidth={0}>
+              <Text tag="p" display="block" margin={0} fontSize={14} fontWeight={500} color="var(--kairo-color-text)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
                 {admin.display_name}
-              </p>
-              <p className="text-xs text-gray-400 truncate">{admin.email}</p>
-            </div>
-          </div>
+              </Text>
+              <Text tag="p" display="block" margin={0} fontSize={12} color="var(--kairo-color-muted)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
+                {admin.email}
+              </Text>
+            </Box>
+          </Box>
           <form action={signOut}>
-            <button
-              type="submit"
-              className="w-full text-left text-xs text-gray-400 hover:text-white transition-colors px-2 py-1.5 rounded hover:bg-gray-800"
-            >
+            <Button variant="ghost" full type="submit">
               Sign out
-            </button>
+            </Button>
           </form>
-        </div>
-      </aside>
+        </Box>
+      </Box>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0">{children}</main>
-    </div>
+      <Box tag="main" flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
+        {children}
+      </Box>
+    </Box>
   );
 }

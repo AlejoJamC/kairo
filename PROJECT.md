@@ -26,10 +26,11 @@ there, not here.
 │   ├── env/            # centralized env validation (@t3-oss/env-core)
 │   ├── types/          # shared TypeScript interfaces
 │   ├── i18n/           # shared translation resources (EN/ES)
-│   ├── ui/             # shared ShadCN components
+│   ├── ui/             # shared UI primitives and blocks for web and native clients
+│   ├── tokens/         # design tokens (W3C DTCG source, generated CSS and TS)
+│   ├── client-core/    # shared client logic: API client, session, platform ports, triage state
 │   ├── feature-flags/  # static + runtime feature flags
 │   ├── identity/       # email/phone normalization, contact dedup
-│   ├── claude_design/  # Pencil design token package
 │   └── intelligence/   # Vercel AI SDK, Gateway model roles, and local Ollama
 │       └── prompts/    # versioned LLM prompts (YAML frontmatter + markdown)
 ├── supabase/
@@ -91,7 +92,8 @@ there, not here.
 - Session management
 - Profile settings with password change
 - i18n (EN/ES) on landing page, login page, and dashboard password settings
-- Shared component library (`packages/ui`) with ShadCN
+- Shared UI package (`packages/ui`) with primitives that compile for web and React Native
+- Shared client logic (`packages/client-core`) — API client with injectable origins, session, platform ports (storage, navigation, clipboard, app focus, auth handoff) and the triage store; each host calls `initClientCore()` with its own ports
 - Shared types (`packages/types`) with core schema
 - Centralized env validation (`packages/env`) via `@t3-oss/env-core` + Zod
 - Intelligence layer (`packages/intelligence`) — all remote language, native decision and embedding models use Vercel AI Gateway. Local Ollama remains available for classification, text and embeddings. `CLASSIFICATION_MODE` selects native typed decisions or structured language generation; per-role environment variables select models independently. Native decision probabilities are retained, and uncalibrated results require review. Optional legacy JEV shadow/canary paths also use Gateway and cannot approve a native principal model by agreement with itself.

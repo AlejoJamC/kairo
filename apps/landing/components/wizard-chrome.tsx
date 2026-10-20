@@ -1,62 +1,27 @@
 "use client";
 
-import Link from "next/link";
+import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { Box, WizardHeader } from "@kairo/ui";
 import { KairoLogo } from "@/components/kairo-logo";
 import { useTranslation } from "@/lib/i18n";
 
 interface WizardChromeProps {
-  children: React.ReactNode;
+  /** The wizard stepper shown in the header. */
+  stepper?: ReactNode;
+  children: ReactNode;
 }
 
-export function WizardChrome({ children }: WizardChromeProps) {
+export function WizardChrome({ stepper, children }: WizardChromeProps) {
   const { t } = useTranslation();
+  const router = useRouter();
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "var(--surface)",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <header
-        style={{
-          height: 60,
-          borderBottom: "1px solid var(--border)",
-          background: "white",
-          padding: "0 32px",
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-          flexShrink: 0,
-        }}
-      >
-        <KairoLogo size={26} href="/" />
-        <Link
-          href="/"
-          style={{
-            marginLeft: "auto",
-            fontSize: 13,
-            color: "var(--text-tertiary)",
-            textDecoration: "none",
-          }}
-        >
-          {t.wizard.exitSetup}
-        </Link>
-      </header>
-
-      <div
-        style={{
-          maxWidth: 720,
-          margin: "0 auto",
-          width: "100%",
-          padding: "40px 32px 60px",
-          flex: 1,
-        }}
-      >
+    <Box minHeight="100vh" backgroundColor="var(--kairo-color-sunk)" display="flex" flexDirection="column">
+      <WizardHeader brand={<KairoLogo size={26} href="/" />} stepper={stepper} exit={{ label: t.wizard.exitSetup, onPress: () => router.push("/") }} />
+      <Box maxWidth={720} marginVertical={0} marginHorizontal="auto" width="100%" paddingTop={40} paddingHorizontal={32} paddingBottom={60} flexGrow={1} flexShrink={1} flexBasis="0%">
         {children}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

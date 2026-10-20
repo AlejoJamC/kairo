@@ -1,19 +1,20 @@
 import { TicketDecisions } from './ticket-decisions';
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mail, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
-import { TicketHeader } from "./ticket-header";
-import { isTriageActive, isTicketReadOnly } from "@/lib/triage-status";
-import { useTriageStore } from "@/stores/triage-store";
-import { useTicketThread, type ThreadMessage } from "@/hooks/use-ticket-thread";
+import { TicketHeader, TicketHeadingBlock } from "./ticket-header";
+import { isTriageActive, isTicketReadOnly } from "@kairo/client-core/triage-status";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { useTicketThread, type ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, getInitials } from "./ui/avatar";
-import { getLandingUrl } from "@/lib/api-client";
+import { Avatar, Box, Chip, Icon, Pressable, ReadOnlyBar, SlaIndicator, Text, ThreadMessage as ThreadMessageView } from "@kairo/ui";
+import { startGmailConnect } from "@kairo/client-core/endpoints";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
+import { formatDuration, slaDisplay } from "@/lib/sla-display";
+import { useActiveView } from "@/hooks/useActiveView";
 
 // Delay before clearing the selection once the open ticket leaves the active queue.
 const CLEAR_AFTER_LEAVING_ACTIVE_MS = 2500;
@@ -22,73 +23,43 @@ const CLEAR_AFTER_LEAVING_ACTIVE_MS = 2500;
 const HIGHLIGHT_DURATION_MS = 2000;
 
 // ---------------------------------------------------------------------------
-// KAI-168 — operational SLA (by ticket priority) progress bar. Shown below
-// the subject, above the AI reasoning banner. Own domain — computed
-// client-side from the ticket's own priority/received_at/first_response_at
-// plus the account's SLA config (tickets arrive raw from Supabase, so this
-// can't be a pre-computed field on the wire — see computeTicketOperationalSla).
+// KAI-168 — operational SLA (by ticket priority). Shown under the subject while
+// there is no first response. Own domain — computed client-side from the
+// ticket's own priority/received_at/first_response_at plus the account's SLA
+// config (tickets arrive raw from Supabase, so this can't be a pre-computed
+// field on the wire — see computeTicketOperationalSla).
 // ---------------------------------------------------------------------------
 
 // Smallest comfortable width for this column — same constant already used as
 // `centerMin` by useResizablePanel (apps/dashboard/src/hooks/use-resizable-panel.ts)
 // to keep this exact column readable when the right panel is dragged wider.
-// That value was only ever enforced against the right panel's own max width;
-// this applies it as a real min-width on the center column itself, so it no
-// longer collapses when the window is narrowed (unlike the ticket-list
-// column, fixed at 360px, and the right panel, floored at 340px).
 const CENTER_PANEL_MIN_WIDTH = 520;
 
-const PRIORITY_SLA_BAR_COLOR: Record<"ok" | "at_risk" | "breached", string> = {
-  ok: "#10B981",
-  at_risk: "#F97316",
-  breached: "#EF4444",
-};
-
-// "Xd Xh Xm" — always shows the largest unit down to minutes so nothing
-// renders as an unreadable "1171h 25m"; drops leading zero units instead of
-// always printing all three (e.g. "19h 25m" under a day, "25m" under an hour).
-function formatDurationParts(totalSeconds: number): string {
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
-}
+// Name of the queue the open ticket belongs to, for the breadcrumb of the ticket bar.
+const VIEW_LABEL_KEY = {
+  triage: "ticketList.header",
+  awaiting: "sidebar.pendingClient",
+  resolved: "sidebar.resolved",
+  escalated: "sidebar.escalation",
+  "ai-review": "sidebar.aiReview",
+} as const;
 
 function PrioritySlaBar({ ticket }: { ticket: Ticket }) {
   const { t } = useTranslation("dashboard");
   const config = useTriageStore((s) => s.operationalSlaConfig);
   const sla = useMemo(() => computeTicketOperationalSla(ticket, config), [ticket, config]);
-  if (!sla) return null;
+  if (!sla || ticket.first_response_at) return null;
 
-  const duration = formatDurationParts(sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds);
-
-  const detail =
-    sla.status === "ok"
-      ? t("prioritySla.detailRemaining", { duration })
-      : sla.status === "at_risk"
-        ? t("prioritySla.detailDueSoon", { duration })
-        : t("prioritySla.detailOverdue", { duration });
-
-  const barWidth = Math.min(100, sla.percentUsed);
+  const { status, seconds, progress } = slaDisplay(sla);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div style={{ height: 6, borderRadius: 3, background: "var(--k-border-subtle)", overflow: "hidden" }}>
-        <div
-          style={{
-            height: "100%",
-            width: `${barWidth}%`,
-            background: PRIORITY_SLA_BAR_COLOR[sla.status],
-            borderRadius: 3,
-            transition: "width 0.2s ease",
-          }}
-        />
-      </div>
-      <span style={{ fontSize: 12, color: PRIORITY_SLA_BAR_COLOR[sla.status], fontWeight: 500 }}>{detail}</span>
-    </div>
+    <SlaIndicator
+      variant="full"
+      status={status}
+      label={t(`sla.full.${status}`, { time: formatDuration(seconds) })}
+      note={t("sla.noResponse")}
+      progress={status === "overdue" ? 1 : progress}
+    />
   );
 }
 
@@ -97,28 +68,7 @@ function PrioritySlaBar({ ticket }: { ticket: Ticket }) {
 // ---------------------------------------------------------------------------
 
 function SenderAvatar({ name, email }: { name: string | null; email: string | null }) {
-  const initials = getInitials(name, email);
-  return (
-    <div
-      style={{
-        width: 36,
-        height: 36,
-        borderRadius: "50%",
-        background: "var(--k-accent-subtle)",
-        border: "1.5px solid #C7D2FE",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 13,
-        fontWeight: 600,
-        color: "var(--k-accent)",
-        flexShrink: 0,
-        letterSpacing: "0.02em",
-      }}
-    >
-      {initials}
-    </div>
-  );
+  return <Avatar soft size={36} name={name} email={email} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,238 +102,72 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
 
   const bodyText = message.body_plain ?? message.snippet ?? null;
 
-  // Internal note: amber card, full-width, no avatar offset (KAI-232 spec B5)
+  const body = bodyText ? (
+    <Text tag="pre" display="block" fontSize={13} lineHeightRatio={1.65} whiteSpace="pre-wrap" wordBreak="break-word" overflowX="hidden" margin={0}>
+      {bodyText}
+    </Text>
+  ) : null;
+
   if (isInternal) {
     return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 0,
-          borderLeft: "3px solid var(--k-note-rail)",
-          background: "var(--k-note-bg)",
-          border: "1px solid var(--k-note-border)",
-          borderRadius: 12,
-          overflow: "hidden",
-        }}
+      <ThreadMessageView
+        variant="note"
+        avatar={<Avatar name={message.sender_display_name} email={message.sender_external_id} seed={message.author_id ?? message.sender_external_id} size={22} />}
+        name={message.is_own_note ? t("notes.you", "You") : senderLabel}
+        tag={
+          <>
+            <TeamOnlyChip />
+            {/* Only exists while the jump highlight is running. */}
+            {jumped && (
+              <Text font="mono" fontSize={9.5} color="var(--k-note-label)" backgroundColor="color-mix(in srgb, var(--kairo-color-warn) 16%, transparent)" paddingVertical={2} paddingHorizontal={6} borderRadius={3} letterSpacing={0.38}>
+                ↳ {t("notes.jumpedFromNotes", "JUMPED FROM NOTES")}
+              </Text>
+            )}
+          </>
+        }
+        meta={timestamp}
+        missingBody={t("ticketDetail.noBody", "No email body available.")}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 9,
-            padding: "10px 14px",
-            borderBottom: "1px solid var(--k-note-border)",
-          }}
-        >
-          <Avatar
-            name={message.sender_display_name}
-            email={message.sender_external_id}
-            seed={message.author_id ?? message.sender_external_id}
-            size={22}
-          />
-          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--k-note-text-strong)" }}>
-            {message.is_own_note ? t("notes.you", "You") : senderLabel}
-          </span>
-          <TeamOnlyChip />
-          {/* Only exists while the jump highlight is running (spec B5). */}
-          {jumped && (
-            <span
-              style={{
-                fontFamily: "var(--k-font-mono)",
-                fontSize: 9.5,
-                color: "var(--k-note-label)",
-                background: "rgba(245,158,11,0.16)",
-                padding: "2px 6px",
-                borderRadius: 3,
-                letterSpacing: "0.04em",
-              }}
-            >
-              ↳ {t("notes.jumpedFromNotes", "JUMPED FROM NOTES")}
-            </span>
-          )}
-          <span
-            style={{
-              marginLeft: "auto",
-              fontFamily: "var(--k-font-mono)",
-              fontSize: 10.5,
-              color: "var(--k-note-label)",
-              flexShrink: 0,
-            }}
-          >
-            {timestamp}
-          </span>
-        </div>
-        <div style={{ padding: "12px 14px" }}>
-          {/* KAI-232: mention tokens render as chips, never as raw @[user:…]. */}
-          <NoteBody
-            body={bodyText}
-            mentions={message.mentions}
-            style={{ fontSize: 13.5, lineHeight: 1.6, color: "var(--k-note-text-strong)" }}
-          />
-        </div>
-      </div>
+        {/* Mention tokens render as chips, never as raw @[user:…]. */}
+        {bodyText ? <NoteBody body={bodyText} mentions={message.mentions} fontSize={13.5} lineHeightRatio={1.6} /> : null}
+      </ThreadMessageView>
     );
   }
 
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        marginLeft: isOutbound ? 48 : 0,
-        marginRight: isOutbound ? 0 : 48,
-      }}
-    >
-      {/* Message header row */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-        <SenderAvatar
-          name={message.sender_display_name}
-          email={message.sender_external_id}
-        />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <p
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--k-text-primary)",
-                margin: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {senderLabel}
-            </p>
-            {message.is_origin && (
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "var(--k-accent)",
-                  background: "var(--k-accent-subtle)",
-                  border: "1px solid #C7D2FE",
-                  borderRadius: 4,
-                  padding: "1px 5px",
-                  flexShrink: 0,
-                }}
-              >
-                {t("ticketDetail.originMessage", "Initial message")}
-              </span>
-            )}
-            {isOutbound && (
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "#6B7280",
-                  background: "#F3F4F6",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: 4,
-                  padding: "1px 5px",
-                  flexShrink: 0,
-                }}
-              >
-                {t("ticketDetail.outbound", "Reply sent")}
-              </span>
-            )}
-            {isOutbound && message.delivery_status && message.delivery_status !== "sent" && (
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: message.delivery_status === "failed" ? "#B91C1C" : "#92400E",
-                  background: message.delivery_status === "failed" ? "#FEF2F2" : "#FFFBEB",
-                  border: `1px solid ${message.delivery_status === "failed" ? "#FECACA" : "#FDE68A"}`,
-                  borderRadius: 4,
-                  padding: "1px 5px",
-                  flexShrink: 0,
-                }}
-              >
-                {message.delivery_status === "failed"
-                  ? t("ticketDetail.deliveryFailed", "Failed to send")
-                  : t("ticketDetail.deliverySending", "Sending…")}
-              </span>
-            )}
-            {isOutbound
-              && message.delivery_status === "failed"
-              && message.send_error?.code === "INSUFFICIENT_SCOPE" && (
-              <button
-                type="button"
-                onClick={() => { window.location.href = getLandingUrl("/bff/auth/google"); }}
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "var(--k-accent)",
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                  flexShrink: 0,
-                }}
-              >
-                {t("ticketDetail.reconnectGmail", "Reconnect Gmail to retry")}
-              </button>
-            )}
-          </div>
-          <p
-            style={{
-              fontSize: 12,
-              color: "var(--k-text-tertiary)",
-              margin: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {senderEmail}
-            {timestamp ? (senderEmail ? ` · ${timestamp}` : timestamp) : ""}
-          </p>
-        </div>
-      </div>
+  const tag = (
+    <>
+      {message.is_origin && <Chip tone="accent" size="sm">{t("ticketDetail.originMessage", "Initial message")}</Chip>}
+      {isOutbound && <Chip size="sm">{t("ticketDetail.outbound", "Reply sent")}</Chip>}
+      {isOutbound && message.delivery_status && message.delivery_status !== "sent" && (
+        <Chip size="sm" tone={message.delivery_status === "failed" ? "neutral" : "note"}>
+          {message.delivery_status === "failed" ? t("ticketDetail.deliveryFailed", "Failed to send") : t("ticketDetail.deliverySending", "Sending…")}
+        </Chip>
+      )}
+      {isOutbound && message.delivery_status === "failed" && message.send_error?.code === "INSUFFICIENT_SCOPE" && (
+        <Pressable type="button" onClick={() => { startGmailConnect(); }} fontSize={10} fontWeight={600} color="var(--k-accent)" textDecoration="underline">
+          {t("ticketDetail.reconnectGmail", "Reconnect Gmail to retry")}
+        </Pressable>
+      )}
+    </>
+  );
 
-      {/* Message body */}
-      <div
-        style={{
-          background: isOutbound ? "var(--k-accent-subtle)" : "white",
-          border: `1px solid ${isOutbound ? "#C7D2FE" : "var(--k-border)"}`,
-          borderRadius: 10,
-          overflow: "hidden",
-          padding: "14px 16px",
-        }}
-      >
-        {bodyText ? (
-          <pre
-            style={{
-              fontFamily: "inherit",
-              fontSize: 13,
-              lineHeight: 1.65,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              overflowX: "hidden",
-              color: "var(--k-text-primary)",
-              margin: 0,
-            }}
-          >
-            {bodyText}
-          </pre>
+  return (
+    <ThreadMessageView
+      variant={isOutbound ? "reply" : "initial"}
+      avatar={
+        isOutbound ? (
+          <Avatar name={message.sender_display_name} email={message.sender_external_id} size={36} />
         ) : (
-          <p
-            style={{
-              margin: 0,
-              fontStyle: "italic",
-              color: "var(--k-text-tertiary)",
-              fontSize: 13,
-            }}
-          >
-            {t("ticketDetail.noBody", "No email body available.")}
-          </p>
-        )}
-      </div>
-    </div>
+          <SenderAvatar name={message.sender_display_name} email={message.sender_external_id} />
+        )
+      }
+      name={senderLabel}
+      tag={tag}
+      meta={`${senderEmail}${timestamp ? (senderEmail ? ` · ${timestamp}` : timestamp) : ""}`}
+      missingBody={t("ticketDetail.noBody", "No email body available.")}
+    >
+      {body}
+    </ThreadMessageView>
   );
 }
 
@@ -394,6 +178,10 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
 export function TicketDetail() {
   const { t } = useTranslation("dashboard");
   const { tickets, selectedTicketId, selectTicket } = useTriageStore();
+  const requestPanelTab = useTriageStore((state) => state.requestPanelTab);
+  const [view] = useActiveView();
+  const labelKey = (VIEW_LABEL_KEY as Record<string, (typeof VIEW_LABEL_KEY)[keyof typeof VIEW_LABEL_KEY]>)[view ?? "triage"] ?? VIEW_LABEL_KEY.triage;
+  const queueName = t(labelKey);
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
 
   const { messages: allMessages, loading: threadLoading, appendOptimisticMessage } = useTicketThread(ticket?.id ?? null);
@@ -464,23 +252,12 @@ export function TicketDetail() {
 
   if (!ticket) {
     return (
-      <div
-        style={{
-          flex: 1,
-          minWidth: CENTER_PANEL_MIN_WIDTH,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "var(--k-surface)",
-          gap: 8,
-        }}
-      >
-        <Mail style={{ width: 40, height: 40, color: "var(--k-border)" }} />
-        <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={CENTER_PANEL_MIN_WIDTH} display="flex" flexDirection="column" alignItems="center" justifyContent="center" backgroundColor="var(--k-surface)" gap={8}>
+        <Icon name="mail" size={40} color="var(--k-border)" />
+        <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" display="block">
           {t("ticketDetail.selectPrompt", "Select a ticket to view details")}
-        </p>
-      </div>
+        </Text>
+      </Box>
     );
   }
 
@@ -489,226 +266,86 @@ export function TicketDetail() {
     : null;
 
   return (
-    <div
-      style={{
-        flex: 1,
-        minWidth: CENTER_PANEL_MIN_WIDTH,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        background: "var(--k-surface)",
-      }}
-    >
-      <TicketHeader ticket={ticket} readOnly={isReadOnly} />
+    <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={CENTER_PANEL_MIN_WIDTH} display="flex" flexDirection="column" overflow="hidden" backgroundColor="var(--k-surface)">
+      <TicketHeader ticket={ticket} queueName={queueName} readOnly={isReadOnly} onOpenNotes={() => requestPanelTab("notes")} />
 
       {/* Scrollable body */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: "auto",
-          padding: "20px 28px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-        }}
-      >
-        {/* Subject h1 */}
-        <h1
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: "var(--k-text-primary)",
-            margin: 0,
-            lineHeight: 1.3,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          {ticket.subject ?? t("ticketDetail.noSubject", "(Sin asunto)")}
-        </h1>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll>
+        <Box maxWidth={780} display="flex" flexDirection="column" gap={22} paddingTop={28} paddingHorizontal={32} paddingBottom={32}>
+          <TicketHeadingBlock ticket={ticket} readOnly={isReadOnly} sla={<PrioritySlaBar ticket={ticket} />} />
 
-        <PrioritySlaBar ticket={ticket} />
-        <TicketDecisions ticketId={ticket.id} />
+          <TicketDecisions ticketId={ticket.id} />
 
-        {/* AI reasoning banner */}
-        {ticket.ai_reasoning && (
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              alignItems: "flex-start",
-              padding: "8px 10px",
-              background: "var(--k-accent-subtle)",
-              borderRadius: 6,
-              border: "1px solid #DBE3FF",
-            }}
-          >
-            <Sparkles
-              style={{ width: 13, height: 13, color: "var(--k-accent)", flexShrink: 0, marginTop: 1 }}
-            />
-            <div style={{ fontSize: 12, color: "var(--k-text-secondary)", flex: 1, lineHeight: 1.5 }}>
-              <span style={{ color: "var(--k-accent)", fontWeight: 500 }}>
-                Triage Intelligence
-              </span>{" "}
-              {ticket.ai_reasoning}
-            </div>
-          </div>
-        )}
-
-        {/* Thread: render message cards if available, fallback to legacy body_plain */}
-        {threadLoading ? (
-          /* Skeleton while loading */
-          <div
-            style={{
-              background: "white",
-              border: "1px solid var(--k-border)",
-              borderRadius: 12,
-              padding: "18px 20px",
-              opacity: 0.5,
-            }}
-          >
-            <div
-              style={{
-                height: 14,
-                background: "var(--k-border)",
-                borderRadius: 4,
-                marginBottom: 8,
-                width: "60%",
-              }}
-            />
-            <div
-              style={{
-                height: 14,
-                background: "var(--k-border)",
-                borderRadius: 4,
-                width: "90%",
-              }}
-            />
-          </div>
-        ) : messages.length > 0 ? (
-          /* Thread view — N message cards in chronological order */
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                ref={(el) => {
-                  if (el) messageRefs.current.set(msg.id, el);
-                  else messageRefs.current.delete(msg.id);
-                }}
-                // KAI-232 spec B5: outline + amber halo fading out over 1.6s.
-                // Driven by a CSS class so the animation cannot drift from the
-                // token values (see .note-jump-highlight in index.css).
-                className={highlightedMessageId === msg.id ? "note-jump-highlight" : undefined}
-              >
-                <MessageCard message={msg} jumped={highlightedMessageId === msg.id} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          /* Fallback — pre-backfill safety net: render legacy body_plain */
-          <>
-            {/* Sender row (legacy) */}
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-              <SenderAvatar name={ticket.from_name} email={ticket.from_email} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "var(--k-text-primary)",
-                    margin: "0 0 2px",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+          {/* Thread: render message cards if available, fallback to legacy body_plain */}
+          {threadLoading ? (
+            /* Skeleton while loading */
+            <Box backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={12} paddingVertical={18} paddingHorizontal={20} opacity={0.5} borderStyle="solid">
+              <Box height={14} backgroundColor="var(--k-border)" borderRadius={4} marginBottom={8} width="60%" />
+              <Box height={14} backgroundColor="var(--k-border)" borderRadius={4} width="90%" />
+            </Box>
+          ) : messages.length > 0 ? (
+            /* Thread view — N message cards in chronological order */
+            <Box display="flex" flexDirection="column" gap={16}>
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  ref={(el) => {
+                    if (el) messageRefs.current.set(msg.id, el);
+                    else messageRefs.current.delete(msg.id);
                   }}
+                  // KAI-232 spec B5: outline + amber halo fading out over 1.6s.
+                  // Driven by a CSS class so the animation cannot drift from the
+                  // token values (see .note-jump-highlight in index.css).
+                  className={highlightedMessageId === msg.id ? "note-jump-highlight" : undefined}
                 >
-                  {ticket.from_name ?? ticket.from_email ?? t("ticketDetail.unknownSender", "Unknown sender")}
-                </p>
-                <p
-                  style={{
-                    fontSize: 12,
-                    color: "var(--k-text-tertiary)",
-                    margin: 0,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {ticket.from_email && ticket.from_name ? `<${ticket.from_email}>` : ""}
-                  {receivedDate ? ` · ${receivedDate}` : ""}
-                </p>
-              </div>
-            </div>
+                  <MessageCard message={msg} jumped={highlightedMessageId === msg.id} />
+                </div>
+              ))}
+            </Box>
+          ) : (
+            /* Fallback — pre-backfill safety net: render legacy body_plain */
+            <>
+              {/* Sender row (legacy) */}
+              <Box display="flex" alignItems="flex-start" gap={10}>
+                <SenderAvatar name={ticket.from_name} email={ticket.from_email} />
+                <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0}>
+                  <Text tag="p" fontSize={13} fontWeight={600} color="var(--k-text-primary)" marginTop={0} marginHorizontal={0} marginBottom={2} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
+                    {ticket.from_name ?? ticket.from_email ?? t("ticketDetail.unknownSender", "Unknown sender")}
+                  </Text>
+                  <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" margin={0} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" display="block">
+                    {ticket.from_email && ticket.from_name ? `<${ticket.from_email}>` : ""}
+                    {receivedDate ? ` · ${receivedDate}` : ""}
+                  </Text>
+                </Box>
+              </Box>
 
-            {/* Email body card (legacy) */}
-            <div
-              style={{
-                background: "white",
-                border: "1px solid var(--k-border)",
-                borderRadius: 12,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  padding: "18px 20px 22px",
-                  fontSize: 14,
-                  color: "var(--k-text-primary)",
-                  lineHeight: 1.65,
-                }}
-              >
-                {ticket.body_plain ? (
-                  <pre
-                    style={{
-                      fontFamily: "inherit",
-                      fontSize: 14,
-                      lineHeight: 1.65,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                      overflowX: "hidden",
-                      color: "var(--k-text-primary)",
-                      margin: 0,
-                    }}
-                  >
-                    {ticket.body_plain}
-                  </pre>
-                ) : ticket.snippet ? (
-                  <p style={{ margin: 0, lineHeight: 1.65 }}>{ticket.snippet}</p>
-                ) : (
-                  <p
-                    style={{
-                      margin: 0,
-                      fontStyle: "italic",
-                      color: "var(--k-text-tertiary)",
-                    }}
-                  >
-                    {t("ticketDetail.noBody", "No email body available.")}
-                  </p>
-                )}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+              {/* Email body card (legacy) */}
+              <Box backgroundColor="white" borderWidth={1} borderColor="var(--k-border)" borderRadius={12} overflow="hidden" borderStyle="solid">
+                <Text tag="div" paddingTop={18} paddingHorizontal={20} paddingBottom={22} fontSize={14} color="var(--k-text-primary)" lineHeight={23.1} display="block">
+                  {ticket.body_plain ? (
+                    <Text tag="pre" display="block" fontSize={14} lineHeightRatio={1.65} whiteSpace="pre-wrap" wordBreak="break-word" overflowX="hidden" color="var(--k-text-primary)" margin={0}>
+                      {ticket.body_plain}
+                    </Text>
+                  ) : ticket.snippet ? (
+                    <Text tag="p" margin={0} lineHeightRatio={1.65} display="block">{ticket.snippet}</Text>
+                  ) : (
+                    <Text tag="p" margin={0} fontStyle="italic" color="var(--k-text-tertiary)" display="block">
+                      {t("ticketDetail.noBody", "No email body available.")}
+                    </Text>
+                  )}
+                </Text>
+              </Box>
+            </>
+          )}
+        </Box>
+      </Box>
 
       {/* Fixed bottom reply bar — hidden for read-only historical tickets */}
       {isReadOnly ? (
-        <div
-          style={{
-            borderTop: "1px solid var(--k-border)",
-            padding: "10px 16px",
-            fontSize: 12,
-            color: "var(--k-text-tertiary)",
-            background: "var(--k-surface)",
-            textAlign: "center",
-            flexShrink: 0,
-          }}
-        >
-          {t("ticketDetail.readOnlyBanner")}
-        </div>
+        <ReadOnlyBar>{t("ticketDetail.readOnlyBanner")}</ReadOnlyBar>
       ) : (
         <ReplyBar onReplyQueued={appendOptimisticMessage} />
       )}
-    </div>
+    </Box>
   );
 }

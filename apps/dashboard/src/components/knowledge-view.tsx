@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Clock } from "lucide-react";
-import { apiCall } from "@/lib/api-client";
-import { useAuth } from "@/contexts/auth-context";
+import { getKnowledgeDrafts, getKbEvidence, reviewKnowledge } from "@kairo/client-core/endpoints";
+import { useAuth } from "@kairo/client-core/auth";
 import type { AppView } from "@/types";
+import { ArticleEditor, Box, Button, Callout, Card, KnowledgeList, PageFrame, Text, type ArticleDraft, type ArticleState, type KnowledgeArticleRow } from "@kairo/ui";
 
-type ArticleFilter = "draft" | "published";
+type ArticleFilter = "all" | ArticleState;
 
 interface Article {
   id: string;
@@ -24,6 +24,7 @@ interface KnowledgeViewProps {
 }
 
 const AI_DRAFT_TAG = "ai-draft";
+const INTERNAL_TAG = /^(ai-draft|source-message:|type:|review:)/;
 const KIND_KEYS = { business_fact: 'knowledgeView.kinds.business_fact', policy: 'knowledgeView.kinds.policy', exception: 'knowledgeView.kinds.exception', article: 'knowledgeView.kinds.article' } as const;
 const REASON_KEYS = {
   human_validation_required: 'knowledgeView.reasons.human_validation_required',
@@ -40,16 +41,24 @@ function labelKey<T extends Record<string, string>>(keys: T, value: string): T[k
   return Object.hasOwn(keys, value) ? keys[value as keyof T] : undefined;
 }
 
+function stateOf(article: Article): ArticleState {
+  if (article.is_published) return "published";
+  return (article.tags ?? []).includes(AI_DRAFT_TAG) ? "review" : "draft";
+}
+
 export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProps) {
-  const { t } = useTranslation("dashboard");
+  const { t, i18n } = useTranslation("dashboard");
   const { user } = useAuth();
 
-  const [filter, setFilter] = useState<ArticleFilter>("draft");
+  const [filter, setFilter] = useState<ArticleFilter>("all");
+  const [query, setQuery] = useState("");
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [publish, setPublish] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const [evidence, setEvidence] = useState<{ steps: { feature: string; model: string; version: string | null }[]; evidence: string[] } | null>(null);
@@ -57,12 +66,14 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
-      const res = await apiCall("/api/v1/workflow/knowledge");
-      if (res.ok) {
-        const json: { articles: Article[] } = await res.json();
-        setArticles(json.articles ?? []);
-      }
+      const res = await getKnowledgeDrafts();
+      if (!res.ok) throw new Error(String(res.status));
+      const json: { articles: Article[] } = await res.json();
+      setArticles(json.articles ?? []);
+    } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -73,15 +84,15 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
     void load();
   }, [user, load]);
 
-  const visible = articles.filter((a) => (filter === "draft" ? !a.is_published : Boolean(a.is_published)));
-  const selected = visible.find((a) => a.id === selectedId) ?? null;
+  const selected = articles.find((a) => a.id === selectedId) ?? null;
+
   useEffect(() => {
     setEvidence(null);
     setEvidenceError(false);
     if (selected?.kind === 'learning') { setEvidence({ steps: [], evidence: selected.evidence ?? [] }); return; }
     if (!selected?.tags?.some(tag => tag.startsWith('source-message:'))) return;
     let active = true;
-    void apiCall(`/api/v1/kb-articles/${selected.id}/evidence`).then(async res => {
+    void getKbEvidence(selected.id).then(async res => {
       if (!res.ok) throw new Error('Evidence unavailable');
       const data = await res.json();
       if (active) setEvidence(data);
@@ -89,24 +100,49 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
     return () => { active = false; };
   }, [selected?.id]);
 
-  const open = (article: Article) => {
+  const open = (id: string) => {
+    const article = articles.find((a) => a.id === id);
+    if (!article) return;
     setError(false);
     setSelectedId(article.id);
     setTitle(article.title);
     setContent(article.content);
+    setPublish(Boolean(article.is_published));
   };
 
-  const save = async (article: Article, publish: boolean) => {
+  const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(i18n.language === "en" ? "en-US" : "es-ES") : "—");
+
+  const rows: KnowledgeArticleRow[] = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return articles
+      .map((article) => ({
+        id: article.id,
+        title: article.title,
+        preview: article.content.split("\n").find((line) => line.trim()) ?? "",
+        tags: (article.tags ?? []).filter((tag) => !INTERNAL_TAG.test(tag)),
+        state: stateOf(article),
+        updated: formatDate(article.updated_at),
+        updatedAt: article.updated_at ?? "",
+        content: article.content,
+      }))
+      .filter((row) => filter === "all" || row.state === filter)
+      .filter((row) => !needle || [row.title, row.content, ...row.tags].some((text) => text.toLowerCase().includes(needle)))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((row) => ({ id: row.id, title: row.title, preview: row.preview, tags: row.tags, state: row.state, updated: row.updated }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [articles, filter, query, i18n.language]);
+
+  const countOf = (state: ArticleState) => articles.filter((article) => stateOf(article) === state).length;
+
+  const save = async (article: Article) => {
     setBusy(true);
     setError(false);
     try {
-      const res = await apiCall(`/api/v1/workflow/knowledge/${article.id}/review`, {
-        method: "POST",
-        body: JSON.stringify({ title, content, kind: article.kind, versionId: article.versionId, decision: publish || article.is_published ? "approved" : "pending_review" }),
-      });
+      const approve = publish || Boolean(article.is_published);
+      const res = await reviewKnowledge(article.id, { title, content, kind: article.kind, versionId: article.versionId, decision: approve ? "approved" : "pending_review" });
       if (!res.ok) throw new Error(String(res.status));
       await load();
-      if (publish) setSelectedId(null);
+      if (approve) setSelectedId(null);
     } catch {
       setError(true);
     } finally {
@@ -118,7 +154,7 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
     setBusy(true);
     setError(false);
     try {
-      const res = await apiCall(`/api/v1/workflow/knowledge/${article.id}/review`, { method: "POST", body: JSON.stringify({ kind: article.kind, versionId: article.versionId, decision: "rejected" }) });
+      const res = await reviewKnowledge(article.id, { kind: article.kind, versionId: article.versionId, decision: "rejected" });
       if (!res.ok) throw new Error(String(res.status));
       setArticles((prev) => prev.filter((a) => a.id !== article.id));
       setSelectedId(null);
@@ -129,160 +165,122 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
     }
   };
 
-  const tabStyle = (active: boolean) => ({
-    padding: "6px 12px",
-    fontSize: 13,
-    fontWeight: 500,
-    borderRadius: 6,
-    border: "1px solid var(--k-border)",
-    cursor: "pointer",
-    background: active ? "var(--k-text-primary)" : "white",
-    color: active ? "white" : "var(--k-text-secondary)",
-  });
-
-  const buttonStyle = (primary: boolean) => ({
-    padding: "6px 14px",
-    fontSize: 13,
-    fontWeight: 500,
-    borderRadius: 6,
-    cursor: busy ? "not-allowed" : "pointer",
-    opacity: busy ? 0.6 : 1,
-    border: "1px solid var(--k-border)",
-    background: primary ? "var(--k-text-primary)" : "white",
-    color: primary ? "white" : "var(--k-text-primary)",
-  });
-
-  const fieldStyle = {
-    width: "100%",
-    boxSizing: "border-box" as const,
-    padding: "8px 10px",
-    fontSize: 14,
-    border: "1px solid var(--k-border)",
-    borderRadius: 6,
-    fontFamily: "inherit",
-    color: "var(--k-text-primary)",
-    background: "white",
-  };
+  if (selected) {
+    const draft: ArticleDraft = {
+      title,
+      content,
+      published: publish,
+      review: stateOf(selected) === "review" ? "review" : null,
+      tags: (selected.tags ?? []).filter((tag) => !INTERNAL_TAG.test(tag)),
+      updated: formatDate(selected.updated_at),
+    };
+    const hasSource = selected.tags?.some((tag) => tag.startsWith("source-message:"));
+    return (
+      <PageFrame narrow>
+        <ArticleEditor
+          value={draft}
+          heading={t("knowledgeView.editArticle")}
+          // An article that is already published cannot be unpublished from here.
+          onChange={(patch) => {
+            if (patch.title !== undefined) setTitle(patch.title);
+            if (patch.content !== undefined) setContent(patch.content);
+            if (patch.published !== undefined && !selected.is_published) setPublish(patch.published);
+          }}
+          canSave={!busy && title.trim() !== "" && content.trim() !== "" && (title !== selected.title || content !== selected.content || publish !== Boolean(selected.is_published))}
+          saving={busy}
+          dirty={title !== selected.title || content !== selected.content || publish !== Boolean(selected.is_published)}
+          error={error ? t("knowledgeView.error") : undefined}
+          onSave={() => void save(selected)}
+          onBack={() => setSelectedId(null)}
+          onDiscard={() => open(selected.id)}
+          labels={{
+            back: t("knowledgeView.title"),
+            discard: t("knowledgeView.discardChanges"),
+            save: t("knowledgeView.save"),
+            title: t("knowledgeView.fieldTitle"),
+            titlePlaceholder: t("knowledgeView.titlePlaceholder"),
+            contentPlaceholder: t("knowledgeView.contentPlaceholder"),
+            published: t("knowledgeView.published"),
+            review: t("knowledgeView.review"),
+            reviewStates: { review: t("knowledgeView.states.review"), reviewed: t("knowledgeView.states.reviewed") },
+            markReviewed: "",
+            tags: t("knowledgeView.tags"),
+            addTag: "",
+            removeTag: (tag) => tag,
+            updated: t("knowledgeView.updated"),
+            note: t("knowledgeView.note"),
+            discardChanges: t("knowledgeView.discardChangesAsk"),
+            confirmDiscard: t("knowledgeView.discardChanges"),
+          }}
+        />
+        {hasSource && (
+          <Card paddingVertical={16} paddingHorizontal={20} display="flex" flexDirection="column" gap={10} aria-label={t("knowledgeView.evidenceTitle")}>
+            <Text tag="h2" margin={0} fontSize={15} fontWeight={600} color="var(--k-text-primary)">{t("knowledgeView.evidenceTitle")}</Text>
+            <Text fontSize={12.5} color="var(--k-text-tertiary)">{t("knowledgeView.validationScope")}</Text>
+            <Text fontSize={12.5} color="var(--k-text-secondary)">{t(labelKey(KIND_KEYS, selected.tags?.find((tag) => tag.startsWith("type:"))?.slice(5) ?? "article") ?? KIND_KEYS.article)}</Text>
+            {(selected.tags ?? []).filter((tag) => tag.startsWith("review:") && tag !== "review:provider_not_calibrated").map((tag) => (
+              <Callout key={tag} tone="note">{t(labelKey(REASON_KEYS, tag.slice(7)) ?? "knowledgeView.evidenceUnavailable")}</Callout>
+            ))}
+            {evidenceError && <Callout tone="error">{t("knowledgeView.evidenceUnavailable")}</Callout>}
+            {evidence?.evidence.map((quote, index) => (
+              <Text tag="blockquote" key={index} display="block" margin={0} paddingLeft={12} borderLeftWidth={2} borderLeftColor="var(--k-border)" borderStyle="solid" whiteSpace="pre-wrap" fontSize={13} color="var(--k-text-secondary)">{quote}</Text>
+            ))}
+            {evidence && !evidence.evidence.length && <Text fontSize={12.5} color="var(--k-text-tertiary)">{t("knowledgeView.evidenceUnavailable")}</Text>}
+            {evidence?.steps.map((step) => (
+              <Text key={step.feature} font="mono" fontSize={11.5} color="var(--k-text-tertiary)">
+                {t(labelKey(STEP_KEYS, step.feature) ?? "knowledgeView.evidenceTitle")} — {step.model} ({step.version})
+              </Text>
+            ))}
+          </Card>
+        )}
+        <Box display="flex">
+          <Button disabled={busy} onPress={() => void discard(selected)}>
+            {selected.is_published ? t("knowledgeView.delete") : t("knowledgeView.discard")}
+          </Button>
+        </Box>
+      </PageFrame>
+    );
+  }
 
   return (
-    <>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          background: "var(--k-surface)",
-          width: selected ? 360 : undefined,
-          minWidth: selected ? 360 : undefined,
-          flex: selected ? undefined : 1,
-          borderRight: selected ? "1px solid var(--k-border)" : undefined,
-          flexShrink: 0,
+    <PageFrame>
+      <KnowledgeList
+        title={t("knowledgeView.title")}
+        total={loading ? null : articles.length}
+        countLabel={t("knowledgeView.countLabel", { count: articles.length })}
+        description={t("knowledgeView.subtitle")}
+        // Articles are proposed from emails and tickets; there is no endpoint to write one by hand.
+        canEdit={false}
+        onAdd={() => {}}
+        filters={[
+          { id: "all", label: t("knowledgeView.filterAll"), count: loading ? null : articles.length },
+          { id: "published", label: t("knowledgeView.states.published"), count: loading ? null : countOf("published") },
+          { id: "draft", label: t("knowledgeView.tabDrafts"), count: loading ? null : countOf("draft") },
+          { id: "review", label: t("knowledgeView.states.review"), count: loading ? null : countOf("review") },
+        ]}
+        filter={filter}
+        onFilter={(id) => setFilter(id as ArticleFilter)}
+        query={query}
+        onQuery={setQuery}
+        articles={rows}
+        onOpen={open}
+        loading={loading}
+        error={loadError ? { message: t("knowledgeView.loadError"), retryLabel: t("replyBar.retry"), onRetry: () => void load() } : undefined}
+        empty={!loading && !loadError && articles.length === 0}
+        labels={{
+          add: t("knowledgeView.add"),
+          filters: t("knowledgeView.filters"),
+          search: t("knowledgeView.search"),
+          article: t("knowledgeView.colArticle"),
+          tags: t("knowledgeView.tags"),
+          state: t("knowledgeView.colState"),
+          updated: t("knowledgeView.updated"),
+          states: { published: t("knowledgeView.states.published"), draft: t("knowledgeView.states.draft"), review: t("knowledgeView.states.review") },
+          emptyTitle: t("knowledgeView.emptyTitle"),
+          emptyDescription: t("knowledgeView.emptyDescription"),
+          noResults: t("knowledgeView.noResults"),
         }}
-      >
-        <div style={{ borderBottom: "1px solid var(--k-border)", background: "white", padding: "16px 24px", flexShrink: 0 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 600, color: "var(--k-text-primary)", letterSpacing: "-0.01em", fontFamily: "var(--k-font-display)", margin: 0 }}>
-            {t("knowledgeView.title")}
-          </h1>
-          <p style={{ marginTop: 2, fontSize: 13, color: "var(--k-text-tertiary)" }}>{t("knowledgeView.subtitle")}</p>
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button type="button" style={tabStyle(filter === "draft")} onClick={() => { setFilter("draft"); setSelectedId(null); }}>
-              {t("knowledgeView.tabDrafts")}
-            </button>
-            <button type="button" style={tabStyle(filter === "published")} onClick={() => { setFilter("published"); setSelectedId(null); }}>
-              {t("knowledgeView.tabPublished")}
-            </button>
-          </div>
-        </div>
-
-        <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
-          {loading && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
-              <Clock style={{ width: 20, height: 20, color: "var(--k-text-tertiary)" }} className="animate-spin" />
-            </div>
-          )}
-
-          {!loading && visible.length === 0 && (
-            <div style={{ display: "flex", justifyContent: "center", paddingTop: 80, textAlign: "center" }}>
-              <p style={{ fontSize: 13, color: "var(--k-text-tertiary)" }}>
-                {t(filter === "draft" ? "knowledgeView.emptyDrafts" : "knowledgeView.emptyPublished")}
-              </p>
-            </div>
-          )}
-
-          {!loading &&
-            visible.map((article) => (
-              <button
-                key={article.id}
-                type="button"
-                onClick={() => open(article)}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "12px 24px",
-                  border: "none",
-                  borderBottom: "1px solid var(--k-border)",
-                  cursor: "pointer",
-                  background: selectedId === article.id ? "var(--k-bg)" : "transparent",
-                }}
-              >
-                <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>{article.title}</span>
-                <span style={{ display: "block", marginTop: 2, fontSize: 12, color: "var(--k-text-tertiary)" }}>
-                  {(article.tags ?? []).includes(AI_DRAFT_TAG) ? t("knowledgeView.aiDraft") : t("knowledgeView.manual")}
-                </span>
-              </button>
-            ))}
-        </div>
-      </div>
-
-      {selected && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflowY: "auto", background: "var(--k-surface)", padding: 24, gap: 12 }}>
-          {selected.tags?.some(tag => tag.startsWith('source-message:')) && (
-            <section aria-label={t('knowledgeView.evidenceTitle')}>
-              <strong>{t('knowledgeView.evidenceTitle')}</strong>
-              <p>{t('knowledgeView.validationScope')}</p>
-              <p>{t(labelKey(KIND_KEYS, selected.tags.find(tag => tag.startsWith('type:'))?.slice(5) ?? 'article') ?? KIND_KEYS.article)}</p>
-              <ul>
-                {selected.tags.filter(tag => tag.startsWith('review:') && tag !== 'review:provider_not_calibrated').map(tag => (
-                  <li key={tag}>{t(labelKey(REASON_KEYS, tag.slice(7)) ?? 'knowledgeView.evidenceUnavailable')}</li>
-                ))}
-              </ul>
-              {evidenceError && <p role="alert">{t('knowledgeView.evidenceUnavailable')}</p>}
-              {evidence?.evidence.map((quote, index) => <blockquote key={index} style={{ whiteSpace: 'pre-wrap' }}>{quote}</blockquote>)}
-              {evidence && !evidence.evidence.length && <p>{t('knowledgeView.evidenceUnavailable')}</p>}
-              <ol>
-                {evidence?.steps.map(step => <li key={step.feature}>{t(labelKey(STEP_KEYS, step.feature) ?? 'knowledgeView.evidenceTitle')} — {step.model} ({step.version})</li>)}
-              </ol>
-            </section>
-          )}
-          <label style={{ fontSize: 12, color: "var(--k-text-tertiary)" }}>
-            {t("knowledgeView.fieldTitle")}
-            <input value={title} onChange={(e) => setTitle(e.target.value)} style={{ ...fieldStyle, marginTop: 4 }} />
-          </label>
-          <label style={{ fontSize: 12, color: "var(--k-text-tertiary)", display: "flex", flexDirection: "column", flex: 1 }}>
-            {t("knowledgeView.fieldContent")}
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              style={{ ...fieldStyle, marginTop: 4, flex: 1, minHeight: 320, resize: "vertical" }}
-            />
-          </label>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {!selected.is_published && (
-              <button type="button" disabled={busy} style={buttonStyle(true)} onClick={() => void save(selected, true)}>
-                {t("knowledgeView.publish")}
-              </button>
-            )}
-            <button type="button" disabled={busy} style={buttonStyle(false)} onClick={() => void save(selected, false)}>
-              {t("knowledgeView.save")}
-            </button>
-            <button type="button" disabled={busy} style={buttonStyle(false)} onClick={() => void discard(selected)}>
-              {selected.is_published ? t("knowledgeView.delete") : t("knowledgeView.discard")}
-            </button>
-            {error && <span style={{ fontSize: 13, color: "var(--k-danger, #b42318)" }}>{t("knowledgeView.error")}</span>}
-          </div>
-        </div>
-      )}
-    </>
+      />
+    </PageFrame>
   );
 }

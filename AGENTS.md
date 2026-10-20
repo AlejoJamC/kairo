@@ -85,6 +85,26 @@ Kairo — AI support cockpit for support teams. Monorepo: dashboard (Vite+React1
 - For file-based specifications, move the existing specification from `specs/pending/` to `specs/done/` and add a brief implementation summary only when the work and required validation are complete.
 - Keep long-running task progress concise and free of customer or evaluation data. Do not introduce a separate agent instruction file to persist progress.
 
+## ⛔ Nothing is published that was not asked for
+
+**Architecture decision records are private.** They live only in the git-ignored internal folder. Never create an ADR, a folder for ADRs or any architecture-decision document in a tracked location (`docs/`, `README`, `AGENTS.md`, skills, comments, Linear, commit or PR text), never propose one, and never quote or paraphrase the content of a private ADR in anything tracked. When a task or criterion calls for one, say so and wait for the explicit order: it is then written in the internal folder with the next free id.
+
+**The rule is wider than ADRs.** Do not add any file, folder, document, section, rule or explanation to the repository or to an external tool unless the user asked for it in that message. A requirement found in a ticket, a spec or an earlier note is not an order to publish something; if its location is unclear, ask. Information that came from a private location never moves into a tracked one.
+
+**Mistakes are reported, never hidden.** Do not delete, rewrite or "clean up" a wrongly published artifact on your own initiative, and do not rewrite pushed history without an explicit order: state what was published, where it is, and let the user decide.
+
+## Frontend architecture
+
+One component library and one set of design values serve every client (web dashboard, landing, kelan, mobile, desktop shell). Read `skills/kairo-ui/SKILL.md` before any UI work.
+
+- **Layers.** `packages/tokens` holds the design values; `packages/ui` holds the components and their specifications (`packages/ui/spec`); `packages/client-core` holds data, session and platform ports; `apps/*` hold screens. `packages/ui` never imports `client-core`, data libraries or apps; `client-core` has no UI; apps never import each other. `bun run ui:boundaries` enforces it.
+- **Find before writing.** `packages/ui/CATALOG.md` lists every specified piece and whether it exists. Use the export. If the piece is specified but missing, build it in `packages/ui` from its spec, with tests, before using it. Never define a local version of a specified piece inside an app.
+- **The approved design is final.** A state or detail marked "Not defined in the approved design." or "Not designed" is not invented in code or in specs; ask.
+- **Screens compose; they do not style.** No inline `style`, no color or hex literals, no Tailwind classes, no hand-written CSS color variables and no `@tamagui/*` imports in apps. Values come from `@kairo/tokens`; layout from `Box`, `Text` and `Pressable`; icons from `Icon`; overlays, forms and feedback from the library. A visual refactor of the dashboard is verified with the fixture preview (`apps/dashboard/preview`), which records every screen's layout before and after.
+- **Views never touch the platform or the backend.** No `fetch`, `localStorage`, `window.location`, `navigator.clipboard` or Supabase in a view: use `@kairo/client-core` endpoints, queries, hooks and the platform ports.
+- **Enforcement.** ESLint runs against a baseline (`apps/dashboard/eslint-suppressions.json`) that may only shrink: never add to it, and run `eslint --prune-suppressions` after fixing violations. An editor hook lints each dashboard file right after it is written. CI runs typecheck, tests, lint, boundaries, the catalog check and `ui:metrics`.
+- **Reference.** `bun run ui:metrics` reports the remaining gap against the specification; `bun run ui:catalog` regenerates the catalog after a piece or its spec changes.
+
 ## Feature documentation
 
 - READMEs describe the domain and its current usage: purpose, commands, configuration and outputs. Keep them concise and understandable without conversation history.

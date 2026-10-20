@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import './globals.css';
+import './reset.css';
 import { InstrumentationClient } from './_instrumentation-client';
+import { UiRoot } from './ui-root';
 
 export const metadata: Metadata = {
   title: 'Kelan — Kairo Backoffice',
@@ -12,9 +13,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-gray-950 text-gray-100 antialiased">
+      <body>
         <InstrumentationClient />
-        {children}
+        <UiRoot>{children}</UiRoot>
       </body>
     </html>
   );

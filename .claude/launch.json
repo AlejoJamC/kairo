@@ -4,20 +4,44 @@
     {
       "name": "dashboard",
       "runtimeExecutable": "bunx",
-      "runtimeArgs": ["turbo", "run", "dev", "--filter=@kairo/dashboard"],
+      "runtimeArgs": [
+        "turbo",
+        "run",
+        "dev",
+        "--filter=@kairo/dashboard"
+      ],
       "port": 5173
     },
     {
       "name": "landing",
       "runtimeExecutable": "bunx",
-      "runtimeArgs": ["turbo", "run", "dev", "--filter=@kairo/landing"],
+      "runtimeArgs": [
+        "turbo",
+        "run",
+        "dev",
+        "--filter=@kairo/landing"
+      ],
       "port": 3000
     },
     {
       "name": "all",
       "runtimeExecutable": "bun",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "dashboard-preview",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "apps/dashboard",
+        "preview:dev"
+      ],
+      "port": 5174
     }
   ]
 }

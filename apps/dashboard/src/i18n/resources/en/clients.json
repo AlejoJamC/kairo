@@ -1,5 +1,5 @@
 {
-  "title": "Client Directory",
+  "title": "Clients",
   "searchPlaceholder": "Search by name or ID...",
   "addClient": "Add Client",
   "loading": "Loading clients...",
@@ -51,9 +51,11 @@
     "cancelButton": "Cancel",
     "requiredError": "Internal ID and Company Name are required",
     "saveError": "Failed to save client. Please try again.",
-    "duplicateIdError": "A client with this Internal ID already exists"
+    "duplicateIdError": "A client with this Internal ID already exists",
+    "removePerson": "Remove contact person"
   },
   "actions": {
+    "more": "More actions",
     "edit": "Edit",
     "delete": "Delete Client",
     "confirmDelete": "Delete \"{{name}}\"? This cannot be undone.",
@@ -67,7 +69,9 @@
     "bulkConfirmModalTitle": "Confirm drafts from {{org}}",
     "bulkConfirmModalBody": "{{count}} drafts will be confirmed. This action cannot be undone from the regular UI.",
     "bulkConfirmSuccess": "{{count}} drafts confirmed",
-    "externalReadOnly": "Data synced from {{source}}. Editing not available."
+    "externalReadOnly": "Data synced from {{source}}. Editing not available.",
+    "close": "Close",
+    "export": "Export"
   },
   "empty": {
     "noClients": "No clients found",
@@ -80,7 +84,11 @@
     "statusAll": "All",
     "statusDrafts": "Drafts",
     "statusConfirmed": "Confirmed",
-    "statusRejected": "Rejected"
+    "statusRejected": "Rejected",
+    "status": "Status",
+    "organization": "Organization",
+    "allOrganizations": "All organizations",
+    "plan": "Plan"
   },
   "badges": {
     "draft": "Draft",
@@ -98,8 +106,11 @@
     "genericAction": "Action could not be completed."
   },
   "search": {
-    "placeholder": "Search by name, email, phone..."
+    "placeholder": "Search by name, email, phone...",
+    "label": "Search clients"
   },
   "errorMessage": "Failed to load drafts.",
-  "retry": "Retry"
+  "retry": "Retry",
+  "countLabel_one": "{{count}} client",
+  "countLabel_other": "{{count}} clients"
 }

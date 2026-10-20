@@ -1,7 +1,5 @@
-import type { ReactNode } from "react";
-import { Lock } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Chip } from "@/components/ui/chip";
+import { Box, Button, Chip, Icon, Skeleton, Text } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // KAI-232 — small shared pieces of the internal-notes surface. Kept here (not
@@ -14,7 +12,7 @@ import { Chip } from "@/components/ui/chip";
 export function TeamOnlyChip({ size = "md" }: { size?: "sm" | "md" }) {
   const { t } = useTranslation("dashboard");
   return (
-    <Chip tone="note" mono size={size} icon={<Lock style={{ width: size === "sm" ? 9 : 10, height: size === "sm" ? 9 : 10 }} />}>
+    <Chip tone="note" mono size={size} icon={<Icon name="lock" size={size === "sm" ? 9 : 10} />}>
       {t("notes.teamOnly", "TEAM ONLY")}
     </Chip>
   );
@@ -24,41 +22,18 @@ export function TeamOnlyChip({ size = "md" }: { size?: "sm" | "md" }) {
 export function NotesHeader({ count, onNewNote }: { count: number; onNewNote?: () => void }) {
   const { t } = useTranslation("dashboard");
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-      <span
-        style={{
-          fontFamily: "var(--k-font-mono)",
-          fontSize: 10.5,
-          color: "var(--k-text-tertiary)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-        }}
-      >
+    <Box display="flex" alignItems="center" gap={8} marginBottom={10}>
+      <Text font="mono" fontSize={10.5} color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.53}>
         {t("notes.count", { count, defaultValue: "{{count}} notes · this ticket" })}
-      </span>
+      </Text>
       {onNewNote && (
-        <button
-          type="button"
-          onClick={onNewNote}
-          style={{
-            marginLeft: "auto",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 11,
-            padding: "4px 8px",
-            borderRadius: 5,
-            border: "1px solid var(--k-note-border)",
-            background: "var(--k-note-bg)",
-            color: "var(--k-note-label)",
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
-          + {t("notes.new", "New note")}
-        </button>
+        <Box marginLeft="auto">
+          <Button size="sm" icon={<Icon name="plus" size={11} />} onPress={onNewNote}>
+            {t("notes.new", "New note")}
+          </Button>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -66,86 +41,26 @@ export function NotesHeader({ count, onNewNote }: { count: number; onNewNote?: (
 export function PrivacyFootnote() {
   const { t } = useTranslation("dashboard");
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 6,
-        marginTop: 4,
-        padding: "8px 10px",
-        borderRadius: 6,
-        background: "var(--k-surface)",
-        border: "1px solid var(--k-border-subtle)",
-      }}
-    >
-      <Lock style={{ width: 11, height: 11, color: "var(--k-text-tertiary)", flexShrink: 0, marginTop: 2 }} />
-      <span style={{ fontSize: 11, color: "var(--k-text-tertiary)", lineHeight: 1.45 }}>
+    <Box display="flex" alignItems="flex-start" gap={6} marginTop={4} paddingVertical={8} paddingHorizontal={10} borderRadius={6} backgroundColor="var(--k-surface)" borderWidth={1} borderColor="var(--k-border-subtle)" borderStyle="solid">
+      <Icon name="lock" size={11} color="var(--k-text-tertiary)" marginTop={2} />
+      <Text fontSize={11} color="var(--k-text-tertiary)" lineHeight={15.95}>
         {t("notes.privacy", "Internal notes are never sent to or visible by the customer.")}
-      </span>
-    </div>
-  );
-}
-
-/** The system's empty-state block — same shape as the other right-panel tabs. */
-export function EmptyBlock({
-  title,
-  sub,
-  children,
-}: {
-  title: string;
-  sub: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div style={{ padding: "46px 22px", textAlign: "center" }}>
-      <div
-        style={{
-          fontFamily: "var(--k-font-mono)",
-          fontSize: 18,
-          color: "var(--k-border)",
-          marginBottom: 10,
-        }}
-      >
-        ◌
-      </div>
-      <div style={{ fontSize: 13, color: "var(--k-text-secondary)", fontWeight: 500, marginBottom: 5 }}>
-        {title}
-      </div>
-      <div
-        style={{
-          fontSize: 11.5,
-          color: "var(--k-text-tertiary)",
-          lineHeight: 1.5,
-          maxWidth: 240,
-          margin: "0 auto",
-        }}
-      >
-        {sub}
-      </div>
-      {children && <div style={{ marginTop: 14, display: "flex", justifyContent: "center" }}>{children}</div>}
-    </div>
+      </Text>
+    </Box>
   );
 }
 
 /** Loading placeholder with the real card's amber outline and metrics. */
 export function NoteSkeleton() {
   return (
-    <div
-      style={{
-        padding: "10px 12px",
-        borderRadius: 8,
-        marginBottom: 8,
-        background: "var(--k-note-bg)",
-        border: "1px solid var(--k-note-border)",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
-        <div className="shimmer-note" style={{ width: 20, height: 20, borderRadius: 999 }} />
-        <div className="shimmer-note" style={{ height: 9, width: 92 }} />
-        <div className="shimmer-note" style={{ height: 8, width: 34, marginLeft: "auto" }} />
-      </div>
-      <div className="shimmer-note" style={{ height: 8, width: "100%", marginBottom: 6 }} />
-      <div className="shimmer-note" style={{ height: 8, width: "72%" }} />
-    </div>
+    <Box paddingVertical={10} paddingHorizontal={12} borderRadius={8} marginBottom={8} backgroundColor="var(--k-note-bg)" borderWidth={1} borderColor="var(--k-note-border)" borderStyle="solid">
+      <Box display="flex" alignItems="center" gap={7} marginBottom={8}>
+        <Skeleton width={20} height={20} borderRadius={999} />
+        <Skeleton height={9} width={92} />
+        <Skeleton height={8} width={34} marginLeft="auto" />
+      </Box>
+      <Skeleton height={8} width="100%" marginBottom={6} />
+      <Skeleton height={8} width="72%" />
+    </Box>
   );
 }

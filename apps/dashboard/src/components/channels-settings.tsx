@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { Mail, Plus, Trash2, Star, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
-import { useAuth } from "@/contexts/auth-context";
-import { apiCall, getLandingUrl } from "@/lib/api-client";
+import { useTranslation } from "react-i18next";
+import { useAuth } from "@kairo/client-core/auth";
+import { listChannels, deleteChannel, startGmailConnect } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
+import { Box, Callout, Icon, IconButton, IntegrationCard, Spinner, Text } from "@kairo/ui";
 
 interface SupportChannel {
   id: string;
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function ChannelsSettings({ onViewChange }: Props) {
+  const { t } = useTranslation("dashboard");
   const { accountId } = useAuth();
   const [channels, setChannels] = useState<SupportChannel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,18 +32,16 @@ export function ChannelsSettings({ onViewChange }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiCall(`/api/v1/accounts/${accountId}/channels`, {
-        headers: { "x-account-id": accountId },
-      });
+      const res = await listChannels(accountId);
       if (!res.ok) throw new Error(`${res.status}`);
       const data = await res.json();
       setChannels((data.channels ?? []).filter((c: SupportChannel) => c.is_active));
     } catch {
-      setError("Could not load channels.");
+      setError(t("channelsSettings.loadError"));
     } finally {
       setLoading(false);
     }
-  }, [accountId]);
+  }, [accountId, t]);
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
@@ -49,132 +49,102 @@ export function ChannelsSettings({ onViewChange }: Props) {
     if (!accountId) return;
     setDisconnecting(channelId);
     try {
-      await apiCall(`/api/v1/accounts/${accountId}/channels/${channelId}`, {
-        method: "DELETE",
-        headers: { "x-account-id": accountId },
-      });
+      await deleteChannel(accountId, channelId);
       setChannels((prev) => prev.filter((c) => c.id !== channelId));
     } catch {
-      setError("Failed to disconnect channel.");
+      setError(t("channelsSettings.disconnectError"));
     } finally {
       setDisconnecting(null);
     }
   };
 
-  const handleConnectGmail = () => {
-    // Redirect to the existing Gmail OAuth flow in the landing app.
-    window.location.href = getLandingUrl("/bff/auth/google");
+  // Redirect to the existing Gmail OAuth flow in the landing app.
+  const handleConnectGmail = () => startGmailConnect();
+
+  const labels = {
+    beta: "BETA",
+    soon: t("channelsSettings.soon"),
+    connect: t("channelsSettings.connect"),
+    connecting: t("channelsSettings.connecting"),
+    reconnect: t("channelsSettings.reconnect"),
+    // The connected card has no configuration screen: its action is Disconnect.
+    configure: t("channelsSettings.disconnect"),
+    requestAccess: "",
+    requested: "",
   };
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", background: "var(--k-bg)", padding: "32px 40px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button
-          onClick={() => onViewChange("settings")}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--k-text-tertiary)", padding: 4, borderRadius: 6, display: "flex" }}
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <div>
-          <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--k-text-primary)" }}>
-            Support Channels
-          </h1>
-          <p style={{ fontSize: 13, color: "var(--k-text-tertiary)", margin: "4px 0 0" }}>
-            Email inboxes connected to this account as support channels.
-          </p>
-        </div>
-      </div>
+    <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll backgroundColor="var(--k-bg)" paddingVertical={32} paddingHorizontal={40}>
+      <Box display="flex" alignItems="center" gap={12} marginBottom={28}>
+        <IconButton label={t("channelsSettings.back")} onPress={() => onViewChange("settings")}>
+          <Icon name="back" size={18} color="var(--k-text-tertiary)" />
+        </IconButton>
+        <Box>
+          <Text tag="h1" fontSize={18} fontWeight={600} margin={0} color="var(--k-text-primary)" display="block">
+            {t("channelsSettings.title")}
+          </Text>
+          <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" marginTop={4} marginHorizontal={0} marginBottom={0} display="block">
+            {t("channelsSettings.subtitle")}
+          </Text>
+        </Box>
+      </Box>
 
-      {/* Error */}
       {error && (
-        <div style={{ display: "flex", gap: 8, alignItems: "center", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 8, padding: "10px 14px", marginBottom: 20 }}>
-          <AlertCircle size={15} color="#EF4444" />
-          <p style={{ fontSize: 13, color: "#B91C1C", margin: 0 }}>{error}</p>
-        </div>
+        <Box marginBottom={20}>
+          <Callout tone="error" icon={<Icon name="alert" size={15} color="var(--kairo-color-bad)" />}>{error}</Callout>
+        </Box>
       )}
 
-      {/* Channel list */}
-      <div style={{ background: "var(--k-surface)", border: "1px solid var(--k-border)", borderRadius: 10, overflow: "hidden", marginBottom: 20 }}>
+      <Box display="flex" flexDirection="column" gap={10} marginBottom={20}>
         {loading ? (
-          <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
-            <Loader2 size={20} color="var(--k-text-tertiary)" style={{ animation: "spin 1s linear infinite" }} />
-          </div>
+          <Box display="flex" justifyContent="center" padding={32}>
+            <Spinner size="lg" />
+          </Box>
         ) : channels.length === 0 ? (
-          <div style={{ padding: 32, textAlign: "center" }}>
-            <Mail size={28} color="var(--k-text-tertiary)" style={{ marginBottom: 8 }} />
-            <p style={{ fontSize: 14, color: "var(--k-text-secondary)", margin: 0 }}>
-              No channels connected yet.
-            </p>
-            <p style={{ fontSize: 13, color: "var(--k-text-tertiary)", margin: "4px 0 0" }}>
-              Connect a Gmail inbox to start receiving support tickets.
-            </p>
-          </div>
+          <Box alignItems="center" padding={32}>
+            <Icon name="mail" size={28} color="var(--k-text-tertiary)" marginBottom={8} />
+            <Text tag="p" fontSize={14} color="var(--k-text-secondary)" margin={0} display="block">
+              {t("channelsSettings.emptyTitle")}
+            </Text>
+            <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" marginTop={4} marginHorizontal={0} marginBottom={0} display="block">
+              {t("channelsSettings.emptyBody")}
+            </Text>
+          </Box>
         ) : (
-          channels.map((ch, i) => (
-            <div
+          channels.map((ch) => (
+            <IntegrationCard
               key={ch.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "14px 18px",
-                borderBottom: i < channels.length - 1 ? "1px solid var(--k-border)" : "none",
-              }}
-            >
-              <Mail size={16} color="var(--k-text-tertiary)" />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)" }}>
-                    {ch.email_address}
-                  </span>
-                  {ch.is_primary && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#F59E0B", fontWeight: 500 }}>
-                      <Star size={10} fill="#F59E0B" /> Primary
-                    </span>
-                  )}
-                </div>
-                <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", margin: "2px 0 0", textTransform: "capitalize" }}>
-                  {ch.channel_type} · Connected {new Date(ch.connected_at).toLocaleDateString()}
-                </p>
-              </div>
-              <button
-                onClick={() => handleDisconnect(ch.id)}
-                disabled={disconnecting === ch.id}
-                title="Disconnect channel"
-                style={{
-                  background: "none", border: "none", cursor: disconnecting === ch.id ? "not-allowed" : "pointer",
-                  color: "var(--k-text-tertiary)", padding: 6, borderRadius: 6, display: "flex",
-                  opacity: disconnecting === ch.id ? 0.5 : 1,
-                }}
-              >
-                {disconnecting === ch.id
-                  ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
-                  : <Trash2 size={14} />
-                }
-              </button>
-            </div>
+              name={ch.email_address}
+              initial={ch.channel_type.slice(0, 1).toUpperCase()}
+              tileColor="var(--kairo-color-accent)"
+              status={disconnecting === ch.id ? "connecting" : "connected"}
+              description={[
+                t("channelsSettings.connectedOn", { type: ch.channel_type, date: new Date(ch.connected_at).toLocaleDateString() }),
+                ch.is_primary ? t("channelsSettings.primary") : null,
+              ].filter(Boolean).join(" · ")}
+              labels={labels}
+              onConfigure={() => handleDisconnect(ch.id)}
+            />
           ))
         )}
-      </div>
-
-      {/* Connect Gmail button */}
-      <button
-        onClick={handleConnectGmail}
-        style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "10px 16px", borderRadius: 8,
-          border: "1px solid var(--k-border)", background: "var(--k-surface)",
-          cursor: "pointer", fontSize: 14, fontWeight: 500, color: "var(--k-text-primary)",
-        }}
-      >
-        <Plus size={16} />
-        Connect Gmail inbox
-      </button>
-
-      <p style={{ fontSize: 12, color: "var(--k-text-tertiary)", marginTop: 12 }}>
-        Outlook, IMAP, and custom channels coming soon.
-      </p>
-    </div>
+        <IntegrationCard
+          name={t("channelsSettings.gmailName")}
+          initial="G"
+          tileColor="var(--kairo-color-accent)"
+          status="available"
+          description={t("channelsSettings.gmailDescription")}
+          labels={labels}
+          onConnect={handleConnectGmail}
+        />
+        <IntegrationCard
+          name={t("channelsSettings.outlookName")}
+          initial="O"
+          tileColor="var(--kairo-color-faint)"
+          status="soon"
+          description={t("channelsSettings.outlookDescription")}
+          labels={labels}
+        />
+      </Box>
+    </Box>
   );
 }

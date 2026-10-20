@@ -1,10 +1,10 @@
 import * as React from "react";
 import { JSDOM } from "jsdom";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReplyBar } from "./reply-bar";
-import { useTriageStore } from "@/stores/triage-store";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { renderWithProviders } from "@/test/render-with-providers";
 
 const apiCallMock = vi.fn();
@@ -22,13 +22,13 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/lib/api-client", () => ({
+vi.mock("@kairo/client-core/api-client", () => ({
   apiCall: (...args: unknown[]) => apiCallMock(...args),
 }));
 
 // KAI-232: ReplyBar reads the current user to exclude self from the @mention
 // dropdown. These tests render it outside an AuthProvider.
-vi.mock("@/contexts/auth-context", () => ({
+vi.mock("@kairo/client-core/auth", () => ({
   useAuth: () => ({ user: { id: "user-1" } }),
 }));
 
@@ -69,7 +69,7 @@ describe("ReplyBar", () => {
     expect(screen.queryByText(/replyBar\.sendNote/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId("mention-dropdown")).not.toBeInTheDocument();
     // The reply composer itself is untouched.
-    expect(screen.getByPlaceholderText(/ticketDetail\.replyPlaceholder/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/replyBar\.replyPlaceholder/i)).toBeInTheDocument();
   });
 
   it("auto-populates draft from aiSuggestedReply and clears store value", async () => {
@@ -111,7 +111,7 @@ describe("ReplyBar", () => {
     await waitFor(() => expect(apiCallMock).toHaveBeenCalledTimes(1));
     expect(useTriageStore.getState().aiSuggestedReply).toBeNull();
     // After send the card branch goes away; the composer is the plain placeholder textarea, empty.
-    const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
+    const composer = await screen.findByPlaceholderText("replyBar.replyPlaceholder");
     expect(composer).toHaveValue("");
     expect(screen.queryByText(/replyBar\.aiBadge/i)).not.toBeInTheDocument();
     expect(screen.getByText("replyBar.sendSuccess")).toBeInTheDocument();
@@ -138,7 +138,7 @@ describe("ReplyBar", () => {
     renderWithProviders(<ReplyBar onReplyQueued={onReplyQueued} />);
     useTriageStore.getState().selectTicket("ticket-1");
 
-    const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
+    const composer = await screen.findByPlaceholderText("replyBar.replyPlaceholder");
     await userEvent.type(composer, "On it, thanks for your patience!");
     await userEvent.click(screen.getByRole("button", { name: "ticketDetail.send" }));
 
@@ -173,12 +173,11 @@ describe("ReplyBar", () => {
     renderWithProviders(<ReplyBar />);
     useTriageStore.getState().selectTicket("ticket-1");
 
-    const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
+    const composer = await screen.findByPlaceholderText("replyBar.replyPlaceholder");
     await userEvent.type(composer, "All set, this is now resolved!");
     // "Send & Resolve" lives inside the send split-button's dropdown now.
     await userEvent.click(screen.getByRole("button", { name: "replyBar.sendOptionsLabel" }));
-    const sendMenu = within(await screen.findByTestId("send-split-menu"));
-    await userEvent.click(sendMenu.getByRole("button", { name: "replyBar.sendAndResolve" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /replyBar\.sendAndResolve/ }));
 
     await waitFor(() => expect(apiCallMock).toHaveBeenCalledTimes(1));
     const [, options] = apiCallMock.mock.calls[0] as [string, { body: string }];
@@ -189,7 +188,7 @@ describe("ReplyBar", () => {
     expect(apiCallMock).toHaveBeenCalledTimes(1);
   });
 
-  it("'Resolver' in the send split-button PATCHes status only — never calls /reply", async () => {
+  it("the Resolve button PATCHes status only — never calls /reply", async () => {
     apiCallMock.mockResolvedValue({
       ok: true,
       json: async () => ({ ticket: { status: "resolved" } }),
@@ -198,17 +197,30 @@ describe("ReplyBar", () => {
     renderWithProviders(<ReplyBar />);
     useTriageStore.getState().selectTicket("ticket-1");
 
-    const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
+    const composer = await screen.findByPlaceholderText("replyBar.replyPlaceholder");
     await userEvent.type(composer, "Draft not sent");
-    await userEvent.click(screen.getByRole("button", { name: "replyBar.sendOptionsLabel" }));
-    const sendMenu = within(await screen.findByTestId("send-split-menu"));
-    await userEvent.click(sendMenu.getByRole("button", { name: "replyBar.actionResolver" }));
+    await userEvent.click(screen.getByRole("button", { name: "replyBar.actionResolver" }));
 
     await waitFor(() => expect(apiCallMock).toHaveBeenCalledTimes(1));
     const [url, options] = apiCallMock.mock.calls[0] as [string, { method: string; body: string }];
     expect(url).toContain("/status");
     expect(options.method).toBe("PATCH");
     expect(JSON.parse(options.body)).toEqual({ status: "resolved" });
+  });
+
+  it("the R shortcut resolves the open ticket through the same status-only call", async () => {
+    apiCallMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ticket: { status: "resolved" } }),
+    });
+
+    renderWithProviders(<ReplyBar />);
+    useTriageStore.getState().selectTicket("ticket-1");
+    await screen.findByPlaceholderText("replyBar.replyPlaceholder");
+    act(() => useTriageStore.getState().requestTicketAction("resolve"));
+
+    await waitFor(() => expect(apiCallMock).toHaveBeenCalledTimes(1));
+    expect(JSON.parse((apiCallMock.mock.calls[0] as [string, { body: string }])[1].body)).toEqual({ status: "resolved" });
   });
 
   it("shows the no-Gmail-integration error using the response error code", async () => {
@@ -220,7 +232,7 @@ describe("ReplyBar", () => {
     renderWithProviders(<ReplyBar />);
     useTriageStore.getState().selectTicket("ticket-1");
 
-    const composer = await screen.findByPlaceholderText("ticketDetail.replyPlaceholder");
+    const composer = await screen.findByPlaceholderText("replyBar.replyPlaceholder");
     await userEvent.type(composer, "Trying to reply...");
     await userEvent.click(screen.getByRole("button", { name: "ticketDetail.send" }));
 

@@ -18,6 +18,7 @@ import { useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { getDashboardUrl } from '@/lib/api-config';
 import { KairoLogo } from '@/components/kairo-logo';
+import { Box, Spinner, Text } from "@kairo/ui";
 
 export default function AuthHandoffPage() {
   useEffect(() => {
@@ -40,17 +41,12 @@ export default function AuthHandoffPage() {
   }, []);
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 16,
-      background: '#f9fafb',
-    }}>
+    <Box minHeight="100vh" display="flex" flexDirection="column" alignItems="center" justifyContent="center" gap={16} backgroundColor="var(--kairo-color-sunk)">
       <KairoLogo size={26} />
-      <p style={{ color: '#6b7280', fontSize: 14 }}>Signing you in…</p>
-    </div>
+      <Box display="flex" alignItems="center" gap={8}>
+        <Spinner />
+        <Text fontSize={14} color="var(--kairo-color-faint)">Signing you in…</Text>
+      </Box>
+    </Box>
   );
 }

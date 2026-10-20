@@ -12,6 +12,10 @@ const testFallbackEnv = {
     "test-anon-key",
   VITE_LANDING_URL:
     import.meta.env.VITE_LANDING_URL ?? process.env.VITE_LANDING_URL ?? "",
+  VITE_API_BASE_URL:
+    import.meta.env.VITE_API_BASE_URL ?? process.env.VITE_API_BASE_URL ?? "",
+  VITE_BFF_BASE_URL:
+    import.meta.env.VITE_BFF_BASE_URL ?? process.env.VITE_BFF_BASE_URL ?? "",
   // KAI-126: ClickStack (OpenTelemetry) browser tracing. Unset -> disabled.
   VITE_OTEL_EXPORTER_OTLP_ENDPOINT:
     import.meta.env.VITE_OTEL_EXPORTER_OTLP_ENDPOINT ??
@@ -33,6 +37,9 @@ export const env = createEnv({
     VITE_SUPABASE_URL: z.string().url(),
     VITE_SUPABASE_ANON_KEY: z.string().min(1),
     VITE_LANDING_URL: z.string().default(""),
+    // Origins serving /api/* and /bff/*. Empty = same origin as the app (web build).
+    VITE_API_BASE_URL: z.string().default(""),
+    VITE_BFF_BASE_URL: z.string().default(""),
     VITE_OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
     VITE_OTEL_SERVICE_NAME: z.string().min(1).default("kairo-dashboard"),
     VITE_HYPERDX_INGESTION_API_KEY: z.string().min(1).optional(),

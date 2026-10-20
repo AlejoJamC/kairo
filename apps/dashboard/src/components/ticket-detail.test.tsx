@@ -78,7 +78,7 @@ const mockOperationalSlaConfig = {
 
 const mockSelectTicket = vi.fn();
 
-vi.mock("@/stores/triage-store", () => {
+vi.mock("@kairo/client-core/stores/triage-store", () => {
   // Mirrors zustand's real selector API — PrioritySlaBar calls this with a
   // selector (`useTriageStore((s) => s.operationalSlaConfig)`) while
   // TicketDetail calls it with no args, so the mock must support both.
@@ -90,6 +90,7 @@ vi.mock("@/stores/triage-store", () => {
       selectedTicketId: "ticket-1",
       operationalSlaConfig: mockOperationalSlaConfig,
       selectTicket: mockSelectTicket,
+      requestPanelTab: vi.fn(),
     };
     return selector ? selector(state) : state;
   };
@@ -97,12 +98,17 @@ vi.mock("@/stores/triage-store", () => {
   return { useTriageStore };
 });
 
+vi.mock("@/hooks/useActiveView", () => ({
+  useActiveView: () => ["triage", vi.fn()],
+}));
+
 vi.mock("./reply-bar", () => ({
   ReplyBar: () => React.createElement("div", { "data-testid": "reply-bar" }),
 }));
 
 vi.mock("./ticket-header", () => ({
   TicketHeader: () => React.createElement("div", { "data-testid": "ticket-header" }),
+  TicketHeadingBlock: ({ sla }: { sla?: React.ReactNode }) => React.createElement("div", { "data-testid": "ticket-heading" }, sla),
 }));
 
 // We mock useTicketThread directly — we test the hook separately
@@ -112,7 +118,7 @@ let mockThreadResult: { messages: typeof mockMessages | []; loading: boolean; er
   error: null,
 };
 
-vi.mock("@/hooks/use-ticket-thread", () => ({
+vi.mock("@kairo/client-core/hooks/use-ticket-thread", () => ({
   useTicketThread: () => mockThreadResult,
 }));
 
@@ -194,21 +200,26 @@ describe("TicketDetail — priority SLA bar (KAI-168)", () => {
   it("renders nothing when the ticket has no priority", () => {
     mockTicket = { ...mockTicket, priority: null };
     renderWithProviders(React.createElement(TicketDetail));
-    expect(screen.queryByText(/restantes|remaining/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("sla.noResponse")).not.toBeInTheDocument();
   });
 
-  it("shows remaining time text when under 50% of the priority's max response time", () => {
-    // P1 max is 1h — 5 min elapsed is well under 50%.
-    mockTicket = { ...mockTicket, priority: "P1", received_at: minutesAgo(5), first_response_at: null };
+  it.each([
+    [5, "sla.full.onTime"],
+    [35, "sla.full.atRisk"],
+    [50, "sla.full.escalating"],
+    [120, "sla.full.overdue"],
+  ])("shows the state of the SLA after %i minutes of a 1h P1", (elapsed, phrase) => {
+    // P1: max 1h, risk alert at 30m, automatic escalation at 45m.
+    mockTicket = { ...mockTicket, priority: "P1", received_at: minutesAgo(elapsed), first_response_at: null };
     renderWithProviders(React.createElement(TicketDetail));
-    expect(screen.getByText(/prioritySla.detailRemaining/i)).toBeInTheDocument();
+    expect(screen.getByText(phrase)).toBeInTheDocument();
+    expect(screen.getByText("sla.noResponse")).toBeInTheDocument();
   });
 
-  it("shows overdue text when past 100% of the priority's max response time", () => {
-    // P1 max is 1h — 2h elapsed is 200%.
-    mockTicket = { ...mockTicket, priority: "P1", received_at: minutesAgo(120), first_response_at: null };
+  it("shows no SLA once the first response is sent", () => {
+    mockTicket = { ...mockTicket, priority: "P1", received_at: minutesAgo(120), first_response_at: minutesAgo(100) };
     renderWithProviders(React.createElement(TicketDetail));
-    expect(screen.getByText(/prioritySla.detailOverdue/i)).toBeInTheDocument();
+    expect(screen.queryByText("sla.noResponse")).not.toBeInTheDocument();
   });
 });
 

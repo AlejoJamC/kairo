@@ -54,34 +54,33 @@ describe("PrioritySlaBadge (via TicketCard)", () => {
     renderWithProviders(
       React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
     );
-    expect(screen.queryByText(/prioritySla\./)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/sla\.title/)).not.toBeInTheDocument();
   });
 
-  it("shows a remaining-time label when under 50% of the priority's max response time", () => {
-    // P1 max is 1h — 5 min elapsed is well under 50%.
-    const ticket = baseTicket({ priority: "P1", received_at: minutesAgo(5) });
+  it.each([
+    [5, "sla.title.onTime"],
+    [35, "sla.title.atRisk"],
+    [50, "sla.title.escalating"],
+    [120, "sla.title.overdue"],
+  ])("names the SLA state after %i minutes of a 1h P1 in its title", (elapsed, title) => {
+    // P1: max 1h, risk alert at 30m, automatic escalation at 45m.
+    const ticket = baseTicket({ priority: "P1", received_at: minutesAgo(elapsed) });
     renderWithProviders(
       React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
     );
-    expect(screen.getByText(/prioritySla\.remainingMinutes/)).toBeInTheDocument();
+    expect(screen.getByTitle(new RegExp(title.split(".").join("\\.")))).toBeInTheDocument();
   });
 
-  it("shows a due-soon label when between 50% and 100% of the priority's max response time", () => {
-    // P1 max is 1h — 45 min elapsed is 75%.
-    const ticket = baseTicket({ priority: "P1", received_at: minutesAgo(45) });
-    renderWithProviders(
-      React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
+  it("shows the overdue time without a prefix and the countdown with one", () => {
+    const { unmount } = renderWithProviders(
+      React.createElement(TicketCard, { ticket: baseTicket({ priority: "P1", received_at: minutesAgo(120) }), selected: false, onSelect: () => {} })
     );
-    expect(screen.getByText(/prioritySla\.dueInMinutes/)).toBeInTheDocument();
-  });
-
-  it("shows an overdue label when past 100% of the priority's max response time", () => {
-    // P1 max is 1h — 2h elapsed is 200%.
-    const ticket = baseTicket({ priority: "P1", received_at: minutesAgo(120) });
+    expect(screen.getByText("1h")).toBeInTheDocument();
+    unmount();
     renderWithProviders(
-      React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
+      React.createElement(TicketCard, { ticket: baseTicket({ priority: "P1", received_at: minutesAgo(5) }), selected: false, onSelect: () => {} })
     );
-    expect(screen.getByText(/prioritySla\.overdueHours/)).toBeInTheDocument();
+    expect(screen.getByText(/sla\.compactIn/)).toBeInTheDocument();
   });
 });
 
@@ -96,7 +95,7 @@ describe("TicketCard — sentiment emoji tooltip i18n", () => {
     renderWithProviders(
       React.createElement(TicketCard, { ticket, selected: false, onSelect: () => {} })
     );
-    const emoji = screen.getByText("😩");
+    const emoji = screen.getByText("😠");
     expect(emoji).toHaveAttribute("title", "ticketCard.emotionFrustrated:");
     expect(emoji).toHaveAttribute("aria-label", "ticketCard.emotionFrustrated:");
   });

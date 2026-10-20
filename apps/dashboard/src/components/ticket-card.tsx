@@ -1,139 +1,28 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Users, ArrowUp, Lock } from "lucide-react";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
-import { getEmotionTokens } from "@kairo/ui";
-import { useTriageStore } from "@/stores/triage-store";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { SlaBadge } from "@/components/sla-badge";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
+import { formatCompactDuration, formatDuration, slaDisplay } from "@/lib/sla-display";
+import { normalizeTicketType } from "@/lib/ticket-labels";
+import { Box, Button, CategoryChip, Chip, Icon, PlainInput, Pressable, SlaIndicator, Text, TicketRow, type Sentiment } from "@kairo/ui";
 
 const NO_NOTE_COUNTS = { notes: 0, unread_mentions: 0 } as const;
 
 // ---------------------------------------------------------------------------
-// Sentiment helpers — sourced from @kairo/ui triage-tokens
-// aggressive(🤬red) → frustrated(😩orange) → neutral(😐blue) → positive(😊green)
+// Sentiment helpers — stripe colors come from the sentiment scale of
+// @kairo/tokens; the emoji is the indicator the design specifies.
 // ---------------------------------------------------------------------------
 
-const STRIPE_COLOR: Record<string, string> = {
-  aggressive: "#EF4444",
-  frustrated: "#F97316",
-  neutral:    "#60A5FA",
-  positive:   "#10B981",
-};
-
-function stripeColor(sentiment: string | null | undefined): string {
-  return STRIPE_COLOR[(sentiment ?? "").toLowerCase()] ?? "#D4D4D8";
-}
-
-// getEmotionTokens (@kairo/ui) hardcodes its ariaLabel in English (used by
-// other, non-i18n consumers of that package) — translate it here instead of
-// showing that raw string as the tooltip/aria-label for this ticket list.
 const EMOTION_LABEL_KEY = {
   aggressive: "ticketCard.emotionAggressive",
   frustrated: "ticketCard.emotionFrustrated",
   neutral:    "ticketCard.emotionNeutral",
   positive:   "ticketCard.emotionPositive",
 } as const satisfies Record<string, string>;
-
-// ---------------------------------------------------------------------------
-// Priority badge
-// ---------------------------------------------------------------------------
-
-const PRIORITY_STYLE: Record<string, React.CSSProperties> = {
-  P1: { background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" },
-  P2: { background: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA" },
-  P3: { background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" },
-  P4: { background: "#F4F4F5", color: "#71717A", border: "1px solid #E4E4E7" },
-};
-
-function PriorityBadge({ priority }: { priority: string | null | undefined }) {
-  if (!priority) return null;
-  const p = priority.toUpperCase();
-  const style = PRIORITY_STYLE[p] ?? { background: "#F4F4F5", color: "#71717A", border: "1px solid #E4E4E7" };
-  return (
-    <span
-      style={{
-        ...style,
-        fontSize: 10,
-        fontWeight: 600,
-        padding: "2px 6px",
-        borderRadius: 4,
-        letterSpacing: "0.02em",
-      }}
-    >
-      {p}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Type badge
-// ---------------------------------------------------------------------------
-
-function typeBadgeStyle(type: string | null | undefined): React.CSSProperties {
-  const t = (type ?? "").toLowerCase();
-  if (t === "lead" || t === "prospect") return { background: "#ECFDF5", color: "#047857" };
-  if (t === "spam") return { background: "#F4F4F5", color: "#71717A" };
-  return { background: "#EEF2FF", color: "#2B5BFF" };
-}
-
-function typeLabel(type: string | null | undefined): string {
-  const t = (type ?? "").toLowerCase();
-  if (t === "lead" || t === "prospect") return "LEAD";
-  if (t === "spam") return "SPAM";
-  return "SOPORTE";
-}
-
-// ---------------------------------------------------------------------------
-// SLA badge
-// ---------------------------------------------------------------------------
-
-interface SlaBadgeProps {
-  slaDate: string | null | undefined;
-}
-
-function SlaBadge({ slaDate }: SlaBadgeProps) {
-  const { t } = useTranslation("dashboard");
-
-  const label = useMemo(() => {
-    if (!slaDate) return null;
-    const now = Date.now();
-    const due = new Date(slaDate).getTime();
-    const diff = due - now;
-
-    if (diff <= 0) return { text: t("ticketCard.slaBreached"), breached: true };
-
-    const totalMinutes = Math.floor(diff / 60_000);
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-
-    if (hours > 0) {
-      return { text: t("ticketCard.slaHours_other", { count: hours, minutes }), breached: false };
-    }
-    return { text: t("ticketCard.slaMinutes_other", { count: totalMinutes }), breached: false };
-  }, [slaDate, t]);
-
-  if (!label) return null;
-
-  return (
-    <span
-      style={{
-        fontSize: 10,
-        fontWeight: 600,
-        padding: "2px 6px",
-        borderRadius: 4,
-        background: label.breached ? "#FEF2F2" : "#F4F4F5",
-        color: label.breached ? "#DC2626" : "#71717A",
-        whiteSpace: "nowrap",
-        flexShrink: 0,
-      }}
-      title={t("ticketCard.slaTooltip", "SLA contractual según el plan del cliente")}
-    >
-      {label.text}
-    </span>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // KAI-168 — operational SLA (by ticket priority) badge.
@@ -145,46 +34,23 @@ function SlaBadge({ slaDate }: SlaBadgeProps) {
 // existing element is touched.
 // ---------------------------------------------------------------------------
 
-const PRIORITY_SLA_STYLE: Record<"ok" | "at_risk" | "breached", React.CSSProperties> = {
-  ok:       { background: "#ECFDF5", color: "#047857" },
-  at_risk:  { background: "#FFF7ED", color: "#C2410C" },
-  breached: { background: "#FEF2F2", color: "#DC2626" },
-};
-
 function PrioritySlaBadge({ ticket }: { ticket: Ticket }) {
   const { t } = useTranslation("dashboard");
   const config = useTriageStore((s) => s.operationalSlaConfig);
   const sla = useMemo(() => computeTicketOperationalSla(ticket, config), [ticket, config]);
   if (!sla) return null;
 
-  const hours = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 3600);
-  const minutes = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 60);
-  const days = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 86400);
-
-  let label: string;
-  if (sla.status === "ok") {
-    label = hours > 0 ? t("prioritySla.remainingHours", { count: hours }) : t("prioritySla.remainingMinutes", { count: minutes });
-  } else if (sla.status === "at_risk") {
-    label = hours > 0 ? t("prioritySla.dueInHours", { count: hours }) : t("prioritySla.dueInMinutes", { count: minutes });
-  } else {
-    label = days > 0 ? t("prioritySla.overdueDays", { count: days }) : t("prioritySla.overdueHours", { count: hours });
-  }
+  const { status, seconds } = slaDisplay(sla);
+  const compact = formatCompactDuration(seconds);
+  const full = formatDuration(seconds);
 
   return (
-    <span
-      style={{
-        ...PRIORITY_SLA_STYLE[sla.status],
-        fontSize: 10,
-        fontWeight: 600,
-        padding: "2px 6px",
-        borderRadius: 4,
-        whiteSpace: "nowrap",
-        flexShrink: 0,
-      }}
-      title={t("prioritySla.tooltip", "ANS operativo según la prioridad del ticket")}
-    >
-      {label}
-    </span>
+    <SlaIndicator
+      variant="compact"
+      status={status}
+      time={status === "overdue" ? compact : t("sla.compactIn", { time: compact })}
+      title={t(`sla.title.${status}`, { time: full })}
+    />
   );
 }
 
@@ -221,6 +87,8 @@ const LONG_PRESS_MS = 500;
 
 export interface TicketCardProps {
   ticket: Ticket;
+  /** Third line of the row (Awaiting customer: last reply and follow-up). */
+  footer?: ReactNode;
   selected: boolean;
   onSelect: (id: string) => void;
   onGroup?: (id: string) => void;
@@ -241,6 +109,7 @@ export interface TicketCardProps {
 
 export function TicketCard({
   ticket,
+  footer,
   selected,
   onSelect,
   onGroup,
@@ -279,384 +148,118 @@ export function TicketCard({
 
   const isSpam = (ticket.ticket_type ?? "").toLowerCase() === "spam";
   const relativeTime = useRelativeTime(ticket.received_at ?? ticket.created_at);
-  const emotion = getEmotionTokens(ticket.sentiment);
   const emotionKey = (ticket.sentiment ?? "").toLowerCase() as keyof typeof EMOTION_LABEL_KEY;
-  const emotionLabel = EMOTION_LABEL_KEY[emotionKey] ? t(EMOTION_LABEL_KEY[emotionKey]) : emotion.ariaLabel;
+  const emotionLabel = EMOTION_LABEL_KEY[emotionKey] ? t(EMOTION_LABEL_KEY[emotionKey]) : "";
+
+  const hasConfidence = ticket.classification_confidence !== null && ticket.classification_confidence !== undefined;
 
   return (
-    <button
-      onClick={() => {
-        if (longPressFired.current) {
-          longPressFired.current = false;
-          return;
-        }
-        onSelect(ticket.id);
-      }}
+    <Box
+      position="relative"
       onPointerDown={handlePointerDown}
       onPointerUp={clearLongPressTimer}
       onPointerLeave={clearLongPressTimer}
       onPointerCancel={clearLongPressTimer}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{
-        position: "relative",
-        display: "flex",
-        flexDirection: "column",
-        width: "100%",
-        padding: "12px 14px 12px 18px",
-        borderBottom: "1px solid var(--k-border-subtle)",
-        background: selected
-          ? "var(--k-surface-2)"
-          : hovered
-          ? "var(--k-surface)"
-          : "transparent",
-        borderLeft: selected
-          ? "2px solid var(--k-accent)"
-          : "2px solid transparent",
-        cursor: "pointer",
-        opacity: isSpam ? 0.55 : 1,
-        textAlign: "left",
-        transition: "background 0.1s ease",
-      }}
-      aria-selected={selected}
     >
-      {/* Priority stripe */}
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 8,
-          bottom: 8,
-          width: 3,
-          background: stripeColor(ticket.sentiment),
-          borderRadius: "0 2px 2px 0",
+      <TicketRow
+        code={ticket.ticket_number ? `KAI-${ticket.ticket_number}` : ""}
+        subject={ticket.subject ?? ""}
+        priority={ticket.priority}
+        escalated={ticket.status === "escalated"}
+        age={relativeTime}
+        sentiment={emotionKey in EMOTION_LABEL_KEY ? (emotionKey as Sentiment) : null}
+        sentimentLabel={emotionLabel}
+        sender={ticket.from_name ?? ticket.from_email ?? "Unknown"}
+        mention={INTERNAL_NOTES_ENABLED && noteCounts.unread_mentions > 0 ? { label: t("notes.queueMentionTooltip", "You have an unread mention here") } : undefined}
+        notes={INTERNAL_NOTES_ENABLED ? { count: noteCounts.notes, label: t("notes.queueChipTooltip", "Internal notes on this ticket") } : undefined}
+        sla={
+          <>
+            <SlaBadge slaDate={ticket.sla_due_at} />
+            <PrioritySlaBadge ticket={ticket} />
+          </>
+        }
+        confidence={hasConfidence ? ticket.classification_confidence : undefined}
+        confidenceLabel={t("ticketCard.confidenceLabel", "Confianza")}
+        extras={
+          <>
+            {ticket.ticket_type && (
+              <CategoryChip
+                scale="ticketType"
+                value={normalizeTicketType(ticket.ticket_type)}
+                label={t(`ticketTypes.${normalizeTicketType(ticket.ticket_type)}`)}
+                size="sm"
+              />
+            )}
+            {isCorrected && (
+              <Chip size="sm" tone="note">{t("correction.correctedBadge")}</Chip>
+            )}
+            {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount > 1 && (
+              <Text title={t("ticketCard.groupedTooltip", { count: groupCount - 1 })} display="flex" alignItems="center" gap={4} fontSize={10} color="var(--k-text-tertiary)">
+                <Icon name="clients" size={10} />+ {groupCount - 1}
+              </Text>
+            )}
+            {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount <= 1 && (
+              <Text title={t("ticketCard.groupedAloneTooltip", "Este ticket pertenece a un grupo")} display="inline-flex" flexShrink={0}>
+                <Icon name="clients" size={12} color="var(--k-text-tertiary)" />
+              </Text>
+            )}
+            {ticket.priority_score !== null && ticket.priority_score !== undefined && (
+              <Text title={t("ticketCard.priorityScoreTooltip", "Peso de prioridad")} font="mono" fontSize={10} fontWeight={600} color="var(--k-text-tertiary)">
+                {Math.round(ticket.priority_score)}
+              </Text>
+            )}
+          </>
+        }
+        leading={
+          onToggleSelect && (hovered || multiSelectMode || isChecked) ? (
+            <PlainInput type="checkbox" checked={isChecked} aria-label={t("ticketCard.selectForGrouping", "Seleccionar para agrupar")} onClick={(e) => e.stopPropagation()} onChange={(e) => {
+                e.stopPropagation();
+                onToggleSelect(ticket.id);
+              }} width={13} height={13} cursor="pointer" />
+          ) : undefined
+        }
+        footer={footer}
+        selected={selected}
+        muted={isSpam}
+        onPress={() => {
+          if (longPressFired.current) {
+            longPressFired.current = false;
+            return;
+          }
+          onSelect(ticket.id);
         }}
       />
 
-      {/* Row 1: ticket ID + priority + type + corrected + time */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          marginBottom: 8,
-          flexWrap: "wrap",
-        }}
-      >
-        {onToggleSelect && (
-          <span style={{ width: 14, display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
-            {(hovered || multiSelectMode || isChecked) && (
-              <input
-                type="checkbox"
-                checked={isChecked}
-                aria-label={t("ticketCard.selectForGrouping", "Seleccionar para agrupar")}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  onToggleSelect(ticket.id);
-                }}
-                style={{ width: 13, height: 13, cursor: "pointer" }}
-              />
-            )}
-          </span>
-        )}
-        {ticket.ticket_number && (
-          <span
-            style={{
-              fontSize: 11,
-              fontFamily: "var(--k-font-mono)",
-              color: "var(--k-text-primary)",
-              fontWeight: 700,
-              letterSpacing: "0.02em",
-            }}
-          >
-            KAI-{ticket.ticket_number}
-          </span>
-        )}
-        <PriorityBadge priority={ticket.priority} />
-        {/* KAI-232 — internal notes on this ticket (amber chip) and a blue dot
-            when one of them holds an unread mention of you (spec A1). Counts
-            come from the store, computed server-side per request. */}
-        {INTERNAL_NOTES_ENABLED && noteCounts.notes > 0 && (
-          <span
-            title={t("notes.queueChipTooltip", "Internal notes on this ticket")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 3,
-              padding: "1px 5px",
-              borderRadius: 3,
-              background: "var(--k-note-bg)",
-              border: "1px solid var(--k-note-border)",
-              color: "var(--k-note-label)",
-              fontFamily: "var(--k-font-mono)",
-              fontSize: 9.5,
-            }}
-          >
-            <Lock style={{ width: 8, height: 8 }} />
-            {noteCounts.notes}
-          </span>
-        )}
-        {INTERNAL_NOTES_ENABLED && noteCounts.unread_mentions > 0 && (
-          <span
-            title={t("notes.queueMentionTooltip", "You have an unread mention here")}
-            style={{
-              width: 5,
-              height: 5,
-              borderRadius: 999,
-              background: "var(--k-mention-solid)",
-              flexShrink: 0,
-            }}
-          />
-        )}
-        {ticket.ticket_type && (
-          <span
-            style={{
-              ...typeBadgeStyle(ticket.ticket_type),
-              fontSize: 10,
-              fontFamily: "var(--k-font-mono)",
-              padding: "2px 6px",
-              borderRadius: 4,
-            }}
-          >
-            {typeLabel(ticket.ticket_type)}
-          </span>
-        )}
-        {isCorrected && (
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              padding: "2px 6px",
-              borderRadius: 4,
-              background: "#FEF3C7",
-              color: "#B45309",
-            }}
-          >
-            {t("correction.correctedBadge")}
-          </span>
-        )}
-        <span
-          style={{
-            marginLeft: "auto",
-            fontSize: 10,
-            fontFamily: "var(--k-font-mono)",
-            color: "var(--k-text-tertiary)",
-          }}
-        >
-          {relativeTime}
-        </span>
-      </div>
-
-      {/* Row 2: subject */}
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 500,
-          color: "var(--k-text-primary)",
-          marginBottom: 8,
-          lineHeight: 1.35,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {ticket.subject}
-      </div>
-
-      {/* Row 3: sentiment emoji + name | priority score + confidence */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          fontSize: 12,
-          color: "var(--k-text-secondary)",
-        }}
-      >
-        {emotion.emoji && (
-          <span
-            style={{ fontSize: 13, flexShrink: 0, lineHeight: 1 }}
-            aria-label={emotionLabel}
-            title={emotionLabel}
-          >
-            {emotion.emoji}
-          </span>
-        )}
-        <span
-          style={{
-            flex: 1,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {ticket.from_name ?? ticket.from_email ?? "Unknown"}
-        </span>
-      </div>
-
-      {/* Row 4: SLA + grouped badge + priority score/confidence (ticket number moved to Row 1) */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          marginTop: 6,
-        }}
-      >
-        <SlaBadge slaDate={ticket.sla_due_at} />
-        {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount > 1 && (
-          <span
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              fontSize: 10,
-              color: "var(--k-text-tertiary)",
-              padding: "2px 7px",
-              borderRadius: 4,
-              border: "1px dashed var(--k-border)",
-              fontFamily: "var(--k-font-mono)",
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-            }}
-            title={t("ticketCard.groupedTooltip", { count: groupCount - 1 })}
-          >
-            <Users style={{ width: 10, height: 10, flexShrink: 0 }} />+ {groupCount - 1}
-          </span>
-        )}
-        {TICKET_GROUPING_ENABLED && ticket.group_id && groupCount <= 1 && (
-          <span
-            style={{ display: "inline-flex", flexShrink: 0 }}
-            title={t("ticketCard.groupedAloneTooltip", "Este ticket pertenece a un grupo")}
-          >
-            <Users
-              style={{ width: 12, height: 12, color: "var(--k-text-tertiary)", flexShrink: 0 }}
-            />
-          </span>
-        )}
-
-        <div style={{ marginLeft: "auto", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
-          <PrioritySlaBadge ticket={ticket} />
-          {ticket.priority_score !== null && ticket.priority_score !== undefined && (
-            <span
-              style={{
-                fontFamily: "var(--k-font-mono)",
-                fontSize: 10,
-                fontWeight: 600,
-                padding: "1px 5px",
-                borderRadius: 4,
-                background: "var(--k-surface-2)",
-                color: "var(--k-text-tertiary)",
-              }}
-              title={t("ticketCard.priorityScoreTooltip", "Peso de prioridad")}
-            >
-              {Math.round(ticket.priority_score)}
-            </span>
-          )}
-          {ticket.classification_confidence !== null &&
-            ticket.classification_confidence !== undefined && (
-              <span
-                style={{
-                  fontFamily: "var(--k-font-mono)",
-                  fontSize: 10,
-                  color: "var(--k-text-tertiary)",
-                }}
-                title={t("ticketCard.confidenceTooltip", "Confianza de la clasificación IA (0.00–1.00)")}
-              >
-                {ticket.classification_confidence.toFixed(2)}
-              </span>
-            )}
-        </div>
-      </div>
-
       {/* KAI-25 — historical context trigger (selected card only, when related history exists) */}
       {selected && hasRelatedHistory && onOpenHistory && (
-        <div style={{ marginTop: 6 }}>
-          <button
-            onClick={(e) => {
+        <Box paddingHorizontal={34} paddingBottom={8}>
+          <Pressable onClick={(e) => {
               e.stopPropagation();
               onOpenHistory(ticket.id);
-            }}
-            style={{
-              fontSize: 11,
-              fontWeight: 500,
-              color: "var(--k-accent)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: 0,
-              textAlign: "left",
-              textDecoration: "underline",
-              textUnderlineOffset: 2,
-            }}
-          >
+            }} fontSize={11} fontWeight={500} color="var(--k-accent)" textDecoration="underline" textUnderlineOffset={2}>
             {t("ticketCard.viewRelatedHistory")}
-          </button>
-        </div>
+          </Pressable>
+        </Box>
       )}
 
       {/* Hover quick actions */}
       {hovered && (onGroup || onEscalate) && (
-        <div
-          style={{
-            position: "absolute",
-            right: 8,
-            top: 8,
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-          }}
-        >
+        <Box position="absolute" right={8} top={8} display="flex" alignItems="center" gap={4}>
           {onGroup && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onGroup(ticket.id);
-              }}
-              style={{
-                fontSize: 10,
-                fontWeight: 500,
-                padding: "2px 6px",
-                borderRadius: 4,
-                background: "white",
-                border: "1px solid var(--k-border)",
-                color: "var(--k-text-secondary)",
-                boxShadow: "0 1px 2px rgba(9,9,11,0.04)",
-                cursor: "pointer",
-              }}
-            >
+            <Button size="sm" onPress={() => onGroup(ticket.id)}>
               {t("ticketCard.group")}
-            </button>
+            </Button>
           )}
           {onEscalate && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onEscalate(ticket.id);
-              }}
-              style={{
-                fontSize: 10,
-                fontWeight: 500,
-                padding: "2px 6px",
-                borderRadius: 4,
-                background: "white",
-                border: "1px solid var(--k-border)",
-                color: "var(--k-text-secondary)",
-                boxShadow: "0 1px 2px rgba(9,9,11,0.04)",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 3,
-              }}
-            >
-              <ArrowUp style={{ width: 10, height: 10 }} />
+            <Button size="sm" icon={<Icon name="escalate" size={10} />} onPress={() => onEscalate(ticket.id)}>
               {t("ticketCard.escalate")}
-            </button>
+            </Button>
           )}
-        </div>
+        </Box>
       )}
-    </button>
+    </Box>
   );
 }
 

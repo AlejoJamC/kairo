@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck all workspaces
+        run: bunx turbo run typecheck
+
+      - name: Test client packages and dashboard
+        run: bunx turbo run test --filter=@kairo/dashboard --filter=@kairo/client-core --filter=@kairo/tokens --filter=@kairo/ui
+
+      - name: Lint dashboard
+        run: bun run --cwd apps/dashboard lint
+      - name: Lint landing
+        run: bun run --cwd apps/landing lint
+      - name: Lint kelan
+        run: bun run --cwd apps/kelan lint
+
+      - name: Package boundaries
+        run: bun run ui:boundaries
+
+      - name: UI scripts
+        run: bun test scripts/ui
+
+      - name: UI catalog is current
+        run: bun run ui:catalog -- --check
+
+      - name: UI metrics
+        run: bun run ui:metrics
