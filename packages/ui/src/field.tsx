@@ -3,6 +3,7 @@ import { styled, Stack, Text, type GetProps } from '@tamagui/core'
 import { Input as TamaguiInput, TextArea as TamaguiTextArea } from '@tamagui/input'
 import { tokens } from '@kairo/tokens'
 import { domProps } from './lib/overlay'
+import { Icon } from './icon'
 import { Spinner } from './loading'
 import { px } from './lib/units'
 
@@ -83,19 +84,37 @@ type FieldSelectProps = Omit<GetProps<typeof SelectFrame>, 'children' | 'onChang
   children: ReactNode
 }
 
-/** Native <select>, so the platform picker and keyboard behaviour come for free. */
-function FieldSelect({ value, defaultValue, onValueChange, children, ...props }: FieldSelectProps) {
+/**
+ * Native <select>, so the platform picker and keyboard behaviour come for free,
+ * drawn like the other fields: the control font, no browser arrow, and our own
+ * chevron. The width props size the whole control.
+ */
+function FieldSelect({ value, defaultValue, onValueChange, children, width, minWidth, maxWidth, ...props }: FieldSelectProps) {
   return (
-    <SelectFrame
-      {...props}
-      {...domProps({
-        value,
-        defaultValue,
-        onChange: (event: { target: { value: string } }) => onValueChange?.(event.target.value),
-      })}
-    >
-      {children}
-    </SelectFrame>
+    <Stack position="relative" width={width ?? '100%'} minWidth={minWidth} maxWidth={maxWidth} flexShrink={0}>
+      <SelectFrame
+        {...props}
+        paddingRight={32}
+        {...domProps({
+          value,
+          defaultValue,
+          style: {
+            appearance: 'none',
+            WebkitAppearance: 'none',
+            fontFamily: tokens['font.family.sans'],
+            // The text sits on the middle of the control: its height minus the borders.
+            fontSize: props.size === 'web' ? 14 : 13,
+            lineHeight: props.size === 'web' ? '38px' : '34px',
+          },
+          onChange: (event: { target: { value: string } }) => onValueChange?.(event.target.value),
+        })}
+      >
+        {children}
+      </SelectFrame>
+      <Stack position="absolute" right={11} top={0} bottom={0} alignItems="center" justifyContent="center" pointerEvents="none" aria-hidden>
+        <Icon name="down" size={12} color={tokens['text.tertiary']} />
+      </Stack>
+    </Stack>
   )
 }
 

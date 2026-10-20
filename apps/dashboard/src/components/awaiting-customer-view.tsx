@@ -4,6 +4,7 @@ import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { QueueView } from "@/components/queue-view";
 import type { AppView } from "@/types";
 import type { Ticket } from "@kairo/types";
+import { AWAITING_STATUSES } from "@kairo/client-core/triage-status";
 import { Box, Icon, Pressable, Text } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
@@ -23,7 +24,7 @@ export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCu
 
   const { tickets, loading } = useStatusTickets({
     channelPrefix: "awaiting",
-    statuses: ["awaiting_customer"] as const,
+    statuses: AWAITING_STATUSES,
     orderBy: "sla_due_at",
     ascending: true,
   });

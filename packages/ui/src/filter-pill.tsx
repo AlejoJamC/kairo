@@ -77,6 +77,7 @@ function FilterPillSelect({ label, value, onValueChange, options }: FilterPillSe
         height={px(tokens['size.control'])}
         paddingLeft={12}
         paddingRight={30}
+        lineHeight={28}
         borderRadius={px(tokens['radius.pill'])}
         borderWidth={1}
         borderStyle="solid"

@@ -82,7 +82,7 @@ function WorkspaceSection() {
       </Card>
       <Card paddingVertical={0}>
         <SettingsRow icon="globe" title={t("dashboard:settings.workspace.langTitle")} description={t("dashboard:settings.workspace.langDesc")} controlId="workspace-language">
-          <FieldSelect id="workspace-language" minWidth={180}>
+          <FieldSelect id="workspace-language" width={220}>
             <option>{t("dashboard:settings.workspace.langLatam")}</option>
             <option>{t("dashboard:settings.workspace.langSpain")}</option>
             <option>{t("dashboard:settings.workspace.langEnglish")}</option>

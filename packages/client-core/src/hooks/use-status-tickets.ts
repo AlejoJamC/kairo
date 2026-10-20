@@ -20,8 +20,10 @@ export interface StatusTicketsOptions {
  * realtime subscription that adds, updates and removes rows as their status
  * enters or leaves the bucket. Rows with an empty order column sort last.
  */
-export function useStatusTickets({ channelPrefix, statuses, orderBy, ascending }: StatusTicketsOptions) {
+export function useStatusTickets({ channelPrefix, statuses: statusList, orderBy, ascending }: StatusTicketsOptions) {
   const { user, accountId } = useAuth();
+  // The effects depend on the values, not on the identity of the array a caller passes.
+  const statusKey = statusList.join(",");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -31,14 +33,14 @@ export function useStatusTickets({ channelPrefix, statuses, orderBy, ascending }
     (async () => {
       setLoading(true);
       const supabase = createClient();
-      let query = supabase.from("tickets").select("*").in("status", [...statuses]);
+      let query = supabase.from("tickets").select("*").in("status", statusKey.split(","));
       if (accountId) query = query.eq("account_id", accountId);
       const { data, error } = await query.order(orderBy, { ascending, nullsFirst: false });
 
       if (!error && data) setTickets(data as Ticket[]);
       setLoading(false);
     })();
-  }, [user, accountId, statuses, orderBy, ascending]);
+  }, [user, accountId, statusKey, orderBy, ascending]);
 
   useEffect(() => {
     if (!user) return;
@@ -46,7 +48,7 @@ export function useStatusTickets({ channelPrefix, statuses, orderBy, ascending }
     const supabase = createClient();
     const channelName = `${channelPrefix}:tickets:${accountId ?? user.id}`;
     const rowFilter = accountId ? `account_id=eq.${accountId}` : undefined;
-    const inBucket = (status: string | null | undefined) => !!status && statuses.includes(status);
+    const inBucket = (status: string | null | undefined) => !!status && statusKey.split(",").includes(status);
     const sortKey = (ticket: Ticket) => {
       const value = ticket[orderBy];
       return value ? new Date(value).getTime() : ascending ? Infinity : -Infinity;
@@ -87,7 +89,7 @@ export function useStatusTickets({ channelPrefix, statuses, orderBy, ascending }
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, accountId, channelPrefix, statuses, orderBy, ascending]);
+  }, [user, accountId, channelPrefix, statusKey, orderBy, ascending]);
 
   return { tickets, setTickets, loading };
 }
