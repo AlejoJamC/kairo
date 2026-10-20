@@ -1,8 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import { type ContactRowStatus } from "@kairo/client-core/contact-row";
-import { Box, Icon, Text } from "@kairo/ui";
-import { BADGE_STYLE } from "@/components/clients/contact-helpers";
+import { Badge, Box, Icon, Text } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
 // Status badge
@@ -10,25 +9,16 @@ import { BADGE_STYLE } from "@/components/clients/contact-helpers";
 
 export function StatusBadge({ status }: { status: ContactRowStatus }) {
   const { t } = useTranslation("clients");
-  const s = BADGE_STYLE[status];
+  const variant = status === "proposed" ? "draft" : status === "confirmed" ? "sent" : "outline";
   const labelKey =
     status === "proposed"  ? "badges.draft" :
     status === "confirmed" ? "badges.confirmed" :
                              "badges.rejected";
-  return (
-    <Text fontSize={10} fontWeight={600} paddingVertical={2} paddingHorizontal={7} borderRadius={999} backgroundColor={s.bg} color={s.color} borderWidth={1} borderColor={s.border} letterSpacing={0.3} flexShrink={0} borderStyle="solid">
-      {t(labelKey)}
-    </Text>
-  );
+  return <Badge variant={variant}>{t(labelKey)}</Badge>;
 }
 
 export function ExternalSourceBadge({ source }: { source: string }) {
-  const s = BADGE_STYLE.external;
-  return (
-    <Text fontSize={10} fontWeight={600} paddingVertical={2} paddingHorizontal={7} borderRadius={999} backgroundColor={s.bg} color={s.color} borderWidth={1} borderColor={s.border} letterSpacing={0.3} flexShrink={0} borderStyle="solid">
-      {source}
-    </Text>
-  );
+  return <Badge variant="outline">{source}</Badge>;
 }
 
 // ---------------------------------------------------------------------------

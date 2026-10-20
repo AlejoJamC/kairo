@@ -6,9 +6,9 @@ Navigation entry in the app sidebar and the settings sub-navigation.
 
 ## Variants
 
-- Sidebar (`.nav`): 30px, 16px icon, label, mono count; live dot (5px pulse in accent) before the count.
+- Sidebar (`.nav`): 30px, 16px icon, label, mono count; live dot (5px pulse in accent) before the count when the current view has tickets and the engine is classifying. Count in `text.tertiary`; in the current view, `accent.ink`; no tickets, no count. The full sidebar is in sidebar.
 - Collapsed sidebar: icon only, label kept in `title`.
-- Settings (`.snav`): 32px, 15px icon.
+- Settings (`.snav`): 32px, 15px icon, no count.
 
 ## States
 
@@ -21,14 +21,15 @@ Navigation entry in the app sidebar and the settings sub-navigation.
 
 ## Accessibility
 
-- Use `<button>` or `<a>`; the sidebar is a `<nav>` with `aria-label`.
+- Use `<button>` or `<a>` with `aria-current="page"` on the current view; the sidebar is a `<nav>` with `aria-label`.
+- The count carries visually hidden text ("12 tickets"); the live dot is decorative.
 
 ## Domain value
 
-Order: Triage, Awaiting customer, Resolved, Escalated, AI Classification, Knowledge, then Clients and Settings.
+Sidebar order: Triage, Awaiting customer, Resolved, Escalated, AI Classification, Knowledge, then Clients and Settings. Settings order: Workspace, Team, Integrations, Triage Engine, SLA by priority, Billing, Security, API & Webhooks. Knowledge base articles are managed in the Knowledge view, not in Settings.
 
 ## Platforms
 
-- **web**: Triage app in the browser.
+- **web**: Triage app in the browser. Below `layout.breakpoint` the sidebar goes full width, always expanded, and the settings sub-navigation stacks above the content.
 - **desktop**: Triage desktop app, same component.
-- **mobile**: Not designed. Below 980px the app panes stack to full width.
+- **mobile**: Not designed.

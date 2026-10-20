@@ -64,7 +64,7 @@ const Divider = styled(Stack, {
   backgroundColor: tokens['border.default'],
 })
 
-const ITEM = '[role="menuitem"]:not([aria-disabled="true"])'
+const ITEM = '[role="menuitem"]:not([aria-disabled="true"]), [role="menuitemradio"]:not([aria-disabled="true"])'
 
 type MenuProps = Omit<GetProps<typeof List>, 'role'> & { label: string }
 
@@ -110,9 +110,9 @@ type MenuItemProps = {
 function MenuItem({ label, onSelect, icon, shortcut, current, destructive, disabled, rich }: MenuItemProps) {
   return (
     <Item
-      role="menuitem"
+      role={(current === undefined ? 'menuitem' : 'menuitemradio') as never}
       aria-disabled={disabled || undefined}
-      aria-current={current || undefined}
+      aria-checked={current === undefined ? undefined : current}
       disabled={disabled}
       rich={rich}
       tabIndex={-1}

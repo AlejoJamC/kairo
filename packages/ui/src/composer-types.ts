@@ -12,13 +12,14 @@ export type ComposerLabels = {
   sending: string
   retry: string
   sendOptions: string
-  dragHandle: string
 }
 
 export type SendOption = {
   id: string
   label: string
   disabled?: boolean
+  /** Shortcut shown at the end of the item ('⌘⇧↵'). The first option also runs on that key. */
+  shortcut?: string
   onSelect: () => void
 }
 
@@ -33,10 +34,14 @@ export type ComposerProps = {
   /** The last send failed; shown above the textarea. The text is kept. */
   error?: string | null
   onRetry?: () => void
-  /** Line under the composer: the success message, or the shortcut hint. */
-  status?: { tone: 'hint' | 'success'; text: string }
-  /** Quick reply, attach, the team-only badge and mention chips. */
+  /** Hint after the mode switch: who the reply goes to, or who sees the note. */
+  hint?: string
+  /** The success message; replaces the hint until the next edit. */
+  status?: { tone: 'success'; text: string }
+  /** Icon buttons at the end of the mode row (quick reply, attach). */
   tools?: ReactNode
+  /** Note mode row: team-only badge, mention chips and their hint. */
+  noteRow?: ReactNode
   /** Replaces the textarea (the AI draft card owns its own field). */
   banner?: ReactNode
   /** Inline panel above the actions (escalation). */
@@ -51,35 +56,8 @@ export type ComposerProps = {
   popover?: ReactNode
   placeholder?: string
   maxLength?: number
-  /** Textarea height in px; the drag handle resizes it. */
-  height?: number
-  onResizeStart?: (event: { clientY: number; preventDefault: () => void }) => void
   fieldRef?: Ref<HTMLTextAreaElement>
   onFieldKeyDown?: (event: { key: string; metaKey: boolean; ctrlKey: boolean; preventDefault: () => void }) => void
   onFieldSelect?: (value: string, caret: number) => void
   labels: ComposerLabels
-}
-
-export type MentionOption = { id: string; name: string; email?: string | null; role: string }
-
-export type MentionListProps = {
-  /** Header label and accessible name. */
-  title: string
-  /** What the agent typed after the @. */
-  query: string
-  options: readonly MentionOption[]
-  activeIndex: number
-  /** First open of the session: skeleton rows. */
-  loading?: boolean
-  onPick: (id: string) => void
-  onHover?: (index: number) => void
-  testId?: string
-  labels: {
-    counter: string
-    empty: string
-    more?: string
-    keyNavigate: string
-    keyInsert: string
-    keyClose: string
-  }
 }

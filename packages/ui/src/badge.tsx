@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { styled, Stack, Text, type GetProps } from '@tamagui/core'
 import { tokens } from '@kairo/tokens'
+import { domProps } from './lib/dom-props'
 
 // The badge family: small status or count markers. Internal (team) is amber,
 // AI is accent, escalation is mood. Nothing amber is ever sent to the customer.
@@ -15,6 +16,7 @@ export type BadgeVariant =
   | 'sent'
   | 'beta'
   | 'escalated'
+  | 'bell'
 
 interface BadgeStyle {
   background: string
@@ -46,7 +48,7 @@ const STYLE: Record<BadgeVariant, BadgeStyle> = {
   },
   draft: {
     background: tokens['notes.background'], border: tokens['notes.border'], text: tokens['notes.label'],
-    height: 18, mono: false, uppercase: false, fontSize: 11, fontWeight: '500',
+    height: 18, mono: true, uppercase: false, fontSize: 10.5, fontWeight: '500',
   },
   outline: {
     background: 'transparent', border: tokens['border.default'], text: tokens['text.secondary'],
@@ -61,8 +63,12 @@ const STYLE: Record<BadgeVariant, BadgeStyle> = {
     height: 18, mono: true, uppercase: true, fontSize: 9.5, fontWeight: '500',
   },
   escalated: {
-    background: tokens['status.escalated'], border: tokens['status.escalated'], text: tokens['text.onAccent'],
-    height: 20, mono: false, uppercase: false, fontSize: 11, fontWeight: '600',
+    background: 'transparent', border: tokens['escalation.border'], text: tokens['escalation.text'],
+    height: 20, mono: true, uppercase: true, fontSize: 9.5, fontWeight: '500',
+  },
+  bell: {
+    background: tokens['color.bad'], border: tokens['color.bad'], text: tokens['text.onAccent'],
+    height: 15, mono: true, uppercase: false, fontSize: 9, fontWeight: '600',
   },
 }
 
@@ -87,22 +93,26 @@ type BadgeProps = Omit<GetProps<typeof BadgeFrame>, 'children'> & {
   children?: ReactNode
   /** Leading icon, for the variants that carry one (team, ai, escalated). */
   icon?: ReactNode
+  /** Makes the badge a button (the team badge that opens the notes). */
+  onPress?: () => void
 }
 
-function Badge({ variant = 'count', children, icon, ...props }: BadgeProps) {
+function Badge({ variant = 'count', children, icon, onPress, ...props }: BadgeProps) {
   const style = STYLE[variant]
+  const button = onPress !== undefined
   return (
     <BadgeFrame
-      height={style.height}
+      height={button ? 24 : style.height}
       backgroundColor={style.background}
       borderColor={style.border}
+      {...(button ? { tag: 'button', cursor: 'pointer', hoverStyle: { borderColor: tokens['notes.label'] }, ...domProps({ onClick: onPress }) } : null)}
       {...props}
     >
       {icon}
       {typeof children === 'string' || typeof children === 'number' ? (
         <BadgeText
           color={style.text}
-          fontSize={style.fontSize}
+          fontSize={button ? 10.5 : style.fontSize}
           fontWeight={style.fontWeight}
           fontFamily={style.mono ? '$mono' : undefined}
           textTransform={style.uppercase ? 'uppercase' : undefined}

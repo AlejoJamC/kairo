@@ -19,7 +19,8 @@ import {
   EvidencePanel,
   Faq,
   IntegrationCard,
-  MentionList,
+  MentionChip,
+  MentionMenu,
   PermissionList,
   PlanCard,
   PricingTable,
@@ -396,27 +397,41 @@ describe('Composer', () => {
     expect(screen.queryByLabelText('Message')).toBeNull()
   })
 
-  const mentionLabels = { counter: '1 of 3', empty: 'No members found', keyNavigate: 'navigate', keyInsert: 'insert', keyClose: 'close' }
+  const mentionLabels = { counter: '1 of 3', empty: 'No teammates match', searching: 'Searching…', keyInsert: 'insert', keyClose: 'close' }
 
   it('lists mentions, highlights the match and picks on mouse down', () => {
     const onPick = vi.fn()
-    renderUi(<MentionList title="Mention" query="an" options={[{ id: 'u1', name: 'Ana Pérez', role: 'admin' }]} activeIndex={0} onPick={onPick} labels={mentionLabels} />)
+    renderUi(<MentionMenu title="Mention" query="an" options={[{ id: 'u1', name: 'Ana Pérez', role: 'admin' }]} activeIndex={0} onPick={onPick} labels={mentionLabels} />)
     expect(screen.getByText('1 of 3')).toBeTruthy()
     expect(screen.getByText('@an')).toBeTruthy()
+    expect(screen.getByRole('option', { name: /Ana Pérez/ }).getAttribute('aria-selected')).toBe('true')
     fireEvent.mouseDown(screen.getByRole('option', { name: /Ana Pérez/ }))
     expect(onPick).toHaveBeenCalledWith('u1')
   })
 
-  it('shows the quoted query when nothing matches and skeletons while loading', () => {
-    const { rerender } = renderUi(<MentionList title="Mention" query="zz" options={[]} activeIndex={0} onPick={vi.fn()} labels={mentionLabels} />)
-    expect(screen.getByText('No members found')).toBeTruthy()
-    expect(screen.getByText('«zz»')).toBeTruthy()
+  it('shows the empty text, the searching row and the load error', () => {
+    const { rerender } = renderUi(<MentionMenu title="Mention" query="zz" options={[]} activeIndex={0} onPick={vi.fn()} labels={mentionLabels} />)
+    expect(screen.getByText('No teammates match')).toBeTruthy()
     rerender(
       <UiProvider>
-        <MentionList title="Mention" query="" options={[]} activeIndex={0} loading onPick={vi.fn()} labels={mentionLabels} />
+        <MentionMenu title="Mention" query="" options={[]} activeIndex={0} loading onPick={vi.fn()} labels={mentionLabels} />
       </UiProvider>,
     )
-    expect(screen.queryByText('No members found')).toBeNull()
+    expect(screen.getByText('Searching…')).toBeTruthy()
+    rerender(
+      <UiProvider>
+        <MentionMenu title="Mention" query="" options={[]} activeIndex={0} error="The team could not be loaded." onPick={vi.fn()} labels={mentionLabels} />
+      </UiProvider>,
+    )
+    expect(screen.getByText('The team could not be loaded.')).toBeTruthy()
+  })
+
+  it('removes a mention chip by its named button', () => {
+    const onRemove = vi.fn()
+    renderUi(<MentionChip name="Ana Pérez" onRemove={onRemove} removeLabel="Remove Ana" />)
+    expect(screen.getByText('@Ana')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Ana' }))
+    expect(onRemove).toHaveBeenCalled()
   })
 })
 
@@ -537,14 +552,14 @@ describe('CommandPalette', () => {
 })
 
 describe('IntegrationCard', () => {
-  const labels = { beta: 'BETA', soon: 'Coming soon', connect: 'Connect', connecting: 'Connecting…', reconnect: 'Reconnect', disconnect: 'Disconnect' }
+  const labels = { beta: 'BETA', soon: 'Coming soon', connect: 'Connect', connecting: 'Connecting…', reconnect: 'Reconnect', configure: 'Configure', requestAccess: 'Request access', requested: 'Requested' }
   const base = { name: 'Gmail', initial: 'G', tileColor: '#000000', labels }
 
   it('offers Connect when available and Reconnect on error with the error text', () => {
     const onConnect = vi.fn()
     const onReconnect = vi.fn()
     const { rerender } = renderUi(<IntegrationCard {...base} status="available" description="Inbox" onConnect={onConnect} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Gmail' }))
     expect(onConnect).toHaveBeenCalled()
     rerender(
       <UiProvider>
@@ -553,7 +568,7 @@ describe('IntegrationCard', () => {
     )
     expect(screen.getByText('Connection lost')).toBeTruthy()
     expect(screen.queryByText('Inbox')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Gmail' }))
     expect(onReconnect).toHaveBeenCalled()
   })
 

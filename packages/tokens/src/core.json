@@ -113,6 +113,14 @@
       "$type": "color",
       "$value": "#F97316"
     },
+    "mood-ink": {
+      "$type": "color",
+      "$value": "#C2410C"
+    },
+    "mood-line": {
+      "$type": "color",
+      "$value": "rgba(249,115,22,0.35)"
+    },
     "violet": {
       "$type": "color",
       "$value": "#7C5CFF"
@@ -160,6 +168,10 @@
     "sla-escalate-ink": {
       "$type": "color",
       "$value": "#C2410C"
+    },
+    "sla-on-time": {
+      "$type": "color",
+      "$value": "rgba(43,91,255,0.45)"
     },
     "inverse-bg": {
       "$type": "color",

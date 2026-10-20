@@ -17,6 +17,7 @@ vi.mock("react-i18next", () => ({
         "filters.statusDrafts":    "Borradores",
         "filters.statusConfirmed": "Confirmados",
         "filters.statusRejected":  "Rechazados",
+        "filters.allOrganizations": "Todas las organizaciones",
         "badges.draft":            "Borrador",
         "badges.confirmed":        "Confirmado",
         "badges.rejected":         "Rechazado",

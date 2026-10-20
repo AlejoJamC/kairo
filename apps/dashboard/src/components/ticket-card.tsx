@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
@@ -6,6 +6,7 @@ import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { SlaBadge } from "@/components/sla-badge";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
+import { formatCompactDuration, formatDuration, slaDisplay } from "@/lib/sla-display";
 import { normalizeTicketType } from "@/lib/ticket-labels";
 import { Box, Button, CategoryChip, Chip, Icon, PlainInput, Pressable, SlaIndicator, Text, TicketRow, type Sentiment } from "@kairo/ui";
 
@@ -39,25 +40,16 @@ function PrioritySlaBadge({ ticket }: { ticket: Ticket }) {
   const sla = useMemo(() => computeTicketOperationalSla(ticket, config), [ticket, config]);
   if (!sla) return null;
 
-  const hours = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 3600);
-  const minutes = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 60);
-  const days = Math.floor((sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds) / 86400);
-
-  let label: string;
-  if (sla.status === "ok") {
-    label = hours > 0 ? t("prioritySla.remainingHours", { count: hours }) : t("prioritySla.remainingMinutes", { count: minutes });
-  } else if (sla.status === "at_risk") {
-    label = hours > 0 ? t("prioritySla.dueInHours", { count: hours }) : t("prioritySla.dueInMinutes", { count: minutes });
-  } else {
-    label = days > 0 ? t("prioritySla.overdueDays", { count: days }) : t("prioritySla.overdueHours", { count: hours });
-  }
+  const { status, seconds } = slaDisplay(sla);
+  const compact = formatCompactDuration(seconds);
+  const full = formatDuration(seconds);
 
   return (
     <SlaIndicator
       variant="compact"
-      status={sla.status === "ok" ? "onTime" : sla.status === "at_risk" ? "atRisk" : "overdue"}
-      time={label}
-      title={t("prioritySla.tooltip", "ANS operativo según la prioridad del ticket")}
+      status={status}
+      time={status === "overdue" ? compact : t("sla.compactIn", { time: compact })}
+      title={t(`sla.title.${status}`, { time: full })}
     />
   );
 }
@@ -95,6 +87,8 @@ const LONG_PRESS_MS = 500;
 
 export interface TicketCardProps {
   ticket: Ticket;
+  /** Third line of the row (Awaiting customer: last reply and follow-up). */
+  footer?: ReactNode;
   selected: boolean;
   onSelect: (id: string) => void;
   onGroup?: (id: string) => void;
@@ -115,6 +109,7 @@ export interface TicketCardProps {
 
 export function TicketCard({
   ticket,
+  footer,
   selected,
   onSelect,
   onGroup,
@@ -225,6 +220,7 @@ export function TicketCard({
               }} width={13} height={13} cursor="pointer" />
           ) : undefined
         }
+        footer={footer}
         selected={selected}
         muted={isSpam}
         onPress={() => {

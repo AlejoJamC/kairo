@@ -2,17 +2,19 @@ import { TicketDecisions } from './ticket-decisions';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ReplyBar } from "./reply-bar";
-import { TicketClassification, TicketHeader } from "./ticket-header";
+import { TicketHeader, TicketHeadingBlock } from "./ticket-header";
 import { isTriageActive, isTicketReadOnly } from "@kairo/client-core/triage-status";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { useTicketThread, type ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, Box, Chip, Icon, Pressable, SlaIndicator, Text, ThreadMessage as ThreadMessageView } from "@kairo/ui";
+import { Avatar, Box, Chip, Icon, Pressable, ReadOnlyBar, SlaIndicator, Text, ThreadMessage as ThreadMessageView } from "@kairo/ui";
 import { startGmailConnect } from "@kairo/client-core/endpoints";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
+import { formatDuration, slaDisplay } from "@/lib/sla-display";
+import { useActiveView } from "@/hooks/useActiveView";
 
 // Delay before clearing the selection once the open ticket leaves the active queue.
 const CLEAR_AFTER_LEAVING_ACTIVE_MS = 2500;
@@ -21,56 +23,42 @@ const CLEAR_AFTER_LEAVING_ACTIVE_MS = 2500;
 const HIGHLIGHT_DURATION_MS = 2000;
 
 // ---------------------------------------------------------------------------
-// KAI-168 — operational SLA (by ticket priority) progress bar. Shown below
-// the subject, above the AI reasoning banner. Own domain — computed
-// client-side from the ticket's own priority/received_at/first_response_at
-// plus the account's SLA config (tickets arrive raw from Supabase, so this
-// can't be a pre-computed field on the wire — see computeTicketOperationalSla).
+// KAI-168 — operational SLA (by ticket priority). Shown under the subject while
+// there is no first response. Own domain — computed client-side from the
+// ticket's own priority/received_at/first_response_at plus the account's SLA
+// config (tickets arrive raw from Supabase, so this can't be a pre-computed
+// field on the wire — see computeTicketOperationalSla).
 // ---------------------------------------------------------------------------
 
 // Smallest comfortable width for this column — same constant already used as
 // `centerMin` by useResizablePanel (apps/dashboard/src/hooks/use-resizable-panel.ts)
 // to keep this exact column readable when the right panel is dragged wider.
-// That value was only ever enforced against the right panel's own max width;
-// this applies it as a real min-width on the center column itself, so it no
-// longer collapses when the window is narrowed (unlike the ticket-list
-// column, fixed at 360px, and the right panel, floored at 340px).
 const CENTER_PANEL_MIN_WIDTH = 520;
 
-// "Xd Xh Xm" — always shows the largest unit down to minutes so nothing
-// renders as an unreadable "1171h 25m"; drops leading zero units instead of
-// always printing all three (e.g. "19h 25m" under a day, "25m" under an hour).
-function formatDurationParts(totalSeconds: number): string {
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
-}
+// Name of the queue the open ticket belongs to, for the breadcrumb of the ticket bar.
+const VIEW_LABEL_KEY = {
+  triage: "ticketList.header",
+  awaiting: "sidebar.pendingClient",
+  resolved: "sidebar.resolved",
+  escalated: "sidebar.escalation",
+  "ai-review": "sidebar.aiReview",
+} as const;
 
 function PrioritySlaBar({ ticket }: { ticket: Ticket }) {
   const { t } = useTranslation("dashboard");
   const config = useTriageStore((s) => s.operationalSlaConfig);
   const sla = useMemo(() => computeTicketOperationalSla(ticket, config), [ticket, config]);
-  if (!sla) return null;
+  if (!sla || ticket.first_response_at) return null;
 
-  const duration = formatDurationParts(sla.status === "breached" ? sla.overdueSeconds : sla.remainingSeconds);
-
-  const detail =
-    sla.status === "ok"
-      ? t("prioritySla.detailRemaining", { duration })
-      : sla.status === "at_risk"
-        ? t("prioritySla.detailDueSoon", { duration })
-        : t("prioritySla.detailOverdue", { duration });
+  const { status, seconds, progress } = slaDisplay(sla);
 
   return (
     <SlaIndicator
       variant="full"
-      status={sla.status === "ok" ? "onTime" : sla.status === "at_risk" ? "atRisk" : "overdue"}
-      label={detail}
-      progress={Math.min(100, sla.percentUsed) / 100}
+      status={status}
+      label={t(`sla.full.${status}`, { time: formatDuration(seconds) })}
+      note={t("sla.noResponse")}
+      progress={status === "overdue" ? 1 : progress}
     />
   );
 }
@@ -190,6 +178,10 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
 export function TicketDetail() {
   const { t } = useTranslation("dashboard");
   const { tickets, selectedTicketId, selectTicket } = useTriageStore();
+  const requestPanelTab = useTriageStore((state) => state.requestPanelTab);
+  const [view] = useActiveView();
+  const labelKey = (VIEW_LABEL_KEY as Record<string, (typeof VIEW_LABEL_KEY)[keyof typeof VIEW_LABEL_KEY]>)[view ?? "triage"] ?? VIEW_LABEL_KEY.triage;
+  const queueName = t(labelKey);
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
 
   const { messages: allMessages, loading: threadLoading, appendOptimisticMessage } = useTicketThread(ticket?.id ?? null);
@@ -275,18 +267,12 @@ export function TicketDetail() {
 
   return (
     <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={CENTER_PANEL_MIN_WIDTH} display="flex" flexDirection="column" overflow="hidden" backgroundColor="var(--k-surface)">
-      <TicketHeader ticket={ticket} readOnly={isReadOnly} />
+      <TicketHeader ticket={ticket} queueName={queueName} readOnly={isReadOnly} onOpenNotes={() => requestPanelTab("notes")} />
 
       {/* Scrollable body */}
       <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll>
         <Box maxWidth={780} display="flex" flexDirection="column" gap={22} paddingTop={28} paddingHorizontal={32} paddingBottom={32}>
-          <Box display="flex" flexDirection="column" gap={12}>
-            <Text tag="h2" fontSize={22} fontWeight={600} color="var(--k-text-primary)" margin={0} lineHeight={27.5} letterSpacing={-0.33} display="block">
-              {ticket.subject ?? t("ticketDetail.noSubject", "(Sin asunto)")}
-            </Text>
-            <TicketClassification ticket={ticket} readOnly={isReadOnly} />
-            <PrioritySlaBar ticket={ticket} />
-          </Box>
+          <TicketHeadingBlock ticket={ticket} readOnly={isReadOnly} sla={<PrioritySlaBar ticket={ticket} />} />
 
           <TicketDecisions ticketId={ticket.id} />
 
@@ -356,9 +342,7 @@ export function TicketDetail() {
 
       {/* Fixed bottom reply bar — hidden for read-only historical tickets */}
       {isReadOnly ? (
-        <Text tag="div" borderTopWidth={1} borderTopColor="var(--k-border)" paddingVertical={10} paddingHorizontal={16} fontSize={12} color="var(--k-text-tertiary)" backgroundColor="var(--k-surface)" textAlign="center" flexShrink={0} display="block" borderStyle="solid">
-          {t("ticketDetail.readOnlyBanner")}
-        </Text>
+        <ReadOnlyBar>{t("ticketDetail.readOnlyBanner")}</ReadOnlyBar>
       ) : (
         <ReplyBar onReplyQueued={appendOptimisticMessage} />
       )}

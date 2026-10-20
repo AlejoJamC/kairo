@@ -165,6 +165,18 @@
       "$description": "Ticket status glyph: closed."
     }
   },
+  "escalation": {
+    "text": {
+      "$type": "color",
+      "$value": "{color.mood-ink}",
+      "$description": "Text and arrow of the Escalated pill. 5.18:1 on surface.panel."
+    },
+    "border": {
+      "$type": "color",
+      "$value": "{color.mood-line}",
+      "$description": "1px inset ring of the Escalated pill."
+    }
+  },
   "priority": {
     "P1": {
       "$type": "color",
@@ -220,6 +232,16 @@
       "$value": "{color.bad}",
       "$description": "Overdue SLA bar."
     },
+    "atRiskText": {
+      "$type": "color",
+      "$value": "{color.sla-alert-ink}",
+      "$description": "At-risk SLA text and clock icon."
+    },
+    "escalationText": {
+      "$type": "color",
+      "$value": "{color.sla-escalate-ink}",
+      "$description": "SLA text and clock icon between the automatic escalation threshold and the breach."
+    },
     "track": {
       "$type": "color",
       "$value": "{color.hover}",
@@ -227,7 +249,7 @@
     },
     "onTime": {
       "$type": "color",
-      "$value": "rgba(43,91,255,0.45)",
+      "$value": "{color.sla-on-time}",
       "$description": "SLA scale, on-time segment (accent at 45%)."
     },
     "atRisk": {

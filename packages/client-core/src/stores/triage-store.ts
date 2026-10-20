@@ -141,6 +141,23 @@ interface TriageStore {
   // consecutive ones, and there is no state to reset afterwards.
   composeNoteRequests: number;
   requestComposeNote: () => void;
+  // Ids of the tickets the open queue shows, in order. The queue publishes it
+  // so the ticket bar and the J / K shortcuts move through what is visible.
+  queueIds: string[];
+  setQueueIds: (ids: string[]) => void;
+  selectRelativeTicket: (delta: 1 | -1) => void;
+  // A, R and E ask the composer or the context panel to act on the open
+  // ticket. Each request carries a nonce so consecutive presses all fire.
+  ticketActionRequest: { action: "acknowledge" | "resolve"; nonce: number } | null;
+  requestTicketAction: (action: "acknowledge" | "resolve") => void;
+  clearTicketActionRequest: () => void;
+  // Text the composer takes as its draft when a ticket opens (the follow-up of
+  // the Awaiting customer view). Consumed once.
+  composerPrefill: string | null;
+  setComposerPrefill: (text: string | null) => void;
+  panelTabRequest: { tab: string; nonce: number } | null;
+  requestPanelTab: (tab: string) => void;
+  clearPanelTabRequest: () => void;
 }
 
 export interface NoteCounts {
@@ -253,4 +270,26 @@ export const useTriageStore = create<TriageStore>((set) => ({
 
   composeNoteRequests: 0,
   requestComposeNote: () => set((state) => ({ composeNoteRequests: state.composeNoteRequests + 1 })),
+
+  queueIds: [],
+  setQueueIds: (ids) =>
+    set((state) =>
+      state.queueIds.length === ids.length && state.queueIds.every((id, index) => id === ids[index]) ? state : { queueIds: ids },
+    ),
+  selectRelativeTicket: (delta) =>
+    set((state) => {
+      if (state.queueIds.length === 0) return state;
+      const index = state.selectedTicketId ? state.queueIds.indexOf(state.selectedTicketId) : -1;
+      const next = state.queueIds[index === -1 ? 0 : index + delta];
+      return next ? { selectedTicketId: next } : state;
+    }),
+
+  ticketActionRequest: null,
+  requestTicketAction: (action) => set((state) => ({ ticketActionRequest: { action, nonce: (state.ticketActionRequest?.nonce ?? 0) + 1 } })),
+  clearTicketActionRequest: () => set({ ticketActionRequest: null }),
+  composerPrefill: null,
+  setComposerPrefill: (text) => set({ composerPrefill: text }),
+  panelTabRequest: null,
+  requestPanelTab: (tab) => set((state) => ({ panelTabRequest: { tab, nonce: (state.panelTabRequest?.nonce ?? 0) + 1 } })),
+  clearPanelTabRequest: () => set({ panelTabRequest: null }),
 }));

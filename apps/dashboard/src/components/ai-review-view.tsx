@@ -4,12 +4,10 @@ import { fetchProposals } from "@kairo/client-core/queries";
 import { approveClassification } from "@kairo/client-core/endpoints";
 import { useAuth } from "@kairo/client-core/auth";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { TicketDetail } from "@/components/ticket-detail";
-import { AiAssistant } from "@/components/ai-assistant";
-import { TicketCard } from "@/components/ticket-card";
+import { QueueView } from "@/components/queue-view";
 import type { AppView } from "@/types";
 import type { Ticket } from "@kairo/types";
-import { AiProposal, Box, Chip, Spinner, Text } from "@kairo/ui";
+import { AiProposal, FilterPill, FilterPillGroup } from "@kairo/ui";
 
 type ProposalFilter = "pending" | "auto_approved";
 
@@ -34,10 +32,13 @@ interface AiReviewViewProps {
 export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps) {
   const { t } = useTranslation("dashboard");
   const { user, accountId } = useAuth();
-  const { addTicket, selectTicket, selectedTicketId, tickets: storeTickets } = useTriageStore();
+  const addTicket = useTriageStore((state) => state.addTicket);
+  const selectTicket = useTriageStore((state) => state.selectTicket);
+  const selectedTicketId = useTriageStore((state) => state.selectedTicketId);
 
   const [filter, setFilter] = useState<ProposalFilter>("pending");
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [counts, setCounts] = useState<Record<ProposalFilter, number | null>>({ pending: null, auto_approved: null });
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<"confirm" | "reject" | null>(null);
   const [error, setError] = useState(false);
@@ -45,8 +46,10 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
   const load = useCallback(async () => {
     setLoading(true);
     const { data, error: queryError } = await fetchProposals(filter);
-
-    if (!queryError && data) setProposals(data as unknown as Proposal[]);
+    if (!queryError && data) {
+      setProposals(data as unknown as Proposal[]);
+      setCounts((prev) => ({ ...prev, [filter]: data.length }));
+    }
     setLoading(false);
   }, [filter]);
 
@@ -56,12 +59,12 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
   }, [user, accountId, load]);
 
   const selected = proposals.find((p) => p.ticket_id === selectedTicketId) ?? null;
-  const selectedTicket = storeTickets.find((tk) => tk.id === selectedTicketId) ?? null;
+  const tickets = proposals.map((proposal) => proposal.ticket);
 
-  const openThread = (proposal: Proposal) => {
+  const openThread = (ticket: Ticket) => {
     setError(false);
-    addTicket(proposal.ticket);
-    selectTicket(proposal.ticket_id);
+    addTicket(ticket);
+    selectTicket(ticket.id);
   };
 
   const review = async (proposal: Proposal, action: "confirm" | "reject") => {
@@ -70,8 +73,14 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
     try {
       const res = await approveClassification(proposal.ticket_id, { proposal_id: proposal.id, action });
       if (!res.ok) throw new Error(String(res.status));
-      setProposals((prev) => prev.filter((p) => p.id !== proposal.id));
-      selectTicket(null);
+      const index = proposals.findIndex((p) => p.id === proposal.id);
+      const remaining = proposals.filter((p) => p.id !== proposal.id);
+      setProposals(remaining);
+      setCounts((prev) => ({ ...prev, [filter]: remaining.length }));
+      // The queue selects the next proposal once this one is answered.
+      const next = remaining[Math.min(index, remaining.length - 1)];
+      if (next) openThread(next.ticket);
+      else selectTicket(null);
     } catch {
       setError(true);
     } finally {
@@ -79,89 +88,48 @@ export function AiReviewView({ onViewChange: _onViewChange }: AiReviewViewProps)
     }
   };
 
-  const showDetailPane = selected !== null;
-
-  const listPane = (
-    <Box display="flex" flexDirection="column" overflow="hidden" backgroundColor="var(--k-surface)" width={showDetailPane ? 360 : undefined} minWidth={showDetailPane ? 360 : undefined} flex={showDetailPane ? undefined : 1} borderRightWidth={showDetailPane ? 1 : 0} borderRightColor="var(--k-border)" flexShrink={0} borderStyle="solid">
-      <Box borderBottomWidth={1} borderBottomColor="var(--k-border)" backgroundColor="white" paddingVertical={16} paddingHorizontal={24} flexShrink={0} borderStyle="solid">
-        <Text tag="h1" fontSize={18} fontWeight={600} color="var(--k-text-primary)" letterSpacing={-0.18} font="display" margin={0} display="block">
-          {t("aiReviewView.title")}
-        </Text>
-        <Text tag="p" marginTop={2} fontSize={13} color="var(--k-text-tertiary)" display="block">
-          {t("aiReviewView.subtitle")}
-        </Text>
-        <Box display="flex" gap={8} marginTop={12}>
-          <Chip selected={filter === "pending"} onPress={() => setFilter("pending")}>
-            {t("aiReviewView.tabPending")}
-          </Chip>
-          <Chip selected={filter === "auto_approved"} onPress={() => setFilter("auto_approved")}>
-            {t("aiReviewView.tabAutoApproved")}
-          </Chip>
-        </Box>
-      </Box>
-
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll paddingBottom={8}>
-        {loading && (
-          <Box display="flex" alignItems="center" justifyContent="center" paddingTop={64}>
-            <Spinner size="lg" />
-          </Box>
-        )}
-
-        {!loading && proposals.length === 0 && (
-          <Text tag="div" display="flex" flexDirection="column" alignItems="center" justifyContent="center" paddingTop={80} textAlign="center">
-            <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" display="block">
-              {t(filter === "pending" ? "aiReviewView.emptyPending" : "aiReviewView.emptyAutoApproved")}
-            </Text>
-          </Text>
-        )}
-
-        {!loading &&
-          proposals.map((proposal) => (
-            <TicketCard
-              key={proposal.id}
-              ticket={proposal.ticket}
-              selected={selectedTicketId === proposal.ticket_id}
-              onSelect={() => openThread(proposal)}
-            />
-          ))}
-      </Box>
-    </Box>
-  );
-
-  if (!selected) return listPane;
-
-  const fields = [
-    { label: t("aiReviewView.fieldType"), value: selected.proposed_type },
-    { label: t("aiReviewView.fieldCategory"), value: selected.proposed_category },
-    { label: t("aiReviewView.fieldPriority"), value: selected.proposed_priority },
-    { label: t("aiReviewView.fieldTone"), value: selected.proposed_sentiment },
-  ];
+  const strip = selected && filter === "pending" ? (
+    <AiProposal
+      title={t("aiReviewView.proposalTitle")}
+      model={selected.model_version}
+      fields={[
+        { label: t("aiReviewView.fieldType"), value: selected.proposed_type },
+        { label: t("aiReviewView.fieldCategory"), value: selected.proposed_category },
+        { label: t("aiReviewView.fieldPriority"), value: selected.proposed_priority },
+        { label: t("aiReviewView.fieldTone"), value: selected.proposed_sentiment },
+      ]}
+      confidence={selected.confidence_score}
+      confidenceLabel={t("aiReviewView.fieldConfidence")}
+      state={error ? "error" : busyAction === "confirm" ? "confirming" : "ready"}
+      onConfirm={() => void review(selected, "confirm")}
+      onReject={() => void review(selected, "reject")}
+      onRetry={() => setError(false)}
+      labels={{ confirm: t("aiReviewView.confirm"), reject: t("aiReviewView.reject"), retry: t("replyBar.retry"), error: t("aiReviewView.error"), confidence: t("aiReviewView.fieldConfidence") }}
+    />
+  ) : undefined;
 
   return (
-    <>
-      {listPane}
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" flexDirection="column" minWidth={0} overflow="hidden">
-        <Box borderBottomWidth={1} borderBottomColor="var(--k-border)" backgroundColor="var(--kairo-color-surface)" paddingVertical={12} paddingHorizontal={24} flexShrink={0} borderStyle="solid">
-          <AiProposal
-            title={t("aiReviewView.proposalTitle")}
-            model={selected.model_version}
-            fields={fields}
-            confidence={selected.confidence_score}
-            confidenceLabel={t("aiReviewView.fieldConfidence")}
-            state={busyAction === "confirm" ? "confirming" : "ready"}
-            onConfirm={() => void review(selected, "confirm")}
-            onReject={() => void review(selected, "reject")}
-            labels={{ confirm: t("aiReviewView.confirm"), reject: t("aiReviewView.reject"), retry: t("aiReviewView.confirm"), error: t("aiReviewView.error") }}
-          />
-          {error && (
-            <Text role="alert" tag="p" margin={0} marginTop={8} fontSize={13} color="var(--kairo-color-bad-ink)" display="block">{t("aiReviewView.error")}</Text>
-          )}
-        </Box>
-        <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" overflow="hidden">
-          <TicketDetail />
-        </Box>
-      </Box>
-      <AiAssistant customer={selectedTicket?.from_name ?? selectedTicket?.from_email ?? "—"} />
-    </>
+    <QueueView
+      title={t("aiReviewView.title")}
+      description={t("aiReviewView.subtitle")}
+      barVariant="pills"
+      bar={
+        <FilterPillGroup label={t("aiReviewView.filters")}>
+          <FilterPill kind="tab" active={filter === "pending"} count={counts.pending} onPress={() => setFilter("pending")}>
+            {t("aiReviewView.tabPending")}
+          </FilterPill>
+          <FilterPill kind="tab" active={filter === "auto_approved"} count={counts.auto_approved} onPress={() => setFilter("auto_approved")}>
+            {t("aiReviewView.tabAutoApproved")}
+          </FilterPill>
+        </FilterPillGroup>
+      }
+      tickets={tickets}
+      loading={loading}
+      empty={filter === "pending"
+        ? { title: t("aiReviewView.emptyPending"), description: t("aiReviewView.emptyPendingHint") }
+        : { title: t("aiReviewView.emptyAutoApproved"), description: t("aiReviewView.emptyAutoApprovedHint") }}
+      onOpen={openThread}
+      aboveTicket={strip}
+    />
   );
 }

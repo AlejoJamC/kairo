@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { getRelatedHistory, getKnowledgeContext, requestEscalationReasons, escalateTicket, getClientProfile } from "@kairo/client-core/endpoints";
+import { getRelatedHistory, getKnowledgeContext, getClientProfile } from "@kairo/client-core/endpoints";
 import type { ClientProfile } from "@kairo/client-core/stores/triage-store";
-import {
-  ClientProfileCard,
-  ClientProfileSkeleton,
-} from "@/components/triage/ClientProfileCard";
+import { ClientTabContainer, EscalateTabContainer } from "@/components/triage/ContextTabs";
 import { useResizablePanel } from "@/hooks/use-resizable-panel";
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
 import { NotesPanel } from "@/components/triage/NotesPanel";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
-import { Box, Button, Chip, Field, FieldTextarea, Icon, PropRow, Resizer, Skeleton, Tab, Tabs, Text } from "@kairo/ui";
+import { isTicketReadOnly } from "@kairo/client-core/triage-status";
+import { Box, Button, Chip, Icon, Resizer, Skeleton, Tab, Tabs, Text } from "@kairo/ui";
 
 const RESIZE_MIN = 340;
 
@@ -60,19 +58,6 @@ function sortByTabOrder<T extends { id: string }>(tabs: T[]): T[] {
 // Types
 // ---------------------------------------------------------------------------
 
-interface EscalationReason {
-  id:       string;
-  label_es: string;
-  label_en: string;
-  severity: "high" | "medium" | "low";
-}
-
-interface EscalationResult {
-  reasons:          EscalationReason[];
-  recommendedLevel: 1 | 2 | 3;
-  confidence:       number;
-}
-
 interface SimilarCase {
   id:                 string;
   subject:            string | null;
@@ -88,27 +73,6 @@ interface KbArticle {
   content:    string;
   tags:       string[] | null;
   similarity: number | null;
-}
-
-// ---------------------------------------------------------------------------
-// Severity styles (inline — no Tailwind palette classes)
-// ---------------------------------------------------------------------------
-
-const SEVERITY_CHIP: Record<string, { bg: string; color: string; border: string }> = {
-  high:   { bg: "var(--kairo-color-bad-soft)", color: "var(--kairo-color-bad-ink)", border: "var(--kairo-color-bad-line)" },
-  medium: { bg: "color-mix(in srgb, var(--kairo-color-mood) 12%, transparent)", color: "var(--kairo-color-sla-escalate-ink)", border: "color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" },
-  low:    { bg: "var(--kairo-color-note-soft)", color: "var(--kairo-color-note)", border: "var(--kairo-color-note-line)" },
-};
-
-const SEVERITY_BORDER: Record<string, string> = {
-  high: "var(--kairo-color-bad)", medium: "var(--kairo-color-mood)", low: "var(--kairo-color-warn)", none: "var(--k-border)",
-};
-
-function topSeverity(reasons: EscalationReason[]): string {
-  if (reasons.some((r) => r.severity === "high"))   return "high";
-  if (reasons.some((r) => r.severity === "medium")) return "medium";
-  if (reasons.some((r) => r.severity === "low"))    return "low";
-  return "none";
 }
 
 // ---------------------------------------------------------------------------
@@ -132,88 +96,6 @@ function formatSim(s: number | null): string | null {
 
 const TAB_IDS = ["assistant", "client", "similar", "articles", "escalate", "notes"] as const;
 type TabId = typeof TAB_IDS[number];
-
-// ---------------------------------------------------------------------------
-// ClientTab — uses ClientProfileCard (pure display) + adds KPI grid
-// ---------------------------------------------------------------------------
-
-function ClientTab({ loading }: { loading: boolean }) {
-  const { t, i18n } = useTranslation("dashboard");
-  const clientProfile = useTriageStore((s) => s.clientProfile);
-
-  if (loading) {
-    return (
-      <Box display="flex" flexDirection="column" gap={14}>
-        <ClientProfileSkeleton />
-        <Skeleton height={112} borderRadius={8} />
-        <Box display="flex" flexDirection="column" gap={8}>
-          <Skeleton height={9} width={100} />
-          <Skeleton height={9} width="90%" />
-          <Skeleton height={9} width="80%" />
-        </Box>
-      </Box>
-    );
-  }
-
-  const ticketsTooltip = clientProfile
-    ? t("ai.kpiTicketsTooltip", { total: clientProfile.totalTickets, month: clientProfile.ticketsLast30Days })
-    : undefined;
-
-  const plan = clientProfile?.clientType ?? "unknown";
-  const since = clientProfile?.clientSince
-    ? new Date(clientProfile.clientSince).toLocaleDateString(i18n.language === "en" ? "en-US" : "es-ES", { month: "short", year: "numeric" })
-    : null;
-
-  return (
-    <Box display="flex" flexDirection="column" gap={14}>
-      <ClientProfileCard />
-
-      {/* Account properties */}
-      {clientProfile && (
-        <Box>
-          <Text tag="div" paddingBottom={4} fontSize={10} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.5} display="block">
-            {t("ai.account")}
-          </Text>
-          <PropRow label={t("ai.kpiPlan")}>
-            <Chip size="sm">{plan.charAt(0).toUpperCase() + plan.slice(1)}</Chip>
-          </PropRow>
-          <PropRow label={t("ai.kpiMrr")} mono />
-          <PropRow label={t("ai.kpiSince")}>{since}</PropRow>
-          <PropRow label={t("ai.kpiTickets")} mono>
-            <Text title={ticketsTooltip} color="var(--k-accent)">{String(clientProfile.totalTickets)}</Text>
-          </PropRow>
-          <PropRow label={t("ai.kpiCsat")} mono />
-          <PropRow label={t("ai.kpiNps")} mono last />
-        </Box>
-      )}
-
-      {/* Last interactions */}
-      {clientProfile && clientProfile.recentTickets.length > 0 && (
-        <div>
-          <Text tag="p" fontSize={10} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.5} marginTop={0} marginHorizontal={0} marginBottom={8} display="block">
-            {t("ai.lastInteractions")}
-          </Text>
-          {clientProfile.recentTickets.slice(0, 3).map((rt, i) => {
-            const dateStr = rt.resolved_at ?? rt.created_at;
-            const label = dateStr
-              ? new Date(dateStr).toLocaleDateString(i18n.language === "en" ? "en-US" : "es-ES", { day: "2-digit", month: "short" })
-              : "—";
-            return (
-              <Text tag="div" key={rt.id} display="flex" gap={10} paddingVertical={8} paddingHorizontal={0} fontSize={12} borderTopWidth={i > 0 ? 1 : 0} borderTopColor="var(--k-border-subtle)" borderStyle="solid">
-                <Text font="mono" color="var(--k-text-tertiary)" width={44} flexShrink={0}>
-                  {label}
-                </Text>
-                <Text color="var(--k-text-secondary)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" flexGrow={1} flexShrink={1} flexBasis="0%">
-                  {rt.subject ?? "—"}
-                </Text>
-              </Text>
-            );
-          })}
-        </div>
-      )}
-    </Box>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // SimilarTab
@@ -380,181 +262,11 @@ function ArticlesTab({ ticketId }: { ticketId: string | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// EscalateTab
-// ---------------------------------------------------------------------------
-
-function EscalateTab({
-  ticketId,
-  customer,
-  selectedTicketStatus,
-  selectedTicketCategory,
-  lang,
-}: {
-  ticketId: string | null;
-  customer: string;
-  selectedTicketStatus: string | null;
-  selectedTicketCategory: string | null;
-  lang: string;
-}) {
-  const { t } = useTranslation("dashboard");
-  const { setPendingEscalation } = useTriageStore();
-
-  const [escalation,     setEscalation]     = useState<EscalationResult | null>(null);
-  const [reasonsLoading, setReasonsLoading] = useState(false);
-  const [editMode,       setEditMode]       = useState(false);
-  const [escReason,      setEscReason]      = useState("");
-  const [escalating,     setEscalating]     = useState(false);
-  const [escalatedAt,    setEscalatedAt]    = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!ticketId) { setEscalation(null); setEscalatedAt(null); setEditMode(false); return; }
-    setEscalation(null); setEscalatedAt(null); setEditMode(false); setReasonsLoading(true);
-    requestEscalationReasons(ticketId)
-      .then(async (res) => { if (!res.ok) return; setEscalation(await res.json()); })
-      .catch(() => {})
-      .finally(() => setReasonsLoading(false));
-  }, [ticketId]);
-
-  async function handleEscalate() {
-    if (!ticketId || escalating) return;
-    setEscalating(true);
-    try {
-      await escalateTicket(ticketId, escReason || undefined);
-    } catch { /* fire-and-forget */ }
-    finally {
-      const ts = new Date().toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" });
-      setEscalatedAt(ts);
-      setPendingEscalation(ticketId!);
-      setEditMode(false);
-      setEscalating(false);
-    }
-  }
-
-  const reasons = escalation?.reasons ?? [];
-  const level   = escalation?.recommendedLevel ?? 2;
-  const conf    = escalation?.confidence ?? 0;
-  const sev     = topSeverity(reasons);
-
-  if (!ticketId) {
-    return (
-      <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" fontStyle="italic" margin={0} display="block">
-        {t("ai.noEscalationSignals")}
-      </Text>
-    );
-  }
-
-  return (
-    <Box display="flex" flexDirection="column" gap={12}>
-
-      {/* Escalation reasons */}
-      <Box borderRadius={8} borderWidth={1} borderColor="var(--k-border)" borderLeftWidth={3} borderLeftColor={SEVERITY_BORDER[sev]} padding={12} borderStyle="solid">
-        <Text tag="p" fontSize={12} fontWeight={500} color={sev === "none" ? "var(--k-text-secondary)" : "var(--kairo-color-bad-ink)"} marginTop={0} marginHorizontal={0} marginBottom={8} display="block">
-          {t("ai.escalationSuggested")}
-        </Text>
-        {reasonsLoading ? (
-          <Box display="flex" flexDirection="column" gap={6}>
-            <Skeleton height={10} width="80%" />
-            <Skeleton height={10} width="60%" />
-          </Box>
-        ) : reasons.length === 0 ? (
-          <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" fontStyle="italic" margin={0} display="block">
-            {t("ai.noEscalationSignals")}
-          </Text>
-        ) : (
-          <>
-            {conf > 0.80 && (
-              <Text tag="p" fontSize={10} fontWeight={600} color="var(--kairo-color-ok)" textTransform="uppercase" letterSpacing={0.4} marginTop={0} marginHorizontal={0} marginBottom={8} display="block">
-                {t("ai.highConfidence")}
-              </Text>
-            )}
-            <Box display="flex" flexWrap="wrap" gap={6}>
-              {reasons.map((r) => {
-                const chip = SEVERITY_CHIP[r.severity] ?? SEVERITY_CHIP.low;
-                return (
-                  <Text key={r.id} display="inline-flex" alignItems="center" borderRadius={999} paddingVertical={2} paddingHorizontal={8} fontSize={11} fontWeight={500} backgroundColor={chip.bg} color={chip.color} borderWidth={1} borderColor={chip.border} borderStyle="solid">
-                    {lang === "en" ? r.label_en : r.label_es}
-                  </Text>
-                );
-              })}
-            </Box>
-          </>
-        )}
-      </Box>
-
-      {/* Escalation packet */}
-      {escalatedAt ? (
-        <Text tag="div" display="flex" alignItems="center" gap={6} fontSize={12} color="var(--kairo-color-ok)" fontWeight={500}>
-          <Icon name="resolve" size={13} />
-          <span>{t("ai.escalatedSuccess")} {escalatedAt}</span>
-        </Text>
-      ) : (
-        <>
-          {/* Context summary */}
-          <Box grid gridTemplateColumns="1fr 1fr 1fr" gap={6}>
-            {([
-              { labelKey: "ai.customer", value: customer },
-              { labelKey: "ai.workflow", value: selectedTicketCategory ?? "—" },
-              { labelKey: "ai.status",   value: selectedTicketStatus   ?? "—" },
-            ] as const).map(({ labelKey, value }) => (
-              <Text tag="div" key={labelKey} borderRadius={6} paddingVertical={8} paddingHorizontal={6} textAlign="center" backgroundColor="var(--k-surface)" borderWidth={1} borderColor="var(--k-border-subtle)" display="block" borderStyle="solid">
-                <Text tag="p" fontSize={10} color="var(--k-text-tertiary)" marginTop={0} marginHorizontal={0} marginBottom={2} font="mono" textTransform="uppercase" letterSpacing={0.4} display="block">
-                  {t(labelKey)}
-                </Text>
-                <Text tag="p" fontSize={11} fontWeight={500} color="var(--k-text-primary)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
-                  {value}
-                </Text>
-              </Text>
-            ))}
-          </Box>
-
-          {editMode && (
-            <Field label={t("ai.escalationReason")}>
-              <FieldTextarea
-                value={escReason}
-                onChangeText={setEscReason}
-                placeholder={t("ai.escalationReasonPlaceholder")}
-                rows={3}
-              />
-            </Field>
-          )}
-
-          <Box display="flex" gap={6}>
-            {editMode ? (
-              <>
-                <Button flex={1} onPress={() => setEditMode(false)}>
-                  {t("ai.cancelEdit")}
-                </Button>
-                <Button variant="primary" flex={1} loading={escalating} loadingLabel={t("ai.escalating")} onPress={handleEscalate}>
-                  {t("ai.confirmEscalation")}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button onPress={() => setEditMode(true)}>
-                  {t("ai.editDetails")}
-                </Button>
-                <Button variant="primary" flex={1} loading={escalating} loadingLabel={t("ai.escalating")} onPress={handleEscalate}>
-                  {t("ai.escalateToLevel", { level })}
-                </Button>
-              </>
-            )}
-          </Box>
-        </>
-      )}
-    </Box>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // AiAssistant — Right Rail (FIG 2.3)
 // Owns the client-profile fetch so it runs regardless of active tab.
 // ---------------------------------------------------------------------------
 
-interface AiAssistantProps {
-  customer: string;
-}
-
-export function AiAssistant({ customer }: AiAssistantProps) {
+export function AiAssistant() {
   const { t, i18n } = useTranslation("dashboard");
   const { selectedTicketId, tickets, setClientProfile } = useTriageStore();
   const selectedTicket = tickets.find((tk) => tk.id === selectedTicketId) ?? null;
@@ -581,6 +293,8 @@ export function AiAssistant({ customer }: AiAssistantProps) {
   const defaultTabId: TabId = tabs[0]?.id ?? "assistant";
 
   const [activeTab,      setActiveTab]      = useState<TabId>(defaultTabId);
+  const panelTabRequest = useTriageStore((state) => state.panelTabRequest);
+  const clearPanelTabRequest = useTriageStore((state) => state.clearPanelTabRequest);
   const [profileLoading, setProfileLoading] = useState(false);
 
   // KAI-232 — unread mentions on the selected ticket, for the Notes tab badge.
@@ -591,7 +305,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
     : 0;
 
   // Single fetch owned here — runs on ticket change regardless of active tab.
-  // ClientProfileCard reads from store only (pure display component).
+  // The client tab reads the profile from the store.
   useEffect(() => {
     if (!selectedTicketId) { setClientProfile(null); return; }
     setClientProfile(null);
@@ -604,6 +318,14 @@ export function AiAssistant({ customer }: AiAssistantProps) {
       .catch(() => {})
       .finally(() => setProfileLoading(false));
   }, [selectedTicketId]);
+
+  // E and the notes badge of the ticket bar ask for a specific tab.
+  useEffect(() => {
+    if (!panelTabRequest) return;
+    const requested = panelTabRequest.tab as TabId;
+    clearPanelTabRequest();
+    if (tabs.some((entry) => entry.id === requested)) setActiveTab(requested);
+  }, [panelTabRequest, clearPanelTabRequest, tabs]);
 
   // Reset to the first tab (per VITE_FF_RIGHT_PANEL_TAB_ORDER) when ticket changes.
   useEffect(() => { setActiveTab(defaultTabId); }, [selectedTicketId, defaultTabId]);
@@ -663,7 +385,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
       ) : (
       <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll padding={14}>
         {clientTabEnabled && activeTab === "client" && (
-          <ClientTab loading={profileLoading} />
+          <ClientTabContainer loading={profileLoading} />
         )}
         {similarTabEnabled && activeTab === "similar" && (
           <SimilarTab ticketId={selectedTicketId} lang={i18n.language} />
@@ -672,13 +394,7 @@ export function AiAssistant({ customer }: AiAssistantProps) {
           <ArticlesTab ticketId={selectedTicketId} />
         )}
         {escalateTabEnabled && activeTab === "escalate" && (
-          <EscalateTab
-            ticketId={selectedTicketId}
-            customer={customer}
-            selectedTicketStatus={selectedTicket?.status ?? null}
-            selectedTicketCategory={selectedTicket?.category ?? null}
-            lang={i18n.language}
-          />
+          selectedTicket && <EscalateTabContainer key={selectedTicket.id} ticket={selectedTicket} readOnly={isTicketReadOnly(selectedTicket.status)} />
         )}
         {INTERNAL_NOTES_ENABLED && activeTab === "notes" && (
           <NotesPanel ticketId={selectedTicketId} onNewNote={requestComposeNote} />

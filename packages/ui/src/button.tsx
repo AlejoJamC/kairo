@@ -3,6 +3,8 @@ import { styled, Stack, Text, type GetProps } from '@tamagui/core'
 import { tokens } from '@kairo/tokens'
 import { domProps } from './lib/dom-props'
 import { px } from './lib/units'
+import { Kbd } from './kbd'
+import { Box } from './layout'
 import { Spinner } from './loading'
 
 // Triggers an action. One primary action per area; secondary actions use the
@@ -58,8 +60,10 @@ const ButtonFrame = styled(Stack, {
       },
     },
     size: {
-      md: { height: 30, paddingHorizontal: 12 },
-      sm: { height: 28, paddingHorizontal: 10 },
+      xs: { height: px(tokens['size.chip']), paddingHorizontal: 8 },
+      sm: { height: px(tokens['size.control-sm']), paddingHorizontal: 10 },
+      md: { height: px(tokens['size.control']), paddingHorizontal: 12 },
+      lg: { height: px(tokens['size.control-lg']), paddingHorizontal: 16 },
       web: { height: 40, paddingHorizontal: 16 },
       webLg: { height: 44, paddingHorizontal: 20 },
     },
@@ -81,8 +85,10 @@ const LabelText = styled(Text, {
       link: { color: tokens['accent.ink'] },
     },
     size: {
-      md: { fontSize: 12.5 },
+      xs: { fontSize: 12 },
       sm: { fontSize: 12.5 },
+      md: { fontSize: 12.5 },
+      lg: { fontSize: 13 },
       web: { fontSize: 14 },
       webLg: { fontSize: 14.5 },
     },
@@ -90,7 +96,8 @@ const LabelText = styled(Text, {
 })
 
 type Variant = 'secondary' | 'primary' | 'ghost' | 'link'
-type Size = 'md' | 'sm' | 'web' | 'webLg'
+/** xs: actions inside rows and headers; sm: 28px; md: 30px; lg: form footers and page toolbars. */
+type Size = 'xs' | 'sm' | 'md' | 'lg' | 'web' | 'webLg'
 
 type ButtonProps = Omit<GetProps<typeof ButtonFrame>, 'variant' | 'size' | 'children' | 'onPress'> & {
   variant?: Variant
@@ -106,8 +113,10 @@ type ButtonProps = Omit<GetProps<typeof ButtonFrame>, 'variant' | 'size' | 'chil
   loadingLabel?: string
   /** Form behavior: submit sends the surrounding form. */
   type?: 'button' | 'submit'
-  /** Shortcut, carried in the title. */
+  /** Shortcut with a modifier (⌘↵), carried in the title. */
   shortcut?: string
+  /** Single-key shortcut shown inside the button ("A"); the accessible name stays the label. */
+  keyHint?: string
   title?: string
 }
 
@@ -120,6 +129,7 @@ function Button({
   loading,
   loadingLabel,
   shortcut,
+  keyHint,
   disabled,
   title,
   type,
@@ -133,7 +143,11 @@ function Button({
       disabled={inactive}
       aria-disabled={inactive || undefined}
       aria-busy={loading || undefined}
-      {...domProps({ title: title ?? (shortcut ? `${children} (${shortcut})` : undefined), ...(type ? { type } : null) })}
+      {...domProps({
+        title: title ?? (shortcut ? `${children} (${shortcut})` : undefined),
+        ...(keyHint ? { 'aria-keyshortcuts': keyHint } : null),
+        ...(type ? { type } : null),
+      })}
       {...props}
     >
       {loading ? <Spinner onAccent={variant === 'primary'} /> : icon}
@@ -141,6 +155,11 @@ function Button({
         {loading && loadingLabel ? loadingLabel : children}
       </LabelText>
       {iconEnd}
+      {keyHint && (
+        <Box tag="span" aria-hidden marginLeft={2}>
+          <Kbd>{keyHint}</Kbd>
+        </Box>
+      )}
     </ButtonFrame>
   )
 }

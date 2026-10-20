@@ -67,7 +67,10 @@ export function ChannelsSettings({ onViewChange }: Props) {
     connect: t("channelsSettings.connect"),
     connecting: t("channelsSettings.connecting"),
     reconnect: t("channelsSettings.reconnect"),
-    disconnect: t("channelsSettings.disconnect"),
+    // The connected card has no configuration screen: its action is Disconnect.
+    configure: t("channelsSettings.disconnect"),
+    requestAccess: "",
+    requested: "",
   };
 
   return (
@@ -120,7 +123,7 @@ export function ChannelsSettings({ onViewChange }: Props) {
                 ch.is_primary ? t("channelsSettings.primary") : null,
               ].filter(Boolean).join(" · ")}
               labels={labels}
-              onDisconnect={() => handleDisconnect(ch.id)}
+              onConfigure={() => handleDisconnect(ch.id)}
             />
           ))
         )}

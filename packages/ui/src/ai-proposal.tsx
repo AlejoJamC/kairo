@@ -29,7 +29,7 @@ type AiProposalProps = {
   onConfirm: () => void
   onReject: () => void
   onRetry?: () => void
-  labels: { confirm: string; reject: string; retry: string; error: string }
+  labels: { confirm: string; reject: string; retry: string; error: string; confidence: string }
   /** Shortcuts carried in the button titles, for example "R" and "⌘↵". */
   shortcuts?: { confirm?: string; reject?: string }
 }
@@ -44,14 +44,14 @@ function Actions({ state, onConfirm, onReject, onRetry, labels, shortcuts }: Pic
           {labels.retry}
         </Button>
       )}
-      <Button variant="secondary" disabled={loading || confirming} shortcut={shortcuts?.reject} onPress={onReject}>
-        {labels.reject}
-      </Button>
       {state !== 'error' && (
-        <Button variant="primary" disabled={loading} loading={state === 'confirming'} shortcut={shortcuts?.confirm} onPress={onConfirm}>
+        <Button variant="primary" icon={<Icon name="check" size={13} color={tokens['text.onAccent']} />} disabled={loading} loading={state === 'confirming'} shortcut={shortcuts?.confirm} onPress={onConfirm}>
           {labels.confirm}
         </Button>
       )}
+      <Button variant="secondary" icon={<Icon name="x" size={13} />} disabled={loading || confirming} shortcut={shortcuts?.reject} onPress={onReject}>
+        {labels.reject}
+      </Button>
     </Box>
   )
 }
@@ -59,7 +59,7 @@ function Actions({ state, onConfirm, onReject, onRetry, labels, shortcuts }: Pic
 function FieldChips({ fields, state, labels }: Pick<AiProposalProps, 'fields' | 'state' | 'labels'>) {
   if (state === 'loading') {
     return (
-      <Box display="flex" gap={8} flexGrow={1}>
+      <Box display="flex" gap={6} flexGrow={1}>
         {[0, 1, 2].map((index) => (
           <Box key={index} borderRadius={999} overflow="hidden">
             <Skeleton height={26} width={92} />
@@ -76,7 +76,7 @@ function FieldChips({ fields, state, labels }: Pick<AiProposalProps, 'fields' | 
     )
   }
   return (
-    <Box display="flex" alignItems="center" gap={8} flexWrap="wrap" flexGrow={1}>
+    <>
       {fields.map((field) => (
         <Box
           key={field.label}
@@ -99,7 +99,7 @@ function FieldChips({ fields, state, labels }: Pick<AiProposalProps, 'fields' | 
           </Text>
         </Box>
       ))}
-    </Box>
+    </>
   )
 }
 
@@ -144,20 +144,20 @@ function AiProposal(props: AiProposalProps) {
   return (
     <Box
       display="flex"
-      alignItems="center"
-      gap={12}
-      flexWrap="wrap"
-      paddingVertical={10}
-      paddingHorizontal={16}
-      borderWidth={1}
+      flexDirection="column"
+      gap={10}
+      paddingVertical={14}
+      paddingHorizontal={24}
+      borderBottomWidth={1}
       borderStyle="solid"
-      borderColor={tokens['accent.line']}
-      borderRadius={px(tokens['radius.card'])}
-      backgroundColor={tokens['accent.soft']}
+      borderBottomColor={tokens['border.default']}
+      backgroundColor={tokens['surface.panel']}
+      role="region"
+      aria-label={title}
     >
-      <Box display="flex" alignItems="center" gap={8} flexShrink={0}>
-        <Icon name="spark" size={14} color={tokens['accent.ink']} />
-        <Text fontSize={13} fontWeight={600} color={tokens['accent.ink']}>
+      <Box display="flex" alignItems="center" gap={8}>
+        <Icon name="spark" size={13} color={tokens['accent.default']} />
+        <Text fontWeight={600} color={tokens['text.primary']}>
           {title}
         </Text>
         {model && (
@@ -166,8 +166,17 @@ function AiProposal(props: AiProposalProps) {
           </Text>
         )}
       </Box>
-      <FieldChips fields={fields} state={state} labels={labels} />
-      {state === 'ready' && ring}
+      <Box display="flex" alignItems="center" gap={6} flexWrap="wrap">
+        <FieldChips fields={fields} state={state} labels={labels} />
+        {state === 'ready' && (
+          <Box display="flex" alignItems="center" gap={6} height={26} paddingHorizontal={10} borderRadius={999} borderWidth={1} borderStyle="solid" borderColor={tokens['border.default']} backgroundColor={tokens['surface.panel']}>
+            <Text fontSize={11.5} color={tokens['text.tertiary']}>
+              {labels.confidence}
+            </Text>
+            {ring}
+          </Box>
+        )}
+      </Box>
       <Actions {...props} />
     </Box>
   )

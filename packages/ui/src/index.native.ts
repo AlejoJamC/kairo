@@ -24,7 +24,6 @@ export * from './layout'
 export * from './plain'
 export * from './tabs'
 export * from './segmented'
-export * from './filter-pill'
 export * from './nav-item'
 export * from './kpi-strip'
 export * from './prop-row'
@@ -51,6 +50,7 @@ export * from "./ai-proposal";
 export * from "./ask-box";
 export * from "./assistant-turn";
 export * from "./composer";
+export * from "./mention-menu";
 export * from "./data-table";
 export * from "./evidence-panel";
 export * from "./command-palette";

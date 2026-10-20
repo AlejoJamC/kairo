@@ -2,7 +2,7 @@ import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { replyToTicket, addTicketNote, setTicketStatus, escalateTicket } from "@kairo/client-core/endpoints";
+import { replyToTicket, addTicketNote, setTicketStatus } from "@kairo/client-core/endpoints";
 import { isFlagEnabled } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { useAccountMembers, filterMembers, type AccountMember } from "@kairo/client-core/hooks/use-account-members";
@@ -13,7 +13,7 @@ import {
   removeMentionToken,
 } from "@kairo/client-core/note-mentions";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, Box, Button, Chip, Composer, ComposerPill, Icon, IconButton, MentionList, PlainTextarea, Text, type SendOption } from "@kairo/ui";
+import { Box, Button, Composer, Icon, IconButton, MentionChip, MentionMenu, PlainTextarea, Text, type SendOption } from "@kairo/ui";
 import { useAuth } from "@kairo/client-core/auth";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
 import type { TicketStatus } from "@kairo/types";
@@ -43,10 +43,10 @@ type TicketAction = "reconocer" | "resolver";
 
 const ACTION_CONFIG: Record<
   TicketAction,
-  { labelKey: string; defaultLabel: string; status: TicketStatus; icon: "check" | "resolve"; iconColor: string }
+  { labelKey: string; defaultLabel: string; status: TicketStatus; icon: "check" | "resolve"; iconColor: string; keyHint: string }
 > = {
-  reconocer: { labelKey: "replyBar.actionReconocer", defaultLabel: "Acknowledge", status: "in_progress", icon: "check",   iconColor: "var(--kairo-color-accent)" },
-  resolver:  { labelKey: "replyBar.actionResolver",  defaultLabel: "Resolve",     status: "resolved",    icon: "resolve", iconColor: "var(--kairo-color-ok)" },
+  reconocer: { labelKey: "replyBar.actionReconocer", defaultLabel: "Acknowledge", status: "in_progress", icon: "check",   iconColor: "var(--kairo-color-accent)", keyHint: "A" },
+  resolver:  { labelKey: "replyBar.actionResolver",  defaultLabel: "Resolve",     status: "resolved",    icon: "resolve", iconColor: "var(--kairo-color-ok)", keyHint: "R" },
 };
 
 // KAI-191 — statuses in which the Escalate action is offered. Exhaustive
@@ -69,34 +69,6 @@ const ESCALATABLE_STATUSES: TicketStatus[] = (
   .map(([status]) => status);
 
 // ---------------------------------------------------------------------------
-// KAI-232 · design spec C7/C8 — a selected mention, removable.
-// Removing the chip also removes the token from the note body: the chip row is
-// a view of the text, never a second source of truth.
-// ---------------------------------------------------------------------------
-
-function SelectedMentionChip({
-  member,
-  onRemove,
-}: {
-  member: AccountMember;
-  onRemove: (userId: string) => void;
-}) {
-  const { t } = useTranslation("dashboard");
-  const label = member.name ?? member.email ?? member.user_id;
-
-  return (
-    <Chip
-      tone="mention"
-      icon={<Avatar name={member.name} email={member.email} seed={member.user_id} size={15} />}
-      aria-label={t("mention.removeChip", { name: label, defaultValue: "Remove mention of {{name}}" })}
-      onPress={() => onRemove(member.user_id)}
-    >
-      @{label} <Icon name="x" size={8} strokeWidth={3} />
-    </Chip>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // ReplyBar
 // ---------------------------------------------------------------------------
 
@@ -113,6 +85,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const aiSuggestedReply = useTriageStore((s) => s.aiSuggestedReply);
   const clearSuggestedReply = useTriageStore((s) => s.clearSuggestedReply);
   const updateClassification = useTriageStore((s) => s.updateClassification);
+  const requestPanelTab = useTriageStore((s) => s.requestPanelTab);
 
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
   const currentStatus = ticket?.status ?? "open";
@@ -134,9 +107,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   const [sendSuccess, setSendSuccess] = React.useState(false);
   const [showAiBanner, setShowAiBanner] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState<TicketAction | null>(null);
-  const [textareaHeight, setTextareaHeight] = React.useState(80);
-  const dragRef = React.useRef<{ startY: number; startHeight: number } | null>(null);
-  const [resolving, setResolving] = React.useState(false);
 
   // ---------------------------------------------------------------------------
   // KAI-232 — @mention autocomplete (note mode only)
@@ -155,7 +125,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     if (composeNoteRequests === 0 || !INTERNAL_NOTES_ENABLED) return;
     setMode("note");
     setShowAiBanner(false);
-    setShowEscalatePanel(false);
     textareaRef.current?.focus();
   }, [composeNoteRequests]);
 
@@ -224,16 +193,21 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   }
 
   // ---------------------------------------------------------------------------
-  // Escalation inline flow (KAI-221)
-  // ---------------------------------------------------------------------------
-  const [showEscalatePanel, setShowEscalatePanel] = React.useState(false);
-  const [escalateReason, setEscalateReason] = React.useState("");
-  const [escalating, setEscalating] = React.useState(false);
-
-  // ---------------------------------------------------------------------------
   // AI banner
   // ---------------------------------------------------------------------------
+  const composerPrefill = useTriageStore((s) => s.composerPrefill);
+  const setComposerPrefill = useTriageStore((s) => s.setComposerPrefill);
   React.useEffect(() => {
+    // The Awaiting customer view opens a ticket with a follow-up already written.
+    if (composerPrefill !== null) {
+      setMode("reply");
+      setDraft(composerPrefill);
+      setShowAiBanner(false);
+      setSendError(null);
+      setSendSuccess(false);
+      setComposerPrefill(null);
+      return;
+    }
     if (!aiSuggestedReply?.trim()) return;
     setDraft(aiSuggestedReply);
     setShowAiBanner(true);
@@ -242,7 +216,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     clearSuggestedReply();
     // AI drafts are always for reply mode
     setMode("reply");
-  }, [aiSuggestedReply, clearSuggestedReply]);
+  }, [aiSuggestedReply, clearSuggestedReply, composerPrefill, setComposerPrefill]);
 
   // Reset draft + error when switching between different tickets.
   // Uses a ref to compare previous vs current so we only reset on actual ticket
@@ -258,8 +232,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       setSendError(null);
       setSendSuccess(false);
       setShowAiBanner(false);
-      setShowEscalatePanel(false);
-      setEscalateReason("");
       setMode("reply");
     }
   }, [selectedTicketId]);
@@ -386,37 +358,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
     setActionLoading(null);
   }
 
-  // "Resolver" option in the send split-button — same status-only resolve as
-  // the Resolver lifecycle action (patchStatus), just reached from the send
-  // menu instead of the row above the composer. Never sends an email.
-  async function handleResolveOnly() {
-    if (!selectedTicketId || resolving) return;
-    setResolving(true);
-    await patchStatus("resolved");
-    setResolving(false);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Escalation flow (KAI-221: reason dialog → POST /escalate)
-  // ---------------------------------------------------------------------------
-  async function handleEscalateConfirm() {
-    if (!selectedTicketId || escalating) return;
-    setEscalating(true);
-    try {
-      const res = await escalateTicket(selectedTicketId, escalateReason.trim() || undefined);
-      if (res.ok) {
-        const body = await res.json() as { ticket?: { status?: string } };
-        if (body.ticket?.status) updateClassification(selectedTicketId, body.ticket as never);
-      }
-    } catch {
-      // silent — best-effort
-    } finally {
-      setEscalating(false);
-      setShowEscalatePanel(false);
-      setEscalateReason("");
-    }
-  }
-
   // ---------------------------------------------------------------------------
   // Keyboard
   // ---------------------------------------------------------------------------
@@ -449,26 +390,6 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   }
 
   // ---------------------------------------------------------------------------
-  // Drag handle
-  // ---------------------------------------------------------------------------
-  function handleDragStart(e: { clientY: number; preventDefault: () => void }) {
-    e.preventDefault();
-    dragRef.current = { startY: e.clientY, startHeight: textareaHeight };
-    function onMove(ev: MouseEvent) {
-      if (!dragRef.current) return;
-      const delta = dragRef.current.startY - ev.clientY;
-      setTextareaHeight(Math.min(300, Math.max(60, dragRef.current.startHeight + delta)));
-    }
-    function onUp() {
-      dragRef.current = null;
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    }
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }
-
-  // ---------------------------------------------------------------------------
   // Derived
   // ---------------------------------------------------------------------------
   const canSend = !!draft.trim() && !!selectedTicketId && !sending;
@@ -494,9 +415,22 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+  // A and R from the keyboard (or the command palette) act on the open ticket,
+  // unless the action does not apply to its current status. The subscription
+  // is renewed on every render so it always sees the current status.
+  React.useEffect(
+    () =>
+      useTriageStore.subscribe((state, previous) => {
+        const request = state.ticketActionRequest;
+        if (!request || request === previous.ticketActionRequest) return;
+        const action: TicketAction = request.action === "acknowledge" ? "reconocer" : "resolver";
+        state.clearTicketActionRequest();
+        if (visibleActions.includes(action)) void handleAction(action);
+      }),
+  );
+
   const sendOptions: SendOption[] = [
-    { id: "send-resolve", label: t("replyBar.sendAndResolve", "Send & Resolve"), disabled: !canSend, onSelect: () => handleSend(true) },
-    { id: "resolve", label: resolving ? "…" : t(ACTION_CONFIG.resolver.labelKey, ACTION_CONFIG.resolver.defaultLabel), disabled: resolving, onSelect: handleResolveOnly },
+    { id: "send-resolve", label: t("replyBar.sendAndResolve", "Send & Resolve"), shortcut: "⌘⇧↵", disabled: !canSend, onSelect: () => handleSend(true) },
   ];
 
   const aiBanner = showAiBanner && !isNote ? (
@@ -528,53 +462,33 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
           if (sendSuccess) setSendSuccess(false);
         }} onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void handleSend(false); }
-        }} width="100%" height={textareaHeight} resize="none" borderWidth={0} backgroundColor="transparent" paddingVertical={10} paddingHorizontal={12} fontSize={13} lineHeight={20.8} color="var(--k-text-primary)" outlineWidth={0} />
+        }} width="100%" rows={4} resize="none" borderWidth={0} backgroundColor="transparent" paddingVertical={10} paddingHorizontal={12} fontSize={13} lineHeight={20.8} color="var(--k-text-primary)" outlineWidth={0} />
     </Box>
   ) : undefined;
 
-  const escalatePanel = showEscalatePanel ? (
-    <Box marginBottom={8} borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" borderRadius={8} backgroundColor="color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)" paddingVertical={10} paddingHorizontal={12} borderStyle="solid">
-      <Box display="flex" alignItems="center" gap={6} marginBottom={8}>
-        <Icon name="warning" size={12} color="var(--kairo-color-sla-escalate-ink)" />
-        <Text fontSize={12} fontWeight={600} color="var(--kairo-color-sla-escalate-ink)">
-          {t("replyBar.escalateTitle", "Escalate ticket")}
-        </Text>
-        <Box marginLeft="auto">
-          <IconButton label={t("replyBar.escalateCancel", "Cancel")} onPress={() => { setShowEscalatePanel(false); setEscalateReason(""); }}>
-            <Icon name="x" size={12} color="var(--kairo-color-faint)" />
-          </IconButton>
-        </Box>
-      </Box>
-      <PlainTextarea placeholder={t("replyBar.escalateReasonPlaceholder", "Reason for escalation (optional)…")} value={escalateReason} onChange={(e) => setEscalateReason(e.target.value)} rows={2} width="100%" resize="none" borderRadius={6} borderWidth={1} borderColor="color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" focusStyle={{ borderColor: "var(--kairo-color-mood)" }} backgroundColor="var(--kairo-color-surface)" paddingVertical={7} paddingHorizontal={10} fontSize={12} lineHeight={18.6} color="var(--k-text-primary)" outlineWidth={0} marginBottom={8} borderStyle="solid" />
-      <Box display="flex" gap={6} justifyContent="flex-end">
-        <Button size="sm" onPress={() => { setShowEscalatePanel(false); setEscalateReason(""); }}>
-          {t("replyBar.escalateCancel", "Cancel")}
-        </Button>
-        <Button size="sm" variant="primary" loading={escalating} loadingLabel={t("replyBar.escalating", "Escalating…")} onPress={handleEscalateConfirm}>
-          {t("replyBar.escalateConfirm", "Confirm escalation")}
-        </Button>
-      </Box>
-    </Box>
-  ) : undefined;
-
-  const lifecycleActions = (visibleActions.length > 0 || canEscalate) && !showEscalatePanel ? (
+  const lifecycleActions = visibleActions.length > 0 || canEscalate ? (
     <>
       {visibleActions.map((action) => {
         const cfg = ACTION_CONFIG[action];
         const loading = actionLoading === action;
         return (
-          <Button key={action} icon={<Icon name={cfg.icon} size={13} color={cfg.iconColor} />} disabled={!!actionLoading} onPress={() => handleAction(action)}>
+          <Button key={action} keyHint={cfg.keyHint} icon={<Icon name={cfg.icon} size={13} color={cfg.iconColor} />} disabled={!!actionLoading} onPress={() => handleAction(action)}>
             {loading ? "…" : t(cfg.labelKey, cfg.defaultLabel)}
           </Button>
         );
       })}
       {canEscalate && (
-        <Button icon={<Icon name="escalate" size={13} color="var(--kairo-color-mood)" />} onPress={() => setShowEscalatePanel(true)}>
+        <Button keyHint="E" icon={<Icon name="escalate" size={13} color="var(--kairo-color-mood)" />} onPress={() => requestPanelTab("escalate")}>
           {t("replyBar.actionEscalar", "Escalate")}
         </Button>
       )}
     </>
   ) : undefined;
+
+  const clientName = ticket?.from_name ?? ticket?.from_email ?? "";
+  const hint = isNote
+    ? t("replyBar.hintNote")
+    : t("replyBar.hintReply", { to: ticket?.from_email ?? "" });
 
   return (
     <Composer
@@ -583,10 +497,7 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         setMode(next);
         setSendError(null);
         setSendSuccess(false);
-        if (next === "note") {
-          setShowAiBanner(false);
-          setShowEscalatePanel(false);
-        }
+        if (next === "note") setShowAiBanner(false);
       } : undefined}
       value={draft}
       onChange={(value, caret) => {
@@ -602,74 +513,84 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       sending={sending}
       error={sendError}
       onRetry={() => void (isNote ? handleSendNote() : handleSend(false))}
-      status={sendError ? undefined : sendSuccess
-        ? { tone: "success", text: isNote ? t("replyBar.noteSuccess", "Note added.") : t("replyBar.sendSuccess") }
-        : { tone: "hint", text: t("ticketDetail.sendHint") }}
+      hint={hint}
+      status={sendError || !sendSuccess ? undefined : { tone: "success", text: isNote ? t("replyBar.noteSuccess", "Note added.") : t("replyBar.sendSuccess") }}
       tools={
         <>
           {!isNote && (
             <TemplatePicker onSelect={handleTemplateSelect} previewVars={templatePreviewVars}>
-              <ComposerPill icon="zap">{t("ticketDetail.quickReply")}</ComposerPill>
+              <IconButton label={t("ticketDetail.quickReply")}>
+                <Icon name="zap" size={14} color="var(--kairo-color-faint)" />
+              </IconButton>
             </TemplatePicker>
           )}
-          {isNote && <TeamOnlyChip />}
+          <IconButton label={t("ticketDetail.attach")}>
+            <Icon name="clip" size={14} color="var(--kairo-color-faint)" />
+          </IconButton>
+        </>
+      }
+      noteRow={
+        <>
+          <TeamOnlyChip />
           {/* KAI-232 spec C7: who this note will notify. The body stores opaque
               tokens, so these chips are the only readable confirmation. */}
-          {isNote && draftMentions.map((member) => (
-            <SelectedMentionChip key={member.user_id} member={member} onRemove={removeMention} />
-          ))}
-          {isNote && draftMentions.length > 0 && (
-            <Text fontSize={10.5} color="var(--k-note-label)" opacity={0.75} marginLeft={2}>
-              {t("mention.willNotify", { count: draftMentions.length, defaultValue: "will be notified" })}
-            </Text>
-          )}
-          <ComposerPill icon="clip">{t("ticketDetail.attach")}</ComposerPill>
+          {draftMentions.map((member) => {
+            const name = member.name ?? member.email ?? member.user_id;
+            return (
+              <MentionChip
+                key={member.user_id}
+                name={name}
+                email={member.email}
+                seed={member.user_id}
+                removeLabel={t("mention.removeChip", { name, defaultValue: "Remove {{name}}" })}
+                onRemove={() => removeMention(member.user_id)}
+              />
+            );
+          })}
+          <Text fontSize={11.5} color="var(--k-text-tertiary)">
+            {t("replyBar.typeAt")}
+          </Text>
         </>
       }
       banner={aiBanner}
-      panel={escalatePanel}
       actions={lifecycleActions}
       sendOptions={sendOptions}
       counter={isNote && draft.length >= NOTE_COUNTER_THRESHOLD ? { text: `${draft.length} / ${NOTE_MAX_LENGTH}`, over: draft.length >= NOTE_MAX_LENGTH } : undefined}
       popover={mentionOpen ? (
-        <MentionList
+        <MentionMenu
           testId="mention-dropdown"
           title={t("mention.header", "Mention")}
           query={mentionQuery?.query ?? ""}
           options={mentionMatches.map((member) => ({ id: member.user_id, name: member.name ?? member.email ?? member.user_id, email: member.email, role: member.role }))}
           activeIndex={mentionIndex}
-          // Skeletons only on the very first open of the session (spec C5) —
+          // Searching row only on the very first open of the session (spec C5) —
           // once the list is cached, a refresh must not blank the rows.
           loading={membersLoading && members.length === 0}
           onPick={(id) => { const picked = mentionMatches.find((member) => member.user_id === id); if (picked) applyMention(picked); }}
           onHover={setMentionIndex}
           labels={{
             counter: t("mention.counter", { shown: mentionMatches.length, total: mentionPool.length, defaultValue: "{{shown}} of {{total}}" }),
-            empty: t("mention.empty", "No members found"),
-            more: t("mention.more", { count: mentionPool.length - mentionMatches.length, defaultValue: "+{{count}} more · keep typing to filter" }),
-            keyNavigate: t("mention.keyNavigate", "navigate"),
+            empty: t("mention.empty"),
+            searching: t("mention.searching"),
             keyInsert: t("mention.keyInsert", "insert"),
             keyClose: t("mention.keyClose", "close"),
           }}
         />
       ) : undefined}
       placeholder={isNote
-        ? t("replyBar.notePlaceholder", "Write a note for your team… use @ to mention")
-        : t("ticketDetail.replyPlaceholder")}
+        ? t("replyBar.notePlaceholder")
+        : t("replyBar.replyPlaceholder", { name: clientName })}
       maxLength={isNote ? NOTE_MAX_LENGTH : undefined}
-      height={textareaHeight}
-      onResizeStart={handleDragStart}
       labels={{
         modeGroup: t("replyBar.modeLabel", "Composer mode"),
         reply: t("replyBar.modeReply", "Reply"),
         note: t("replyBar.modeNote", "Internal note"),
-        textarea: t("replyBar.textareaLabel"),
+        textarea: isNote ? t("replyBar.modeNote", "Internal note") : t("replyBar.modeReply", "Reply"),
         placeholder: "",
         send: isNote ? t("replyBar.sendNote", "Add note") : t("ticketDetail.send"),
         sending: isNote ? t("replyBar.sendingNote", "Saving…") : t("replyBar.sending"),
         retry: t("replyBar.retry"),
         sendOptions: t("replyBar.sendOptionsLabel", "More send options"),
-        dragHandle: t("replyBar.resize"),
       }}
     />
   );

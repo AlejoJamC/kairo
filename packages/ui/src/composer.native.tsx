@@ -1,29 +1,15 @@
 import { TextInput } from 'react-native'
 import { tokens } from '@kairo/tokens'
-import { Avatar } from './avatar'
 import { Button } from './button'
 import { Callout } from './callout'
-import { Icon, type IconName } from './icon'
-import { Box, Pressable, Text } from './layout'
+import { Box, Text } from './layout'
 import { Segmented } from './segmented'
-import { px } from './lib/units'
-import type { ComposerProps, MentionListProps } from './composer-types'
+import type { ComposerProps } from './composer-types'
 
 // React Native composer: reply and internal-note modes, send with the button.
 // Drag resize, keyboard shortcuts and the split-send menu are web only.
 
-function ComposerPill({ icon, children }: { icon?: IconName; children: string }) {
-  return (
-    <Pressable flexDirection="row" alignItems="center" gap={4} paddingVertical={4} paddingHorizontal={9} borderWidth={1} borderColor={tokens['border.default']} borderRadius={999}>
-      {icon && <Icon name={icon} size={11} />}
-      <Text fontSize={11} color={tokens['text.secondary']}>
-        {children}
-      </Text>
-    </Pressable>
-  )
-}
-
-function Composer({ mode, onModeChange, value, onChange, onSend, sending, error, onRetry, status, tools, banner, panel, actions, sendOptions, counter, popover, placeholder, maxLength, height = 80, labels }: ComposerProps) {
+function Composer({ mode, onModeChange, value, onChange, onSend, sending, error, onRetry, hint, status, tools, noteRow, banner, panel, actions, sendOptions, counter, popover, placeholder, maxLength, labels }: ComposerProps) {
   const note = mode === 'note'
   const canSend = value.trim().length > 0 && !sending
   return (
@@ -41,9 +27,10 @@ function Composer({ mode, onModeChange, value, onChange, onSend, sending, error,
           />
         </Box>
       )}
-      {tools && (
+      {(tools || (note && noteRow)) && (
         <Box flexDirection="row" alignItems="center" flexWrap="wrap" gap={4} marginBottom={8}>
           {tools}
+          {note && noteRow}
         </Box>
       )}
       {error && (
@@ -64,7 +51,7 @@ function Composer({ mode, onModeChange, value, onChange, onSend, sending, error,
           editable={!sending}
           onChangeText={(text) => onChange(text, text.length)}
           multiline
-          style={{ color: note ? tokens['notes.text'] : tokens['text.primary'], fontSize: 14, height, borderWidth: 1, borderColor: note ? tokens['notes.border'] : tokens['border.default'], borderRadius: 8, padding: 10 }}
+          style={{ color: note ? tokens['notes.text'] : tokens['text.primary'], fontSize: 14, height: 80, borderWidth: 1, borderColor: note ? tokens['notes.border'] : tokens['border.default'], borderRadius: 8, padding: 10 }}
         />
       )}
       {panel}
@@ -89,41 +76,14 @@ function Composer({ mode, onModeChange, value, onChange, onSend, sending, error,
           {labels.send}
         </Button>
       </Box>
-      {status && (
-        <Text marginTop={6} fontSize={status.tone === 'hint' ? 11 : 12} color={status.tone === 'hint' ? tokens['text.tertiary'] : tokens['color.ok']}>
-          {status.text}
+      {(status || hint) && (
+        <Text marginTop={6} fontSize={status ? 12 : 11} color={status ? tokens['color.ok'] : tokens['text.tertiary']}>
+          {status?.text ?? hint}
         </Text>
       )}
     </Box>
   )
 }
 
-function MentionList({ title, query, options, activeIndex, loading, onPick, labels }: MentionListProps) {
-  return (
-    <Box accessibilityLabel={title} borderWidth={1} borderColor={tokens['border.default']} borderRadius={px(tokens['radius.input'])} backgroundColor={tokens['surface.panel']} marginBottom={6} overflow="hidden">
-      <Text font="mono" fontSize={9.5} paddingVertical={7} paddingHorizontal={11} color={tokens['text.tertiary']}>
-        {title}
-        {query ? ` @${query}` : ''} · {loading ? '…' : labels.counter}
-      </Text>
-      {!loading && options.length === 0 && (
-        <Text fontSize={12.5} padding={18} color={tokens['text.secondary']}>
-          {labels.empty}
-        </Text>
-      )}
-      {options.map((option, index) => (
-        <Pressable key={option.id} onPress={() => onPick(option.id)} flexDirection="row" alignItems="center" gap={10} paddingVertical={8} paddingHorizontal={12} backgroundColor={index === activeIndex ? tokens['surface.hover'] : 'transparent'}>
-          <Avatar name={option.name} email={option.email} seed={option.id} size={24} />
-          <Text flexGrow={1} fontSize={13} fontWeight={500} color={tokens['text.primary']}>
-            {option.name}
-          </Text>
-          <Text font="mono" fontSize={11} color={tokens['text.tertiary']}>
-            {option.role}
-          </Text>
-        </Pressable>
-      ))}
-    </Box>
-  )
-}
-
-export { Composer, ComposerPill, MentionList }
-export type { ComposerProps, MentionListProps } from './composer-types'
+export { Composer }
+export type { ComposerProps, ComposerMode, ComposerLabels, SendOption } from './composer-types'

@@ -11,7 +11,7 @@ type SegmentedItem<V extends string> = {
   /** Leading glyph, for example the priority bars of a list filter. */
   icon?: ReactNode
   /** Count shown after the label (the view-tab variant). */
-  count?: number
+  count?: number | null
   /** Amber styling for the internal-note mode. */
   tone?: 'note'
   disabled?: boolean
@@ -28,16 +28,18 @@ type SegmentedProps<V extends string> = {
   size?: 'md' | 'lg'
   /** track: modes on a shared track; tabs: 28px list filters without a track, with counts. */
   variant?: 'track' | 'tabs'
+  /** Equal segments across the full width (the theme switch of the account menu). */
+  fullWidth?: boolean
 }
 
-function Segmented<V extends string>({ items, value, onChange, label, semantics = 'tablist', size = 'md', variant = 'track' }: SegmentedProps<V>) {
+function Segmented<V extends string>({ items, value, onChange, label, semantics = 'tablist', size = 'md', variant = 'track', fullWidth }: SegmentedProps<V>) {
   const tabs = variant === 'tabs'
   const height = tabs ? 28 : size === 'lg' ? 34 : 26
   return (
     <Box
       role={semantics === 'tablist' ? 'tablist' : 'group'}
       aria-label={label}
-      display="inline-flex"
+      display={fullWidth ? 'flex' : 'inline-flex'}
       padding={tabs ? 0 : 2}
       gap={tabs ? 4 : 2}
       borderRadius={8}
@@ -57,6 +59,9 @@ function Segmented<V extends string>({ items, value, onChange, label, semantics 
             onClick={() => !item.disabled && onChange(item.value)}
             display="flex"
             alignItems="center"
+            justifyContent={fullWidth ? 'center' : undefined}
+            flexGrow={fullWidth ? 1 : undefined}
+            flexBasis={fullWidth ? '0%' : undefined}
             gap={tabs ? 6 : 5}
             height={height}
             paddingHorizontal={size === 'lg' && !tabs ? 14 : 10}
@@ -78,7 +83,7 @@ function Segmented<V extends string>({ items, value, onChange, label, semantics 
             {item.label}
             {item.count !== undefined && (
               <Text font="mono" fontSize={tabs ? 10.5 : 11} opacity={0.65}>
-                {item.count}
+                {item.count === null ? '—' : item.count}
               </Text>
             )}
           </Pressable>

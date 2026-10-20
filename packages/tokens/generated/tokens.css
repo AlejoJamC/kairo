@@ -28,6 +28,8 @@
   --kairo-color-bad: #EF4444;
   --kairo-color-bad-ink: #C9262C;
   --kairo-color-mood: #F97316;
+  --kairo-color-mood-ink: #C2410C;
+  --kairo-color-mood-line: rgba(249,115,22,0.35);
   --kairo-color-violet: #7C5CFF;
   --kairo-color-teal: #0EA5A0;
   --kairo-color-cat-account: #3B82F6;
@@ -40,6 +42,7 @@
   --kairo-color-note-action: #B45309;
   --kairo-color-sla-alert-ink: #B45309;
   --kairo-color-sla-escalate-ink: #C2410C;
+  --kairo-color-sla-on-time: rgba(43,91,255,0.45);
   --kairo-color-inverse-bg: #18181B;
   --kairo-color-inverse-text: #FAFAFA;
   --kairo-color-inverse-faint: #A1A1AA;
@@ -263,6 +266,8 @@
   --kairo-status-ai_resolved: #047857;
   --kairo-status-reopened: #D97706;
   --kairo-status-closed: #A1A1AA;
+  --kairo-escalation-text: #C2410C;
+  --kairo-escalation-border: rgba(249,115,22,0.35);
   --kairo-priority-P1: #EF4444;
   --kairo-priority-P2: #F59E0B;
   --kairo-priority-P3: #A1A1AA;
@@ -273,6 +278,8 @@
   --kairo-sentiment-aggressive: #EF4444;
   --kairo-sla-overdueText: #C9262C;
   --kairo-sla-overdueBar: #EF4444;
+  --kairo-sla-atRiskText: #B45309;
+  --kairo-sla-escalationText: #C2410C;
   --kairo-sla-track: #F2F2F4;
   --kairo-sla-onTime: rgba(43,91,255,0.45);
   --kairo-sla-atRisk: #F59E0B;

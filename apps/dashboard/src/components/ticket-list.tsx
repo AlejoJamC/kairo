@@ -9,7 +9,7 @@ import { isTriageActive } from "@kairo/client-core/triage-status";
 import { getSimilarTickets, getRelatedHistory, syncGmail, classifyBatch } from "@kairo/client-core/endpoints";
 import { fetchTicketById, fetchInboxTickets, fetchBatchJobStatus } from "@kairo/client-core/queries";
 import { useAuth } from "@kairo/client-core/auth";
-import { Box, Button, Callout, EmptyState, Icon, IconButton, Menu, MenuItem, Popover, PopoverContent, PopoverTrigger, PriorityGlyph, PulseDot, Segmented, Spinner, Text } from "@kairo/ui";
+import { Box, Button, Callout, EmptyState, Icon, IconButton, Menu, MenuItem, Popover, PopoverContent, PopoverTrigger, PriorityFilterTabs, PulseDot, QueueHeader, type PriorityLevel } from "@kairo/ui";
 import { TicketSkeleton, VirtualTicketList } from "@/components/ticket-list-parts";
 import { INITIAL_FILTERS, applyFilters, assignToGroupOrCreate, deriveGroupName, type BatchTicketResult, type FilterState, type SimilarTicketRow } from "@/components/ticket-list-helpers";
 
@@ -93,10 +93,15 @@ export function TicketList() {
 
   const filtered = applyFilters(tickets, filters);
 
+  // The ticket bar and the J / K shortcuts move through what the queue shows.
+  const setQueueIds = useTriageStore((state) => state.setQueueIds);
+  useEffect(() => {
+    setQueueIds(filtered.map((ticket) => ticket.id));
+  }, [filtered, setQueueIds]);
+
   // Header count reflects the active triage queue (excludes awaiting/resolved),
   // so it always matches the list instead of the raw store total.
   const activeTickets = tickets.filter((t) => isTriageActive(t.status));
-  const activeClassifiedCount = activeTickets.filter((t) => t.classified_at !== null).length;
 
   // Count how many tickets share each group_id (for "similares agrupados" label)
   const groupCounts = useMemo(() => {
@@ -403,56 +408,51 @@ export function TicketList() {
 
   return (
     <Box display="flex" flexGrow={1} flexShrink={1} flexBasis="0%" flexDirection="column" overflow="hidden" backgroundColor="white">
-      {/* Header */}
-      <Box display="flex" alignItems="center" gap={8} minHeight={56} paddingTop={14} paddingRight={12} paddingLeft={20} flexShrink={0}>
-        <Text tag="h1" fontSize={16} fontWeight={600} letterSpacing={-0.16} color="var(--k-text-primary)" margin={0}>
-          {t("ticketList.header")}
-        </Text>
-        <Text fontSize={12} font="mono" color="var(--k-text-tertiary)">
-          {activeClassifiedCount}/{activeTickets.length}
-        </Text>
-        <Box flexGrow={1} />
-        <Button
-          icon={busy ? <Spinner /> : <Icon name="spark" size={13} color="var(--kairo-color-accent)" />}
-          disabled={busy || tickets.length === 0}
-          onPress={handleClassifyAll}
-        >
-          {classifyingAll ? (classifyProgress ?? t("ticketList.classifying")) : t("ticketList.classify")}
-        </Button>
-
-        {/* ⋯ actions dropdown */}
-        <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-          <PopoverTrigger>
-            <IconButton label={t("ticketList.moreActions", "Más acciones")} disabled={busy}>
-              <Icon name="more" size={15} color="var(--kairo-color-muted)" />
-            </IconButton>
-          </PopoverTrigger>
-          <PopoverContent role="menu" label={t("ticketList.moreActions", "Más acciones")} align="end" width={220}>
-            <Menu label={t("ticketList.moreActions", "Más acciones")}>
-              <MenuItem icon={<Icon name="refresh" size={13} color="var(--kairo-color-faint)" />} label={t("ticketList.syncGmail", "Sincronizar Gmail")} onSelect={handleSyncGmail} />
-            </Menu>
-          </PopoverContent>
-        </Popover>
-      </Box>
-
-      {/* Priority filters */}
-      <Box paddingVertical={10} paddingHorizontal={14} borderBottomWidth={1} borderBottomColor="var(--k-border)" borderStyle="solid" flexShrink={0}>
-        <Segmented
-          variant="tabs"
-          label={t("ticketList.filterLabel", "Filtrar por prioridad")}
-          value={filters.priority === null && filters.type === null ? "all" : filters.priority ?? "all"}
-          items={[
-            { value: "all", label: t("ticketList.filterAll", "Todos"), count: activeTickets.length },
-            ...(["P1", "P2", "P3"] as const).map((level) => ({
-              value: level,
-              label: level,
-              icon: <PriorityGlyph priority={level} size={12} label={false} />,
-              count: activeTickets.filter((ticket) => ticket.priority === level).length,
-            })),
-          ]}
-          onChange={(value) => (value === "all" ? setFilters(INITIAL_FILTERS) : toggleFilter("priority", value))}
-        />
-      </Box>
+      <QueueHeader
+        title={t("ticketList.header")}
+        count={`${filtered.length}/${activeTickets.length}`}
+        countLabel={t("ticketList.countLabel", { shown: filtered.length, open: activeTickets.length })}
+        action={
+          <>
+            <Button
+              size="sm"
+              icon={<Icon name="spark" size={13} color="var(--kairo-color-accent)" />}
+              disabled={tickets.length === 0}
+              loading={busy}
+              loadingLabel={classifyingAll ? (classifyProgress ?? t("ticketList.classifying")) : t("ticketList.syncing")}
+              onPress={handleClassifyAll}
+            >
+              {t("ticketList.classify")}
+            </Button>
+            {/* ⋯ actions dropdown */}
+            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+              <PopoverTrigger>
+                <IconButton label={t("ticketList.moreActions", "Más acciones")} disabled={busy}>
+                  <Icon name="more" size={15} color="var(--kairo-color-muted)" />
+                </IconButton>
+              </PopoverTrigger>
+              <PopoverContent role="menu" label={t("ticketList.moreActions", "Más acciones")} align="end" width={220}>
+                <Menu label={t("ticketList.moreActions", "Más acciones")}>
+                  <MenuItem icon={<Icon name="refresh" size={13} color="var(--kairo-color-faint)" />} label={t("ticketList.syncGmail", "Sincronizar Gmail")} onSelect={handleSyncGmail} />
+                </Menu>
+              </PopoverContent>
+            </Popover>
+          </>
+        }
+        bar={
+          <PriorityFilterTabs
+            value={(filters.priority ?? "all") as "all" | PriorityLevel}
+            onChange={(value) => (value === "all" ? setFilters(INITIAL_FILTERS) : toggleFilter("priority", value))}
+            counts={{
+              all: activeTickets.length,
+              P1: activeTickets.filter((ticket) => ticket.priority === "P1").length,
+              P2: activeTickets.filter((ticket) => ticket.priority === "P2").length,
+              P3: activeTickets.filter((ticket) => ticket.priority === "P3").length,
+            }}
+            labels={{ priority: t("ticketList.filterLabel", "Filtrar por prioridad"), all: t("ticketList.filterAll", "Todos") }}
+          />
+        }
+      />
 
       {/* KAI-24 — multi-select action bar (behind VITE_FF_ENABLE_TICKET_GROUPING) */}
       {TICKET_GROUPING_ENABLED && selectedTicketIds.size >= 2 && (

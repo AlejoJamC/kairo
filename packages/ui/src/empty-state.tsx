@@ -16,6 +16,7 @@ const Frame = styled(Stack, {
     variant: {
       list: {},
       pending: {
+        paddingVertical: 56,
         borderWidth: 1,
         borderStyle: 'dashed',
         borderColor: tokens['border.strong'],
@@ -104,7 +105,7 @@ function EmptyState({
     )
   }
   return (
-    <Frame variant="list" role={role} {...props}>
+    <Frame variant="list" role={role} {...(scanning ? { 'aria-live': 'polite' as const } : null)} {...props}>
       {icon ?? (
         <Glyph tone={tone} aria-hidden>
           {glyph ?? (tone === 'error' ? '!' : '◌')}

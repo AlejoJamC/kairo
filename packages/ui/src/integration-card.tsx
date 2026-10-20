@@ -3,11 +3,13 @@ import { tokens } from '@kairo/tokens'
 import { Button } from './button'
 import { Box, Text } from './layout'
 import { px } from './lib/units'
+import { VisuallyHidden } from './lib/visually-hidden'
 
 // A connected or available channel in settings. The tile shows the service
 // initial (or the provider logo) on the provider color.
 
-type IntegrationStatus = 'connected' | 'available' | 'connecting' | 'error' | 'soon'
+/** requestable: beta, access not requested yet; requested: beta, request sent. */
+type IntegrationStatus = 'connected' | 'available' | 'requestable' | 'requested' | 'connecting' | 'error' | 'soon'
 
 type IntegrationCardProps = {
   name: string
@@ -21,10 +23,11 @@ type IntegrationCardProps = {
   /** Error text, shown instead of the description when the connection is lost. */
   errorMessage?: string
   beta?: boolean
-  labels: { beta: string; soon: string; connect: string; connecting: string; reconnect: string; disconnect?: string }
+  labels: { beta: string; soon: string; connect: string; connecting: string; reconnect: string; configure: string; requestAccess: string; requested: string }
   onConnect?: () => void
   onReconnect?: () => void
-  onDisconnect?: () => void
+  onConfigure?: () => void
+  onRequest?: () => void
 }
 
 function dotColor(status: IntegrationStatus): string | null {
@@ -34,15 +37,16 @@ function dotColor(status: IntegrationStatus): string | null {
   return null
 }
 
-function IntegrationCard({ name, initial, tileColor, logo, status, description, errorMessage, beta, labels, onConnect, onReconnect, onDisconnect }: IntegrationCardProps) {
+function IntegrationCard({ name, initial, tileColor, logo, status, description, errorMessage, beta, labels, onConnect, onReconnect, onConfigure, onRequest }: IntegrationCardProps) {
   const dot = dotColor(status)
   return (
     <Box
       display="flex"
       alignItems="center"
-      gap={12}
+      gap={14}
       minHeight={84}
-      padding={14}
+      paddingVertical={16}
+      paddingHorizontal={18}
       borderWidth={1}
       borderStyle="solid"
       borderColor={tokens['border.default']}
@@ -59,6 +63,7 @@ function IntegrationCard({ name, initial, tileColor, logo, status, description, 
         borderRadius={px(tokens['radius.row'])}
         backgroundColor={tileColor}
         opacity={status === 'soon' ? 0.5 : 1}
+        aria-hidden
       >
         {logo ?? (
           <Text fontSize={16} fontWeight={600} color={tokens['text.onAccent']}>
@@ -72,6 +77,7 @@ function IntegrationCard({ name, initial, tileColor, logo, status, description, 
             {name}
           </Text>
           {dot && <Box width={7} height={7} circle backgroundColor={dot} pulse={status === 'connecting'} />}
+          {status === 'connected' && <VisuallyHidden>connected</VisuallyHidden>}
           {beta && (
             <Text font="mono" fontSize={9.5} fontWeight={600} paddingVertical={1} paddingHorizontal={5} borderRadius={4} backgroundColor={tokens['accent.soft']} color={tokens['accent.ink']}>
               {labels.beta}
@@ -85,24 +91,34 @@ function IntegrationCard({ name, initial, tileColor, logo, status, description, 
         )}
       </Box>
       {status === 'soon' ? (
-        <Text fontSize={12} color={tokens['text.tertiary']}>
+        <Text font="mono" fontSize={10} textTransform="uppercase" color={tokens['text.tertiary']}>
           {labels.soon}
         </Text>
       ) : status === 'connecting' ? (
-        <Button disabled loading>
+        <Button disabled loading aria-label={`${labels.connecting} ${name}`}>
           {labels.connecting}
         </Button>
       ) : status === 'error' ? (
-        <Button variant="primary" onPress={onReconnect}>
+        <Button aria-label={`${labels.reconnect} ${name}`} onPress={onReconnect}>
           {labels.reconnect}
         </Button>
-      ) : status === 'available' ? (
-        <Button onPress={onConnect}>{labels.connect}</Button>
-      ) : labels.disconnect ? (
-        <Button variant="ghost" onPress={onDisconnect}>
-          {labels.disconnect}
+      ) : status === 'requested' ? (
+        <Button disabled aria-label={`${labels.requested} ${name}`}>
+          {labels.requested}
         </Button>
-      ) : null}
+      ) : status === 'requestable' ? (
+        <Button aria-label={`${labels.requestAccess} ${name}`} onPress={onRequest}>
+          {labels.requestAccess}
+        </Button>
+      ) : status === 'available' ? (
+        <Button aria-label={`${labels.connect} ${name}`} onPress={onConnect}>
+          {labels.connect}
+        </Button>
+      ) : (
+        <Button variant="ghost" aria-label={`${labels.configure} ${name}`} onPress={onConfigure}>
+          {labels.configure}
+        </Button>
+      )}
     </Box>
   )
 }

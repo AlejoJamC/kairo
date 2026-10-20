@@ -29,8 +29,8 @@ function MenuPopover({ onSelect = () => {} }: { onSelect?: () => void }) {
         <Menu label="Change status">
           <MenuLabel>Status</MenuLabel>
           <MenuItem label="Open" current onSelect={onSelect} />
-          <MenuItem label="Pending" onSelect={onSelect} />
-          <MenuItem label="Locked" disabled onSelect={onSelect} />
+          <MenuItem label="Pending" current={false} onSelect={onSelect} />
+          <MenuItem label="Locked" current={false} disabled onSelect={onSelect} />
           <MenuSeparator />
           <MenuItem label="Delete" destructive onSelect={onSelect} />
         </Menu>
@@ -94,7 +94,7 @@ describe('Menu', () => {
   it('moves between enabled items with the arrow keys, skipping disabled ones', () => {
     renderUi(<MenuPopover />)
     fireEvent.click(screen.getByRole('button', { name: 'Status' }))
-    const items = screen.getAllByRole('menuitem')
+    const items = Array.from(document.querySelectorAll<HTMLElement>('[role^="menuitem"]'))
     items[0]!.focus()
     fireEvent.keyDown(items[0]!, { key: 'ArrowDown' })
     expect(document.activeElement).toBe(items[1])
@@ -112,9 +112,9 @@ describe('Menu', () => {
     const onSelect = vi.fn()
     renderUi(<MenuPopover onSelect={onSelect} />)
     fireEvent.click(screen.getByRole('button', { name: 'Status' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Pending' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Pending' }))
     expect(onSelect).toHaveBeenCalledTimes(1)
-    const locked = screen.getByRole('menuitem', { name: 'Locked' })
+    const locked = screen.getByRole('menuitemradio', { name: 'Locked' })
     expect(locked.getAttribute('aria-disabled')).toBe('true')
     fireEvent.click(locked)
     expect(onSelect).toHaveBeenCalledTimes(1)
@@ -123,7 +123,7 @@ describe('Menu', () => {
   it('marks the current option', () => {
     renderUi(<MenuPopover />)
     fireEvent.click(screen.getByRole('button', { name: 'Status' }))
-    expect(screen.getByRole('menuitem', { name: 'Open' }).getAttribute('aria-current')).toBe('true')
+    expect(screen.getByRole('menuitemradio', { name: 'Open' }).getAttribute('aria-checked')).toBe('true')
   })
 })
 

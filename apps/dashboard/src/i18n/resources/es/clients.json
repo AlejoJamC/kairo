@@ -1,5 +1,5 @@
 {
-  "title": "Directorio de Clientes",
+  "title": "Clientes",
   "searchPlaceholder": "Buscar por nombre o ID...",
   "addClient": "Agregar Cliente",
   "loading": "Cargando clientes...",
@@ -70,7 +70,8 @@
     "bulkConfirmModalBody": "Se confirmarán {{count}} borradores. Esta acción no se puede deshacer desde la UI normal.",
     "bulkConfirmSuccess": "Confirmados {{count}} borradores",
     "externalReadOnly": "Datos sincronizados desde {{source}}. Edición no disponible.",
-    "close": "Cerrar"
+    "close": "Cerrar",
+    "export": "Exportar"
   },
   "empty": {
     "noClients": "No se encontraron clientes",
@@ -83,7 +84,11 @@
     "statusAll": "Todos",
     "statusDrafts": "Borradores",
     "statusConfirmed": "Confirmados",
-    "statusRejected": "Rechazados"
+    "statusRejected": "Rechazados",
+    "status": "Estado",
+    "organization": "Organización",
+    "allOrganizations": "Todas las organizaciones",
+    "plan": "Plan"
   },
   "badges": {
     "draft": "Borrador",
@@ -101,8 +106,11 @@
     "genericAction": "No se pudo completar la acción."
   },
   "search": {
-    "placeholder": "Buscar por nombre, email, teléfono..."
+    "placeholder": "Buscar por nombre, email, teléfono...",
+    "label": "Buscar clientes"
   },
   "errorMessage": "Error al cargar los borradores.",
-  "retry": "Reintentar"
+  "retry": "Reintentar",
+  "countLabel_one": "{{count}} cliente",
+  "countLabel_other": "{{count}} clientes"
 }

@@ -7,7 +7,7 @@ import { fetchTicketById } from "@kairo/client-core/queries";
 import { getNumericFlag } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { Avatar, Badge, Box, Button, EmptyState, Icon, IconButton, NotificationRow, Popover, PopoverContent, PopoverTrigger, Segmented, Text } from "@kairo/ui";
+import { Avatar, Box, Button, EmptyState, NotificationRow, Popover, PopoverContent, PopoverTrigger, Segmented, SidebarBell, Text } from "@kairo/ui";
 import type { AppView } from "@/types";
 
 // KAI-232 — how often the bell re-fetches /api/v1/notifications, in seconds.
@@ -315,19 +315,15 @@ export function NotificationsBell({ onViewChange }: NotificationsBellProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger>
-        <IconButton label={t("dashboard:topChrome.palette.notifications")}>
-          <Box position="relative" display="flex">
-            <Icon name="bell" size={16} color={open ? "var(--kairo-color-text)" : "var(--kairo-color-muted)"} />
-            {unread > 0 && (
-              <Box position="absolute" top={-7} right={-9}>
-                <Badge variant="count">{unread}</Badge>
-              </Box>
-            )}
-            {/* KAI-232 spec D5 — "there are mentions among them". The count
-                covers ALL unread notifications; this dot is only a hint. */}
-            {unreadMentions > 0 && <Box position="absolute" bottom={-2} right={-2} width={7} height={7} circle backgroundColor="var(--k-mention-solid)" />}
-          </Box>
-        </IconButton>
+        {/* KAI-232 spec D5 — the count covers ALL unread notifications; the
+            dot only hints that mentions are among them. */}
+        <SidebarBell
+          label={t("dashboard:topChrome.palette.notifications")}
+          unreadLabel={t("dashboard:topChrome.notifications.unreadCount", { count: unread })}
+          count={unread}
+          hasMention={unreadMentions > 0}
+          open={open}
+        />
       </PopoverTrigger>
       <PopoverContent label={t("dashboard:topChrome.notifications.title")} side="bottom" align="start">
         <NotificationsPopover items={notifs} onMarkAll={markAllRead} onSelect={handleSelect} />

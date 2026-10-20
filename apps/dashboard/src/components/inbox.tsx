@@ -15,7 +15,7 @@ import { Box } from "@kairo/ui";
 
 export function Inbox() {
   const { user, accountId } = useAuth();
-  const { tickets, selectedTicketId, setTickets, setScanning, setOperationalSlaConfig } = useTriageStore();
+  const { setTickets, setScanning, setOperationalSlaConfig } = useTriageStore();
 
   useRealtimeTickets();
 
@@ -59,17 +59,13 @@ export function Inbox() {
     })();
   }, [user, accountId]);
 
-  const selectedTicket = tickets.find((t) => t.id === selectedTicketId) ?? null;
-
   return (
     <>
-      <Box width={360} display="flex" flexDirection="column" backgroundColor="white" flexShrink={0} borderRightWidth={1} borderRightColor="var(--k-border)" borderStyle="solid">
+      <Box width={372} display="flex" flexDirection="column" backgroundColor="var(--kairo-color-surface)" flexShrink={0} borderRightWidth={1} borderRightColor="var(--k-border)" borderStyle="solid">
         <TicketList />
       </Box>
       <TicketDetail />
-      <AiAssistant
-        customer={selectedTicket?.from_name ?? selectedTicket?.from_email ?? "—"}
-      />
+      <AiAssistant />
     </>
   );
 }

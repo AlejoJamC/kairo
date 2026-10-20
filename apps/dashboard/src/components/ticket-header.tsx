@@ -1,13 +1,15 @@
-import { useState } from "react";
+// Ticket bar and ticket heading: where the agent is in the queue and the
+// subject, classification and SLA of the open ticket.
+
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { Ticket } from "@kairo/types";
+import type { Ticket, TicketStatus } from "@kairo/types";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { Box, Button, CategoryChip, Chip, Icon, PriorityGlyph, Text } from "@kairo/ui";
+import { assignTicket, setTicketStatus } from "@kairo/client-core/endpoints";
+import { Button, Icon, StatusChip, TicketBar, TicketHeading, type PriorityLevel, type StatusKey } from "@kairo/ui";
 import { normalizeTicketCategory, normalizeTicketType } from "@/lib/ticket-labels";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
-import { CorrectionDialog } from "@/components/correction-dialog";
-import type { CorrectionFields } from "@/components/correction-dialog";
-import { assignTicket } from "@kairo/client-core/endpoints";
+import { useTicketCorrection } from "@/components/ticket-correction";
 
 // VITE_FF_ENABLE_ASSIGN_TO_ME — OFF unless exactly "true"; safe unset.
 function isFlagEnabled(value: string | undefined): boolean {
@@ -16,27 +18,37 @@ function isFlagEnabled(value: string | undefined): boolean {
 
 const assignToMeEnabled = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ASSIGN_TO_ME);
 
-// ---------------------------------------------------------------------------
-// TicketHeader
-// ---------------------------------------------------------------------------
+// Statuses an agent can move an open ticket to from the bar. Escalation has its
+// own flow in the context panel.
+const STATUS_OPTIONS: TicketStatus[] = ["open", "in_progress", "awaiting_customer", "resolved"];
 
 interface TicketHeaderProps {
   ticket: Ticket;
+  /** Name of the queue the ticket was opened from ("Triage"). */
+  queueName: string;
   // KAI-25 — true for historical tickets opened from the related-history
-  // drawer (resolved/ai_resolved). Hides mutation actions (assign,
-  // correction) so the header matches the read-only detail view.
+  // drawer (resolved/ai_resolved). Hides mutation actions so the bar matches
+  // the read-only detail view.
   readOnly?: boolean;
+  /** Opens the Notes tab of the context panel. */
+  onOpenNotes?: () => void;
 }
 
-export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
+export function TicketHeader({ ticket, queueName, readOnly = false, onOpenNotes }: TicketHeaderProps) {
   const { t } = useTranslation("dashboard");
-  const { updateClassification } = useTriageStore();
+  const updateClassification = useTriageStore((s) => s.updateClassification);
+  const selectRelativeTicket = useTriageStore((s) => s.selectRelativeTicket);
+  const queueIds = useTriageStore((s) => s.queueIds);
   const [assigning, setAssigning] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   const isAssigned = !!ticket.assigned_to;
 
   // KAI-232 — note count for this ticket, from the shared store.
   const noteCount = useTriageStore((s) => s.noteCounts[ticket.id]?.notes) ?? 0;
+
+  const index = queueIds.indexOf(ticket.id);
+  const position = index >= 0 ? { index: index + 1, total: queueIds.length } : undefined;
 
   async function handleAssign() {
     if (assigning || isAssigned) return;
@@ -54,36 +66,28 @@ export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
     }
   }
 
-  const ticketNum = ticket.ticket_number ? `KAI-${ticket.ticket_number}` : null;
-  const escalated = ticket.status === "escalated";
+  async function handleStatus(status: StatusKey) {
+    if (updating || status === ticket.status) return;
+    setUpdating(true);
+    try {
+      const res = await setTicketStatus(ticket.id, status);
+      if (res.ok) {
+        const body = await res.json() as { ticket?: Partial<Ticket> };
+        if (body.ticket) updateClassification(ticket.id, body.ticket);
+      }
+    } catch {
+      // silent — the chip keeps the previous value
+    } finally {
+      setUpdating(false);
+    }
+  }
 
-  return (
-    <Box tag="header" sticky top={0} zIndex={10} display="flex" alignItems="center" gap={8} height={56} flexShrink={0} paddingLeft={24} paddingRight={12} backgroundColor="var(--k-bg)" borderBottomWidth={1} borderBottomColor="var(--k-border)" borderStyle="solid">
-      <Text fontSize={12.5} color="var(--k-text-tertiary)" whiteSpace="nowrap">{t("ticketList.header")}</Text>
-      <Icon name="right" size={12} color="var(--kairo-color-faint)" />
-      {ticketNum && <Text font="mono" fontSize={12} fontWeight={500} color="var(--k-text-primary)">{ticketNum}</Text>}
+  const ticketId = ticket.ticket_number ? `KAI-${ticket.ticket_number}` : "";
+  const statusOptions = STATUS_OPTIONS.map((status) => ({ status, label: t(`ticketStatus.${status}`) }));
 
-      {/* KAI-232 spec A1 — how many internal notes this ticket carries. */}
-      {INTERNAL_NOTES_ENABLED && noteCount > 0 && (
-        <Chip tone="note" size="sm" alignSelf="center" icon={<Icon name="lock" size={9} />}>
-          {t("notes.headerCount", { count: noteCount, defaultValue: "{{count}} notes" })}
-        </Chip>
-      )}
-      {escalated && (
-        <Chip size="sm" mono alignSelf="center" icon={<Icon name="escalate" size={9} />}>
-          {t("ticketHeader.escalated")}
-        </Chip>
-      )}
-
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" />
-
-      {/* Timestamp */}
-      {ticket.received_at && <Chip mono alignSelf="center">{new Date(ticket.received_at).toLocaleString()}</Chip>}
-
-      {/* Asignar a mí button — replaced by a read-only badge for historical tickets */}
-      {readOnly ? (
-        <Chip alignSelf="center" icon={<Icon name="lock" size={11} />}>{t("ticketHeader.readOnlyBadge")}</Chip>
-      ) : !isAssigned && !assignToMeEnabled ? null : (
+  const status: ReactNode = (
+    <>
+      {!readOnly && (isAssigned || assignToMeEnabled) && (
         <Button
           variant={isAssigned ? "secondary" : "primary"}
           disabled={isAssigned}
@@ -95,64 +99,78 @@ export function TicketHeader({ ticket, readOnly = false }: TicketHeaderProps) {
           {isAssigned ? t("ticketHeader.assigned", "Asignado") : t("ticketHeader.assignToMe", "Asignar a mí")}
         </Button>
       )}
-    </Box>
+      <StatusChip
+        status={ticket.status as StatusKey}
+        options={statusOptions}
+        onChange={handleStatus}
+        readOnly={readOnly}
+        readOnlyLabel={t("ticketHeader.readOnlyBadge")}
+        updating={updating}
+        menuLabel={t("ticketHeader.statusMenu")}
+      />
+    </>
+  );
+
+  return (
+    <TicketBar
+      queueName={queueName}
+      ticketId={ticketId}
+      position={position}
+      // KAI-232 spec A1 — how many internal notes this ticket carries.
+      notes={
+        INTERNAL_NOTES_ENABLED && noteCount > 0 && onOpenNotes
+          ? { count: noteCount, label: t("notes.headerCount", { count: noteCount, defaultValue: "{{count}} notes" }), ariaLabel: t("ticketHeader.viewNotes", { count: noteCount }), onOpen: onOpenNotes }
+          : undefined
+      }
+      escalatedLabel={ticket.status === "escalated" ? t("ticketHeader.escalated") : undefined}
+      status={status}
+      hasPrevious={index > 0}
+      hasNext={index >= 0 && index < queueIds.length - 1}
+      onPrevious={() => selectRelativeTicket(-1)}
+      onNext={() => selectRelativeTicket(1)}
+      labels={{
+        path: t("ticketHeader.path"),
+        position: position ? t("ticketHeader.position", { index: position.index, total: position.total }) : "",
+        previous: t("ticketHeader.previous"),
+        next: t("ticketHeader.next"),
+      }}
+    />
   );
 }
 
-// ---------------------------------------------------------------------------
-// TicketClassification — priority, type and category chips under the subject,
-// with the correction trigger.
-// ---------------------------------------------------------------------------
+interface TicketHeadingBlockProps {
+  ticket: Ticket;
+  readOnly?: boolean;
+  /** The SLA indicator of the ticket (full variant), or nothing. */
+  sla?: ReactNode;
+}
 
-export function TicketClassification({ ticket, readOnly = false }: TicketHeaderProps) {
+export function TicketHeadingBlock({ ticket, readOnly = false, sla }: TicketHeadingBlockProps) {
   const { t } = useTranslation("dashboard");
+  const { reclassify, changePriority } = useTicketCorrection(ticket);
   const categoryKey = normalizeTicketCategory(ticket.category);
-  const { applyCorrection, correctedTicketIds } = useTriageStore();
-  const [correctionOpen, setCorrectionOpen] = useState(false);
-  const isCorrected = correctedTicketIds.has(ticket.id);
-
-  function handleCorrected(fields: CorrectionFields) {
-    const patch: Partial<Ticket> = {};
-    if (fields.correct_priority)    patch.priority    = fields.correct_priority as Ticket["priority"];
-    if (fields.correct_ticket_type) patch.ticket_type = fields.correct_ticket_type as Ticket["ticket_type"];
-    if (fields.correct_category)    patch.category    = fields.correct_category as Ticket["category"];
-    if (fields.correct_sentiment)   patch.sentiment   = fields.correct_sentiment as Ticket["sentiment"];
-    applyCorrection(ticket.id, patch);
-  }
+  const typeKey = ticket.ticket_type ? normalizeTicketType(ticket.ticket_type) : null;
 
   return (
-    <Box display="flex" flexWrap="wrap" alignItems="center" gap={6}>
-      {ticket.priority && (
-        <Chip mono icon={<PriorityGlyph priority={ticket.priority} size={12} label={false} />}>
-          {ticket.priority}
-        </Chip>
-      )}
-      {ticket.ticket_type && (
-        <CategoryChip
-          scale="ticketType"
-          value={normalizeTicketType(ticket.ticket_type)}
-          label={t(`ticketTypes.${normalizeTicketType(ticket.ticket_type)}`)}
-        />
-      )}
-      {categoryKey && (
-        <CategoryChip scale="category" value={categoryKey} label={t(`ticketCategories.${categoryKey}`)} />
-      )}
-
-      {/* Correction trigger — hidden in read-only mode */}
-      {!readOnly && ticket.classified_at && (
-        <>
-          {isCorrected && <Chip tone="note">{t("correction.correctedBadge")}</Chip>}
-          <Button variant="ghost" size="sm" icon={<Icon name="flag" size={12} />} onPress={() => setCorrectionOpen(true)}>
-            {t("correction.triggerLabel")}
-          </Button>
-          <CorrectionDialog
-            ticket={ticket}
-            open={correctionOpen}
-            onOpenChange={setCorrectionOpen}
-            onCorrected={handleCorrected}
-          />
-        </>
-      )}
-    </Box>
+    <TicketHeading
+      subject={ticket.subject ?? t("ticketDetail.noSubject", "(Sin asunto)")}
+      classifying={!ticket.classified_at && !ticket.priority && !typeKey && !categoryKey}
+      priority={ticket.priority as PriorityLevel | null}
+      priorityOptions={["P1", "P2", "P3"]}
+      onPriorityChange={(level) => void changePriority(level)}
+      categories={[
+        ...(typeKey ? [{ id: "type", scale: "ticketType" as const, value: typeKey, label: t(`ticketTypes.${typeKey}`) }] : []),
+        ...(categoryKey ? [{ id: "category", scale: "category" as const, value: categoryKey, label: t(`ticketCategories.${categoryKey}`) }] : []),
+      ]}
+      reclassify={ticket.classified_at ? reclassify : undefined}
+      sla={sla}
+      readOnly={readOnly}
+      labels={{
+        priorityChip: (priority) => t("ticketHeading.priorityChip", { priority }),
+        priorityMenu: t("ticketHeading.priorityMenu"),
+        wrongClassification: t("correction.triggerLabel"),
+        classifying: t("ticketHeading.classifying"),
+      }}
+    />
   );
 }

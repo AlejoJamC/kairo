@@ -16,9 +16,13 @@ type ProgressBarProps = {
   running?: boolean
   /** Failure text; turns the bar and the legend red. */
   error?: string
+  /** Without the legend: only the bar (the seats bar of the team page). */
+  hideLegend?: boolean
+  /** Spoken value instead of the percentage ("3 of 5 seats"). */
+  valueText?: string
 }
 
-function ProgressBar({ value, label, status, running, error }: ProgressBarProps) {
+function ProgressBar({ value, label, status, running, error, hideLegend, valueText }: ProgressBarProps) {
   const clamped = Math.max(0, Math.min(1, value))
   const percent = Math.round(clamped * 100)
   return (
@@ -29,6 +33,7 @@ function ProgressBar({ value, label, status, running, error }: ProgressBarProps)
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={percent}
+        aria-valuetext={valueText}
         height={6}
         borderRadius={999}
         backgroundColor={tokens['surface.hover']}
@@ -37,12 +42,12 @@ function ProgressBar({ value, label, status, running, error }: ProgressBarProps)
       >
         <Box height={6} width={`${percent}%` as never} backgroundColor={error ? tokens['color.bad'] : tokens['accent.default']} transition="width 150ms" />
       </Box>
-      <Box display="flex" alignItems="center" gap={6} marginTop={6} role="status" aria-live="polite">
+      {!hideLegend && <Box display="flex" alignItems="center" gap={6} marginTop={6} role="status" aria-live="polite">
         {running && !error && <PulseDot />}
         <Text font="mono" fontSize={11} color={error ? tokens['color.bad-ink'] : running ? tokens['accent.ink'] : tokens['text.tertiary']}>
           {error ?? `${percent}%${status ? ` · ${status}` : ''}`}
         </Text>
-      </Box>
+      </Box>}
     </Box>
   )
 }

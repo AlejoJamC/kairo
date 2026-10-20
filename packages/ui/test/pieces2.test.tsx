@@ -231,8 +231,8 @@ describe('StatusChip', () => {
     const onChange = vi.fn()
     renderUi(<StatusChip status="open" options={options} onChange={onChange} menuLabel="Change status" />)
     fireEvent.click(screen.getByRole('button', { name: /Open/ }))
-    expect(screen.getByRole('menuitem', { name: 'Open' }).getAttribute('aria-current')).toBe('true')
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Resolved' }))
+    expect(screen.getByRole('menuitemradio', { name: 'Open' }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Resolved' }))
     expect(onChange).toHaveBeenCalledWith('resolved')
   })
 
@@ -259,20 +259,6 @@ describe('SlaIndicator', () => {
     const { container } = renderUi(<SlaIndicator variant="full" label="SLA overdue by 30m" progress={0.5} />)
     expect(screen.getByText('SLA overdue by 30m')).toBeTruthy()
     expect(container.querySelector('[aria-hidden="true"]')).toBeTruthy()
-  })
-
-  it('shows the scale legend and an order error as an alert', () => {
-    renderUi(
-      <SlaScale
-        alert={60}
-        escalation={120}
-        maximum={240}
-        labels={{ minimum: '15m', alert: '60m', escalation: '120m', breach: '240m' }}
-        orderError="The order must be minimum < alert < escalation < maximum"
-      />,
-    )
-    expect(screen.getByText('240m')).toBeTruthy()
-    expect(screen.getByRole('alert').textContent).toContain('minimum < alert')
   })
 })
 

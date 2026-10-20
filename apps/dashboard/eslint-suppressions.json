@@ -55,9 +55,6 @@
     }
   },
   "src/components/reply-bar.tsx": {
-    "react-hooks/immutability": {
-      "count": 1
-    },
     "react-hooks/preserve-manual-memoization": {
       "count": 1
     },

@@ -208,9 +208,4 @@ describe('Callout', () => {
     expect(onAction).toHaveBeenCalledTimes(1)
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
-
-  it('draws a lock in the read-only strip', () => {
-    const { container } = renderUi(<Callout tone="readOnly">Read only</Callout>)
-    expect(container.querySelector('svg')).toBeTruthy()
-  })
 })

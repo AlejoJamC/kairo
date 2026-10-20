@@ -7,7 +7,7 @@ import { useDraftContacts } from "@kairo/client-core/hooks/use-draft-contacts";
 import { mapClientToRow, type ContactRow } from "@kairo/client-core/contact-row";
 import { confirmDraft, bulkConfirmByOrganization } from "@kairo/client-core/draft-actions";
 import type { Client } from "@/types";
-import { Box, Button, Callout, DataTable, Dialog, FilterPill, Icon, KpiStrip, PlainInput, PlainSelect, Pressable, Skeleton, Text, Toast } from "@kairo/ui";
+import { Box, Button, Callout, DataTable, Dialog, FilterPill, FilterPillDivider, FilterPillGroup, FilterPillSelect, Icon, KpiStrip, PageFrame, PageHeader, PageSearch, PageToolbar, Skeleton, Text, Toast } from "@kairo/ui";
 import { useContactColumns } from "@/components/clients/contact-columns";
 import { clientKpis, mapRow } from "@/components/clients/contact-helpers";
 import { ContactDetailDrawer } from "@/components/clients/contact-detail-drawer";
@@ -262,29 +262,12 @@ export function ClientDirectory() {
   const isFirstLoad = clientsLoading && draftsLoading;
   if (isFirstLoad) {
     return (
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" flexDirection="column" overflow="hidden" backgroundColor="white">
-        <Box paddingTop={24} paddingHorizontal={32} paddingBottom={0} flexShrink={0}>
-          <Box display="flex" alignItems="baseline" gap={12}>
-            <Text tag="h1" fontSize={28} fontWeight={600} letterSpacing={-0.56} margin={0} font="display" color="var(--k-text-primary)" display="block">
-              Clientes
-            </Text>
-          </Box>
-        </Box>
-        {/* Skeleton */}
-        <Box flexGrow={1} flexShrink={1} flexBasis="0%" paddingVertical={24} paddingHorizontal={32}>
-          {[1, 2, 3].map((i) => (
-            <Skeleton
-              key={i}
-              height={56}
-              marginBottom={1}
-              borderTopLeftRadius={i === 1 ? 12 : 0}
-              borderTopRightRadius={i === 1 ? 12 : 0}
-              borderBottomLeftRadius={i === 3 ? 12 : 0}
-              borderBottomRightRadius={i === 3 ? 12 : 0}
-            />
-          ))}
-        </Box>
-      </Box>
+      <PageFrame>
+        <PageHeader title={t("title")} count={null} />
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} height={56} borderRadius={i === 2 ? 0 : 12} />
+        ))}
+      </PageFrame>
     );
   }
 
@@ -319,100 +302,73 @@ export function ClientDirectory() {
   }
 
   return (
-    <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" flexDirection="column" overflow="hidden" backgroundColor="white">
-      {/* Header */}
-      <Box paddingTop={24} paddingHorizontal={32} paddingBottom={0} flexShrink={0}>
-        <Box display="flex" alignItems="baseline" gap={12}>
-          <Text tag="h1" fontSize={28} fontWeight={600} letterSpacing={-0.56} margin={0} font="display" color="var(--k-text-primary)" display="block">
-            Clientes
-          </Text>
-          <Text font="mono" fontSize={13} color="var(--k-text-tertiary)">
-            {allRows.length}
-          </Text>
-        </Box>
+    <PageFrame>
+      <PageHeader
+        title={t("title")}
+        count={clientsLoading ? null : allRows.length}
+        countLabel={t("countLabel", { count: allRows.length })}
+      />
 
-        {/* KPI strip — always computed over clients */}
-        <Box marginTop={20}>
-          <KpiStrip items={clientKpis(clients)} loading={clientsLoading} />
-        </Box>
+      <KpiStrip items={clientKpis(clients)} loading={clientsLoading} />
 
-        {/* Draft polling error banner */}
-        {draftsError && (
-          <Box marginTop={12}>
-            <Callout tone="error" icon={<Icon name="alert" size={14} />} actionLabel={t("retry")} onAction={retryDrafts}>
-              {t("errorMessage")}
-            </Callout>
-          </Box>
-        )}
+      {/* Draft polling error banner */}
+      {draftsError && (
+        <Callout tone="error" icon={<Icon name="alert" size={14} />} actionLabel={t("retry")} onAction={retryDrafts}>
+          {t("errorMessage")}
+        </Callout>
+      )}
 
-        {/* Status pills */}
-        <Box display="flex" gap={6} marginTop={20} flexWrap="wrap" alignItems="center">
+      <PageToolbar>
+        <FilterPillGroup label={t("filters.status")}>
           {STATUS_FILTERS.map(({ key, labelKey }) => (
-            <FilterPill key={key} active={statusFilter === key} onPress={() => setStatusFilter(key)}>
+            <FilterPill key={key} kind="tab" active={statusFilter === key} onPress={() => setStatusFilter(key)}>
               {t(labelKey)}
             </FilterPill>
           ))}
-        </Box>
-
-        {/* Org filter + bulk confirm button (shown when orgList has 2+ orgs) */}
+        </FilterPillGroup>
+        {(orgList.length >= 2 || showPlanFilters) && <FilterPillDivider />}
         {orgList.length >= 2 && (
-          <Box display="flex" gap={8} marginTop={12} alignItems="center" flexWrap="wrap">
-            <PlainSelect value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)} paddingVertical={5} paddingHorizontal={10} borderRadius={6} fontSize={13} borderWidth={1} borderColor="var(--k-border)" backgroundColor="white" color="var(--k-text-secondary)" cursor="pointer" borderStyle="solid">
-              <option value="all">Todas las organizaciones</option>
-              {orgList.map((org) => (
-                <option key={org} value={org}>{org}</option>
-              ))}
-            </PlainSelect>
-            {orgFilter !== "all" && statusFilter === "drafts" && proposedCountForOrg > 0 && (
-              <Button variant="primary" onPress={() => setBulkModalOpen(true)}>
-                {t("actions.bulkConfirmButton", { org: orgFilter })}
-              </Button>
-            )}
-          </Box>
+          <FilterPillSelect
+            label={t("filters.organization")}
+            value={orgFilter}
+            onValueChange={setOrgFilter}
+            options={[{ value: "all", label: t("filters.allOrganizations") }, ...orgList.map((org) => ({ value: org, label: org }))]}
+          />
         )}
+        {showPlanFilters && (
+          <FilterPillGroup label={t("filters.plan")} semantics="group">
+            {PLAN_FILTERS.map(({ key, label }) => (
+              <FilterPill key={key} active={planFilter === key} onPress={() => setPlanFilter(planFilter === key ? "all" : key)}>
+                {label}
+              </FilterPill>
+            ))}
+          </FilterPillGroup>
+        )}
+        {orgFilter !== "all" && statusFilter === "drafts" && proposedCountForOrg > 0 && (
+          <Button variant="primary" size="lg" onPress={() => setBulkModalOpen(true)}>
+            {t("actions.bulkConfirmButton", { org: orgFilter })}
+          </Button>
+        )}
+      </PageToolbar>
 
-        {/* Plan pills + search + actions */}
-        <Box display="flex" gap={6} marginTop={10} alignItems="center" flexWrap="wrap">
-          {/* Plan pills — only when viewing confirmed/all */}
-          {showPlanFilters && PLAN_FILTERS.map(({ key, label }) => (
-            <FilterPill key={key} active={planFilter === key} onPress={() => setPlanFilter(planFilter === key ? "all" : key)}>
-              {label}
-            </FilterPill>
-          ))}
+      <PageToolbar>
+        <PageSearch label={t("search.label")} placeholder={t("search.placeholder")} value={search} onChange={setSearch} />
+        <Box flexGrow={1} />
+        <Button size="lg" icon={<Icon name="download" size={13} />}>{t("actions.export")}</Button>
+        <Button variant="primary" size="lg" icon={<Icon name="plus" size={13} color="var(--kairo-color-on-accent)" />} onPress={() => { setEditing(null); setFormOpen(true); }}>
+          {t("addClient")}
+        </Button>
+      </PageToolbar>
 
-          {/* Search */}
-          <Box display="flex" alignItems="center" gap={6} paddingVertical={5} paddingHorizontal={12} borderRadius={6} borderWidth={1} borderColor="var(--k-border)" backgroundColor="white" marginLeft={showPlanFilters ? "auto" : undefined} borderStyle="solid">
-            <Icon name="search" size={13} color="var(--k-text-tertiary)" />
-            <PlainInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("search.placeholder")} borderWidth={0} outlineWidth={0} fontSize={13} color="var(--k-text-primary)" backgroundColor="transparent" width={200} />
-            {search && (
-              <Pressable onClick={() => setSearch("")} backgroundColor="transparent" borderWidth={0} cursor="pointer" color="var(--k-text-tertiary)" padding={0}>
-                <Icon name="x" size={12} />
-              </Pressable>
-            )}
-          </Box>
-
-          {/* Export + Add client */}
-          <Box display="flex" gap={8} marginLeft={showPlanFilters ? undefined : "auto"}>
-            <Button icon={<Icon name="download" size={13} />}>Exportar</Button>
-            <Button variant="primary" icon={<Icon name="plus" size={13} color="white" />} onPress={() => { setEditing(null); setFormOpen(true); }}>
-              Agregar cliente
-            </Button>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Table */}
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll paddingTop={16} paddingHorizontal={32} paddingBottom={32}>
-        <DataTable
-          label="Clientes"
-          columns={columns}
-          rows={filteredRows}
-          rowKey={(row) => row.id}
-          onRowClick={setSelectedRow}
-          isNewRow={(row) => newIds.has(row.id)}
-          emptyLabel={emptyMessage()}
-        />
-      </Box>
+      <DataTable
+        label={t("title")}
+        columns={columns}
+        rows={filteredRows}
+        rowKey={(row) => row.id}
+        onRowClick={setSelectedRow}
+        isNewRow={(row) => newIds.has(row.id)}
+        emptyLabel={emptyMessage()}
+      />
 
       {selectedRow && (
         <ContactDetailDrawer
@@ -457,6 +413,6 @@ export function ClientDirectory() {
         onClose={() => setFormOpen(false)}
         onSaved={handleSaved}
       />
-    </Box>
+    </PageFrame>
   );
 }

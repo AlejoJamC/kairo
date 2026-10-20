@@ -81,3 +81,70 @@ describe("pickPreferredGroupId", () => {
     expect(pickPreferredGroupId(tickets, ["t-2"])).toBe(null);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Queue navigation and keyboard requests: J / K move through the visible queue,
+// A / R / E ask the composer or the context panel to act.
+// ---------------------------------------------------------------------------
+
+describe("triage-store — queue navigation and requests", () => {
+  beforeEach(() => {
+    useTriageStore.setState({
+      selectedTicketId: null,
+      queueIds: [],
+      ticketActionRequest: null,
+      panelTabRequest: null,
+      composerPrefill: null,
+    });
+  });
+
+  it("setQueueIds keeps the same array when the ids did not change", () => {
+    useTriageStore.getState().setQueueIds(["t-1", "t-2"]);
+    const first = useTriageStore.getState().queueIds;
+    useTriageStore.getState().setQueueIds(["t-1", "t-2"]);
+    expect(useTriageStore.getState().queueIds).toBe(first);
+  });
+
+  it("selectRelativeTicket moves to the next and previous ticket and stops at the ends", () => {
+    useTriageStore.setState({ queueIds: ["t-1", "t-2", "t-3"], selectedTicketId: "t-1" });
+    useTriageStore.getState().selectRelativeTicket(1);
+    expect(useTriageStore.getState().selectedTicketId).toBe("t-2");
+    useTriageStore.getState().selectRelativeTicket(1);
+    useTriageStore.getState().selectRelativeTicket(1);
+    expect(useTriageStore.getState().selectedTicketId).toBe("t-3");
+    useTriageStore.getState().selectRelativeTicket(-1);
+    expect(useTriageStore.getState().selectedTicketId).toBe("t-2");
+    useTriageStore.setState({ selectedTicketId: "t-1" });
+    useTriageStore.getState().selectRelativeTicket(-1);
+    expect(useTriageStore.getState().selectedTicketId).toBe("t-1");
+  });
+
+  it("selectRelativeTicket selects the first ticket when none is open and does nothing on an empty queue", () => {
+    useTriageStore.getState().selectRelativeTicket(1);
+    expect(useTriageStore.getState().selectedTicketId).toBeNull();
+    useTriageStore.setState({ queueIds: ["t-1", "t-2"] });
+    useTriageStore.getState().selectRelativeTicket(1);
+    expect(useTriageStore.getState().selectedTicketId).toBe("t-1");
+  });
+
+  it("each ticket action and panel tab request carries a new nonce", () => {
+    useTriageStore.getState().requestTicketAction("resolve");
+    const first = useTriageStore.getState().ticketActionRequest;
+    useTriageStore.getState().requestTicketAction("resolve");
+    expect(useTriageStore.getState().ticketActionRequest?.nonce).toBe((first?.nonce ?? 0) + 1);
+    useTriageStore.getState().clearTicketActionRequest();
+    expect(useTriageStore.getState().ticketActionRequest).toBeNull();
+
+    useTriageStore.getState().requestPanelTab("escalate");
+    expect(useTriageStore.getState().panelTabRequest).toMatchObject({ tab: "escalate" });
+    useTriageStore.getState().clearPanelTabRequest();
+    expect(useTriageStore.getState().panelTabRequest).toBeNull();
+  });
+
+  it("composerPrefill holds the follow-up until it is consumed", () => {
+    useTriageStore.getState().setComposerPrefill("Hi Ana");
+    expect(useTriageStore.getState().composerPrefill).toBe("Hi Ana");
+    useTriageStore.getState().setComposerPrefill(null);
+    expect(useTriageStore.getState().composerPrefill).toBeNull();
+  });
+});

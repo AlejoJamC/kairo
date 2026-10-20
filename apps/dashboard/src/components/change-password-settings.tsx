@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@kairo/client-core/auth";
 import { updatePassword } from "@kairo/client-core/queries";
 import type { AppView } from "@/types";
-import { Box, Button, Callout, Field, FieldInput, Icon, PasswordStrength, Text } from "@kairo/ui";
+import { Box, Button, Callout, Card, Field, FieldInput, Icon, PasswordStrength, Text } from "@kairo/ui";
 
 interface Props {
   onViewChange: (view: AppView) => void;
@@ -77,7 +77,7 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
           </Text>
         </Box>
 
-        <Box padding={24} borderWidth={1} borderStyle="solid" borderColor="var(--k-border)" borderRadius={12} backgroundColor="white" boxShadow="var(--kairo-shadow-xs)">
+        <Card paddingVertical={24} paddingHorizontal={24}>
           {success ? (
             <Text tag="div" display="flex" flexDirection="column" alignItems="center" gap={12} paddingVertical={32} paddingHorizontal={0} textAlign="center">
               <Box width={48} height={48} borderRadius={999} backgroundColor="color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)" display="flex" alignItems="center" justifyContent="center">
@@ -136,7 +136,7 @@ export function ChangePasswordSettings({ onViewChange }: Props) {
               </Box>
             </Box>
           )}
-        </Box>
+        </Card>
 
       </Box>
     </Box>

@@ -42,19 +42,6 @@ export function mapRow(row: Record<string, unknown>): Client {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Status badge
-// ---------------------------------------------------------------------------
-
-export type BadgeVariant = "proposed" | "confirmed" | "rejected" | "external";
-
-export const BADGE_STYLE: Record<BadgeVariant, { bg: string; color: string; border: string }> = {
-  proposed:  { bg: "var(--kairo-color-accent-soft)", color: "var(--kairo-color-accent)", border: "var(--kairo-color-accent-line)" },
-  confirmed: { bg: "color-mix(in srgb, var(--kairo-color-ok) 8%, transparent)", color: "var(--kairo-color-ok)", border: "color-mix(in srgb, var(--kairo-color-ok) 24%, transparent)" },
-  rejected:  { bg: "var(--kairo-color-hover)", color: "var(--kairo-color-faint)", border: "var(--kairo-color-line)" },
-  external:  { bg: "color-mix(in srgb, var(--kairo-color-mood) 8%, transparent)", color: "var(--kairo-color-sla-escalate-ink)", border: "color-mix(in srgb, var(--kairo-color-mood) 24%, transparent)" },
-};
-
 export function clientKpis(clients: Client[]): KpiItem[] {
   const active = clients.filter((c) => c.ticketCount > 0 || c.plan != null).length;
   const csatVals = clients.map((c) => c.csatAvg).filter((v): v is number => v != null);

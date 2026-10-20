@@ -1,15 +1,14 @@
 import { useTranslation } from "react-i18next";
 import { useStatusTickets } from "@kairo/client-core/hooks/use-status-tickets";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { TicketDetail } from "@/components/ticket-detail";
-import { AiAssistant } from "@/components/ai-assistant";
+import { QueueView } from "@/components/queue-view";
 import type { AppView } from "@/types";
-import { SlaBadge } from "@/components/sla-badge";
 import type { Ticket } from "@kairo/types";
-import { Box, Button, EmptyState, Icon, Spinner, Text } from "@kairo/ui";
+import { Box, Icon, Pressable, Text } from "@kairo/ui";
 
 // ---------------------------------------------------------------------------
-// AwaitingCustomerView
+// AwaitingCustomerView — tickets where the agent replied and the customer has
+// not answered yet. Opening one fills the composer with a follow-up.
 // ---------------------------------------------------------------------------
 
 interface AwaitingCustomerViewProps {
@@ -18,7 +17,9 @@ interface AwaitingCustomerViewProps {
 
 export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCustomerViewProps) {
   const { t } = useTranslation("dashboard");
-  const { addTicket, selectTicket, selectedTicketId, tickets: storeTickets } = useTriageStore();
+  const addTicket = useTriageStore((state) => state.addTicket);
+  const selectTicket = useTriageStore((state) => state.selectTicket);
+  const setComposerPrefill = useTriageStore((state) => state.setComposerPrefill);
 
   const { tickets, loading } = useStatusTickets({
     channelPrefix: "awaiting",
@@ -35,118 +36,42 @@ export function AwaitingCustomerView({ onViewChange: _onViewChange }: AwaitingCu
     if (mins < 60) return t("ticketCard.timeMinutes_other", { count: mins });
     const hrs = Math.floor(mins / 60);
     if (hrs < 24) return t("ticketCard.timeHours_other", { count: hrs });
-    const days = Math.floor(hrs / 24);
-    return t("ticketCard.timeDays_other", { count: days });
+    return t("ticketCard.timeDays_other", { count: Math.floor(hrs / 24) });
   };
 
-  /**
-   * Open a ticket's thread in the detail pane without leaving the awaiting view.
-   * We add it to the triage store so TicketDetail can find it via selectedTicketId.
-   */
+  // Open a ticket's thread without leaving this view. The composer gets a
+  // follow-up the agent edits before sending.
   const openThread = (ticket: Ticket) => {
     addTicket(ticket);
     selectTicket(ticket.id);
+    setComposerPrefill(t("awaitingView.followUpDraft", { name: (ticket.from_name ?? ticket.from_email ?? "").split(/\s+/)[0] }));
   };
 
-  // Determine whether a detail pane is open — only for tickets in this view
-  const awaitingTicketIds = new Set(tickets.map((t) => t.id));
-  const selectedIsAwaiting = selectedTicketId !== null && awaitingTicketIds.has(selectedTicketId);
-  const selectedTicket = storeTickets.find((t) => t.id === selectedTicketId) ?? null;
-
-  const showDetailPane = selectedIsAwaiting;
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
-
-  const listPane = (
-    <Box display="flex" flexDirection="column" overflow="hidden" backgroundColor="var(--k-surface)" width={showDetailPane ? 360 : undefined} minWidth={showDetailPane ? 360 : undefined} flex={showDetailPane ? undefined : 1} borderRightWidth={showDetailPane ? 1 : 0} borderRightColor="var(--k-border)" flexShrink={0} borderStyle="solid">
-      {/* Header */}
-      <Box borderBottomWidth={1} borderBottomColor="var(--k-border)" backgroundColor="white" paddingVertical={16} paddingHorizontal={24} flexShrink={0} borderStyle="solid">
-        <Text tag="h1" fontSize={18} fontWeight={600} color="var(--k-text-primary)" letterSpacing={-0.18} font="display" margin={0} display="block">
-          {t("awaitingView.title")}
-        </Text>
-        <Text tag="p" marginTop={2} fontSize={13} color="var(--k-text-tertiary)" display="block">
-          {t("awaitingView.subtitle")}
-        </Text>
-      </Box>
-
-      {/* Content */}
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" scroll paddingVertical={20} paddingHorizontal={24}>
-        {loading && (
-          <Box display="flex" alignItems="center" justifyContent="center" paddingTop={64}>
-            <Spinner size="lg" />
-          </Box>
-        )}
-
-        {!loading && tickets.length === 0 && (
-          <EmptyState title={t("awaitingView.empty")} paddingTop={80} />
-        )}
-
-        {!loading && tickets.length > 0 && (
-          <Box tag="ul" display="flex" flexDirection="column" gap={8} listStyle="none" margin={0} padding={0}>
-            {tickets.map((ticket) => {
-              const isSelected = ticket.id === selectedTicketId;
-              return (
-                <Box tag="li" key={ticket.id} onClick={() => openThread(ticket)} display="flex" alignItems="center" gap={16} borderRadius={10} borderWidth={1} borderColor={isSelected ? "var(--k-accent)" : "var(--k-border)"} backgroundColor={isSelected ? "var(--k-accent-subtle)" : "white"} paddingVertical={12} paddingHorizontal={16} boxShadow="var(--kairo-shadow-xs)" cursor="pointer" transition="border-color 0.1s ease, background 0.1s ease" borderStyle="solid">
-                  {/* Left: number + subject + client */}
-                  <Box minWidth={0} flexGrow={1} flexShrink={1} flexBasis="0%">
-                    <Box display="flex" alignItems="center" gap={6} marginBottom={2}>
-                      <Text fontSize={11} font="mono" color="var(--k-text-tertiary)" flexShrink={0}>
-                        {t("awaitingView.ticketNumber", { number: ticket.ticket_number })}
-                      </Text>
-                      {(ticket.sla_breached || ticket.sla_due_at) && (
-                        <SlaBadge slaDate={ticket.sla_due_at} breached={ticket.sla_breached ?? false} />
-                      )}
-                      {ticket.sla_breached && (
-                        <Icon name="warning" size={13} color="var(--kairo-color-bad)" />
-                      )}
-                    </Box>
-                    <Text tag="p" fontSize={13} fontWeight={500} color="var(--k-text-primary)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
-                      {ticket.subject}
-                    </Text>
-                    <Text tag="p" fontSize={12} color="var(--k-text-tertiary)" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" margin={0} display="block">
-                      {ticket.from_name ?? ticket.from_email}
-                    </Text>
-                  </Box>
-
-                  {/* Center: last reply time */}
-                  <Box flexShrink={0} display="flex" flexDirection="column" alignItems="flex-end" gap={2}>
-                    <Text fontSize={10} font="mono" color="var(--k-text-tertiary)" textTransform="uppercase" letterSpacing={0.5}>
-                      {t("awaitingView.lastReply")}
-                    </Text>
-                    <Text fontSize={12} fontWeight={500} color="var(--k-text-secondary)">
-                      {relativeTime(ticket.last_response_at)}
-                    </Text>
-                  </Box>
-
-                  {/* Action */}
-                  <Button
-                    iconEnd={<Icon name="arrow" size={12} />}
-                    onPress={() => openThread(ticket)}
-                  >
-                    {t("awaitingView.followUp")}
-                  </Button>
-                </Box>
-              );
-            })}
-          </Box>
-        )}
-      </Box>
-    </Box>
-  );
-
-  if (!showDetailPane) {
-    return listPane;
-  }
-
   return (
-    <>
-      {listPane}
-      <TicketDetail />
-      <AiAssistant
-        customer={selectedTicket?.from_name ?? selectedTicket?.from_email ?? "—"}
-      />
-    </>
+    <QueueView
+      title={t("awaitingView.title")}
+      count={tickets.length}
+      countLabel={t("awaitingView.countLabel", { count: tickets.length })}
+      description={t("awaitingView.subtitle")}
+      tickets={tickets}
+      loading={loading}
+      empty={{ title: t("awaitingView.empty"), description: t("awaitingView.emptyHint") }}
+      onOpen={openThread}
+      footer={(ticket) => (
+        <Box display="flex" alignItems="center" gap={8} paddingLeft={22} width="100%">
+          <Text font="mono" fontSize={9.5} letterSpacing={0.57} textTransform="uppercase" color="var(--k-text-tertiary)">
+            {t("awaitingView.lastReply")}
+          </Text>
+          <Text fontSize={12} color="var(--k-text-secondary)">
+            {relativeTime(ticket.last_response_at)}
+          </Text>
+          <Box flexGrow={1} />
+          <Pressable onClick={() => openThread(ticket)} display="inline-flex" alignItems="center" gap={4} fontSize={12} color="var(--kairo-color-accent-ink)">
+            {t("awaitingView.followUp")}
+            <Icon name="arrow" size={12} />
+          </Pressable>
+        </Box>
+      )}
+    />
   );
 }
