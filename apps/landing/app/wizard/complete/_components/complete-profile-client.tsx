@@ -8,7 +8,8 @@ import { useTranslation } from "@/lib/i18n";
 import { WizardChrome } from "@/components/wizard-chrome";
 import { WizardSteps } from "@/components/wizard-steps";
 import { DetectionStep } from "./detection-step";
-import { Box, Button, CategoryChip, Field, FieldInput, Icon, KpiStrip, PermissionList, Spinner, Text } from "@kairo/ui";
+import { TriageSummary } from "./triage-summary";
+import { Box, Button, Callout, CategoryChip, Field, FieldInput, Icon, KpiStrip, PermissionList, Spinner, Text } from "@kairo/ui";
 
 interface UserData {
   id: string;
@@ -181,7 +182,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
   }
 
   return (
-    <WizardChrome stepper={<WizardSteps current={localStep === 1 ? "detect" : "triage"} />}>
+    <WizardChrome stepper={<WizardSteps current={localStep === 1 ? "detect" : "triage"} />} aside={localStep === 2 ? <TriageSummary /> : undefined}>
       <Box backgroundColor="var(--kairo-color-surface)" borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" borderRadius={14} padding={40}>
 
         {/* ── Step 1: Detect (real-time) — flag ON only ──────────────────── */}
@@ -264,20 +265,29 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
               <Text tag="p" role="alert" display="block" marginTop={12} fontSize={13} color="var(--kairo-color-bad-ink)">{error}</Text>
             )}
 
+            <Box marginTop={20}>
+              <Callout tone="ai" icon={<Icon name="spark" size={14} />}>
+                <Text fontWeight={500} color="var(--kairo-color-text)">
+                  {t.wizard.aiCalloutTitle}
+                </Text>{" "}
+                {t.wizard.aiCalloutDesc}
+              </Callout>
+            </Box>
+
             <Box marginTop={28} display="flex" gap={8} alignItems="center">
               <Button
                 variant="primary"
-                size="web"
+                size="webLg"
                 disabled={!companyName.trim()}
                 loading={saving}
                 loadingLabel={t.wizard.saving}
                 iconEnd={<Icon name="right" size={14} color="var(--kairo-color-on-accent)" />}
                 onPress={handleSubmit}
               >
-                {t.wizard.openCockpit}
+                {t.wizard.openTriage}
               </Button>
-              <Button variant="ghost" size="web" onPress={() => redirectToDashboard()}>
-                {t.wizard.skipConfig}
+              <Button variant="ghost" size="webLg" onPress={() => redirectToDashboard()}>
+                {t.wizard.configureLater}
               </Button>
             </Box>
           </Box>

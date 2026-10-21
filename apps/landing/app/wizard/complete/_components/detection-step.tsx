@@ -2,7 +2,7 @@
 
 import { useClassificationProgress, type ClassificationProgress } from "@/lib/hooks/useClassificationProgress";
 import { useTranslation } from "@/lib/i18n";
-import { Box, Button, CategoryChip, Icon, KpiStrip, Spinner, Text } from "@kairo/ui";
+import { Box, Button, CategoryChip, Icon, KpiStrip, ProgressBar, Text, TicketRow } from "@kairo/ui";
 
 interface DetectionStepProps {
   onContinue: () => void;
@@ -85,6 +85,15 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
       </Text>
 
       <Box marginBottom={24}>
+        <ProgressBar
+          label={dt.progressLabel}
+          value={data && data.messages_total > 0 ? data.messages_classified / data.messages_total : 0}
+          status={isDone ? undefined : dt.progressStatus}
+          running={isStillScanning}
+        />
+      </Box>
+
+      <Box marginBottom={24}>
         <KpiStrip
           items={[
             { label: dt.metricTickets, value: data?.tickets_count ?? 0 },
@@ -105,12 +114,27 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
         <Box aria-live="polite" aria-label={dt.loadingDescription} height={28} marginBottom={28} />
       )}
 
-      {/* Scanning indicator — visible while pipeline is still running, even after threshold */}
-      {isStillScanning && (
-        <Text tag="div" aria-live="polite" display="flex" alignItems="center" gap={6} fontSize={12} color="var(--kairo-color-faint)" font="mono" marginBottom={16}>
-          <Spinner />
-          {dt.loadingDescription}
-        </Text>
+      {/* Recently classified */}
+      {data && data.recent.length > 0 && (
+        <Box marginBottom={28}>
+          <Text tag="div" display="block" marginBottom={8} fontSize={12} font="mono" color="var(--kairo-color-faint)" letterSpacing={0.6}>
+            {dt.recentTitle}
+          </Text>
+          <Box display="flex" flexDirection="column" gap={2}>
+            {data.recent.map((ticket) => (
+              <TicketRow
+                key={ticket.id}
+                code={ticket.ticket_number ? `KAI-${ticket.ticket_number}` : ""}
+                subject={ticket.subject ?? ""}
+                priority={ticket.priority}
+                age={ticket.classified_at ? new Date(ticket.classified_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : dt.justNow}
+                sender={ticket.sender ?? ""}
+                onPress={() => {}}
+                ariaLabel={`${ticket.ticket_number ? `KAI-${ticket.ticket_number} ` : ""}${ticket.subject ?? ""}`}
+              />
+            ))}
+          </Box>
+        </Box>
       )}
 
       {/* Actions */}

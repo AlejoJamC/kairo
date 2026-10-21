@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
-import { Box, Faq, PlanCard, Section, SectionHeader, Segmented } from "@kairo/ui";
+import { Box, Faq, PlanCard, PricingTable, Section, SectionHeader, Segmented } from "@kairo/ui";
 
 interface Plan {
   id: string;
@@ -26,6 +26,47 @@ export default function PricingPage() {
     { id: "pro", name: p.plans.pro.name, price: annual ? 49 : 59, blurb: p.plans.pro.blurb, cta: p.plans.pro.cta, highlight: true, features: p.features.pro },
     { id: "scale", name: p.plans.scale.name, price: annual ? 199 : 249, blurb: p.plans.scale.blurb, cta: p.plans.scale.cta, features: p.features.scale },
     { id: "enterprise", name: p.plans.enterprise.name, price: null, blurb: p.plans.enterprise.blurb, cta: p.plans.enterprise.cta, features: p.features.enterprise },
+  ];
+
+  const c = p.table;
+  const tableGroups = [
+    {
+      id: "triage",
+      title: c.groupTriage,
+      rows: [
+        { id: "tickets", feature: c.tickets, values: ["200", "2,000", "20,000"] },
+        { id: "inboxes", feature: c.inboxes, values: ["1", "5", c.unlimited] },
+        { id: "full", feature: c.fullTriage, values: [false, true, true] },
+        { id: "resolve", feature: c.autoResolve, values: [false, false, true] },
+        { id: "routing", feature: c.routing, values: [false, false, true] },
+      ],
+    },
+    {
+      id: "replies",
+      title: c.groupReplies,
+      rows: [
+        { id: "drafts", feature: c.aiDrafts, values: [false, true, true] },
+        { id: "similar", feature: c.similar, values: [false, true, true] },
+        { id: "kb", feature: c.knowledge, values: [false, true, true] },
+      ],
+    },
+    {
+      id: "team",
+      title: c.groupTeam,
+      rows: [
+        { id: "slack", feature: c.slack, values: [false, true, true] },
+        { id: "api", feature: c.api, values: [false, false, true] },
+        { id: "sso", feature: c.sso, values: [false, false, true] },
+      ],
+    },
+    {
+      id: "support",
+      title: c.groupSupport,
+      rows: [
+        { id: "email", feature: c.email, values: [true, true, true] },
+        { id: "priority", feature: c.priority, values: [false, false, true] },
+      ],
+    },
   ];
 
   return (
@@ -61,6 +102,21 @@ export default function PricingPage() {
               features={plan.features}
             />
           ))}
+        </Box>
+      </Section>
+
+      <Section>
+        <Box display="flex" flexDirection="column" gap={24}>
+          <SectionHeader title={c.title} />
+          <PricingTable
+            plans={[p.plans.free.name, p.plans.pro.name, p.plans.scale.name]}
+            recommended={1}
+            groups={tableGroups}
+            featureLabel={c.feature}
+            includedLabel={c.included}
+            notIncludedLabel={c.notIncluded}
+            caption={c.title}
+          />
         </Box>
       </Section>
 

@@ -22,6 +22,18 @@ export interface ClassificationProgress {
   // Use this to enable the wizard "Continue" button without waiting for the
   // full scan to complete.
   threshold_reached: boolean;
+  /** Messages of the account and how many of them are classified: the scan progress. */
+  messages_total: number;
+  messages_classified: number;
+  /** The latest classified tickets, newest first. */
+  recent: {
+    id: string;
+    ticket_number: number | null;
+    subject: string | null;
+    priority: string | null;
+    sender: string | null;
+    classified_at: string | null;
+  }[];
 }
 
 interface UseClassificationProgressResult {

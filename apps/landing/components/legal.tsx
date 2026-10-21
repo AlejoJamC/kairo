@@ -1,27 +1,144 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Box, Callout, Section, Text } from "@kairo/ui";
+import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { Box, Callout, Icon, Section, Segmented, Text } from "@kairo/ui";
+import { useTranslation } from "@/lib/i18n";
+import { useMinWidth } from "@/lib/hooks/useMinWidth";
 
-/** The frame of a legal page: a narrow section with the title and the update date. */
-export function LegalPage({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
+type LegalTab = "privacy" | "terms";
+
+interface LegalPageProps {
+  title: string;
+  updated: string;
+  /** Which document this is, for the tabs. */
+  tab: LegalTab;
+  /** The sections of the page, in order: the table of contents links to them. */
+  toc: { id: string; title: string }[];
+  children: ReactNode;
+}
+
+/** The current section of the table of contents: the last one that reached the top of the viewport. */
+function useCurrentSection(ids: string[]): string | undefined {
+  const [current, setCurrent] = useState<string | undefined>(ids[0]);
+  const key = ids.join("|");
+
+  useEffect(() => {
+    const sections = key.split("|").map((id) => document.getElementById(id)).filter((el): el is HTMLElement => el !== null);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setCurrent(visible[0].target.id);
+      },
+      { rootMargin: "-80px 0px -60% 0px" },
+    );
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [key]);
+
+  return current;
+}
+
+/** The frame of a legal page: tabs, title, update date, table of contents and the article. */
+export function LegalPage({ title, updated, tab, toc, children }: LegalPageProps) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const wide = useMinWidth(720);
+  const current = useCurrentSection(toc.map((item) => item.id));
+  const l = t.legalPage;
+
   return (
-    <Section first narrow>
+    <Section first>
+      <Box marginBottom={24}>
+        <Segmented
+          label={l.tabsLabel}
+          semantics="group"
+          value={tab}
+          onChange={(value) => router.push(value === "privacy" ? "/privacy" : "/terms")}
+          items={[
+            { value: "privacy", label: l.tabPrivacy },
+            { value: "terms", label: l.tabTerms },
+          ]}
+        />
+      </Box>
       <Box marginBottom={40}>
         <Text tag="h1" display="block" fontSize={40} fontWeight={600} letterSpacing={-1} marginTop={0} marginHorizontal={0} marginBottom={12} color="var(--kairo-color-text)">
           {title}
         </Text>
-        <Text tag="p" display="block" margin={0} color="var(--kairo-color-muted)">
-          {updated}
+        <Text tag="p" display="block" margin={0} font="mono" fontSize={11.5} color="var(--kairo-color-faint)">
+          {updated} · {l.version}
         </Text>
       </Box>
-      {children}
+
+      <Box display="flex" gap={40} alignItems="flex-start">
+        {wide && (
+          <Box tag="aside" width={220} flexShrink={0} sticky top={80} display="flex" flexDirection="column" gap={8}>
+            <Text tag="div" display="block" paddingHorizontal={10} paddingBottom={4} font="mono" fontSize={10.5} letterSpacing={0.6} textTransform="uppercase" color="var(--kairo-color-faint)">
+              {l.tocLabel}
+            </Text>
+            <Box tag="nav" aria-label={l.tocNav} display="flex" flexDirection="column" gap={2}>
+              {toc.map((item) => {
+                const active = item.id === current;
+                return (
+                  <Text
+                    key={item.id}
+                    tag="a"
+                    href={`#${item.id}`}
+                    aria-current={active ? "location" : undefined}
+                    display="block"
+                    paddingVertical={6}
+                    paddingHorizontal={10}
+                    borderRadius={6}
+                    fontSize={13}
+                    textDecoration="none"
+                    fontWeight={active ? 500 : 400}
+                    color={active ? "var(--kairo-color-text)" : "var(--kairo-color-muted)"}
+                    backgroundColor={active ? "var(--kairo-color-hover)" : "transparent"}
+                  >
+                    {item.title}
+                  </Text>
+                );
+              })}
+            </Box>
+          </Box>
+        )}
+        <Box tag="article" flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0} maxWidth={720}>
+          <LegalSummary />
+          {children}
+        </Box>
+      </Box>
     </Section>
   );
 }
 
+/** What the document says in a few lines, first in the article. */
+function LegalSummary() {
+  const { t } = useTranslation();
+  const l = t.legalPage;
+  return (
+    <Box marginBottom={44} padding={24} borderRadius={14} borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" backgroundColor="var(--kairo-color-side)" display="flex" flexDirection="column" gap={14}>
+      <Text tag="div" display="block" font="mono" fontSize={10.5} letterSpacing={0.6} color="var(--kairo-color-faint)">
+        {l.summaryTitle}
+      </Text>
+      <Box tag="ul" margin={0} padding={0} listStyle="none" display="flex" flexDirection="column" gap={10}>
+        {l.summaryPoints.map((point) => (
+          <Box key={point} tag="li" display="flex" gap={10} alignItems="flex-start">
+            <Icon name="check" size={14} color="var(--kairo-color-ok)" />
+            <Text fontSize={14.5} color="var(--kairo-color-text)">
+              {point}
+            </Text>
+          </Box>
+        ))}
+      </Box>
+      <Text tag="p" display="block" margin={0} fontSize={13} color="var(--kairo-color-muted)">
+        {l.summaryNote}
+      </Text>
+    </Box>
+  );
+}
+
 /** A titled block of a legal page; the highlighted one is shown as a notice. */
-export function LegalSection({ title, highlight, children }: { title: string; highlight?: boolean; children: ReactNode }) {
+export function LegalSection({ id, title, highlight, children }: { id: string; title: string; highlight?: boolean; children: ReactNode }) {
   const content = (
     <>
       <Text tag="h2" display="block" fontSize={24} fontWeight={600} marginTop={0} marginHorizontal={0} marginBottom={16} color="var(--kairo-color-text)">
@@ -31,7 +148,7 @@ export function LegalSection({ title, highlight, children }: { title: string; hi
     </>
   );
   return (
-    <Box tag="section" marginBottom={32}>
+    <Box tag="section" id={id} marginBottom={32}>
       {highlight ? <Callout tone="ai">{content}</Callout> : content}
     </Box>
   );

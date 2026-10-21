@@ -67,6 +67,10 @@ export async function GET(request: Request) {
   const oauthError = requestUrl.searchParams.get("error");
   const oauthErrorDesc = requestUrl.searchParams.get("error_description") ?? "";
 
+  if (oauthError === "access_denied") {
+    return NextResponse.redirect(`${appUrl}/wizard?error=access_denied`);
+  }
+
   if (oauthError) {
     return NextResponse.redirect(
       `${appUrl}/auth/error?type=oauth_error&description=${encodeURIComponent(oauthErrorDesc || oauthError)}`
