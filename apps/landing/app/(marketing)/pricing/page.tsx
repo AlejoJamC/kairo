@@ -29,45 +29,6 @@ export default function PricingPage() {
   ];
 
   const c = p.table;
-  const tableGroups = [
-    {
-      id: "triage",
-      title: c.groupTriage,
-      rows: [
-        { id: "tickets", feature: c.tickets, values: ["200", "2,000", "20,000"] },
-        { id: "inboxes", feature: c.inboxes, values: ["1", "5", c.unlimited] },
-        { id: "full", feature: c.fullTriage, values: [false, true, true] },
-        { id: "resolve", feature: c.autoResolve, values: [false, false, true] },
-        { id: "routing", feature: c.routing, values: [false, false, true] },
-      ],
-    },
-    {
-      id: "replies",
-      title: c.groupReplies,
-      rows: [
-        { id: "drafts", feature: c.aiDrafts, values: [false, true, true] },
-        { id: "similar", feature: c.similar, values: [false, true, true] },
-        { id: "kb", feature: c.knowledge, values: [false, true, true] },
-      ],
-    },
-    {
-      id: "team",
-      title: c.groupTeam,
-      rows: [
-        { id: "slack", feature: c.slack, values: [false, true, true] },
-        { id: "api", feature: c.api, values: [false, false, true] },
-        { id: "sso", feature: c.sso, values: [false, false, true] },
-      ],
-    },
-    {
-      id: "support",
-      title: c.groupSupport,
-      rows: [
-        { id: "email", feature: c.email, values: [true, true, true] },
-        { id: "priority", feature: c.priority, values: [false, false, true] },
-      ],
-    },
-  ];
 
   return (
     <>
@@ -106,12 +67,12 @@ export default function PricingPage() {
       </Section>
 
       <Section>
-        <Box display="flex" flexDirection="column" gap={24}>
-          <SectionHeader title={c.title} />
+        <Box display="flex" flexDirection="column" gap={40}>
+          <SectionHeader eyebrow={c.eyebrow} title={c.title} />
           <PricingTable
-            plans={[p.plans.free.name, p.plans.pro.name, p.plans.scale.name]}
+            plans={[p.plans.free.name, p.plans.pro.name, p.plans.scale.name, p.plans.enterprise.name]}
             recommended={1}
-            groups={tableGroups}
+            groups={c.groups}
             featureLabel={c.feature}
             includedLabel={c.included}
             notIncludedLabel={c.notIncluded}

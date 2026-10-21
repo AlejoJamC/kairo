@@ -2,19 +2,12 @@
 
 import { useClassificationProgress } from "@/lib/hooks/useClassificationProgress";
 import { useTranslation } from "@/lib/i18n";
-import { Box, Kbd, KpiStrip, Text, TicketRow } from "@kairo/ui";
-
-const noop = () => {};
-
-const SHORTCUTS = [
-  { keys: ["J", "K"], label: "shortcutMove" },
-  { keys: ["⌘", "K"], label: "shortcutPalette" },
-  { keys: ["?"], label: "shortcutHelp" },
-] as const;
+import { QueuePreviewRow } from "@/components/queue-preview";
+import { Box, Kbd, KpiStrip, ProductFrame, Text } from "@kairo/ui";
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <Text tag="div" display="block" marginBottom={8} fontSize={11} font="mono" color="var(--kairo-color-faint)" letterSpacing={0.6}>
+    <Text tag="span" display="block" font="mono" fontSize={10.5} letterSpacing={0.63} textTransform="uppercase" color="var(--kairo-color-faint)">
       {children}
     </Text>
   );
@@ -25,60 +18,52 @@ export function TriageSummary() {
   const { t } = useTranslation();
   const { data } = useClassificationProgress();
   const w = t.wizard;
+  const shortcuts = [
+    { keys: ["J", "K"], label: w.shortcutNavigate },
+    { keys: ["A"], label: w.shortcutAssign },
+    { keys: ["⌘K"], label: w.shortcutCommands },
+  ];
 
   return (
-    <Box display="flex" flexDirection="column" gap={24}>
-      <Box>
-        <SectionLabel>{w.summaryTitle}</SectionLabel>
-        <KpiStrip
-          items={[
-            { label: w.summaryTickets, value: data?.tickets_count ?? 0 },
-            { label: w.summaryThreads, value: data?.threads_count ?? 0 },
-            { label: w.summaryClients, value: data?.clients_count ?? 0 },
-          ]}
-        />
-      </Box>
+    <>
+      <KpiStrip
+        items={[
+          { label: w.summaryTickets, value: data?.tickets_count },
+          { label: w.summaryClients, value: data?.clients_count },
+          { label: w.summaryUrgent, value: data?.urgent_count, urgent: (data?.urgent_count ?? 0) > 0 },
+        ]}
+      />
 
       {data && data.recent.length > 0 && (
-        <Box>
-          <SectionLabel>{w.summaryFirstRows}</SectionLabel>
-          <Box borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" borderRadius={10} overflow="hidden" backgroundColor="var(--kairo-color-surface)">
-            {data.recent.map((row) => {
-              const code = row.ticket_number ? `KAI-${row.ticket_number}` : "";
-              return (
-                <TicketRow
-                  key={row.id}
-                  code={code}
-                  subject={row.subject ?? ""}
-                  priority={row.priority}
-                  sender={row.sender ?? ""}
-                  age={row.classified_at ? new Date(row.classified_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : w.detect.justNow}
-                  onPress={noop}
-                  ariaLabel={`${code} ${row.subject ?? ""}`.trim()}
-                />
-              );
-            })}
-          </Box>
+        <Box display="flex" flexDirection="column" gap={10}>
+          <SectionLabel>{w.summaryFirst}</SectionLabel>
+          <ProductFrame compact label={w.previewLabel} route={w.previewRoute}>
+            {data.recent.slice(0, 3).map((row, index) => (
+              <QueuePreviewRow
+                key={row.id}
+                confidenceLabel={w.confidenceLabel}
+                item={{ id: row.id, title: row.subject ?? "", priority: row.priority, code: row.ticket_number ? `KAI-${row.ticket_number}` : undefined, selected: index === 0 }}
+              />
+            ))}
+          </ProductFrame>
         </Box>
       )}
 
-      <Box>
+      <Box display="flex" flexDirection="column" gap={10}>
         <SectionLabel>{w.summaryShortcuts}</SectionLabel>
-        <Box display="flex" flexDirection="column" gap={8}>
-          {SHORTCUTS.map((shortcut) => (
-            <Box key={shortcut.label} display="flex" alignItems="center" justifyContent="space-between" gap={12}>
-              <Text fontSize={13} color="var(--kairo-color-muted)">
-                {w[shortcut.label]}
+        <Box display="flex" flexWrap="wrap" columnGap={18} rowGap={10}>
+          {shortcuts.map((shortcut) => (
+            <Box key={shortcut.label} display="inline-flex" alignItems="center" gap={6}>
+              {shortcut.keys.map((key) => (
+                <Kbd key={key}>{key}</Kbd>
+              ))}
+              <Text fontSize={12.5} color="var(--kairo-color-muted)">
+                {shortcut.label}
               </Text>
-              <Box display="flex" gap={4}>
-                {shortcut.keys.map((key) => (
-                  <Kbd key={key}>{key}</Kbd>
-                ))}
-              </Box>
             </Box>
           ))}
         </Box>
       </Box>
-    </Box>
+    </>
   );
 }

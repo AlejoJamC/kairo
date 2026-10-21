@@ -1,14 +1,14 @@
 "use client";
 
 import { useTranslation } from "@/lib/i18n";
-import { LegalItem, LegalLink, LegalList, LegalPage, LegalParagraph, LegalSection } from "@/components/legal";
+import { LegalItem, LegalLink, LegalList, LegalNotice, LegalPage, LegalParagraph, LegalSection } from "@/components/legal";
 
 export default function TermsPage() {
   const { t } = useTranslation();
   const tr = t.terms;
 
   return (
-    <LegalPage title={tr.title} updated={tr.updated} tab="terms" toc={[{ id: "s1", title: tr.s1.title }, { id: "s2", title: tr.s2.title }, { id: "s3", title: tr.s3.title }, { id: "s4", title: tr.s4.title }, { id: "s5", title: tr.s5.title }, { id: "s6", title: tr.s6.title }, { id: "s7", title: tr.s7.title }, { id: "s8", title: tr.s8.title }, { id: "s9", title: tr.s9.title }, { id: "s10", title: tr.s10.title }, { id: "s11", title: tr.s11.title }]}>
+    <LegalPage title={tr.title} updated={tr.updated} tab="terms" lead={<LegalNotice />} toc={[{ id: "s1", title: tr.s1.title }, { id: "s2", title: tr.s2.title }, { id: "s3", title: tr.s3.title }, { id: "s4", title: tr.s4.title }, { id: "s5", title: tr.s5.title }, { id: "s6", title: tr.s6.title }, { id: "s7", title: tr.s7.title }, { id: "s8", title: tr.s8.title }, { id: "s9", title: tr.s9.title }, { id: "s10", title: tr.s10.title }, { id: "s11", title: tr.s11.title }]}>
       <LegalSection id="s1" title={tr.s1.title}>
         <LegalParagraph>{tr.s1.p}</LegalParagraph>
       </LegalSection>

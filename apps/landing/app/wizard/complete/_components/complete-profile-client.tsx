@@ -9,7 +9,8 @@ import { WizardChrome } from "@/components/wizard-chrome";
 import { WizardSteps } from "@/components/wizard-steps";
 import { DetectionStep } from "./detection-step";
 import { TriageSummary } from "./triage-summary";
-import { Box, Button, Callout, CategoryChip, Field, FieldInput, Icon, KpiStrip, PermissionList, Spinner, Text } from "@kairo/ui";
+import { WizardHeading } from "@/components/wizard-heading";
+import { Box, Button, Callout, CategoryChip, Field, FieldInput, Icon, KpiStrip, SettingsRow, Spinner, Switch, Text } from "@kairo/ui";
 
 interface UserData {
   id: string;
@@ -24,7 +25,7 @@ interface Props {
 
 // Fake scan animation constants (used only when showDetectionStep=false is toggled off — kept for reference)
 const SCAN_DURATION = 1800;
-const SCAN_TARGETS = { tickets: 234, threads: 89, customers: 47 };
+const SCAN_TARGETS = { mails: 234, tickets: 89, customers: 47 };
 
 const STATIC_CATEGORIES = [
   { label: "Facturación", count: 47, value: "billing" },
@@ -80,7 +81,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
 
   // Fake scan animation state (flag OFF only)
   const [scanned, setScanned] = useState(false);
-  const [detected, setDetected] = useState({ tickets: 0, threads: 0, customers: 0 });
+  const [detected, setDetected] = useState({ mails: 0, tickets: 0, customers: 0 });
   const rafRef = useRef<number>(0);
 
   // Load user profile + pre-fill organisation name from the provisioned account
@@ -130,7 +131,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
       const ease = 1 - Math.pow(1 - progress, 3);
       setDetected({
         tickets: Math.round(SCAN_TARGETS.tickets * ease),
-        threads: Math.round(SCAN_TARGETS.threads * ease),
+        mails: Math.round(SCAN_TARGETS.mails * ease),
         customers: Math.round(SCAN_TARGETS.customers * ease),
       });
       if (progress < 1) {
@@ -181,118 +182,121 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
     );
   }
 
+  const w = t.wizard;
+  const ruleRows = [
+    { id: "classify", name: w.triageAutoClassify, description: w.triageAutoClassifyDesc },
+    { id: "drafts", name: w.triageDraftReplies, description: w.triageDraftRepliesDesc },
+    { id: "spam", name: w.triageAutoResolveSpam, description: w.triageAutoResolveSpamDesc },
+    { id: "priority", name: w.triagePriorityPro, description: w.triagePriorityProDesc },
+  ] as const;
+
   return (
-    <WizardChrome stepper={<WizardSteps current={localStep === 1 ? "detect" : "triage"} />} aside={localStep === 2 ? <TriageSummary /> : undefined}>
-      <Box backgroundColor="var(--kairo-color-surface)" borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" borderRadius={14} padding={40}>
+    <WizardChrome
+      stepper={<WizardSteps current={localStep === 1 ? "detect" : "triage"} />}
+      width={localStep === 1 ? 760 : 540}
+      gap={localStep === 1 ? 32 : 28}
+      aside={localStep === 2 ? <TriageSummary /> : undefined}
+    >
+      {/* ── Step 1: Detect (real-time) — flag ON only ──────────────────── */}
+      {localStep === 1 && showDetectionStep && <DetectionStep onContinue={() => setLocalStep(2)} />}
 
-        {/* ── Step 1: Detect (real-time) — flag ON only ──────────────────── */}
-        {localStep === 1 && showDetectionStep && (
-          <DetectionStep onContinue={() => setLocalStep(2)} />
-        )}
+      {/* ── Step 1: Detect (fake animation) — flag OFF only ───────────── */}
+      {localStep === 1 && !showDetectionStep && (
+        <>
+          <WizardHeading
+            eyebrow={w.stepOf2}
+            title={scanned ? w.detectDoneTitle : w.detectScanningTitle}
+            body={scanned ? w.detectDoneNote : w.detectScanningNote}
+          />
 
-        {/* ── Step 1: Detect (fake animation) — flag OFF only ───────────── */}
-        {localStep === 1 && !showDetectionStep && (
-          <>
-            <Text tag="h1" display="block" fontSize={32} fontWeight={600} letterSpacing={-0.64} marginTop={0} marginHorizontal={0} marginBottom={12} font="display" color="var(--kairo-color-text)">
-              {scanned ? t.wizard.detectDoneTitle : t.wizard.detectScanningTitle}
+          <KpiStrip
+            items={[
+              { label: w.detectMails, value: detected.mails },
+              { label: w.detectTickets, value: detected.tickets },
+              { label: w.detectCustomers, value: detected.customers },
+            ]}
+          />
+
+          <Box display="flex" flexDirection="column" gap={10}>
+            <Text tag="span" display="block" font="mono" fontSize={10.5} letterSpacing={0.63} textTransform="uppercase" color="var(--kairo-color-faint)">
+              {w.detectCategories}
             </Text>
-            <Text tag="p" display="block" fontSize={15} color="var(--kairo-color-muted)" lineHeightRatio={1.6} marginTop={0} marginHorizontal={0} marginBottom={28}>
-              {scanned ? t.wizard.detectDoneNote : t.wizard.detectScanningNote}
-            </Text>
-
-            <Box marginBottom={24}>
-              <KpiStrip
-                items={[
-                  { label: t.wizard.detectTickets, value: detected.tickets },
-                  { label: t.wizard.detectThreads, value: detected.threads },
-                  { label: t.wizard.detectCustomers, value: detected.customers },
-                ]}
-              />
-            </Box>
-
-            <Text tag="div" display="block" marginBottom={8} fontSize={12} font="mono" color="var(--kairo-color-faint)" letterSpacing={0.6}>
-              {t.wizard.detectCategories}
-            </Text>
-            <Box display="flex" gap={6} flexWrap="wrap" marginBottom={28}>
+            <Box display="flex" gap={6} flexWrap="wrap">
               {STATIC_CATEGORIES.map((cat) => (
                 <CategoryChip key={cat.label} scale="category" value={cat.value} label={`${cat.label} ${cat.count}`} />
               ))}
             </Box>
+          </Box>
 
+          <Box display="flex" flexWrap="wrap" alignItems="center" gap={14} borderTopWidth={1} borderStyle="solid" borderTopColor="var(--kairo-color-line)" paddingTop={24}>
             <Button
               variant="primary"
-              size="web"
+              size="webLg"
               disabled={!scanned}
               loading={!scanned}
-              loadingLabel={t.wizard.detectScanningTitle}
+              loadingLabel={w.detect.classifying}
               iconEnd={<Icon name="right" size={14} color="var(--kairo-color-on-accent)" />}
               onPress={() => setLocalStep(2)}
             >
-              {t.wizard.detectContinue}
+              {w.detectContinue}
             </Button>
-          </>
-        )}
-
-        {/* ── Step 2: Triage + company name ─────────────────────────────── */}
-        {localStep === 2 && (
-          <Box>
-            <Text tag="h1" display="block" fontSize={32} fontWeight={600} letterSpacing={-0.64} marginTop={0} marginHorizontal={0} marginBottom={12} font="display" color="var(--kairo-color-text)">
-              {t.wizard.triageTitle}
+            <Text fontSize={12.5} color="var(--kairo-color-faint)">
+              {w.detect.rangeNote}
             </Text>
-            <Text tag="p" display="block" fontSize={15} color="var(--kairo-color-muted)" lineHeightRatio={1.6} marginTop={0} marginHorizontal={0} marginBottom={28}>
-              {t.wizard.triageSubtitle}
-            </Text>
-
-            <PermissionList
-              label={t.wizard.rulesLabel}
-              requirementLabels={{ required: t.wizard.ruleRequired, optional: t.wizard.ruleOptional }}
-              onChange={(id, checked) => setRules((current) => ({ ...current, [id]: checked }))}
-              items={[
-                { id: "classify", name: t.wizard.triageAutoClassify, description: t.wizard.triageAutoClassifyDesc, checked: rules.classify },
-                { id: "drafts", name: t.wizard.triageDraftReplies, description: t.wizard.triageDraftRepliesDesc, checked: rules.drafts },
-                { id: "spam", name: t.wizard.triageAutoResolveSpam, description: t.wizard.triageAutoResolveSpamDesc, checked: rules.spam },
-                { id: "priority", name: t.wizard.triagePriorityPro, description: t.wizard.triagePriorityProDesc, checked: rules.priority },
-              ]}
-            />
-
-            <Box marginTop={28} paddingTop={24} borderTopWidth={1} borderStyle="solid" borderTopColor="var(--kairo-color-line)">
-              <Field label={t.wizard.companyLabel} size="web">
-                <FieldInput value={companyName} onChangeText={setCompanyName} placeholder={t.wizard.companyPlaceholder} autoComplete="organization" />
-              </Field>
-            </Box>
-
-            {error && (
-              <Text tag="p" role="alert" display="block" marginTop={12} fontSize={13} color="var(--kairo-color-bad-ink)">{error}</Text>
-            )}
-
-            <Box marginTop={20}>
-              <Callout tone="ai" icon={<Icon name="spark" size={14} />}>
-                <Text fontWeight={500} color="var(--kairo-color-text)">
-                  {t.wizard.aiCalloutTitle}
-                </Text>{" "}
-                {t.wizard.aiCalloutDesc}
-              </Callout>
-            </Box>
-
-            <Box marginTop={28} display="flex" gap={8} alignItems="center">
-              <Button
-                variant="primary"
-                size="webLg"
-                disabled={!companyName.trim()}
-                loading={saving}
-                loadingLabel={t.wizard.saving}
-                iconEnd={<Icon name="right" size={14} color="var(--kairo-color-on-accent)" />}
-                onPress={handleSubmit}
-              >
-                {t.wizard.openTriage}
-              </Button>
-              <Button variant="ghost" size="webLg" onPress={() => redirectToDashboard()}>
-                {t.wizard.configureLater}
-              </Button>
-            </Box>
           </Box>
-        )}
-      </Box>
+        </>
+      )}
+
+      {/* ── Step 2: Triage + company name ─────────────────────────────── */}
+      {localStep === 2 && (
+        <>
+          <WizardHeading eyebrow={w.stepOf3} title={w.triageTitle} body={w.triageSubtitle} />
+
+          <Box borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" borderRadius={12} backgroundColor="var(--kairo-color-surface)" overflow="hidden">
+            <Box paddingVertical={12} paddingHorizontal={16}>
+              <Text font="mono" fontSize={10.5} letterSpacing={0.63} textTransform="uppercase" color="var(--kairo-color-faint)">
+                {w.rulesLabel}
+              </Text>
+            </Box>
+            {ruleRows.map((rule) => (
+              <SettingsRow key={rule.id} title={rule.name} description={rule.description} divider>
+                <Switch label={rule.name} checked={rules[rule.id]} onCheckedChange={(checked) => setRules((current) => ({ ...current, [rule.id]: checked }))} />
+              </SettingsRow>
+            ))}
+          </Box>
+
+          <Field label={w.companyLabel} size="web">
+            <FieldInput value={companyName} onChangeText={setCompanyName} placeholder={w.companyPlaceholder} autoComplete="organization" />
+          </Field>
+
+          <Callout tone="ai" icon={<Icon name="spark" size={14} />}>
+            {w.aiCallout}
+          </Callout>
+
+          {error && (
+            <Text tag="p" role="alert" display="block" margin={0} fontSize={13} color="var(--kairo-color-bad-ink)">
+              {error}
+            </Text>
+          )}
+
+          <Box display="flex" flexWrap="wrap" alignItems="center" gap={10}>
+            <Button
+              variant="primary"
+              size="webLg"
+              disabled={!companyName.trim()}
+              loading={saving}
+              loadingLabel={w.saving}
+              iconEnd={<Icon name="right" size={14} color="var(--kairo-color-on-accent)" />}
+              onPress={handleSubmit}
+            >
+              {w.openTriage}
+            </Button>
+            <Button variant="ghost" size="webLg" onPress={() => redirectToDashboard()}>
+              {w.configureLater}
+            </Button>
+          </Box>
+        </>
+      )}
     </WizardChrome>
   );
 }

@@ -59,13 +59,14 @@ export async function GET() {
       threshold_reached: false,
       messages_total: 0,
       messages_classified: 0,
+      urgent_count: 0,
       recent: [],
     });
   }
 
   const { data: ticketRows, error: ticketErr } = await supabase
     .from("tickets")
-    .select("id, ticket_number, subject, priority, from_name, from_email, category, gmail_thread_id, client_id, classified_at")
+    .select("id, ticket_number, subject, priority, from_name, from_email, category, classification_confidence, gmail_thread_id, client_id, classified_at")
     .eq("account_id", accountId)
     .not("classified_at", "is", null);
 
@@ -92,6 +93,8 @@ export async function GET() {
     supabase.from("messages").select("id", { count: "exact", head: true }).eq("account_id", accountId).eq("classification_status", "classified"),
   ]);
 
+  const urgent_count = rows.filter((row) => row.priority === "P1").length;
+
   // The latest classified tickets, newest first.
   const recent = [...rows]
     .sort((a, b) => (b.classified_at ?? "").localeCompare(a.classified_at ?? ""))
@@ -102,6 +105,8 @@ export async function GET() {
       subject: row.subject,
       priority: row.priority,
       sender: row.from_name ?? row.from_email,
+      category: row.category ? (CATEGORY_MAP[row.category] ?? "general") : null,
+      confidence: row.classification_confidence,
       classified_at: row.classified_at,
     }));
 
@@ -132,6 +137,7 @@ export async function GET() {
     threshold_reached,
     messages_total: messagesTotal ?? 0,
     messages_classified: messagesClassified ?? 0,
+    urgent_count,
     recent,
   });
 }

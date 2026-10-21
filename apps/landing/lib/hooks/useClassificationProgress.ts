@@ -25,6 +25,8 @@ export interface ClassificationProgress {
   /** Messages of the account and how many of them are classified: the scan progress. */
   messages_total: number;
   messages_classified: number;
+  /** Classified tickets of priority P1. */
+  urgent_count: number;
   /** The latest classified tickets, newest first. */
   recent: {
     id: string;
@@ -32,6 +34,8 @@ export interface ClassificationProgress {
     subject: string | null;
     priority: string | null;
     sender: string | null;
+    category: keyof ClassificationProgress["categories"] | null;
+    confidence: number | null;
     classified_at: string | null;
   }[];
 }

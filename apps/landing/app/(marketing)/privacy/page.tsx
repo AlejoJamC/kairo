@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslation } from "@/lib/i18n";
-import { LegalItem, LegalLink, LegalList, LegalPage, LegalParagraph, LegalSection } from "@/components/legal";
+import { LegalItem, LegalLink, LegalList, LegalPage, LegalParagraph, LegalSection, LegalSummary } from "@/components/legal";
 import { Text } from "@kairo/ui";
 
 export default function PrivacyPage() {
@@ -9,7 +9,7 @@ export default function PrivacyPage() {
   const p = t.privacy;
 
   return (
-    <LegalPage title={p.title} updated={p.updated} tab="privacy" toc={[{ id: "s1", title: p.s1.title }, { id: "s2", title: p.s2.title }, { id: "s3", title: p.s3.title }, { id: "s4", title: p.s4.title }, { id: "s5", title: p.s5.title }, { id: "s6", title: p.s6.title }, { id: "s7", title: p.s7.title }, { id: "s8", title: p.s8.title }, { id: "s9", title: p.s9.title }]}>
+    <LegalPage title={p.title} updated={p.updated} tab="privacy" lead={<LegalSummary />} toc={[{ id: "summary", title: t.legalPage.tocSummary }, { id: "s1", title: p.s1.title }, { id: "s2", title: p.s2.title }, { id: "s3", title: p.s3.title }, { id: "s4", title: p.s4.title }, { id: "s5", title: p.s5.title }, { id: "s6", title: p.s6.title }, { id: "s7", title: p.s7.title }, { id: "s8", title: p.s8.title }, { id: "s9", title: p.s9.title }]}>
       <LegalSection id="s1" title={p.s1.title}>
         <LegalParagraph>{p.s1.p1}</LegalParagraph>
         <LegalParagraph>{p.s1.p2}</LegalParagraph>

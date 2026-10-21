@@ -15,6 +15,8 @@ interface LegalPageProps {
   tab: LegalTab;
   /** The sections of the page, in order: the table of contents links to them. */
   toc: { id: string; title: string }[];
+  /** First block of the article: the summary card or a notice. */
+  lead?: ReactNode;
   children: ReactNode;
 }
 
@@ -40,7 +42,7 @@ function useCurrentSection(ids: string[]): string | undefined {
 }
 
 /** The frame of a legal page: tabs, title, update date, table of contents and the article. */
-export function LegalPage({ title, updated, tab, toc, children }: LegalPageProps) {
+export function LegalPage({ title, updated, tab, toc, lead, children }: LegalPageProps) {
   const { t } = useTranslation();
   const router = useRouter();
   const wide = useMinWidth(720);
@@ -61,8 +63,8 @@ export function LegalPage({ title, updated, tab, toc, children }: LegalPageProps
           ]}
         />
       </Box>
-      <Box marginBottom={40}>
-        <Text tag="h1" display="block" fontSize={40} fontWeight={600} letterSpacing={-1} marginTop={0} marginHorizontal={0} marginBottom={12} color="var(--kairo-color-text)">
+      <Box marginBottom={40} display="flex" flexDirection="column">
+        <Text tag="h1" display="block" fontSize={54} fontWeight={600} lineHeightRatio={1.05} letterSpacing={-1.84} marginTop={0} marginHorizontal={0} marginBottom={16} color="var(--kairo-color-text)">
           {title}
         </Text>
         <Text tag="p" display="block" margin={0} font="mono" fontSize={11.5} color="var(--kairo-color-faint)">
@@ -70,9 +72,9 @@ export function LegalPage({ title, updated, tab, toc, children }: LegalPageProps
         </Text>
       </Box>
 
-      <Box display="flex" gap={40} alignItems="flex-start">
+      <Box display="flex" gap={56} alignItems="flex-start">
         {wide && (
-          <Box tag="aside" width={220} flexShrink={0} sticky top={80} display="flex" flexDirection="column" gap={8}>
+          <Box tag="aside" width={260} flexShrink={0} sticky top={80} display="flex" flexDirection="column" gap={8}>
             <Text tag="div" display="block" paddingHorizontal={10} paddingBottom={4} font="mono" fontSize={10.5} letterSpacing={0.6} textTransform="uppercase" color="var(--kairo-color-faint)">
               {l.tocLabel}
             </Text>
@@ -103,7 +105,7 @@ export function LegalPage({ title, updated, tab, toc, children }: LegalPageProps
           </Box>
         )}
         <Box tag="article" flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0} maxWidth={720}>
-          <LegalSummary />
+          {lead}
           {children}
         </Box>
       </Box>
@@ -111,26 +113,40 @@ export function LegalPage({ title, updated, tab, toc, children }: LegalPageProps
   );
 }
 
-/** What the document says in a few lines, first in the article. */
-function LegalSummary() {
+/** The first block of the terms: they are accepted together with the privacy policy. */
+export function LegalNotice() {
   const { t } = useTranslation();
   const l = t.legalPage;
   return (
-    <Box marginBottom={44} padding={24} borderRadius={14} borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" backgroundColor="var(--kairo-color-side)" display="flex" flexDirection="column" gap={14}>
+    <Box marginBottom={44}>
+      <Callout icon={<Icon name="info" size={16} />}>
+        {l.noticeBefore} <LegalLink href="/privacy">{l.noticeLink}</LegalLink>
+        {l.noticeAfter}
+      </Callout>
+    </Box>
+  );
+}
+
+/** What the document says in a few lines, first in the article. */
+export function LegalSummary() {
+  const { t } = useTranslation();
+  const l = t.legalPage;
+  return (
+    <Box id="summary" marginBottom={44} padding={24} borderRadius={14} borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" backgroundColor="var(--kairo-color-side)" display="flex" flexDirection="column" gap={14}>
       <Text tag="div" display="block" font="mono" fontSize={10.5} letterSpacing={0.6} color="var(--kairo-color-faint)">
         {l.summaryTitle}
       </Text>
       <Box tag="ul" margin={0} padding={0} listStyle="none" display="flex" flexDirection="column" gap={10}>
         {l.summaryPoints.map((point) => (
           <Box key={point} tag="li" display="flex" gap={10} alignItems="flex-start">
-            <Icon name="check" size={14} color="var(--kairo-color-ok)" />
+            <Icon name="check" size={16} color="var(--kairo-color-ok)" />
             <Text fontSize={14.5} color="var(--kairo-color-text)">
               {point}
             </Text>
           </Box>
         ))}
       </Box>
-      <Text tag="p" display="block" margin={0} fontSize={13} color="var(--kairo-color-muted)">
+      <Text tag="p" display="block" margin={0} font="mono" fontSize={11} color="var(--kairo-color-faint)">
         {l.summaryNote}
       </Text>
     </Box>
@@ -141,14 +157,14 @@ function LegalSummary() {
 export function LegalSection({ id, title, highlight, children }: { id: string; title: string; highlight?: boolean; children: ReactNode }) {
   const content = (
     <>
-      <Text tag="h2" display="block" fontSize={24} fontWeight={600} marginTop={0} marginHorizontal={0} marginBottom={16} color="var(--kairo-color-text)">
+      <Text tag="h2" display="block" fontSize={20} fontWeight={600} marginTop={0} marginHorizontal={0} marginBottom={16} color="var(--kairo-color-text)">
         {title}
       </Text>
       {children}
     </>
   );
   return (
-    <Box tag="section" id={id} marginBottom={32}>
+    <Box tag="section" id={id} marginBottom={44}>
       {highlight ? <Callout tone="ai">{content}</Callout> : content}
     </Box>
   );
@@ -156,7 +172,7 @@ export function LegalSection({ id, title, highlight, children }: { id: string; t
 
 export function LegalParagraph({ children }: { children: ReactNode }) {
   return (
-    <Text tag="p" display="block" marginTop={0} marginHorizontal={0} marginBottom={16} lineHeightRatio={1.65} color="var(--kairo-color-text)">
+    <Text tag="p" display="block" marginTop={0} marginHorizontal={0} marginBottom={16} fontSize={15} lineHeightRatio={1.7} color="var(--kairo-color-muted)">
       {children}
     </Text>
   );
@@ -172,7 +188,7 @@ export function LegalList({ children, plain }: { children: ReactNode; plain?: bo
 
 export function LegalItem({ children }: { children: ReactNode }) {
   return (
-    <Text tag="li" display={"list-item" as never} lineHeightRatio={1.6} color="var(--kairo-color-text)">
+    <Text tag="li" display={"list-item" as never} fontSize={15} lineHeightRatio={1.7} color="var(--kairo-color-muted)">
       {children}
     </Text>
   );

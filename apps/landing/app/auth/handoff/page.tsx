@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { getDashboardUrl } from '@/lib/api-config';
 import { useTranslation } from '@/lib/i18n';
-import { Box, ProgressSteps, Text, type ProgressStep } from "@kairo/ui";
+import { Box, Icon, ProgressSteps, Text, type ProgressStep } from "@kairo/ui";
 
 type Stage = 'verify' | 'prepare' | 'open' | 'failed';
 
@@ -72,7 +72,7 @@ export default function AuthHandoffPage() {
   });
 
   return (
-    <Box minHeight="100vh" display="flex" flexDirection="column" alignItems="center" justifyContent="center" gap={20} paddingHorizontal={16} backgroundColor="var(--kairo-color-sunk)">
+    <Box minHeight="100vh" display="flex" flexDirection="column" alignItems="center" justifyContent="center" gap={20} paddingHorizontal={16} backgroundColor="var(--kairo-color-side)">
       <ProgressSteps
         title={failed ? h.errorTitle : h.title}
         subtitle={failed ? undefined : h.subtitle}
@@ -80,12 +80,24 @@ export default function AuthHandoffPage() {
         doneLabel={h.ready}
         retryLabel={h.retry}
         onRetry={() => setAttempt((value) => value + 1)}
+        fallback={failed ? undefined : { label: h.fallbackLink, href: getDashboardUrl() }}
       />
       {failed && (
         <Text tag="a" href="/login" fontSize={13} color="var(--kairo-color-accent-ink)">
           {h.backToSignIn}
         </Text>
       )}
+      <Box display="flex" gap={18} paddingTop={24}>
+        <Box display="inline-flex" alignItems="center" gap={6}>
+          <Icon name="lock" size={10} color="var(--kairo-color-faint)" />
+          <Text font="mono" fontSize={11} color="var(--kairo-color-faint)">
+            {h.secure}
+          </Text>
+        </Box>
+        <Text font="mono" fontSize={11} color="var(--kairo-color-faint)">
+          © 2026 Kairo
+        </Text>
+      </Box>
     </Box>
   );
 }
