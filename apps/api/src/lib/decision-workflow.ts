@@ -8,10 +8,9 @@ import {
 import { computeTicketOperationalSla, buildConfigByPriority } from '@kairo/types';
 import { supabase } from './supabase.js';
 import { recordLlmCall } from './llm-logging.js';
-import { approvedWorkflowKnowledge, knowledgeReferences, KnowledgeVersionSchema } from './workflow-knowledge.js';
+import { approvedWorkflowKnowledge, enqueueWorkflowKnowledge, knowledgeReferences, KnowledgeVersionSchema } from './workflow-knowledge.js';
 import { resolveSenderIdentity } from './client-identity.js';
 import { contractualSlaFor } from './sla.js';
-import { env } from '@kairo/env';
 import { proposeEmailKnowledge } from './email-knowledge.js';
 import { createBackendSemanticService } from './semantic-service.js';
 
@@ -45,7 +44,7 @@ export async function recordWorkflowResult(input: {
 }
 
 export async function recordWorkflowFailure(work: DecisionWork & { attempts: number }, failure: { retriable: boolean; error: string }, db = supabase) {
-  if (!work.ticket_id || work.contract === 'semantic_index') return;
+  if (!work.ticket_id) return;
   let revision = work.case_revision;
   const revisionSource = revision === undefined ? 'observed_after_failure' : 'attempted_case';
   if (revision === undefined) {
@@ -117,21 +116,10 @@ async function ensureKnowledgeEmbedding(work: DecisionWork, db: typeof supabase,
 const decisionProvider = (deps: DecisionWorkDeps, role: 'classification' | 'knowledge_decision' = 'knowledge_decision') => deps.decisionProvider?.(role) ?? createDecisionProvider('gateway', role);
 
 export async function processDecisionWork(work: DecisionWork, db = supabase, deps: DecisionWorkDeps = {}) {
-  if (work.contract === 'semantic_index') {
-    const source = work.ticket_id ? { kind: 'ticket', id: work.ticket_id } :
-      work.knowledge_version_id ? { kind: 'knowledge_version', id: work.knowledge_version_id } : null;
-    if (!source) throw new ProviderError('Semantic index source missing', false);
-    const service = createBackendSemanticService({ db, embed: deps.embed, space: deps.space,
-      scope: { accountId: work.account_id, actor: { kind: 'workflow', id: work.id }, permissions: ['index'] } });
-    const result = await service.indexSource({ source });
-    if (result.status === 'failed' && result.reason !== 'not_found') throw new ProviderError('Semantic index unavailable', true);
-    return;
-  }
   if (work.contract === 'knowledge_change') {
+    if (!work.knowledge_version_id) throw new ProviderError('Knowledge version missing', false);
     await ensureKnowledgeEmbedding(work, db, deps);
-    const { error } = await db.rpc('enqueue_semantic_knowledge_candidates', { p_version_id: work.knowledge_version_id,
-      p_threshold: env.EMBEDDING_SIMILARITY_THRESHOLD, p_limit: env.KNOWLEDGE_CANDIDATE_LIMIT });
-    if (error) throw new ProviderError('Knowledge candidate selection failed', true);
+    await enqueueWorkflowKnowledge(work.account_id, db, { versionId: work.knowledge_version_id });
     return;
   }
   const ctx = await ticketContext(work, db, deps);

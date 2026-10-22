@@ -1645,53 +1645,6 @@ export type Database = {
           },
         ]
       }
-      semantic_indexes: {
-        Row: {
-          account_id: string
-          created_at: string
-          dimensions: number
-          embedding: string
-          model: string
-          preparation: string
-          provider: string
-          revision: string
-          source_id: string
-          source_kind: string
-        }
-        Insert: {
-          account_id: string
-          created_at?: string
-          dimensions: number
-          embedding: string
-          model: string
-          preparation: string
-          provider: string
-          revision: string
-          source_id: string
-          source_kind: string
-        }
-        Update: {
-          account_id?: string
-          created_at?: string
-          dimensions?: number
-          embedding?: string
-          model?: string
-          preparation?: string
-          provider?: string
-          revision?: string
-          source_id?: string
-          source_kind?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "semantic_indexes_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       support_channels: {
         Row: {
           account_id: string
@@ -3289,19 +3242,6 @@ export type Database = {
         }
         Returns: string
       }
-      read_semantic_ticket_vectors: {
-        Args: {
-          p_account_id: string
-          p_dimensions: number
-          p_ids: string[]
-          p_model: string
-          p_provider: string
-        }
-        Returns: {
-          embedding: string
-          id: string
-        }[]
-      }
       record_decision_outcome: {
         Args: { p_ok: boolean; p_outage_failure: boolean }
         Returns: string
@@ -3370,24 +3310,6 @@ export type Database = {
         }
         Returns: number
       }
-      retrieve_semantic_sources: {
-        Args: {
-          p_account_id: string
-          p_dimensions: number
-          p_exclude_same_group?: boolean
-          p_kind: string
-          p_knowledge_kind?: string
-          p_limit?: number
-          p_model: string
-          p_provider: string
-          p_purpose: string
-          p_query: string
-          p_status_filter?: string
-          p_threshold?: number
-          p_ticket_id?: string
-        }
-        Returns: Json
-      }
       return_decision_work: { Args: { p_id: string }; Returns: undefined }
       review_ticket_enrichment: {
         Args: {
@@ -3431,25 +3353,6 @@ export type Database = {
           p_revision: number
           p_ticket_id: string
           p_user_id: string
-        }
-        Returns: string
-      }
-      semantic_revision: { Args: { p_source: Json }; Returns: string }
-      semantic_source: {
-        Args: { p_account_id: string; p_id: string; p_kind: string }
-        Returns: Json
-      }
-      store_semantic_index: {
-        Args: {
-          p_account_id: string
-          p_dimensions: number
-          p_embedding: string
-          p_id: string
-          p_kind: string
-          p_model: string
-          p_preparation: string
-          p_provider: string
-          p_revision: string
         }
         Returns: string
       }

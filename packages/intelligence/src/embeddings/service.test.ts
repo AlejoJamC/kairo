@@ -75,4 +75,76 @@ describe('semantic domain', () => {
     const result = await f.create(['retrieve'],[f.adapter,other]).retrieve({ purpose:'similar_cases',query:{text:'Acme'},limit:1 });
     expect(result.matches).toHaveLength(1); expect(result.matches[0]?.similarity).toBe(0.9);
   });
+  it('reads only compatible current indices without generating or storing vectors', async () => {
+    const f = fixture('synthetic_note');
+    const service = f.create();
+    expect(await service.readIndexes({ sources: [f.source.reference] })).toMatchObject([{ status: 'unavailable', reason: 'index_missing' }]);
+    f.source.index = { revision: 'r1', preparation: 'v1', space, vector: [1,0] };
+    expect(await service.readIndexes({ sources: [f.source.reference] })).toMatchObject([{ status: 'ready', source: f.source.reference, vector: [1,0], space }]);
+    for (const index of [
+      { ...f.source.index, revision: 'old' }, { ...f.source.index, preparation: 'different' },
+      { ...f.source.index, space: { ...space, model: 'different' } }, { ...f.source.index, space: { ...space, provider: 'different' } },
+      { ...f.source.index, space: { ...space, dimensions: 3 } }, { ...f.source.index, vector: [0,0] },
+      { ...f.source.index, vector: [NaN,0] }, { ...f.source.index, vector: [1] },
+    ]) {
+      f.source.index = index;
+      expect(await service.readIndexes({ sources: [f.source.reference] })).toMatchObject([{ status: 'unavailable', reason: 'index_incompatible' }]);
+    }
+    expect(f.embed).not.toHaveBeenCalled(); expect(f.store).not.toHaveBeenCalled();
+  });
+  it('uses the batch source port once and rejects foreign or unrequested rows', async () => {
+    const f = fixture();
+    f.source.index = { revision: 'r1', preparation: 'v1', space, vector: [1,0] };
+    const loadMany = vi.fn(async () => [f.source,
+      { ...f.source, accountId: 'outside', reference: { kind: 'ticket', id: 'foreign' } },
+      { ...f.source, reference: { kind: 'ticket', id: 'unrequested' } }]);
+    const adapter = { ...f.adapter, loadMany };
+    const found = await f.create(['retrieve'],[adapter]).readIndexes({ sources: [f.source.reference, { kind: 'ticket', id: 'foreign' }] });
+    expect(found).toMatchObject([{ status: 'ready' }, { status: 'unavailable', reason: 'not_found' }]);
+    expect(loadMany).toHaveBeenCalledTimes(1); expect(f.adapter.load).not.toHaveBeenCalled();
+    expect(f.embed).not.toHaveBeenCalled(); expect(f.store).not.toHaveBeenCalled();
+  });
+  it('blocks invalid, disabled and unauthorized reads before touching storage', async () => {
+    const f = fixture();
+    expect(await f.create([]).readIndexes({ sources: [f.source.reference] })).toMatchObject([{ reason: 'forbidden' }]);
+    expect(await f.create().readIndexes({ sources: [{ kind: 'ticket', id: ' ' }] })).toMatchObject([{ reason: 'invalid_input' }]);
+    expect(await f.create().indexSource({ source: { kind: 'ticket', id: ' ' } })).toMatchObject({ reason: 'invalid_input' });
+    const tooMany = await f.create().readIndexes({ sources: Array.from({ length: 201 }, () => f.source.reference) });
+    expect(tooMany.every(result => result.status === 'unavailable' && result.reason === 'invalid_input')).toBe(true);
+    f.adapter.enabled = false;
+    expect(await f.create().readIndexes({ sources: [f.source.reference] })).toMatchObject([{ reason: 'disabled' }]);
+    expect(f.adapter.load).not.toHaveBeenCalled(); expect(f.embed).not.toHaveBeenCalled();
+  });
+  it('does not use a disabled source as a retrieval query for an enabled source', async () => {
+    const f = fixture();
+    const query = { ...f.adapter, kind: 'synthetic_note', enabled: false };
+    expect(await f.create(['retrieve'],[f.adapter,query]).retrieve({ purpose: 'similar_cases', sources: ['ticket'],
+      query: { source: { kind: 'synthetic_note', id: 'source' } } })).toMatchObject({ status: 'unavailable', reason: 'disabled' });
+    expect(f.adapter.load).not.toHaveBeenCalled(); expect(f.embed).not.toHaveBeenCalled();
+  });
+  it('owns grouping over compatible indices and reports missing sources without exposing vectors', async () => {
+    const f = fixture('synthetic_note');
+    f.adapter.load = vi.fn(async reference => ({ ...f.source, reference,
+      ...(reference.id === 'missing' ? {} : { index: { revision: 'r1', preparation: 'v1', space, vector: reference.id === 'b' ? [0.95,0.05] : [1,0] } }) }));
+    const sources = ['a','b','missing'].map(id => ({ kind: 'synthetic_note', id }));
+    const result = await f.create().groupSources({ sources });
+    expect(result).toMatchObject({ status: 'partial', groups: [[sources[0],sources[1]]],
+      sources: [{ status: 'ready' }, { status: 'ready' }, { status: 'unavailable', reason: 'index_missing' }] });
+    expect(JSON.stringify(result)).not.toContain('vector');
+    expect(f.embed).not.toHaveBeenCalled(); expect(f.store).not.toHaveBeenCalled();
+    f.adapter.load = vi.fn(async () => { throw new Error('private storage details'); });
+    expect(await f.create().readIndexes({ sources: [f.source.reference] })).toMatchObject([{ reason: 'storage_unavailable' }]);
+    expect(await f.create().groupSources({ sources, minSimilarity: NaN })).toMatchObject({ status: 'unavailable', groups: [] });
+  });
+  it('keeps centroid grouping stable when one source could bridge unrelated groups', async () => {
+    const f = fixture();
+    const vectors: Record<string, number[]> = { a: [1,0], b: [0.8,0.6], c: [0.6,0.8], d: [0,1] };
+    f.adapter.load = vi.fn(async reference => ({ ...f.source, reference,
+      index: { revision: 'r1', preparation: 'v1', space, vector: vectors[reference.id]! } }));
+    const result = await f.create().groupSources({ sources: Object.keys(vectors).map(id => ({ kind: 'ticket', id })), minSimilarity: 0.9 });
+    expect(result.status).toBe('ok');
+    expect(result.groups.map(group => group.map(reference => reference.id))).toEqual([['a'],['b','c'],['d']]);
+    expect(f.embed).not.toHaveBeenCalled();
+  });
+
 });

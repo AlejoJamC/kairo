@@ -185,3 +185,10 @@ vite.config.ts.timestamp-*
 *.p12
 *.key
 *.mobileprovision
+
+
+# Tauri desktop
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+# The bundle requires these icons, so they are not covered by *.png.
+!apps/desktop/src-tauri/icons/*.png

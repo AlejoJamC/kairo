@@ -11,12 +11,12 @@ import { sharedAgentTools } from './agent-tools.js';
 import { OllamaEmbeddingProvider } from '@kairo/intelligence';
 import { maybeGenerateTicketEmbedding } from './ticket-embedding.js';
 
-const db = new PGlite({ extensions: { vector } });
+const runSql = process.env['RUN_SEMANTIC_SQL_TESTS'] === '1';
+const db = runSql ? new PGlite({ extensions: { vector } }) : null!;
 const root = new URL('../../../../',import.meta.url);
 const vec = `[${[1,...Array<number>(767).fill(0)].join(',')}]`;
 let legacy: Awaited<ReturnType<typeof fixture>>;
 let installationBefore: Awaited<ReturnType<typeof installationState>>;
-let candidateDefinitionBefore: unknown[];
 async function query<T>(text: string, args: unknown[] = []) { return (await db.query<T>(text,args)).rows; }
 async function installationState() {
   return Promise.all(['tickets','kb_articles','knowledge_versions','knowledge_embeddings','decision_work_items','ticket_decision_history','knowledge_candidate_runs','operational_learning','accounts','messages'].map(table =>
@@ -28,6 +28,7 @@ const section = (source: string,start: string,end: string) => {
   return source.slice(offset,source.indexOf(end,offset)+end.length);
 };
 beforeAll(async()=>{
+  if (!runSql) return;
   await db.exec(`CREATE SCHEMA extensions; CREATE EXTENSION vector WITH SCHEMA extensions;
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
     CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY); CREATE TABLE messages(id uuid PRIMARY KEY);
@@ -49,12 +50,12 @@ beforeAll(async()=>{
   await db.exec(`CREATE TRIGGER kb_version AFTER INSERT OR UPDATE OR DELETE ON kb_articles FOR EACH ROW EXECUTE FUNCTION record_knowledge_version();`);
   await db.exec(section(workflow,'CREATE VIEW public.latest_knowledge','WHERE status=\'approved\';'));
   await db.exec(section(workflow,'CREATE FUNCTION public.enqueue_knowledge_candidates(','\n$$;'));
+  await db.exec(section(workflow,'CREATE FUNCTION public.enqueue_pending_knowledge(','\n$$;'));
   legacy = await fixture();
   installationBefore = await installationState();
-  candidateDefinitionBefore = await query("SELECT pg_get_functiondef('public.enqueue_knowledge_candidates(uuid,double precision,integer)'::regprocedure) AS definition");
-  await db.exec(await readFile(new URL('supabase/migrations/20261021075456_semantic_domain_storage.sql',root),'utf8'));
+  await db.exec(await readFile(new URL('supabase/migrations/20261023103232_embeddings_domain.sql',root),'utf8'));
 },30000);
-afterAll(async()=>{ await db.close(); });
+afterAll(async()=>{ if (db) await db.close(); });
 async function fixture() {
   const account=randomUUID(),ticket=randomUUID(),article=randomUUID();
   await query('INSERT INTO accounts(id) VALUES($1)',[account]);
@@ -76,18 +77,41 @@ async function search(account: string,kind: string,ticket?: string) {
 const adapterDb = {
   async rpc(name: string, args: Record<string, unknown>) {
     const entries = Object.entries(args);
-    const parameters = entries.map(([key], index) => `${key}=>$${index + 1}${key === 'p_query' || key === 'p_embedding' ? '::extensions.vector' : ''}`).join(',');
-    const [{ result }] = await query<{result:unknown}>(`SELECT ${name}(${parameters}) AS result`, entries.map(([key, value]) => key === 'p_query' || key === 'p_embedding' ? JSON.stringify(value) : value));
+    const parameters = entries.map(([key], index) => key === 'p_ids'
+      ? `${key}=>ARRAY(SELECT jsonb_array_elements_text($${index + 1}::jsonb)::uuid)`
+      : `${key}=>$${index + 1}${key === 'p_query' || key === 'p_embedding' ? '::extensions.vector' : ''}`).join(',');
+    const values = entries.map(([key, value]) => ['p_query','p_embedding','p_ids'].includes(key) ? JSON.stringify(value) : value);
+    if (name === 'semantic_sources') return { data: await query(`SELECT * FROM ${name}(${parameters})`, values), error: null };
+    const [{ result }] = await query<{result:unknown}>(`SELECT ${name}(${parameters}) AS result`, values);
     return { data: result, error: null };
   },
 } as unknown as SupabaseClient;
-describe('semantic SQL guarantees',()=>{
-  it('installs the service without rewriting business data, queueing work or replacing the existing candidate function', async () => {
+describe.skipIf(!runSql)('semantic SQL guarantees',()=>{
+  it('installs the service without rewriting business data or queueing work', async () => {
     expect(await installationState()).toEqual(installationBefore);
-    expect(await query("SELECT pg_get_functiondef('public.enqueue_knowledge_candidates(uuid,double precision,integer)'::regprocedure) AS definition")).toEqual(candidateDefinitionBefore);
     expect(await query("SELECT id FROM decision_work_items WHERE account_id=$1 AND contract='semantic_index'",[legacy.account])).toHaveLength(0);
     expect(await query('SELECT source_id FROM semantic_indexes WHERE account_id=$1',[legacy.account])).toHaveLength(0);
     expect((await search(legacy.account,'knowledge_version')).reason).toBe('index_missing');
+  });
+  it('indexes every initial source without rewriting any business representation', async () => {
+    const f = await fixture();
+    const before = await installationState();
+    for (const [kind,id] of [['ticket',f.ticket],['kb_article',f.article],['knowledge_version',f.version]]) {
+      expect(await index(f.account,kind!,id!)).toBe('indexed');
+    }
+    expect(await installationState()).toEqual(before);
+    expect(await query('SELECT source_id FROM semantic_indexes WHERE account_id=$1',[f.account])).toHaveLength(3);
+  });
+  it('reads and groups compatible indices through the public batch contract without generating vectors', async () => {
+    const f = await fixture(), other = await fixture();
+    await index(f.account,'ticket',f.ticket); await index(other.account,'ticket',other.ticket);
+    const embed = mock(async () => { throw new Error('Reading stored indices must not generate vectors'); });
+    const service = createBackendSemanticService({ db: adapterDb, embed, space: { provider: 'synthetic', model: 'acme', dimensions: 768 },
+      scope: { accountId: f.account, actor: { kind: 'workflow', id: 'synthetic' }, permissions: ['retrieve'] } });
+    const sources = [f.ticket,other.ticket].map(id => ({ kind: 'ticket', id }));
+    expect(await service.readIndexes({ sources })).toMatchObject([{ status: 'ready' }, { status: 'unavailable', reason: 'not_found' }]);
+    expect(await service.groupSources({ sources })).toMatchObject({ status: 'partial', groups: [[sources[0]]] });
+    expect(embed).not.toHaveBeenCalled();
   });
   it('does not invent identity for legacy vectors and never compares different models',async()=>{
     const f=await fixture();
@@ -189,14 +213,14 @@ describe('semantic SQL guarantees',()=>{
       space:{provider:'synthetic',model:'acme',dimensions:768},embedFn:async()=>JSON.parse(vec) as number[]})).toEqual({status:'ok'});
     expect(await query('SELECT source_id FROM semantic_indexes WHERE account_id=$1',[f.account])).toHaveLength(1);
   });
-  it('excludes incompatible candidate indices from knowledge impact and reports coverage', async () => {
+  it('lets the workflow consume compatible vectors without copying them to business tables', async () => {
     const f = await fixture();
     await query("UPDATE tickets SET status='open' WHERE id=$1",[f.ticket]);
     await index(f.account,'ticket',f.ticket,'other-model'); await index(f.account,'knowledge_version',f.version);
-    await query('SELECT enqueue_semantic_knowledge_candidates($1)',[f.version]);
+    expect((await query<{queued:number}>('SELECT enqueue_knowledge_candidates($1) AS queued',[f.version]))[0].queued).toBe(0);
     expect(await query("SELECT id FROM decision_work_items WHERE account_id=$1 AND contract='knowledge_impact'",[f.account])).toHaveLength(0);
     await index(f.account,'ticket',f.ticket);
-    await query('SELECT enqueue_semantic_knowledge_candidates($1)',[f.version]);
+    expect((await query<{queued:number}>('SELECT enqueue_knowledge_candidates($1) AS queued',[f.version]))[0].queued).toBe(1);
     expect(await query("SELECT id FROM decision_work_items WHERE account_id=$1 AND contract='knowledge_impact'",[f.account])).toHaveLength(1);
   });
   it('prevents browser credentials from executing privileged index functions', async () => {
@@ -207,7 +231,7 @@ describe('semantic SQL guarantees',()=>{
   });
 });
 
-const runOllama = process.env['RUN_OLLAMA_EMBEDDING_TESTS'] === '1';
+const runOllama = runSql && process.env['RUN_OLLAMA_EMBEDDING_TESTS'] === '1';
 
 describe.skipIf(!runOllama)('Ollama semantic integration — real local embeddings', () => {
   const endpoint = 'http://127.0.0.1:11434';

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { RESOLVED_STATUSES } from '@kairo/types';
 import {
   createSemanticService, generateEmbedding, configuredEmbeddingDimensions, resolveModelRoute,
-  SEMANTIC_PREPARATIONS, prepareTicketEmbeddingText, prepareArticleEmbeddingText, prepareKnowledgeEmbeddingText,
+  SEMANTIC_SOURCE_DEFINITIONS,
   type SemanticScope, type VectorSpace, type LoadedSemanticSource, type SemanticAdapter,
 } from '@kairo/intelligence';
 
@@ -37,21 +37,26 @@ export function createBackendSemanticService(options: SemanticBackendOptions) {
   const scope = { ...options.scope, actor: { ...options.scope.actor }, permissions: [...options.scope.permissions] };
   const route = resolveModelRoute('embedding');
   const space = options.space ?? { provider: route.provider, model: route.model, dimensions: configuredEmbeddingDimensions() };
-  const definitions = {
-    ticket: (input: Record<string, unknown>) => prepareTicketEmbeddingText(String(input['subject'] ?? ''), String(input['body_plain'] || input['snippet'] || '')),
-    kb_article: (input: Record<string, unknown>) => prepareArticleEmbeddingText(String(input['title'] ?? ''), String(input['content'] ?? '')),
-    knowledge_version: prepareKnowledgeEmbeddingText,
+  const definitions = SEMANTIC_SOURCE_DEFINITIONS;
+  const prepare = (kind: keyof typeof definitions, data: unknown): LoadedSemanticSource => {
+    const parsed = SourceSchema.parse(data);
+    return { ...parsed, text: parsed.input ? definitions[kind].prepare(parsed.input) : parsed.text,
+      preparation: parsed.input ? definitions[kind].preparation : parsed.preparation, index: parsed.index ?? undefined };
   };
   const adapters: SemanticAdapter[] = (Object.keys(definitions) as Array<keyof typeof definitions>).map(kind => ({
-    kind,
-    purposes: kind === 'ticket' ? ['similar_cases'] : ['approved_knowledge'],
+    kind, purposes: definitions[kind].purposes,
     async load(reference) {
       const { data, error } = await db.rpc('semantic_source', { p_account_id: scope.accountId, p_kind: kind, p_id: reference.id });
       if (error) throw new Error('Semantic source unavailable');
       if (!data) return null;
-      const parsed = SourceSchema.parse(data);
-      return { ...parsed, text: parsed.input ? definitions[kind](parsed.input) : parsed.text,
-        preparation: parsed.input ? SEMANTIC_PREPARATIONS[kind] : parsed.preparation, index: parsed.index ?? undefined } satisfies LoadedSemanticSource;
+      return prepare(kind, data);
+    },
+    async loadMany(references) {
+      const { data, error } = await db.rpc('semantic_sources', {
+        p_account_id: scope.accountId, p_kind: kind, p_ids: references.map(reference => reference.id),
+      });
+      if (error) throw new Error('Semantic sources unavailable');
+      return z.array(z.object({ source: SourceSchema })).parse(data).map(row => prepare(kind, row.source));
     },
     async store(source, vector, vectorSpace) {
       const { data, error } = await db.rpc('store_semantic_index', {

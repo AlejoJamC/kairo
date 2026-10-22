@@ -42,11 +42,11 @@ export type {
   Urgency,
 } from './classification';
 
-export { generateEmbedding, generateEmbeddings } from './embeddings';
-export { createSemanticService, sameVectorSpace } from './embeddings/service';
-export { SEMANTIC_PREPARATIONS, prepareTicketEmbeddingText, prepareArticleEmbeddingText, prepareKnowledgeEmbeddingText } from './embeddings/preparation';
-export type { SemanticScope, SourceReference, VectorSpace, SemanticMatch, SemanticFailure, SourceResult,
-  RetrievalResult, LoadedSemanticSource, IndexResult, RetrievalRequest, RetrievalPurpose, SemanticAdapter } from './embeddings/service';
+export { generateEmbedding, generateEmbeddings, createSemanticService, sameVectorSpace, SEMANTIC_SOURCE_DEFINITIONS,
+  SEMANTIC_PREPARATIONS, prepareTicketEmbeddingText, prepareArticleEmbeddingText, prepareKnowledgeEmbeddingText } from './embeddings';
+export type { SemanticService, SemanticServiceDeps, IndexRequest, StoredIndexResult, GroupingResult,
+  SemanticScope, SourceReference, VectorSpace, SemanticMatch, SemanticFailure, SourceResult,
+  RetrievalResult, LoadedSemanticSource, IndexResult, RetrievalRequest, RetrievalPurpose, SemanticAdapter } from './embeddings';
 
 export {
   runLlmFeature,

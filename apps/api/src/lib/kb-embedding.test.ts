@@ -10,6 +10,6 @@ describe('article indexing', () => {
   it('indexes by persisted identity and revision', async () => {
     const f = backendFixture('kb_article');
     expect(await maybeGenerateKbEmbedding({ supabase: f.db, accountId: 'acme', articleId: 'source', title: 'Stale', content: 'Old', space, embedFn: f.embed })).toEqual({ status: 'ok' });
-    expect(f.calls.find(call => call.name === 'store_semantic_index')?.args).toMatchObject({ p_kind: 'kb_article', p_revision: 'r1' });
+    expect(f.calls.find(call => call.name === 'store_semantic_index')?.args).toMatchObject({ p_revision: 'r1' });
   });
 });

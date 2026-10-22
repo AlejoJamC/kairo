@@ -77,11 +77,6 @@ BEGIN
  VALUES(p_account_id,p_kind,p_id,p_revision,p_preparation,p_provider,p_model,p_dimensions,p_embedding)
  ON CONFLICT(account_id,source_kind,source_id) DO UPDATE SET revision=EXCLUDED.revision,preparation=EXCLUDED.preparation,
   provider=EXCLUDED.provider,model=EXCLUDED.model,dimensions=EXCLUDED.dimensions,embedding=EXCLUDED.embedding,created_at=now();
- IF p_kind='ticket' THEN UPDATE tickets SET embedding=p_embedding,embedding_updated_at=now() WHERE id=p_id AND account_id=p_account_id;
- ELSIF p_kind='kb_article' THEN UPDATE kb_articles SET embedding=p_embedding WHERE id=p_id AND account_id=p_account_id;
- ELSE INSERT INTO knowledge_embeddings(version_id,account_id,embedding,source) VALUES(p_id,p_account_id,p_embedding,'semantic_service')
-  ON CONFLICT(version_id) DO UPDATE SET embedding=EXCLUDED.embedding,source=EXCLUDED.source;
- END IF;
  RETURN 'indexed';
 END;
 $$;
@@ -152,8 +147,50 @@ REVOKE ALL ON FUNCTION public.semantic_source(uuid,text,uuid),public.store_seman
 GRANT EXECUTE ON FUNCTION public.semantic_source(uuid,text,uuid),public.store_semantic_index(uuid,text,uuid,text,text,text,text,integer,extensions.vector),
  public.retrieve_semantic_sources(uuid,text,text,extensions.vector,text,text,integer,uuid,double precision,integer,text,boolean,text) TO service_role;
 
-CREATE FUNCTION public.enqueue_semantic_knowledge_candidates(p_version_id uuid, p_threshold double precision DEFAULT 0.80, p_limit integer DEFAULT 25) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=public, extensions AS $$
-DECLARE ki public.semantic_indexes; v public.knowledge_versions; emb extensions.vector; n integer; eligible integer; unembedded integer; cap integer := greatest(1,p_limit);
+-- Read-only query interface: revisions, preparation and vector identity remain owned by embeddings.
+CREATE FUNCTION public.semantic_index_vector(p_account_id uuid,p_kind text,p_id uuid,
+ p_query_kind text DEFAULT NULL,p_query_id uuid DEFAULT NULL) RETURNS extensions.vector
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public,extensions AS $$
+DECLARE source jsonb; query_source jsonb;
+BEGIN
+ source:=semantic_source(p_account_id,p_kind,p_id);
+ IF source IS NULL OR source#>>'{index,revision}' IS DISTINCT FROM source->>'revision'
+  OR source#>>'{index,preparation}' IS DISTINCT FROM source->>'preparation'
+  OR coalesce(source#>>'{index,space,provider}','')='' OR coalesce(source#>>'{index,space,model}','')=''
+  OR coalesce((source#>>'{index,space,dimensions}')::integer,0)<>768 THEN RETURN NULL; END IF;
+ IF p_query_kind IS NOT NULL OR p_query_id IS NOT NULL THEN
+  IF p_query_kind IS NULL OR p_query_id IS NULL THEN RETURN NULL; END IF;
+  query_source:=semantic_source(p_account_id,p_query_kind,p_query_id);
+  IF query_source IS NULL OR query_source#>>'{index,revision}' IS DISTINCT FROM query_source->>'revision'
+   OR query_source#>>'{index,preparation}' IS DISTINCT FROM query_source->>'preparation'
+   OR source#>'{index,space}' IS DISTINCT FROM query_source#>'{index,space}' THEN RETURN NULL; END IF;
+ END IF;
+ RETURN (source#>'{index,vector}')::text::extensions.vector;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.semantic_index_vector(uuid,text,uuid,text,uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.semantic_index_vector(uuid,text,uuid,text,uuid) TO service_role;
+
+CREATE FUNCTION public.semantic_sources(p_account_id uuid,p_kind text,p_ids uuid[])
+RETURNS TABLE(source jsonb) LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ SELECT loaded.source FROM (
+  SELECT semantic_source(p_account_id,p_kind,id) AS source FROM unnest(p_ids) id WHERE cardinality(p_ids)<=200
+ ) loaded WHERE loaded.source IS NOT NULL;
+$$;
+REVOKE ALL ON FUNCTION public.semantic_sources(uuid,text,uuid[]) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.semantic_sources(uuid,text,uuid[]) TO service_role;
+
+CREATE FUNCTION public.semantic_source_similarity(p_account_id uuid,p_kind text,p_id uuid,p_query_kind text,p_query_id uuid)
+RETURNS double precision LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,extensions AS $$
+ SELECT 1-(semantic_index_vector(p_account_id,p_kind,p_id,p_query_kind,p_query_id)
+  <=> semantic_index_vector(p_account_id,p_query_kind,p_query_id));
+$$;
+REVOKE ALL ON FUNCTION public.semantic_source_similarity(uuid,text,uuid,text,uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.semantic_source_similarity(uuid,text,uuid,text,uuid) TO service_role;
+
+-- Knowledge workflow integration: preserve its policy and consume the embeddings query interface.
+CREATE OR REPLACE FUNCTION public.enqueue_knowledge_candidates(p_version_id uuid, p_threshold double precision DEFAULT 0.80, p_limit integer DEFAULT 25) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=public, extensions AS $$
+DECLARE v public.knowledge_versions; knowledge_indexed boolean; n integer; eligible integer; unembedded integer; cap integer := greatest(1,p_limit);
 BEGIN
  SELECT * INTO v FROM knowledge_versions WHERE id=p_version_id;
  IF v.id IS NULL THEN RETURN 0; END IF;
@@ -167,51 +204,32 @@ BEGIN
    UPDATE tickets SET knowledge_context=knowledge_context-v.source_id::text WHERE account_id=v.account_id AND knowledge_context ? v.source_id::text;
    RETURN 0;
  END IF;
- SELECT * INTO ki FROM semantic_indexes WHERE account_id=v.account_id AND source_kind='knowledge_version' AND source_id=v.id
-  AND revision=semantic_revision(jsonb_build_array(v.id,v.revision)) AND preparation='knowledge:title-body:2000:v1';
- emb:=ki.embedding;
+ SELECT semantic_source_similarity(v.account_id,'knowledge_version',v.id,'knowledge_version',v.id) IS NOT NULL INTO knowledge_indexed;
  -- Explicit ties always enter: the source ticket, listed tickets and tickets already using this knowledge.
  -- Everything else must be pending, carry a vector and reach the threshold; the closest ones are queued up to the cap.
  WITH explicit AS (
    SELECT t.id, t.case_revision FROM tickets t WHERE t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL AND (
      v.snapshot->'ticket_ids' @> jsonb_build_array(t.id::text) OR v.snapshot->'tags' @> jsonb_build_array('origin-ticket:'||t.id) OR t.knowledge_context ? v.source_id::text)),
  nearest AS (
-   SELECT t.id, t.case_revision FROM tickets t JOIN semantic_indexes ti ON ti.account_id=t.account_id AND ti.source_kind='ticket' AND ti.source_id=t.id
-   AND ti.provider=ki.provider AND ti.model=ki.model AND ti.dimensions=ki.dimensions
-   AND ti.revision=semantic_revision(jsonb_build_array(t.subject,t.body_plain,t.snippet)) AND ti.preparation='ticket:subject-body:1000:v1'
-   WHERE emb IS NOT NULL AND t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
-     AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND ti.embedding IS NOT NULL
-     AND 1-(ti.embedding <=> emb) >= p_threshold AND t.id NOT IN (SELECT id FROM explicit)
-   ORDER BY ti.embedding <=> emb LIMIT cap)
+   SELECT t.id, t.case_revision FROM tickets t
+   WHERE knowledge_indexed AND t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
+     AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND semantic_source_similarity(t.account_id,'ticket',t.id,'knowledge_version',v.id) IS NOT NULL
+     AND semantic_source_similarity(t.account_id,'ticket',t.id,'knowledge_version',v.id) >= p_threshold AND t.id NOT IN (SELECT id FROM explicit)
+   ORDER BY semantic_source_similarity(t.account_id,'ticket',t.id,'knowledge_version',v.id) DESC LIMIT cap)
  INSERT INTO decision_work_items(account_id,ticket_id,knowledge_version_id,contract,dedupe_key)
  SELECT v.account_id, c.id, v.id, 'knowledge_impact', 'impact:'||c.id||':'||c.case_revision||':'||v.id
  FROM (SELECT * FROM explicit UNION ALL SELECT * FROM nearest) c
  ON CONFLICT DO NOTHING;
  GET DIAGNOSTICS n=ROW_COUNT;
- SELECT count(*) INTO eligible FROM tickets t JOIN semantic_indexes ti ON ti.account_id=t.account_id AND ti.source_kind='ticket' AND ti.source_id=t.id
-   AND ti.provider=ki.provider AND ti.model=ki.model AND ti.dimensions=ki.dimensions
-   AND ti.revision=semantic_revision(jsonb_build_array(t.subject,t.body_plain,t.snippet)) AND ti.preparation='ticket:subject-body:1000:v1'
- WHERE emb IS NOT NULL AND t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
-   AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND ti.embedding IS NOT NULL
-   AND 1-(ti.embedding <=> emb) >= p_threshold;
+ SELECT count(*) INTO eligible FROM tickets t
+ WHERE knowledge_indexed AND t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
+   AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND semantic_source_similarity(t.account_id,'ticket',t.id,'knowledge_version',v.id) IS NOT NULL
+   AND semantic_source_similarity(t.account_id,'ticket',t.id,'knowledge_version',v.id) >= p_threshold;
  SELECT count(*) INTO unembedded FROM tickets t
  WHERE t.account_id=v.account_id AND t.merged_into_ticket_id IS NULL
-   AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND NOT EXISTS(SELECT 1 FROM semantic_indexes ti WHERE ti.account_id=t.account_id AND ti.source_kind='ticket' AND ti.source_id=t.id AND ti.provider=ki.provider AND ti.model=ki.model AND ti.dimensions=ki.dimensions AND ti.revision=semantic_revision(jsonb_build_array(t.subject,t.body_plain,t.snippet)) AND ti.preparation='ticket:subject-body:1000:v1');
+   AND COALESCE(t.status,'open') NOT IN ('resolved','ai_resolved','closed') AND semantic_source_similarity(t.account_id,'ticket',t.id,'knowledge_version',v.id) IS NULL;
  INSERT INTO knowledge_candidate_runs(account_id,version_id,similarity_threshold,candidate_limit,eligible_tickets,selected_tickets,limit_reached,pending_without_embedding,missing_knowledge_embedding)
- VALUES (v.account_id, v.id, p_threshold, cap, eligible, n, eligible > cap, unembedded, emb IS NULL);
+ VALUES (v.account_id, v.id, p_threshold, cap, eligible, n, eligible > cap, unembedded, NOT knowledge_indexed);
  RETURN n;
 END;
 $$;
-
-REVOKE ALL ON FUNCTION public.enqueue_semantic_knowledge_candidates(uuid,double precision,integer) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.enqueue_semantic_knowledge_candidates(uuid,double precision,integer) TO service_role;
-
-CREATE FUNCTION public.read_semantic_ticket_vectors(p_account_id uuid,p_ids uuid[],p_provider text,p_model text,p_dimensions integer)
-RETURNS TABLE(id uuid,embedding extensions.vector) LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,extensions AS $$
- SELECT t.id,i.embedding FROM tickets t JOIN semantic_indexes i ON i.account_id=t.account_id AND i.source_kind='ticket' AND i.source_id=t.id
- WHERE t.account_id=p_account_id AND t.id=ANY(p_ids) AND cardinality(p_ids)<=200
-  AND i.provider=p_provider AND i.model=p_model AND i.dimensions=p_dimensions
-  AND i.revision=semantic_revision(jsonb_build_array(t.subject,t.body_plain,t.snippet)) AND i.preparation='ticket:subject-body:1000:v1';
-$$;
-REVOKE ALL ON FUNCTION public.read_semantic_ticket_vectors(uuid,uuid[],text,text,integer) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.read_semantic_ticket_vectors(uuid,uuid[],text,text,integer) TO service_role;

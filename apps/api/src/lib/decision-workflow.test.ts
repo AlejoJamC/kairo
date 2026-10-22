@@ -22,6 +22,7 @@ function database(options: { knowledge?:boolean; current?:boolean; existing?:boo
     if (name === 'retrieve_semantic_sources') return {data:{status:'ok',matches:options.knowledge === false ? [] : [{source:{kind:'knowledge_version',id:'article'},revision:'r1',version:'version',content:'Use account recovery.',authority:'approved_knowledge',method:'semantic',metadata:{knowledge:version}}]},error:null};
     if (name === 'semantic_source') return {data:{reference:{kind:'knowledge_version',id:'version'},accountId:'account',revision:'r1',preparation:'v1',text:'Use account recovery.',...(options.embedded ? {index:{revision:'r1',preparation:'v1',space:{provider:'synthetic',model:'acme',dimensions:2}}} : {})},error:null};
     if (name === 'store_semantic_index') { saved.push(args); return {data:'indexed',error:null}; }
+    if (name === 'enqueue_knowledge_candidates' || name === 'enqueue_pending_knowledge') return {data:0,error:null};
     saved.push(args); return {data:options.persistStatus ?? 'enriched',error:null};
   });
   const from = (table:string) => {
@@ -44,12 +45,6 @@ function database(options: { knowledge?:boolean; current?:boolean; existing?:boo
 }
 beforeEach(()=>{decide.mockClear();analyze.mockClear();propose.mockClear();});
 describe('durable workflow execution',()=>{
-  it('regenerates queued source indices without running case inference', async () => {
-    const {db,rpc} = database();
-    await processDecisionWork({...work,contract:'semantic_index',ticket_id:null},db,inject());
-    expect(rpc).toHaveBeenCalledWith('store_semantic_index',expect.objectContaining({p_kind:'knowledge_version',p_id:'version',p_account_id:'account'}));
-    expect(decide).not.toHaveBeenCalled(); expect(analyze).not.toHaveBeenCalled(); expect(propose).not.toHaveBeenCalled();
-  });
   it('skips inference when that case and knowledge revision was already evaluated',async()=>{
     const {db}=database({existing:true});await processDecisionWork(work,db,inject());
     expect(decide).not.toHaveBeenCalled();expect(analyze).not.toHaveBeenCalled();
@@ -181,12 +176,17 @@ describe('durable workflow execution',()=>{
     }
   });
 
+  it('rejects a knowledge change without its selected source instead of processing the whole account', async () => {
+    const {db,rpc} = database();
+    await expect(processDecisionWork({...work,contract:'knowledge_change',knowledge_version_id:null},db,inject())).rejects.toThrow('Knowledge version missing');
+    expect(rpc).not.toHaveBeenCalled();
+  });
   it('embeds an approved version before selecting tickets, with the configured threshold and limit',async()=>{
     const {db,saved,rpc}=database(); const vector=mock(async (_text: string)=>[0.3,0.4]);
     await processDecisionWork({...work,contract:'knowledge_change',ticket_id:null,message_id:null},db,inject({embed:vector}));
     expect(vector).toHaveBeenCalledWith('Use account recovery.');
     expect(saved).toContainEqual(expect.objectContaining({p_id:'version',p_embedding:[0.3,0.4],p_model:'acme',p_revision:'r1'}));
-    expect(rpc).toHaveBeenCalledWith('enqueue_semantic_knowledge_candidates',{p_version_id:'version',p_threshold:0.8,p_limit:25});
+    expect(rpc).toHaveBeenCalledWith('enqueue_knowledge_candidates',{p_version_id:'version',p_threshold:0.8,p_limit:25});
   });
   it('does not embed a version that already has a vector',async()=>{
     const {db}=database({embedded:true}); const vector=mock(async (_text: string)=>[0.3]);

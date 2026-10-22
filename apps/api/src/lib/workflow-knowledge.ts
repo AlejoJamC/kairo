@@ -43,20 +43,18 @@ export function knowledgeEmbeddingText(version: Pick<KnowledgeVersion, 'snapshot
   return prepareKnowledgeEmbeddingText(version.snapshot);
 }
 
-/** The pipeline explicitly selects its account's sources; installing the schema schedules nothing. */
-export async function enqueuePendingSemanticKnowledge(accountId: string, db = supabase): Promise<void> {
-  let after: string | undefined;
-  for (;;) {
-    let request = db.from('current_knowledge').select('id').eq('account_id', accountId).order('id').limit(200);
-    if (after) request = request.gt('id', after);
-    const { data, error } = await request;
-    if (error) throw new ProviderError('Pending knowledge lookup failed', true);
-    for (const version of data ?? []) {
-      const result = await db.rpc('enqueue_semantic_knowledge_candidates', { p_version_id: version.id,
-        p_threshold: env.EMBEDDING_SIMILARITY_THRESHOLD, p_limit: env.KNOWLEDGE_CANDIDATE_LIMIT });
-      if (result.error) throw new ProviderError('Pending knowledge check failed', true);
-    }
-    if (!data || data.length < 200) return;
-    after = data[data.length - 1]!.id;
+/** Knowledge owns scheduling; embeddings owns the vector query interface used by its persistence adapter. */
+export async function enqueueWorkflowKnowledge(accountId: string, db = supabase, options: { versionId?: string } = {}): Promise<void> {
+  if (options.versionId) {
+    const { data, error } = await db.from('knowledge_versions').select('id').eq('account_id', accountId).eq('id', options.versionId).maybeSingle();
+    if (error) throw new ProviderError('Knowledge version lookup failed', true);
+    if (!data) throw new ProviderError('Knowledge version unavailable', false);
   }
+  const { data, error } = options.versionId
+    ? await db.rpc('enqueue_knowledge_candidates', { p_version_id: options.versionId,
+      p_threshold: env.EMBEDDING_SIMILARITY_THRESHOLD, p_limit: env.KNOWLEDGE_CANDIDATE_LIMIT })
+    : await db.rpc('enqueue_pending_knowledge', { p_account_id: accountId,
+      p_threshold: env.EMBEDDING_SIMILARITY_THRESHOLD, p_limit: env.KNOWLEDGE_CANDIDATE_LIMIT });
+  if (error) throw new ProviderError('Knowledge candidate selection failed', true);
+  if (!z.number().int().nonnegative().safeParse(data).success) throw new ProviderError('Invalid knowledge candidate result', true);
 }
