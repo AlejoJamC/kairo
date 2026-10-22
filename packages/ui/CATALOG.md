@@ -47,7 +47,7 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `sla-indicator` | implemented | `SlaIndicator` | Shows the first-response SLA of a ticket: how much time is left or how long since it was breached. |
 | `source-list` | implemented | `SourceList` | Lists where an answer comes from or which tickets are related. |
 | `status-chip` | implemented | `StatusChip` | Shows and changes the ticket status. |
-| `stepper` | implemented | `Stepper` | Shows the onboarding wizard step. |
+| `stepper` | implemented | `Stepper` | Shows where the person is in the onboarding wizard and which steps they have completed. It is a progress indicator, not navigation. |
 | `switch` | implemented | `Switch` | Turns a setting on or off with immediate effect. |
 | `tabs` | implemented | `Tab`, `Tabs` | Switches panels inside the context panel. |
 | `thread-message` | implemented | `ThreadMessage` | One message in the ticket thread. |
@@ -81,7 +81,7 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `member-row` | implemented | `MemberRow`, `MemberTable`, `SeatsBar` | One person of the team in Settings › Team. |
 | `mention-menu` | implemented | `MentionChip`, `MentionMenu` | Mentions inside an internal note: the menu that opens when typing @ in the composer, and the chip of each mentioned person. |
 | `page-header` | implemented | `PageFormFooter`, `PageFrame`, `PageHeader`, `PageSearch`, `PageToolbar`, `SettingsNav` | Header and frame of the app page views (Clients, Knowledge and every Settings section), the counterpart of queue-header for views that are not queues. |
-| `permission-list` | implemented | `PermissionList` | Permissions requested from the email provider, and initial rules. |
+| `permission-list` | implemented | `PermissionList` | Lists what the product will do with the connected email account, as rows with a switch, before the person accepts. The same block holds the initial rules on the last wizard step. |
 | `plan-card` | implemented | `PlanCard` | One pricing plan. |
 | `pricing-table` | implemented | `PricingTable` | Plan comparison table. |
 | `product-frame` | implemented | `ProductFrame` | Shows the real app inside a frame on the public web. |
