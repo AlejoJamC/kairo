@@ -71,3 +71,18 @@ jobs:
 
       - name: UI metrics
         run: bun run ui:metrics
+
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Cargo check the desktop shell
+        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml

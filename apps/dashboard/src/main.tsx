@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router'
 import { UiProvider } from '@kairo/ui'
 import { initWebTelemetry } from '@kairo/observability/web'
 import { initClientCore } from '@kairo/client-core/config'
-import { createWebPlatform } from '@kairo/client-core/web'
+import { createPlatform } from '@kairo/client-core'
 import { env } from './env'
 import '@kairo/tokens/tokens.css'
 import './index.css'
@@ -25,7 +25,7 @@ initClientCore({
   landingUrl: env.VITE_LANDING_URL,
   supabaseUrl: env.VITE_SUPABASE_URL,
   supabaseAnonKey: env.VITE_SUPABASE_ANON_KEY,
-  platform: createWebPlatform(),
+  platform: createPlatform(),
 })
 
 createRoot(document.getElementById('root')!).render(

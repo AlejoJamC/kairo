@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // If no existing session, but we have hash tokens from a redirect
-        const handoffTokens = getPlatform().authHandoff.takeHandoffTokens();
+        const handoffTokens = await getPlatform().authHandoff.takeHandoffTokens();
         if (handoffTokens) {
           const { data, error } = await supabase.auth.setSession({
             access_token: handoffTokens.access_token,

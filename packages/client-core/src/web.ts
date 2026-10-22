@@ -65,6 +65,6 @@ export function createWebPlatform(): PlatformPorts {
         };
       },
     },
-    authHandoff: { takeHandoffTokens: () => handoff },
+    authHandoff: { takeHandoffTokens: async () => handoff },
   };
 }

@@ -33,7 +33,7 @@ export interface HandoffTokens {
 
 export interface AuthHandoffPort {
   /** Session tokens delivered by the sign-in surface, or null. Idempotent: repeated calls return the same value. */
-  takeHandoffTokens(): HandoffTokens | null;
+  takeHandoffTokens(): Promise<HandoffTokens | null>;
 }
 
 export interface PlatformPorts {

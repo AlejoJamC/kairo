@@ -118,12 +118,14 @@ type WebProps = {
   pulse?: boolean
   /** Clips the text to this many lines with an ellipsis. */
   lineClamp?: number
+  /** Marks the element as a native window drag region (Tauri webview). */
+  dragRegion?: boolean
 }
 
 // Splits the web-only props into DOM attributes/events and an inline style
 // object; the library is the one place allowed to build inline styles.
 function webProps(props: WebProps): Record<string, never> {
-  const { gridTemplateColumns, transition, transform, listStyle, fontStyle, wordBreak, textDecoration, backgroundImage, textUnderlineOffset, boxSizing, backdropFilter, cssAnimation, fadeIn, pulse, lineClamp, overflowX, overflowY, lineHeightRatio, ...dom } = props
+  const { gridTemplateColumns, transition, transform, listStyle, fontStyle, wordBreak, textDecoration, backgroundImage, textUnderlineOffset, boxSizing, backdropFilter, cssAnimation, fadeIn, pulse, lineClamp, overflowX, overflowY, lineHeightRatio, dragRegion, ...dom } = props
   const style: Record<string, string> = {}
   if (gridTemplateColumns) style.gridTemplateColumns = gridTemplateColumns
   if (transition) style.transition = transition
@@ -143,7 +145,9 @@ function webProps(props: WebProps): Record<string, never> {
   if (textUnderlineOffset !== undefined) style.textUnderlineOffset = `${textUnderlineOffset}px`
   if (fadeIn || pulse) ensureMotionStyles()
   const className = [fadeIn ? 'kairo-ui-fade' : '', pulse ? 'kairo-ui-pulse' : ''].filter(Boolean).join(' ')
-  return domProps({ ...dom, ...(className ? { className } : null), ...(Object.keys(style).length ? { style } : null) })
+  const attrs: Record<string, string> = {}
+  if (dragRegion) attrs['data-tauri-drag-region'] = ''
+  return domProps({ ...dom, ...attrs, ...(className ? { className } : null), ...(Object.keys(style).length ? { style } : null) })
 }
 
 type BoxProps = Omit<GetProps<typeof BoxFrame>, 'role'> & WebProps
@@ -156,7 +160,7 @@ type TextProps = Omit<GetProps<typeof TextFrame>, 'role' | 'fontSize'> &
 const WEB_KEYS = [
   'title', 'role', 'ref', 'fontSize', 'onClick', 'onDoubleClick', 'onMouseDown', 'onMouseUp', 'onMouseEnter', 'onMouseLeave',
   'onKeyDown', 'onSubmit', 'onFocus', 'onBlur', 'type', 'htmlFor', 'href', 'target', 'rel', 'scope', 'colSpan', 'gridTemplateColumns', 'transition', 'transform',
-  'listStyle', 'fontStyle', 'wordBreak', 'textDecoration', 'backgroundImage', 'textUnderlineOffset', 'boxSizing', 'backdropFilter', 'cssAnimation', 'fadeIn', 'pulse', 'lineClamp', 'overflowX', 'overflowY', 'lineHeightRatio', 'onPointerDown', 'onPointerUp', 'onPointerLeave', 'onPointerCancel', 'onSelect', 'onKeyUp',
+  'listStyle', 'fontStyle', 'wordBreak', 'textDecoration', 'backgroundImage', 'textUnderlineOffset', 'boxSizing', 'backdropFilter', 'cssAnimation', 'fadeIn', 'pulse', 'lineClamp', 'overflowX', 'overflowY', 'lineHeightRatio', 'onPointerDown', 'onPointerUp', 'onPointerLeave', 'onPointerCancel', 'onSelect', 'onKeyUp', 'dragRegion',
 ] as const
 
 function split<P extends object>(props: P): [Record<string, unknown>, Record<string, unknown>] {
