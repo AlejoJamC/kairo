@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
-import { Box, Faq, PlanCard, Section, SectionHeader, Segmented } from "@kairo/ui";
+import { Box, Faq, PlanCard, PricingTable, Section, SectionHeader, Segmented } from "@kairo/ui";
 
 interface Plan {
   id: string;
@@ -27,6 +27,8 @@ export default function PricingPage() {
     { id: "scale", name: p.plans.scale.name, price: annual ? 199 : 249, blurb: p.plans.scale.blurb, cta: p.plans.scale.cta, features: p.features.scale },
     { id: "enterprise", name: p.plans.enterprise.name, price: null, blurb: p.plans.enterprise.blurb, cta: p.plans.enterprise.cta, features: p.features.enterprise },
   ];
+
+  const c = p.table;
 
   return (
     <>
@@ -61,6 +63,21 @@ export default function PricingPage() {
               features={plan.features}
             />
           ))}
+        </Box>
+      </Section>
+
+      <Section>
+        <Box display="flex" flexDirection="column" gap={40}>
+          <SectionHeader eyebrow={c.eyebrow} title={c.title} />
+          <PricingTable
+            plans={[p.plans.free.name, p.plans.pro.name, p.plans.scale.name, p.plans.enterprise.name]}
+            recommended={1}
+            groups={c.groups}
+            featureLabel={c.feature}
+            includedLabel={c.included}
+            notIncludedLabel={c.notIncluded}
+            caption={c.title}
+          />
         </Box>
       </Section>
 

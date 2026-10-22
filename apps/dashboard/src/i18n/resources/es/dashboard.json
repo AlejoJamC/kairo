@@ -841,7 +841,13 @@
   },
   "statusBar": {
     "commands": "comandos",
-    "open": "kairo · {{count}} abiertos"
+    "open": "kairo · {{count}} abiertos",
+    "navigate": "navegar",
+    "acknowledge": "reconocer",
+    "resolve": "resolver",
+    "escalate": "escalar",
+    "note": "nota interna",
+    "shortcuts": "atajos"
   },
   "shortcuts": {
     "title": "Atajos de teclado",

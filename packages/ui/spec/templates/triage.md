@@ -39,5 +39,5 @@ Prioritized queue with AI classification, evidence and a human decision on every
 ## Platforms
 
 - **web**: Triage app in the browser. Below `layout.breakpoint` the panes stack and the status bar is hidden.
-- **desktop**: Triage desktop app, same component.
+- **desktop**: Triage desktop app, same layout. macOS adds window-chrome (controls slot and drag areas), the sidebar desktop variant, app-menu, system-notification and dock-badge; Windows and Linux use the native frame.
 - **mobile**: Not designed.
