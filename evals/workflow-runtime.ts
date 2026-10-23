@@ -4,6 +4,7 @@ import type { EmailKnowledgeDeps } from '../apps/api/src/lib/email-knowledge';
 import type { SuggestReplyDeps } from '../apps/api/src/lib/reply-suggestion';
 import type { LlmCallRecord } from '../packages/intelligence/src/harness/run-llm-feature';
 import { workflowStorage } from './workflow-storage';
+import { semanticStorage } from './semantic-storage';
 import type { Row } from './storage';
 import type { Scenario, WorkflowMode } from './workflow-scenarios';
 
@@ -19,6 +20,7 @@ export async function createWorkflowRuntime(notify: (step: WorkflowStep) => void
   process.env['SUPABASE_URL'] ??= 'http://127.0.0.1:54321';
   process.env['SUPABASE_SERVICE_ROLE_KEY'] ??= 'synthetic-eval-storage';
   let active: ReturnType<typeof workflowStorage> | undefined;
+  let semantic: ReturnType<typeof semanticStorage>;
   let example: Scenario;
   const current = () => { if (!active) throw new Error('Evaluation scenario missing'); return active; };
   const calls: LlmCallRecord[] = [];
@@ -36,20 +38,18 @@ export async function createWorkflowRuntime(notify: (step: WorkflowStep) => void
     rpc: (name: string, args: Row) => current().db.rpc(name, args),
   } }));
   mock.module('../apps/api/src/lib/llm-logging.js', () => ({ recordLlmCall: logger }));
+  mock.module('../apps/api/src/lib/semantic-service.js', () => ({
+    createBackendSemanticService: (options: Parameters<ReturnType<typeof semanticStorage>['service']>[0]) => semantic.service(options),
+  }));
   const knowledge = await import('../apps/api/src/lib/workflow-knowledge');
   const retrieveApproved: typeof knowledge.approvedWorkflowKnowledge = async (...args) => {
-    emit('approved_knowledge_retrieval', 'completed', { count: current().current().length, adapter: 'explicit fixture links; no semantic retrieval measurement' });
-    return knowledgeLookup(...args);
+    const versions = await knowledge.approvedWorkflowKnowledge(args[0], args[1], args[2], current().db);
+    emit('approved_knowledge_retrieval', 'completed', { count: versions.length, adapter: 'production semantic domain with memory storage; relevance not measured' });
+    return versions;
   };
-  const knowledgeLookup = knowledge.approvedWorkflowKnowledge;
-  mock.module('../apps/api/src/lib/workflow-knowledge.js', () => ({ ...knowledge,
-    approvedWorkflowKnowledge: async (...args: Parameters<typeof knowledgeLookup>) => knowledgeLookup(args[0], args[1], args[2], current().db, { embed: async () => [1, 0] }),
-  }));
-  const context = await import('../apps/api/src/lib/ticket-context');
-  const retrieval = async () => ({ kbArticles: [], resolvedCases: [], degraded: [] });
-  mock.module('../apps/api/src/lib/ticket-context.js', () => ({ ...context,
-    findRelevantKb: async () => ({ articles: [], degraded: [] }), retrieveTicketContext: retrieval,
-  }));
+  const { retrieveTicketContext } = await import('../apps/api/src/lib/ticket-context');
+  const retrieval: typeof retrieveTicketContext = input => retrieveTicketContext(input, { supabase: current().db });
+  const { maybeGenerateTicketEmbedding } = await import('../apps/api/src/lib/ticket-embedding');
   const { processDecisionWork } = await import('../apps/api/src/lib/decision-workflow');
   const { proposeEmailKnowledge } = await import('../apps/api/src/lib/email-knowledge');
   const { suggestReply } = await import('../apps/api/src/lib/reply-suggestion');
@@ -57,6 +57,15 @@ export async function createWorkflowRuntime(notify: (step: WorkflowStep) => void
   return async (mode: WorkflowMode, input: Scenario) => {
     example = input; active = workflowStorage(input); calls.length = 0; steps.length = 0;
     const db = active.db;
+    semantic = semanticStorage(active);
+    const indexed = await maybeGenerateTicketEmbedding({ supabase: db, accountId: active.identity.accountId,
+      ticketId: active.identity.ticketId, subject: input.subject, bodyPreview: input.body });
+    if (indexed.status !== 'ok') throw new Error('Evaluation ticket indexing failed');
+    for (const version of active.current()) {
+      await processDecisionWork({ id: 'acme-memory-publication', account_id: active.identity.accountId, ticket_id: null,
+        message_id: null, knowledge_version_id: String(version['id']), contract: 'knowledge_change', dedupe_key: `publication:${String(version['id'])}` }, db);
+    }
+    emit('semantic_indexing', 'completed', { count: active.tables['semantic_indexes']!.length, storage: 'memory adapter' });
     const initial = structuredClone(active.tables);
     const beforeTicket = structuredClone(active.ticket);
     const prediction: Record<string, string> = {};
@@ -70,7 +79,7 @@ export async function createWorkflowRuntime(notify: (step: WorkflowStep) => void
       message_id: mode === 'incoming' ? active.source.id : null,
       knowledge_version_id: String(active.tables['knowledge_versions']![input.targetKnowledge ?? 0]?.['id'] ?? ''),
       contract: input.contract, dedupe_key: `acme-work:${input.id}` };
-    const runWork = () => processDecisionWork(work, db, { ...overrides.work, embed: async () => [1, 0],
+    const runWork = () => processDecisionWork(work, db, { ...overrides.work,
       propose: async (args, deps) => {
         const proposal = await proposeEmailKnowledge(args, { ...deps, ...overrides.knowledge, logger });
         emit('knowledge_proposals', 'completed', proposal);
@@ -96,7 +105,7 @@ export async function createWorkflowRuntime(notify: (step: WorkflowStep) => void
           if (work.knowledge_version_id) await runWork();
         } else {
           await processDecisionWork({ ...work, contract: 'knowledge_change', ticket_id: null, message_id: null }, db,
-            { embed: async () => [1, 0] });
+            {});
           emit('candidate_selection_fixture', 'completed', { explicitTicketLinks: active.tables['decision_work_items']!.length, semanticRetrievalMeasured: false });
           const queued = active.tables['decision_work_items']![0];
           if (!queued) throw new Error('EVAL_CANDIDATE_MISSING');
@@ -112,7 +121,7 @@ export async function createWorkflowRuntime(notify: (step: WorkflowStep) => void
         }
       } else if (mode === 'reply') {
         const draft = () => suggestReply(active!.identity, { supabase: db, logger, ...overrides.reply, retrieve: retrieval,
-          retrieveApproved: (...args) => retrieveApproved(args[0], args[1], args[2], db, { embed: async () => [1, 0] }) });
+          retrieveApproved: (...args) => retrieveApproved(args[0], args[1], args[2], db) });
         output = await draft();
         if (!output) throw new Error('EVAL_REPLY_MISSING');
         emit('reply_proposal', 'completed', output);
@@ -121,6 +130,9 @@ export async function createWorkflowRuntime(notify: (step: WorkflowStep) => void
           active.tables['knowledge_versions']!.push({ ...structuredClone(previous), id: 'acme-refreshed-version',
             revision: Number(previous['revision']) + 1,
             snapshot: { ...(previous['snapshot'] as Row), content: 'The current account recovery procedure requires the recovery link and a one-time code.' } });
+          const refreshed = active.current()[0]!;
+          await processDecisionWork({ ...work, contract: 'knowledge_change', ticket_id: null,
+            message_id: null, knowledge_version_id: String(refreshed['id']) }, db);
           output = await draft();
           emit('fresh_request', 'completed', output);
         }

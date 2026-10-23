@@ -1,11 +1,5 @@
-/**
- * Credentials for integration tests that write to a Supabase database.
- *
- * Returns a target only when the run opts in with RUN_SUPABASE_INTEGRATION=1
- * and SUPABASE_URL points at a local stack. It never reads `.env.local`, which
- * holds the linked remote project: these suites insert and delete rows, and
- * must never run against it.
- */
+import { createClient } from '@supabase/supabase-js';
+
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 
 export interface LocalSupabaseTarget { url: string; serviceRoleKey: string }
@@ -15,39 +9,26 @@ export function localSupabaseTarget(env: Record<string, string | undefined> = pr
   const url = env['SUPABASE_URL'];
   const serviceRoleKey = env['SUPABASE_SERVICE_ROLE_KEY'];
   if (!url || !serviceRoleKey) return null;
-  let host: string;
-  try { host = new URL(url).hostname; } catch { return null; }
-  if (!LOCAL_HOSTS.has(host)) {
-    throw new Error('RUN_SUPABASE_INTEGRATION refuses a non-local SUPABASE_URL: these tests write to the database');
+  let endpoint: URL;
+  try { endpoint = new URL(url); } catch { throw new Error('Invalid local Supabase URL'); }
+  if (!LOCAL_HOSTS.has(endpoint.hostname) || endpoint.protocol !== 'http:' || endpoint.port !== '54321' ||
+    endpoint.username || endpoint.password || endpoint.pathname !== '/' || endpoint.search || endpoint.hash || env['NODE_ENV'] === 'production') {
+    throw new Error('Supabase integration tests require the existing non-production local stack on port 54321; non-local and alternate endpoints are refused');
   }
   return { url, serviceRoleKey };
 }
 
-export interface IsolatedSemanticTarget extends LocalSupabaseTarget { projectId: string; runToken: string }
-
-/** A loopback URL alone does not establish that a database is disposable. */
-export function isolatedSemanticTarget(env: Record<string, string | undefined> = process.env): IsolatedSemanticTarget | null {
-  const target = localSupabaseTarget(env);
-  if (!target) return null;
-  const url = new URL(target.url);
-  const projectId = env['SEMANTIC_TEST_PROJECT_ID'];
-  const runToken = env['SEMANTIC_TEST_RUN_TOKEN'];
-  if (env['NODE_ENV'] === 'production' || url.protocol !== 'http:' || url.username || url.password ||
-    !url.port || ['54321','54322'].includes(url.port) || !/^kairo-semantic-test-[a-f0-9]{12}$/.test(projectId ?? '') ||
-    !/^[a-f0-9-]{36}$/.test(runToken ?? '')) {
-    throw new Error('Semantic integration tests require the disposable test runner and refuse the normal development stack');
+export function localSupabaseSqlUrl(value: string | undefined): string {
+  let endpoint: URL;
+  try { endpoint = new URL(value ?? ''); } catch { throw new Error('A local Supabase SQL connection is required'); }
+  if (!['postgres:', 'postgresql:'].includes(endpoint.protocol) || !LOCAL_HOSTS.has(endpoint.hostname) || endpoint.port !== '54322' ||
+    endpoint.pathname !== '/postgres' || [...endpoint.searchParams.keys()].some(key => key !== 'sslmode') ||
+    !['disable', null].includes(endpoint.searchParams.get('sslmode'))) {
+    throw new Error('Supabase SQL tests require the existing local database on port 54322');
   }
-  return { ...target, projectId: projectId!, runToken: runToken! };
+  return endpoint.toString();
 }
 
-export async function assertSemanticTestIdentity(target: IsolatedSemanticTarget): Promise<void> {
-  const response = await fetch(`${new URL(target.url).origin}/rest/v1/rpc/semantic_test_identity`, {
-    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),
-    headers: { apikey: target.serviceRoleKey, Authorization: `Bearer ${target.serviceRoleKey}`, 'Content-Type': 'application/json' }, body: '{}',
-  });
-  if (!response.ok) throw new Error('Disposable database identity is unavailable; refusing test writes');
-  const identity = await response.json() as { projectId?: string; runToken?: string };
-  if (identity.projectId !== target.projectId || identity.runToken !== target.runToken) {
-    throw new Error('Disposable database identity mismatch; refusing test writes');
-  }
+export function createSemanticTestClient(target: LocalSupabaseTarget) {
+  return createClient(target.url, target.serviceRoleKey, { auth: { persistSession: false } });
 }

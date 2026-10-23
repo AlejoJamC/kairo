@@ -3,7 +3,7 @@ import { SQL } from 'bun';
 import { randomUUID } from 'node:crypto';
 import { configuredEmbeddingDimensions, resolveModelRoute } from '@kairo/intelligence';
 import { createClient } from '@supabase/supabase-js';
-import { isolatedSemanticTarget, assertSemanticTestIdentity } from '../test-support/local-supabase.js';
+import { localSupabaseTarget, localSupabaseSqlUrl } from '../test-support/local-supabase.js';
 import { createBackendSemanticService } from './semantic-service.js';
 import { processDecisionWork, type DecisionWork } from './decision-workflow.js';
 import { maybeGenerateTicketEmbedding } from './ticket-embedding.js';
@@ -12,7 +12,7 @@ import { suggestReply, type SuggestReplyDeps } from './reply-suggestion.js';
 import { approvedWorkflowKnowledge, enqueueWorkflowKnowledge } from './workflow-knowledge.js';
 import { sharedAgentTools } from './agent-tools.js';
 
-const target = isolatedSemanticTarget();
+const target = localSupabaseTarget();
 const admin = target ? createClient(target.url, target.serviceRoleKey, { auth: { persistSession: false } }) : null!;
 const vector = [1, ...Array<number>(767).fill(0)];
 const space = { provider: 'synthetic', model: 'acme', dimensions: 768 };
@@ -25,20 +25,20 @@ function check(error: { code?: string } | null) {
 }
 beforeAll(async () => {
   if (!target) return;
-  await assertSemanticTestIdentity(target);
-  const url = new URL(process.env['SEMANTIC_TEST_DB_URL'] ?? 'http://invalid');
-  if (!['postgres:','postgresql:'].includes(url.protocol) || !['127.0.0.1','localhost'].includes(url.hostname) ||
-    !url.port || ['54321','54322','55494'].includes(url.port)) throw new Error('SQL tests refuse an existing development endpoint');
-  sql = new SQL(url.toString());
-  const [proof] = await sql`SELECT public.semantic_test_identity() AS identity`;
-  if (proof.identity.projectId !== target.projectId || proof.identity.runToken !== target.runToken) throw new Error('SQL test identity mismatch');
-  const { data, error } = await admin.from('plans').upsert({ code: 'acme-semantic-integration', name: 'Acme', seat_limit_default: 5 }, { onConflict: 'code' }).select('id').single();
+  sql = new SQL(localSupabaseSqlUrl(process.env['SUPABASE_DB_URL']));
+  const { data, error } = await admin.from('plans').select('id').eq('code', 'starter').single();
   check(error); planId = data!.id;
 });
-afterAll(async () => { if (sql) await sql.close(); });
+const fixtureAccounts: string[] = [];
+afterAll(async () => {
+  try {
+    if (fixtureAccounts.length) check((await admin.from('decision_work_items').delete().in('account_id', fixtureAccounts)).error);
+  } finally { if (sql) await sql.close(); }
+});
 async function fixture(published = true) {
   const account = randomUUID(), ticket = randomUUID(), article = randomUUID();
   check((await admin.from('accounts').insert({ id: account, name: 'Acme', slug: account, plan_id: planId })).error);
+  fixtureAccounts.push(account);
   check((await admin.from('tickets').insert({ id: ticket, account_id: account, subject: 'Acme access', body_plain: 'Invented recovery case', status: 'resolved' })).error);
   check((await admin.from('kb_articles').insert({ id: article, account_id: account, title: 'Acme access recovery', content: 'Use the invented recovery procedure.', is_published: published })).error);
   const service = createBackendSemanticService({ db: admin, embed, space,

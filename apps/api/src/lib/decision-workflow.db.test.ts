@@ -1,11 +1,17 @@
-import { afterAll, describe, expect, it } from 'bun:test';
+import { beforeAll, afterAll, describe, expect, it } from 'bun:test';
 import { SQL } from 'bun';
 import { randomUUID } from 'node:crypto';
+import { localSupabaseSqlUrl } from '../test-support/local-supabase';
 
-// Explicit opt-in; this suite only connects to the disposable local test database.
+// Explicit opt-in; this suite uses only the existing local Supabase database.
 const enabled = process.env['RUN_WORKFLOW_DB_TESTS'] === '1';
-const sql = new SQL('postgresql://postgres:test-only-password@127.0.0.1:55494/postgres?sslmode=disable');
-afterAll(async () => { await sql.close(); });
+const sql = enabled ? new SQL(localSupabaseSqlUrl(process.env['SUPABASE_DB_URL'])) : null!;
+beforeAll(async () => {
+  if (!enabled) return;
+  const [state] = await sql`SELECT count(*)::integer AS count FROM accounts`;
+  if (state.count) throw new Error('Legacy global-queue tests require an empty local database; refusing to modify existing accounts');
+});
+afterAll(async () => { await sql?.close(); });
 
 /** A 768-dimension unit vector whose cosine similarity with the knowledge vector `vec(1)` is `similarity`. */
 function vec(similarity: number, axis = 1): string {

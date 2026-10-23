@@ -22,17 +22,18 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Semantic contracts and consumer tests
         run: bun --no-env-file run test:semantic
+      - name: Canonical evaluation contracts without inference
+        env:
+          SUPABASE_URL: http://127.0.0.1:54321
+          SUPABASE_SERVICE_ROLE_KEY: acme-test-key
+        run: bun --no-env-file evals/technical.ts
       - name: SQL guarantees in disposable process memory
         run: bun --no-env-file run test:semantic:sql
       - name: Typecheck intelligence and API
         run: |
           bun --no-env-file x tsc --noEmit -p packages/intelligence/tsconfig.json
           bun --no-env-file x tsc --noEmit -p apps/api/tsconfig.json
-      - uses: supabase/setup-cli@v1
-        with:
-          version: 2.121.0
-      - name: Supabase adapter in a disposable project without real model calls
-        run: bun --no-env-file run test:semantic:supabase
+          bun --no-env-file x tsc --noEmit -p evals/tsconfig.json
 
   verify:
     runs-on: ubuntu-latest

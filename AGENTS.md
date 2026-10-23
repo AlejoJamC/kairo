@@ -174,3 +174,21 @@ Once the user says "commit", and only then:
 `--linked` on every command: without it they target the local stack on 54322.
 `2>/dev/null` on every redirect: with a bare `>` the CLI's logs land inside the
 file and `gen types` truncates it to 0 bytes.
+
+### Additional gate: validate locally before the approved remote stage
+
+The approval gate above remains mandatory and unchanged. Local application and
+validation do not authorize remote execution or a commit. When the human has
+explicitly authorized the full workflow, execute these dependent steps in order:
+authorized local application and validation → approved remote application →
+canonical schema and generated types → explicitly requested commit.
+
+A local conflict, failed migration, failed test or unavailable local stack blocks
+the remote application, even when the commit instruction has already been given.
+Do not execute the remote stage as independent work while resolving a local
+failure. Destructive local recovery requires explicit authorization and never
+implies permission to reset the remote database. Do not add a repair migration
+or alter migration history to bypass a failure without authorization.
+
+Preserve existing agent rules when adding a compatible rule. An instruction to
+add a rule does not authorize deleting, replacing or weakening an existing one.

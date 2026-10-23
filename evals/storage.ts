@@ -24,7 +24,7 @@ export function storageFor(example: EvalCase) {
     accounts: [{ id: identity.accountId, language: example.lang, business_context: example.businessContext ?? null }],
     account_members: [{ account_id: identity.accountId, user_id: identity.userId, role: 'agent', status: 'active' }],
     clients: [], ticket_priority_sla_config: [], tenant_sla_rules: [], kb_articles: [], operational_learning: [],
-    current_knowledge: versions.filter(v => v.status === 'approved'), ticket_decision_history: [],
+    knowledge_versions: versions, current_knowledge: versions.filter(v => v.status === 'approved'), ticket_decision_history: [],
   };
   const writes: { operation: string; value: Row }[] = [];
   const db = {
@@ -52,7 +52,7 @@ export function storageFor(example: EvalCase) {
       return { data: name === 'save_email_knowledge' ? [] : name === 'save_reply_decision' ? 'acme-proposal' : 'enriched', error: null };
     },
   };
-  return { db: db as unknown as NonNullable<Parameters<typeof processDecisionWork>[1]>, source, versions, writes,
+  return { db: db as unknown as NonNullable<Parameters<typeof processDecisionWork>[1]>, tables, source, versions, writes,
     retrieval: { kbArticles: versions.filter(v => v.status === 'approved').map(v => ({ id: v.source_id,
       title: v.snapshot.title, content: v.snapshot.content, tags: [], similarity: 1 })), resolvedCases: [], degraded: [] } };
 }

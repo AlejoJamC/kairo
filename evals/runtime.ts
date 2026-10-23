@@ -1,6 +1,7 @@
 import { mock } from 'bun:test';
 import type { LlmCallRecord } from '../packages/intelligence/src/harness/run-llm-feature';
 import type { EvalCase } from './cases';
+import { semanticStorage } from './semantic-storage';
 import { identity, storageFor, type Row } from './storage';
 
 /** Run in its own Bun process: only persistence, retrieval and logging are isolated. */
@@ -10,6 +11,7 @@ export async function createRuntime(classifyOverride?: typeof import('../package
   process.env['SUPABASE_SERVICE_ROLE_KEY'] ??= 'synthetic-eval-storage';
   let active: ReturnType<typeof storageFor> | undefined;
   const calls: LlmCallRecord[] = [];
+  let semantic: ReturnType<typeof semanticStorage>;
   const current = () => { if (!active) throw new Error('No evaluation case selected'); return active; };
   const logger = async (record: LlmCallRecord) => { calls.push(record); return `acme-call-${calls.length}`; };
   mock.module('../apps/api/src/lib/supabase.js', () => ({ supabase: {
@@ -17,14 +19,8 @@ export async function createRuntime(classifyOverride?: typeof import('../package
     rpc: (name: string, args: Row) => current().db.rpc(name, args),
   } }));
   mock.module('../apps/api/src/lib/llm-logging.js', () => ({ recordLlmCall: logger }));
-  const contextModule = await import('../apps/api/src/lib/ticket-context');
-  mock.module('../apps/api/src/lib/ticket-context.js', () => ({ ...contextModule,
-    findRelevantKb: async () => ({ articles: current().retrieval.kbArticles, degraded: [] }),
-    retrieveTicketContext: async () => current().retrieval,
-  }));
-  const knowledgeModule = await import('../apps/api/src/lib/workflow-knowledge');
-  mock.module('../apps/api/src/lib/workflow-knowledge.js', () => ({ ...knowledgeModule,
-    approvedWorkflowKnowledge: async () => current().versions.filter(version => version.status === 'approved'),
+  mock.module('../apps/api/src/lib/semantic-service.js', () => ({
+    createBackendSemanticService: (options: Parameters<ReturnType<typeof semanticStorage>['service']>[0]) => semantic.service(options),
   }));
   const { processDecisionWork } = await import('../apps/api/src/lib/decision-workflow');
   const { suggestReply } = await import('../apps/api/src/lib/reply-suggestion');
@@ -34,6 +30,19 @@ export async function createRuntime(classifyOverride?: typeof import('../package
 
   return async (example: EvalCase) => {
     active = storageFor(example);
+    semantic = semanticStorage(active);
+    const setupWrites: typeof active.writes = [];
+    if (example.contract !== 'onboarding_triage') {
+      const service = semantic.service({ db: active.db, scope: { accountId: identity.accountId,
+        actor: { kind: 'workflow', id: 'eval-source-setup' }, permissions: ['index'] } });
+      const sources = [{ kind: 'ticket', id: identity.ticketId }, ...active.versions.filter(version => version.status === 'approved')
+        .map(version => ({ kind: 'knowledge_version', id: version.id }))];
+      for (const source of sources) {
+        const result = await service.indexSource({ source });
+        if (result.status !== 'indexed') throw new Error('Evaluation source indexing failed');
+      }
+      setupWrites.push(...active.writes.splice(0));
+    }
     calls.length = 0;
     const prediction: Record<string, string> = {};
     let output: unknown;
@@ -53,7 +62,7 @@ export async function createRuntime(classifyOverride?: typeof import('../package
         urgency: result.verdict.urgency, category: result.verdict.category, tone: result.verdict.tone }, result.verdict.workflow?.judgments);
       abstain = result.abstain;
     } else if (example.contract === 'reply_suggestion') {
-      output = await suggestReply(identity, { supabase: active.db, logger, retrieve: async () => current().retrieval });
+      output = await suggestReply(identity, { supabase: active.db, logger });
       prediction['referencedKnowledge'] = String(!!(output as { referencedKbArticles: string[] } | null)?.referencedKbArticles.length);
     } else {
       await processDecisionWork({ id: 'acme-job', account_id: identity.accountId, ticket_id: identity.ticketId,
@@ -83,6 +92,7 @@ export async function createRuntime(classifyOverride?: typeof import('../package
         (w.value['p_learnings'] as Row[]).every(r => r['status'] === 'pending_review')),
       firstDeliveryIndependent: example.contract !== 'onboarding_triage' || (active.writes.length === 0 && calls.length === 0),
     };
-    return { prediction, abstain, output, calls: [...calls], safety };
+    return { prediction, abstain, output, calls: [...calls], safety,
+      semantic: { adapter: 'memory', setupWrites, relevanceMeasured: false } };
   };
 }

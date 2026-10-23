@@ -1,3 +1,4 @@
+import { semanticStorage } from './semantic-storage';
 import { mock } from 'bun:test';
 import type { EvalCase } from './cases';
 import type { LlmCallRecord } from '../packages/intelligence/src/harness/run-llm-feature';
@@ -52,21 +53,9 @@ export async function createOnboardingRuntime(examples: EvalCase[], overrides: O
     return `acme-call-${calls.length}`;
   };
   mock.module('../apps/api/src/lib/supabase.js', () => ({ supabase: storage.db }));
+  const semantic = semanticStorage(storage);
+  mock.module('../apps/api/src/lib/semantic-service.js', () => ({ createBackendSemanticService: semantic.service }));
   mock.module('../apps/api/src/lib/llm-logging.js', () => ({ recordLlmCall: logger }));
-  const ticketContext = await import('../apps/api/src/lib/ticket-context');
-  mock.module('../apps/api/src/lib/ticket-context.js', () => ({ ...ticketContext,
-    findRelevantKb: async () => {
-      emit({ case: currentCase, step: 'approved_article_retrieval', status: 'completed', output: { count: 0 } });
-      return { articles: [], degraded: [] };
-    },
-  }));
-  const knowledge = await import('../apps/api/src/lib/workflow-knowledge');
-  mock.module('../apps/api/src/lib/workflow-knowledge.js', () => ({ ...knowledge,
-    approvedWorkflowKnowledge: async () => {
-      emit({ case: currentCase, step: 'approved_knowledge_retrieval', status: 'completed', output: { count: 0 } });
-      return [];
-    },
-  }));
   const { classifyEmailWithMeta } = await import('../packages/intelligence/src/index');
   const { buildEmailClassifierInput } = await import('../apps/api/src/lib/classifier-input');
   const { extractMailFacts } = await import('../apps/api/src/lib/email/mail-facts');
@@ -74,6 +63,7 @@ export async function createOnboardingRuntime(examples: EvalCase[], overrides: O
   const { findOrCreateTicketForThread } = await import('../apps/api/src/lib/tickets-by-thread');
   const { upsertConversationByThread } = await import('../apps/api/src/lib/conversations');
   const { linkMessageToTicket } = await import('../apps/api/src/lib/ticket-messages');
+  const { maybeGenerateTicketEmbedding } = await import('../apps/api/src/lib/ticket-embedding');
   const { classificationAudit } = await import('../apps/api/src/lib/classification-audit');
   const { computePriorityScore, DEFAULT_WEIGHTS } = await import('../apps/api/src/lib/scoring');
   const { tier1ProposalStatus } = await import('../apps/api/src/functions/pipeline/tier1-proposal-status');
@@ -141,6 +131,12 @@ export async function createOnboardingRuntime(examples: EvalCase[], overrides: O
           if (error) throw new Error('Evaluation message persistence failed');
           await linkMessageToTicket(storage.db, { ticket_id: ticket.ticket_id, message_id: messageId, is_origin: ticket.was_created });
           return { ticketId: ticket.ticket_id, messageId };
+        });
+        await runStep('ticket_indexing', async () => {
+          const indexed = await maybeGenerateTicketEmbedding({ supabase: storage.db, accountId,
+            ticketId: persisted.ticketId, subject: example.subject, bodyPreview: example.body });
+          if (indexed.status !== 'ok') throw new Error('Evaluation ticket indexing failed');
+          return indexed;
         });
         classified.push({ example, result, ...persisted });
         emit({ case: currentCase, step: 'first_delivery', status: 'completed' });
