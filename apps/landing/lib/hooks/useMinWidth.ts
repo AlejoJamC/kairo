@@ -2,8 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 
-/** True while the viewport is at least `width` px wide; false on the server. */
-export function useMinWidth(width: number): boolean {
+/** True while the viewport is at least `width` px wide; `initial` on the server. */
+export function useMinWidth(width: number, initial = false): boolean {
   const query = `(min-width: ${width}px)`;
   return useSyncExternalStore(
     (onChange) => {
@@ -12,6 +12,6 @@ export function useMinWidth(width: number): boolean {
       return () => media.removeEventListener("change", onChange);
     },
     () => window.matchMedia(query).matches,
-    () => false,
+    () => initial,
   );
 }

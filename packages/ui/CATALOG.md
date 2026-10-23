@@ -14,7 +14,7 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `card` | implemented | `Card`, `CardAction`, `CardContent`, `CardDescription`, `CardFooter`, `CardHeader`, `CardTitle` | Groups related content on a surface. |
 | `category-chip` | implemented | `CategoryChip` | Shows the ticket type or category. |
 | `chip` | implemented | `Chip` | Compact label for a value, a filter or a selection. |
-| `choice-card` | implemented | `ChoiceCard`, `ChoiceGroup` | Selects the channel to connect in onboarding. |
+| `choice-card` | implemented | `ChoiceCard`, `ChoiceGroup` | Selects one option among two or more available options of equal weight, each with a name, an icon and an availability state. |
 | `confidence-ring` | implemented | `ConfidenceRing` | Shows the AI confidence for a decision. |
 | `dialog` | implemented | `Dialog` | Modal surface for a focused task that blocks the page until it is completed or cancelled. Ships as the classification correction dialog and the client form. |
 | `dock-badge` | specified | - | Counter on the desktop app icon: the same number as the bell count of the sidebar, unread notifications plus mentions. |
@@ -51,7 +51,7 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `switch` | implemented | `Switch` | Turns a setting on or off with immediate effect. |
 | `tabs` | implemented | `Tab`, `Tabs` | Switches panels inside the context panel. |
 | `thread-message` | implemented | `ThreadMessage` | One message in the ticket thread. |
-| `ticket-row` | implemented | `TicketRow` | One ticket in the queue. |
+| `ticket-row` | implemented | `TicketRow` | One ticket in a queue list. The full variant is the queue row of the app; the compact variant is the only queue row of the public web, used in the onboarding wizard. |
 | `toast` | implemented | `Toast` | Short confirmation after an action. |
 | `tooltip` | implemented | `Tooltip` | Short text label for controls that show no visible label. Ships on the collapsed sidebar nav items. |
 | `window-chrome` | specified | - | Window frame of the desktop app: the space reserved for the system window controls and the areas that drag the window. |
@@ -84,7 +84,7 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `permission-list` | implemented | `PermissionList` | Lists what the product will do with the connected email account, as rows with a switch, before the person accepts. The same block holds the initial rules on the last wizard step. |
 | `plan-card` | implemented | `PlanCard` | One pricing plan. |
 | `pricing-table` | implemented | `PricingTable` | Plan comparison table. |
-| `product-frame` | implemented | `ProductFrame` | Shows the real app inside a frame on the public web. |
+| `product-frame` | implemented | `ProductFrame` | Shows the real app inside a frame on the public web, with invented data. Never an illustration. |
 | `queue-header` | implemented | `PriorityFilterTabs`, `QueueHeader` | Header of the queue pane: view title, count, action, filter bar and the empty text of each view. |
 | `reclassify-popover` | implemented | `ReclassifyPopover` | Correction of the AI classification; every correction teaches Triage. |
 | `section` | implemented | `GridBackground`, `Section`, `SectionHeader` | Anatomy of a public web section. |
@@ -114,9 +114,9 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `set-password` | specified | - | Create or reset a password. |
 | `settings` | specified | - | Workspace configuration. |
 | `triage` | specified | - | Main cockpit where the support agent works the queue. |
-| `wizard-complete` | specified | - | Onboarding step 3: Triage is ready. |
-| `wizard-connect` | specified | - | Onboarding step 1: connect the support inbox. |
-| `wizard-detect` | specified | - | Onboarding step 2: scan and classify the inbox. |
+| `wizard-complete` | specified | - | Onboarding step 3: the queue is ready; open it. |
+| `wizard-connect` | specified | - | Onboarding step 1: connect the support inbox with one action. |
+| `wizard-detect` | specified | - | Onboarding step 2: scan the connected inbox and show what was found. |
 
 ## Exports without a specification
 

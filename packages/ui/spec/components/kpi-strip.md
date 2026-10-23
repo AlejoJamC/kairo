@@ -7,7 +7,7 @@ Row of key figures.
 ## Variants
 
 - App: card grid, cells 16×18 with a right divider; key in `label` style, value in the kpi style (24px/600).
-- Web (onboarding): mono 500 counts, 30px during the scan and 22px in the summary; urgent count in `color.bad-ink`.
+- Web count variant, onboarding wizard only: three cells in a card, separated by a left border `border.default`, padding 20×22; key in `label` style and count in mono 30px/500 with −0.03em tracking. An urgent count uses `color.bad-ink`. During the scan the counts rise with the progress.
 
 ## States
 
@@ -15,7 +15,7 @@ Row of key figures.
 - **hover**: Not applicable.
 - **active**: Not applicable.
 - **disabled**: Not applicable.
-- **loading**: Each value is replaced by a skeleton bar 60px wide at the value height.
+- **loading**: App: each value is replaced by a skeleton bar 60px wide at the value height. Web count variant: counts rise from 0 with the scan progress.
 - **error**: Values show — and one 12px `color.bad-ink` line with Retry appears under the strip.
 
 ## Accessibility
@@ -24,7 +24,7 @@ Row of key figures.
 
 ## Domain value
 
-Clients totals; onboarding emails read, tickets created, customers, urgent.
+Clients totals; onboarding emails read, tickets created and urgent.
 
 ## Platforms
 

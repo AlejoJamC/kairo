@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getDashboardUrl } from "@/lib/api-config";
 import { DetectionStep } from "../complete/_components/detection-step";
@@ -17,5 +18,13 @@ async function goToDashboard() {
 }
 
 export function DetectPageClient() {
-  return <DetectionStep onContinue={goToDashboard} />;
+  const [mailbox, setMailbox] = useState<string | undefined>();
+
+  useEffect(() => {
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => setMailbox(data.user?.email ?? undefined));
+  }, []);
+
+  return <DetectionStep onContinue={goToDashboard} mailbox={mailbox} />;
 }

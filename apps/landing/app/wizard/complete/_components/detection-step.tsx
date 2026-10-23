@@ -3,19 +3,15 @@
 import { useClassificationProgress, type ClassificationProgress } from "@/lib/hooks/useClassificationProgress";
 import { useTranslation } from "@/lib/i18n";
 import { WizardHeading } from "@/components/wizard-heading";
-import { QueuePreviewRow } from "@/components/queue-preview";
-import { Box, Button, CategoryChip, Icon, KpiStrip, ProgressBar, Text } from "@kairo/ui";
+import { WizardSectionLabel } from "@/components/wizard-section-label";
+import { QueueList } from "@/components/queue-list";
+import { formatAge } from "@/lib/format-age";
+import { Box, Button, CategoryChip, Icon, KpiStrip, ProgressBar, TicketRow } from "@kairo/ui";
 
 interface DetectionStepProps {
   onContinue: () => void;
-}
-
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <Text tag="span" display="block" font="mono" fontSize={10.5} letterSpacing={0.63} textTransform="uppercase" color="var(--kairo-color-faint)">
-      {children}
-    </Text>
-  );
+  /** The connected mailbox, shown in the eyebrow. */
+  mailbox?: string;
 }
 
 function CategoryPills({
@@ -26,18 +22,21 @@ function CategoryPills({
 }) {
   const entries = Object.entries(categories) as Array<[keyof typeof categories, number]>;
   return (
-    <Box display="flex" gap={6} flexWrap="wrap">
+    <Box tag="ul" margin={0} padding={0} listStyle="none" display="flex" gap={6} flexWrap="wrap">
       {entries.map(([key, count]) => (
-        <CategoryChip key={key} scale="category" value={key} label={`${labels[key] ?? key} ${count}`} />
+        <Box key={key} tag="li">
+          <CategoryChip scale="category" value={key} label={(labels[key] ?? key).toLowerCase()} count={count} />
+        </Box>
       ))}
     </Box>
   );
 }
 
-export function DetectionStep({ onContinue }: DetectionStepProps) {
+export function DetectionStep({ onContinue, mailbox }: DetectionStepProps) {
   const { t } = useTranslation();
   const dt = t.wizard.detect;
   const { data, error, retry } = useClassificationProgress();
+  const eyebrow = mailbox ? `${t.wizard.stepOf2} · ${mailbox}` : t.wizard.stepOf2;
 
   // Two independent signals:
   //  - isStillScanning controls the live "classifying…" legend. It stays true
@@ -62,7 +61,7 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
   if (error) {
     return (
       <>
-        <WizardHeading eyebrow={t.wizard.stepOf2} title={dt.errorTitle} body={dt.errorBody} />
+        <WizardHeading eyebrow={eyebrow} title={dt.errorTitle} body={dt.errorBody} />
         <Box display="flex" gap={8} alignItems="center">
           <Button size="web" icon={<Icon name="refresh" size={14} />} onPress={retry}>
             {dt.retry}
@@ -81,7 +80,7 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
   return (
     <>
       <WizardHeading
-        eyebrow={t.wizard.stepOf2}
+        eyebrow={eyebrow}
         title={isDone ? t.wizard.detectDoneTitle : t.wizard.detectScanningTitle}
         body={isDone ? t.wizard.detectDoneNote : t.wizard.detectScanningNote}
       />
@@ -93,44 +92,7 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
         running={isStillScanning}
       />
 
-      <KpiStrip
-        items={[
-          { label: dt.metricMails, value: data?.messages_total ?? 0 },
-          { label: dt.metricTickets, value: data?.tickets_count ?? 0 },
-          { label: dt.metricClients, value: data?.clients_count ?? 0 },
-        ]}
-      />
-
-      <Box grid gridTemplateColumns="minmax(0, 1fr) minmax(0, 1.2fr)" gap={16} alignItems="flex-start">
-        <Box display="flex" flexDirection="column" gap={10}>
-          <SectionLabel>{dt.metricCategories}</SectionLabel>
-          {data ? (
-            <CategoryPills categories={data.categories} labels={categoryLabels} />
-          ) : (
-            <Box aria-live="polite" aria-label={dt.loadingDescription} height={28} />
-          )}
-        </Box>
-        <Box display="flex" flexDirection="column" gap={10}>
-          <SectionLabel>{dt.recentTitle}</SectionLabel>
-          <Box borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" borderRadius={12} backgroundColor="var(--kairo-color-surface)" padding={6} display="flex" flexDirection="column" gap={2} minHeight={196}>
-            {data?.recent.map((ticket) => (
-              <QueuePreviewRow
-                key={ticket.id}
-                confidenceLabel={t.wizard.confidenceLabel}
-                item={{
-                  id: ticket.id,
-                  title: ticket.subject ?? "",
-                  priority: ticket.priority,
-                  category: ticket.category ? { value: ticket.category, label: categoryLabels[ticket.category] ?? ticket.category } : undefined,
-                  confidence: ticket.confidence,
-                }}
-              />
-            ))}
-          </Box>
-        </Box>
-      </Box>
-
-      <Box display="flex" flexWrap="wrap" alignItems="center" gap={14} borderTopWidth={1} borderStyle="solid" borderTopColor="var(--kairo-color-line)" paddingTop={24}>
+      <Box>
         <Button
           variant="primary"
           size="webLg"
@@ -142,9 +104,46 @@ export function DetectionStep({ onContinue }: DetectionStepProps) {
         >
           {dt.continue}
         </Button>
-        <Text fontSize={12.5} color="var(--kairo-color-faint)">
-          {dt.rangeNote}
-        </Text>
+      </Box>
+
+      <KpiStrip
+        variant="web"
+        items={[
+          { label: dt.metricMails, value: data?.messages_total },
+          { label: dt.metricTickets, value: data?.tickets_count },
+          { label: dt.metricUrgent, value: data?.urgent_count, urgent: (data?.urgent_count ?? 0) > 0 },
+        ]}
+      />
+
+      <Box grid gridTemplateColumns="minmax(0, 1fr) minmax(0, 1.2fr)" gap={16} alignItems="flex-start">
+        <Box display="flex" flexDirection="column" gap={10}>
+          <WizardSectionLabel>{dt.metricCategories}</WizardSectionLabel>
+          {data ? (
+            <CategoryPills categories={data.categories} labels={categoryLabels} />
+          ) : (
+            <Box aria-live="polite" aria-label={dt.loadingDescription} height={28} />
+          )}
+        </Box>
+        <Box display="flex" flexDirection="column" gap={10}>
+          <WizardSectionLabel>{dt.recentTitle}</WizardSectionLabel>
+          <Box borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" borderRadius={12} backgroundColor="var(--kairo-color-surface)" padding={6} minHeight={180}>
+            <QueueList label={dt.recentTitle}>
+              {data?.recent.map((ticket) => (
+                <TicketRow
+                  key={ticket.id}
+                  variant="compact"
+                  entering
+                  subject={ticket.subject ?? ""}
+                  priority={ticket.priority}
+                  age={formatAge(ticket.classified_at)}
+                  category={ticket.category ? { value: ticket.category, label: (categoryLabels[ticket.category] ?? ticket.category).toLowerCase() } : undefined}
+                  confidence={ticket.confidence}
+                  confidenceLabel={t.wizard.confidenceLabel}
+                />
+              ))}
+            </QueueList>
+          </Box>
+        </Box>
       </Box>
     </>
   );

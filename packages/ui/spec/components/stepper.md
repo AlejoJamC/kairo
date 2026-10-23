@@ -11,7 +11,7 @@ Shows where the person is in the onboarding wizard and which steps they have com
 - Pending step: circle with a 1px inset ring in `border.strong`, number in mono `text.tertiary`, label in `text.tertiary`.
 - Completed step: circle in `accent.soft` with a 1px inset ring in `accent.line` and an 11px check (stroke 3) in `accent.ink`; label in `text.secondary`, followed by visually hidden text " (done)".
 - Line after a completed step: `accent.line`. Every other line: `border.strong`.
-- A step is completed once the person has finished it and moved on: Connect after returning from the provider with the account connected; Detect after the scan finishes and the person opens the queue. Going back with the browser makes that step current and keeps the earlier steps completed.
+- A step is completed once the person has finished it and moved on: Connect after returning from the provider with the account connected; Detect after the scan finishes and the person moves on. Going back with the browser makes that step current and keeps the earlier steps completed.
 
 ## States
 

@@ -281,6 +281,43 @@ describe('rich text marks', () => {
   })
 })
 
+describe('TicketRow compact', () => {
+  const row = { variant: 'compact' as const, subject: 'Duplicate charge on invoice', priority: 'P1', age: '2m', category: { value: 'billing', label: 'billing' }, confidence: 0.94, confidenceLabel: 'Confidence' }
+
+  it('is a list item, not a control, and reads priority, subject, age, category and confidence', () => {
+    renderUi(
+      <ul aria-label="Recently classified">
+        <TicketRow {...row} />
+      </ul>,
+    )
+    expect(screen.queryByRole('button')).toBeNull()
+    const item = screen.getByRole('listitem')
+    expect(item.textContent).toContain('P1, ')
+    expect(item.textContent).toContain('Duplicate charge on invoice')
+    expect(item.textContent).toContain('2m')
+    expect(item.textContent).toContain('billing')
+    expect(item.textContent).toContain('0.94')
+  })
+
+  it('has no id and no sender', () => {
+    renderUi(
+      <ul>
+        <TicketRow {...row} />
+      </ul>,
+    )
+    expect(screen.queryByText(/KAI-/)).toBeNull()
+  })
+
+  it('shows a dash when the confidence has no value', () => {
+    renderUi(
+      <ul>
+        <TicketRow {...row} confidence={null} />
+      </ul>,
+    )
+    expect(screen.getByRole('listitem').textContent).toContain('—')
+  })
+})
+
 describe('TicketRow', () => {
   const base = { code: 'KAI-101', subject: 'Export fails', age: '12m', sender: 'Dana', onPress: () => {} }
 

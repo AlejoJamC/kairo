@@ -50,6 +50,17 @@ describe('CategoryChip', () => {
   it('falls back to a neutral dot for an unknown value', () => {
     expect(() => renderUi(<CategoryChip scale="category" value="unknown" label="other" />)).not.toThrow()
   })
+
+  it('shows the count after the name when given', () => {
+    renderUi(<CategoryChip scale="category" value="billing" label="billing" count={47} />)
+    const chip = screen.getByText('billing').parentElement
+    expect(chip?.textContent).toBe('billing47')
+  })
+
+  it('shows no count by default', () => {
+    renderUi(<CategoryChip scale="category" value="billing" label="billing" />)
+    expect(screen.getByText('billing').textContent).toBe('billing')
+  })
 })
 
 describe('Badge', () => {

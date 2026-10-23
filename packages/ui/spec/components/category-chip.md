@@ -8,6 +8,8 @@ Shows the ticket type or category.
 
 - Neutral chip (`.chip`, `size.chip`, `surface.panel`, `border.default`) with a 7px dot in the scale color and the lowercase name in 12px `text.secondary`. One size in every screen: 24px.
 - Static (`<span class="chip">`): in ticket-heading, after the priority chip, in classification order.
+- Static with count: the name followed by the number of tickets in mono 11px `text.tertiary`. For lists of detected categories (onboarding wizard), wrapping onto several lines with a 6px gap.
+- Static in the compact ticket-row: on line 2, without count.
 - As buttons (`button.chip`, `.on` when chosen) in reclassify-popover: `accent.soft` with `accent.line`, text in `accent.ink`; the dot keeps its color.
 
 ## States
@@ -31,6 +33,6 @@ TicketType: support, prospect (labeled Lead), spam, internal, other. TicketCateg
 
 ## Platforms
 
-- **web**: Triage app in the browser. Below `layout.breakpoint` the chips wrap to several lines.
+- **web**: Triage app in the browser, and the public web onboarding wizard (static with count, and in the compact ticket-row). Below `layout.breakpoint` the chips wrap to several lines.
 - **desktop**: Triage desktop app, same component.
 - **mobile**: Not designed.

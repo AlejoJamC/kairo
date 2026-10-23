@@ -5,7 +5,8 @@ import { Skeleton } from './loading'
 
 // Row of key figures. A missing value shows as a dash, never a sample number;
 // while loading each value is a skeleton bar; on error the values show a dash
-// and one line with a retry action appears under the strip.
+// and one line with a retry action appears under the strip. The web variant is
+// the onboarding count: mono figures that rise with the scan, no skeleton.
 
 type KpiItem = {
   label: string
@@ -22,9 +23,12 @@ type KpiStripProps = {
   error?: string
   retryLabel?: string
   onRetry?: () => void
+  /** web: the onboarding wizard's counts (mono 30px, cells 20×22, left dividers). */
+  variant?: 'app' | 'web'
 }
 
-function KpiStrip({ items, loading, error, retryLabel = 'Retry', onRetry }: KpiStripProps) {
+function KpiStrip({ items, loading, error, retryLabel = 'Retry', onRetry, variant = 'app' }: KpiStripProps) {
+  const web = variant === 'web'
   return (
     <Box>
       <Box
@@ -40,18 +44,24 @@ function KpiStrip({ items, loading, error, retryLabel = 'Retry', onRetry }: KpiS
         {items.map((item, index) => (
           <Box
             key={item.label}
-            paddingVertical={16}
-            paddingHorizontal={18}
-            borderRightWidth={index < items.length - 1 ? 1 : 0}
+            paddingVertical={web ? 20 : 16}
+            paddingHorizontal={web ? 22 : 18}
+            borderRightWidth={!web && index < items.length - 1 ? 1 : 0}
+            borderLeftWidth={web && index > 0 ? 1 : 0}
             borderStyle="solid"
             borderRightColor={tokens['border.default']}
+            borderLeftColor={tokens['border.default']}
           >
             <Text tag="div" display="block" font="mono" fontSize={10.5} letterSpacing={0.63} textTransform="uppercase" color={tokens['text.tertiary']}>
               {item.label}
             </Text>
-            <Box marginTop={6} height={29} display="flex" alignItems="center">
-              {loading ? (
+            <Box marginTop={6} height={web ? 36 : 29} display="flex" alignItems="center">
+              {loading && !web ? (
                 <Skeleton width={60} height={22} />
+              ) : web ? (
+                <Text font="mono" fontSize={30} fontWeight={500} letterSpacing={-0.9} color={item.urgent ? tokens['color.bad-ink'] : tokens['text.primary']}>
+                  {error || item.value === null || item.value === undefined ? '—' : item.value}
+                </Text>
               ) : (
                 <Text fontSize={24} fontWeight={600} letterSpacing={-0.48} lineHeightRatio={1.2} color={item.urgent ? tokens['color.bad-ink'] : tokens['text.primary']}>
                   {error || item.value === null || item.value === undefined ? '—' : item.value}

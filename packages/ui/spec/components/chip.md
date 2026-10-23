@@ -10,7 +10,8 @@ Compact label for a value, a filter or a selection.
 - Interactive (`button.chip`, `a.chip`): opens a menu or toggles.
 - Removable: 30px, radius field, 18px remove button.
 - Key–value: 26px, key in `text.tertiary`, value in `text.primary` 500.
-- Large (`.lg`, web): 30px, 12.5px. Used for the channel strip, detected categories and the hero announcement.
+- Large (`.lg`, web): 30px, 12.5px. Used for the channel strip (dot in `color.ok` with "available" in `color.ok-ink`, or dot in `border.strong` with "coming soon" in `text.tertiary`) and the hero announcement.
+- Categories always use category-chip (24px), on the public web too; never the large chip.
 
 ## States
 

@@ -170,6 +170,32 @@ describe('KpiStrip', () => {
   })
 })
 
+describe('KpiStrip web count variant', () => {
+  const items = [
+    { label: 'Emails read', value: 234 },
+    { label: 'Tickets created', value: 89 },
+    { label: 'Urgent', value: 2, urgent: true },
+  ]
+
+  it('shows the counts with their labels', () => {
+    renderUi(<KpiStrip variant="web" items={items} />)
+    expect(screen.getByText('Emails read')).toBeTruthy()
+    expect(screen.getByText('234')).toBeTruthy()
+    expect(screen.getByText('2')).toBeTruthy()
+  })
+
+  it('never shows a skeleton: counts are shown as they rise', () => {
+    const { container } = renderUi(<KpiStrip variant="web" items={items} loading />)
+    expect(container.querySelectorAll('.kairo-ui-shim').length).toBe(0)
+    expect(screen.getByText('89')).toBeTruthy()
+  })
+
+  it('shows a dash for a count that is not known yet', () => {
+    renderUi(<KpiStrip variant="web" items={[{ label: 'Urgent', value: undefined }]} />)
+    expect(screen.getByText('—')).toBeTruthy()
+  })
+})
+
 describe('PropRow', () => {
   it('shows the key and value, or a dash when unknown', () => {
     renderUi(
