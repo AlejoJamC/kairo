@@ -6,9 +6,10 @@ import { getApiUrl } from "@/lib/api-config";
 import { useTranslation } from "@/lib/i18n";
 import { WizardChrome } from "@/components/wizard-chrome";
 import { WizardHeading } from "@/components/wizard-heading";
+import { WizardSectionLabel } from "@/components/wizard-section-label";
 import { WizardSteps } from "@/components/wizard-steps";
-import { QueuePreviewRow, type QueuePreviewItem } from "@/components/queue-preview";
-import { Box, Button, Callout, Icon, PermissionList, ProductFrame, Text } from "@kairo/ui";
+import { QueueList } from "@/components/queue-list";
+import { Box, Button, Callout, Icon, PermissionList, ProductFrame, Text, TicketRow } from "@kairo/ui";
 
 export default function WizardPage() {
   return (
@@ -32,7 +33,7 @@ function ConnectStep() {
   };
 
   return (
-    <WizardChrome stepper={<WizardSteps current="connect" />} width={480} centered aside={<ConnectPreview />}>
+    <WizardChrome stepper={<WizardSteps current="connect" />} width={480} centered aside={<ConnectPreview />} asideLabel={w.previewAside} asideGrid asideGap={16}>
       <WizardHeading eyebrow={w.stepOf1} title={w.connectTitle} body={w.connectSubtitle} />
 
       <Box display="flex" flexDirection="column" gap={12}>
@@ -77,20 +78,20 @@ function ConnectStep() {
 function ConnectPreview() {
   const { t } = useTranslation();
   const w = t.wizard;
-  const rows: QueuePreviewItem[] = [
-    { id: "1", title: w.previewOneTitle, priority: "P1", age: "2m", category: { value: "billing", label: w.detect.categoryBilling }, confidence: 0.94, selected: true },
-    { id: "2", title: w.previewTwoTitle, priority: "P2", age: "11m", category: { value: "technical", label: w.detect.categoryTechnical }, confidence: 0.82 },
-    { id: "3", title: w.previewThreeTitle, priority: "P3", age: "1h", category: { value: "general", label: w.previewSupport }, confidence: 0.64, faded: true },
+  const rows = [
+    { id: "1", title: w.previewOneTitle, priority: "P1", age: "2m", category: { value: "billing", label: w.detect.categoryBilling.toLowerCase() }, confidence: 0.94 },
+    { id: "2", title: w.previewTwoTitle, priority: "P2", age: "11m", category: { value: "technical", label: w.detect.categoryTechnical.toLowerCase() }, confidence: 0.82 },
+    { id: "3", title: w.previewThreeTitle, priority: "P3", age: "1h", category: { value: "general", label: w.previewSupport }, confidence: 0.64 },
   ];
   return (
     <>
-      <Text tag="span" display="block" font="mono" fontSize={10.5} letterSpacing={0.63} textTransform="uppercase" color="var(--kairo-color-faint)">
-        {w.previewTitle}
-      </Text>
-      <ProductFrame compact label={w.previewLabel} route={w.previewRoute}>
-        {rows.map((row) => (
-          <QueuePreviewRow key={row.id} item={row} confidenceLabel={w.confidenceLabel} />
-        ))}
+      <WizardSectionLabel>{w.previewTitle}</WizardSectionLabel>
+      <ProductFrame bare>
+        <QueueList label={w.previewList}>
+          {rows.map((row) => (
+            <TicketRow key={row.id} variant="compact" subject={row.title} priority={row.priority} age={row.age} category={row.category} confidence={row.confidence} confidenceLabel={w.confidenceLabel} />
+          ))}
+        </QueueList>
       </ProductFrame>
       <Text tag="span" display="block" font="mono" fontSize={10.5} color="var(--kairo-color-faint)">
         {w.previewNote}

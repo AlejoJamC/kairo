@@ -816,6 +816,19 @@ describe('Public web pieces', () => {
     expect(screen.getByText('app.acme.com/inbox')).toBeTruthy()
   })
 
+  it('ProductFrame bare has no bar and no role: the list inside names it', () => {
+    renderUi(
+      <ProductFrame bare>
+        <ul aria-label="Example tickets">
+          <li>row</li>
+        </ul>
+      </ProductFrame>,
+    )
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.queryByText('app.acme.com/inbox')).toBeNull()
+    expect(screen.getByRole('list', { name: 'Example tickets' })).toBeTruthy()
+  })
+
   it('Section renders its header and hides the grid from assistive technology', () => {
     const { container } = renderUi(
       <Section grid>
@@ -853,6 +866,12 @@ describe('Public web pieces', () => {
     renderUi(<WizardHeader brand={<span>Kairo</span>} stepper={<span>steps</span>} exit={{ label: 'Exit', onPress }} />)
     fireEvent.click(screen.getByRole('button', { name: 'Exit' }))
     expect(onPress).toHaveBeenCalled()
+    expect(screen.getByText('steps')).toBeTruthy()
+  })
+
+  it('WizardHeader without Exit shows no button', () => {
+    renderUi(<WizardHeader brand={<span>Kairo</span>} stepper={<span>steps</span>} />)
+    expect(screen.queryByRole('button')).toBeNull()
     expect(screen.getByText('steps')).toBeTruthy()
   })
 })

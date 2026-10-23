@@ -4,8 +4,9 @@ import { useClassificationProgress, type ClassificationProgress } from "@/lib/ho
 import { useTranslation } from "@/lib/i18n";
 import { WizardHeading } from "@/components/wizard-heading";
 import { WizardSectionLabel } from "@/components/wizard-section-label";
-import { QueuePreviewRow } from "@/components/queue-preview";
-import { Box, Button, CategoryChip, Icon, KpiStrip, ProgressBar } from "@kairo/ui";
+import { QueueList } from "@/components/queue-list";
+import { formatAge } from "@/lib/format-age";
+import { Box, Button, Chip, Icon, KpiStrip, ProgressBar, Text, TicketRow } from "@kairo/ui";
 
 interface DetectionStepProps {
   onContinue: () => void;
@@ -21,9 +22,18 @@ function CategoryPills({
 }) {
   const entries = Object.entries(categories) as Array<[keyof typeof categories, number]>;
   return (
-    <Box display="flex" gap={6} flexWrap="wrap">
+    <Box tag="ul" margin={0} padding={0} listStyle="none" display="flex" gap={6} flexWrap="wrap">
       {entries.map(([key, count]) => (
-        <CategoryChip key={key} scale="category" value={key} label={`${(labels[key] ?? key).toLowerCase()} ${count}`} />
+        <Box key={key} tag="li">
+          <Chip icon={<Box width={7} height={7} circle backgroundColor={`var(--kairo-category-${key})`} aria-hidden />}>
+            <Text fontSize={12} fontWeight={500} color="var(--kairo-color-muted)">
+              {(labels[key] ?? key).toLowerCase()}
+            </Text>
+            <Text font="mono" fontSize={11} color="var(--kairo-color-faint)">
+              {count}
+            </Text>
+          </Chip>
+        </Box>
       ))}
     </Box>
   );
@@ -122,19 +132,22 @@ export function DetectionStep({ onContinue, mailbox }: DetectionStepProps) {
         </Box>
         <Box display="flex" flexDirection="column" gap={10}>
           <WizardSectionLabel>{dt.recentTitle}</WizardSectionLabel>
-          <Box borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" borderRadius={12} backgroundColor="var(--kairo-color-surface)" padding={6} display="flex" flexDirection="column" gap={2} minHeight={180}>
-            {data?.recent.map((ticket) => (
-              <QueuePreviewRow
-                key={ticket.id}
-                confidenceLabel={t.wizard.confidenceLabel}
-                item={{
-                  id: ticket.id,
-                  title: ticket.subject ?? "",
-                  priority: ticket.priority,
-                  confidence: ticket.confidence,
-                }}
-              />
-            ))}
+          <Box borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" borderRadius={12} backgroundColor="var(--kairo-color-surface)" padding={6} minHeight={180}>
+            <QueueList label={dt.recentTitle}>
+              {data?.recent.map((ticket) => (
+                <TicketRow
+                  key={ticket.id}
+                  variant="compact"
+                  entering
+                  subject={ticket.subject ?? ""}
+                  priority={ticket.priority}
+                  age={formatAge(ticket.classified_at)}
+                  category={ticket.category ? { value: ticket.category, label: (categoryLabels[ticket.category] ?? ticket.category).toLowerCase() } : undefined}
+                  confidence={ticket.confidence}
+                  confidenceLabel={t.wizard.confidenceLabel}
+                />
+              ))}
+            </QueueList>
           </Box>
         </Box>
       </Box>

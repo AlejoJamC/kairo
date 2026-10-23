@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useClassificationProgress } from "@/lib/hooks/useClassificationProgress";
 import { useTranslation } from "@/lib/i18n";
+import { formatAge } from "@/lib/format-age";
 import { WizardChrome } from "@/components/wizard-chrome";
 import { WizardHeading } from "@/components/wizard-heading";
 import { WizardSectionLabel } from "@/components/wizard-section-label";
 import { WizardSteps } from "@/components/wizard-steps";
-import { QueuePreviewRow } from "@/components/queue-preview";
-import { Box, Button, Field, FieldInput, Icon, Kbd, PermissionList, ProductFrame, Text } from "@kairo/ui";
+import { QueueList } from "@/components/queue-list";
+import { Box, Button, Field, FieldInput, Icon, Kbd, PermissionList, ProductFrame, Text, TicketRow } from "@kairo/ui";
 
 interface TriageStepProps {
   onOpen: () => void;
@@ -41,6 +42,9 @@ export function TriageStep({ onOpen, saving, error, askName, companyName, onComp
         .replace("{urgent}", data.urgent_count === 1 ? w.urgentOne : w.urgentMany.replace("{n}", String(data.urgent_count)))
     : w.triageBodyShort;
 
+  const categoryLabel = (key: string) =>
+    ({ technical: w.detect.categoryTechnical, billing: w.detect.categoryBilling, account: w.detect.categoryAccount, general: w.detect.categoryGeneral, not_applicable: w.detect.categoryNotApplicable })[key as "technical"]?.toLowerCase() ?? key;
+
   const shortcuts = [
     { keys: ["J", "K"], label: w.shortcutNavigate },
     { keys: ["A"], label: w.shortcutAcknowledge },
@@ -52,14 +56,21 @@ export function TriageStep({ onOpen, saving, error, askName, companyName, onComp
       {data && data.recent.length > 0 && (
         <Box display="flex" flexDirection="column" gap={10}>
           <WizardSectionLabel>{w.summaryFirst}</WizardSectionLabel>
-          <ProductFrame compact label={w.previewLabel} route={w.previewRoute}>
-            {data.recent.slice(0, 3).map((row, index) => (
-              <QueuePreviewRow
-                key={row.id}
-                confidenceLabel={w.confidenceLabel}
-                item={{ id: row.id, title: row.subject ?? "", priority: row.priority, code: row.ticket_number ? `KAI-${row.ticket_number}` : undefined, selected: index === 0 }}
-              />
-            ))}
+          <ProductFrame bare>
+            <QueueList label={w.summaryFirst}>
+              {data.recent.slice(0, 3).map((row) => (
+                <TicketRow
+                  key={row.id}
+                  variant="compact"
+                  subject={row.subject ?? ""}
+                  priority={row.priority}
+                  age={formatAge(row.classified_at)}
+                  category={row.category ? { value: row.category, label: categoryLabel(row.category) } : undefined}
+                  confidence={row.confidence}
+                  confidenceLabel={w.confidenceLabel}
+                />
+              ))}
+            </QueueList>
           </ProductFrame>
         </Box>
       )}
@@ -69,7 +80,7 @@ export function TriageStep({ onOpen, saving, error, askName, companyName, onComp
           {shortcuts.map((shortcut) => (
             <Box key={shortcut.label} display="inline-flex" alignItems="center" gap={6}>
               {shortcut.keys.map((key) => (
-                <Kbd key={key}>{key}</Kbd>
+                <Kbd key={key} size="lg">{key}</Kbd>
               ))}
               <Text fontSize={12.5} color="var(--kairo-color-muted)">
                 {shortcut.label}
@@ -82,7 +93,7 @@ export function TriageStep({ onOpen, saving, error, askName, companyName, onComp
   );
 
   return (
-    <WizardChrome stepper={<WizardSteps current="triage" />} width={480} centered aside={aside}>
+    <WizardChrome stepper={<WizardSteps current="triage" />} width={480} centered exit={false} aside={aside} asideLabel={w.summaryAside}>
       <WizardHeading eyebrow={w.stepOf3} title={w.triageTitle} body={body} />
 
       {askName && (
