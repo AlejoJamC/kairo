@@ -24,7 +24,7 @@ describe('createPlatform', () => {
       takeHandoffTokens: async () => tokens,
       os: 'macos',
       setBadge: vi.fn(),
-      setMenu: vi.fn(), setWindowSize: vi.fn(), startSignInListener: vi.fn(async () => 4010),
+      setMenu: vi.fn(), setWindowSize: vi.fn(), setMinWindowSize: vi.fn(), startSignInListener: vi.fn(async () => 4010),
       onMenuAction: vi.fn(() => () => {}),
       notify: vi.fn(),
     }

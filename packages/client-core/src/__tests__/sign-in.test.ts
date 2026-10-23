@@ -54,7 +54,7 @@ describe('sign-in entry points', () => {
   })
 
   it('starts the Google sign-in and opens the landing pages through the navigation port', async () => {
-    const host = { os: 'macos' as const, setBadge: vi.fn(), setMenu: vi.fn(), setWindowSize: vi.fn(), startSignInListener: vi.fn(async () => 4010), onMenuAction: vi.fn(() => () => {}), notify: vi.fn() }
+    const host = { os: 'macos' as const, setBadge: vi.fn(), setMenu: vi.fn(), setWindowSize: vi.fn(), setMinWindowSize: vi.fn(), startSignInListener: vi.fn(async () => 4010), onMenuAction: vi.fn(() => () => {}), notify: vi.fn() }
     init({ ...platform('desktop', navigate), host })
     await expect(startGoogleSignIn()).resolves.toBe('https://kairo.example/bff/auth/google?desktop=1&port=4010')
     expect(host.startSignInListener).toHaveBeenCalledTimes(1)

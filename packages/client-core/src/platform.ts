@@ -47,6 +47,8 @@ export interface DesktopHost {
   onMenuAction(listener: (id: string) => void): () => void;
   /** Starts waiting on the loopback address for the browser sign-in to hand over the session; resolves with the port. */
   startSignInListener(): Promise<number>;
+  /** Sets the smallest size the window can take, without resizing it. */
+  setMinWindowSize(minWidth: number, minHeight: number): void;
   /** Resizes the window (logical pixels) and sets the smallest size it can take. */
   setWindowSize(width: number, height: number, minWidth: number, minHeight: number): void;
   /** Shows a system notification. */

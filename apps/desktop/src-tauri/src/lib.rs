@@ -134,6 +134,14 @@ fn set_window_size(width: f64, height: f64, min_width: f64, min_height: f64, app
     }
 }
 
+/// Sets the smallest size the window can take, without resizing it.
+#[tauri::command]
+fn set_min_window_size(min_width: f64, min_height: f64, app: tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_min_size(Some(tauri::LogicalSize::new(min_width, min_height)));
+    }
+}
+
 /// Replaces the native menu bar with the groups the dashboard sends as JSON.
 #[tauri::command]
 fn set_menu(groups: String, app: tauri::AppHandle) {
@@ -151,7 +159,7 @@ fn set_menu(groups: String, app: tauri::AppHandle) {
 /// pick the desktop ports instead of the browser ones.
 fn init_script() -> String {
     format!(
-        "Object.defineProperty(window,'__KAIRO_DESKTOP__',{{value:{{os:'{os}',openExternal:function(url){{return window.__TAURI_INTERNALS__.invoke('open_external',{{url:url}});}},takeHandoffTokens:function(){{return window.__TAURI_INTERNALS__.invoke('take_handoff_tokens');}},notify:function(title,body){{return window.__TAURI_INTERNALS__.invoke('notify',{{title:title,body:body}});}},setBadge:function(count){{return window.__TAURI_INTERNALS__.invoke('set_badge',{{count:count}});}},startSignInListener:function(){{return window.__TAURI_INTERNALS__.invoke('start_sign_in_listener');}},setWindowSize:function(width,height,minWidth,minHeight){{return window.__TAURI_INTERNALS__.invoke('set_window_size',{{width:width,height:height,minWidth:minWidth,minHeight:minHeight}});}},setMenu:function(groups){{return window.__TAURI_INTERNALS__.invoke('set_menu',{{groups:groups}});}},onMenuAction:function(listener){{var handler=function(event){{listener(event.detail);}};window.addEventListener('kairo-menu',handler);return function(){{window.removeEventListener('kairo-menu',handler);}};}}}},configurable:false}});",
+        "Object.defineProperty(window,'__KAIRO_DESKTOP__',{{value:{{os:'{os}',openExternal:function(url){{return window.__TAURI_INTERNALS__.invoke('open_external',{{url:url}});}},takeHandoffTokens:function(){{return window.__TAURI_INTERNALS__.invoke('take_handoff_tokens');}},notify:function(title,body){{return window.__TAURI_INTERNALS__.invoke('notify',{{title:title,body:body}});}},setBadge:function(count){{return window.__TAURI_INTERNALS__.invoke('set_badge',{{count:count}});}},startSignInListener:function(){{return window.__TAURI_INTERNALS__.invoke('start_sign_in_listener');}},setMinWindowSize:function(minWidth,minHeight){{return window.__TAURI_INTERNALS__.invoke('set_min_window_size',{{minWidth:minWidth,minHeight:minHeight}});}},setWindowSize:function(width,height,minWidth,minHeight){{return window.__TAURI_INTERNALS__.invoke('set_window_size',{{width:width,height:height,minWidth:minWidth,minHeight:minHeight}});}},setMenu:function(groups){{return window.__TAURI_INTERNALS__.invoke('set_menu',{{groups:groups}});}},onMenuAction:function(listener){{var handler=function(event){{listener(event.detail);}};window.addEventListener('kairo-menu',handler);return function(){{window.removeEventListener('kairo-menu',handler);}};}}}},configurable:false}});",
         os = match std::env::consts::OS {
             "macos" => "macos",
             "windows" => "windows",
@@ -184,8 +192,8 @@ pub fn run() {
 
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
                 .title("Kairo")
-                .inner_size(1280.0, 800.0)
-                .min_inner_size(960.0, 640.0)
+                .inner_size(1500.0, 860.0)
+                .min_inner_size(1296.0, 700.0)
                 .center()
                 .title_bar_style(tauri::TitleBarStyle::Overlay)
                 .hidden_title(true)
@@ -204,7 +212,7 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![take_handoff_tokens, open_external, notify, set_badge, set_menu, set_window_size, start_sign_in_listener])
+        .invoke_handler(tauri::generate_handler![take_handoff_tokens, open_external, notify, set_badge, set_menu, set_window_size, set_min_window_size, start_sign_in_listener])
         .run(tauri::generate_context!())
         .expect("error while running the Kairo desktop app");
 }

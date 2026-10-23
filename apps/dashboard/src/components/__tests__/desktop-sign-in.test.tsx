@@ -15,7 +15,7 @@ vi.mock("react-i18next", () => ({
 }));
 const setWindowSize = vi.fn();
 vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} unobserve() {} });
-vi.mock("@kairo/client-core/config", () => ({ getPlatform: () => ({ host: { setWindowSize } }) }));
+vi.mock("@kairo/client-core/config", () => ({ getPlatform: () => ({ host: { setWindowSize }, storage: { getItem: () => null } }) }));
 vi.mock("@kairo/client-core/auth", () => ({ useAuth: () => ({ signInWithPassword }) }));
 vi.mock("@kairo/client-core/endpoints", () => ({
   startGoogleSignIn: () => startGoogleSignIn(),
@@ -54,7 +54,7 @@ describe("DesktopSignIn", () => {
   it("gives the large window back when it goes away", () => {
     const { unmount } = renderWithProviders(<DesktopSignIn />);
     unmount();
-    expect(setWindowSize).toHaveBeenLastCalledWith(1280, 800, 960, 640);
+    expect(setWindowSize).toHaveBeenLastCalledWith(1500, 860, 1468, 700);
   });
 
   it("keeps the sign-in button disabled until the email and the password are filled", () => {

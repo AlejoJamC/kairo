@@ -8,6 +8,7 @@ import { useAuth } from "@kairo/client-core/auth";
 import { getPlatform } from "@kairo/client-core/config";
 import { copyText, openLanding, startGoogleSignIn } from "@kairo/client-core/endpoints";
 import { AuthCard, AuthHeader, AuthLayout, Box, Field, FieldInput, GoogleMark, Icon, Pressable, Text, WindowControlsSlot, useWindowChrome } from "@kairo/ui";
+import { APP_WINDOW_HEIGHT, APP_WINDOW_MIN_HEIGHT, appWindowMinWidth, appWindowWidth } from "@/lib/desktop-window";
 import { useContentHeight } from "@/hooks/useContentHeight";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
@@ -30,7 +31,13 @@ export function DesktopSignIn() {
     const total = height + BAR_AND_SPACE;
     getPlatform().host?.setWindowSize(SIGN_IN_WIDTH, total, 440, total);
   });
-  useEffect(() => () => getPlatform().host?.setWindowSize(1280, 800, 960, 640), []);
+  useEffect(
+    () => () => {
+      const collapsed = getPlatform().storage.getItem("sidebar-collapsed") === "true";
+      getPlatform().host?.setWindowSize(appWindowWidth(), APP_WINDOW_HEIGHT, appWindowMinWidth(collapsed), APP_WINDOW_MIN_HEIGHT);
+    },
+    [],
+  );
 
   const submit = async () => {
     setLoading(true);

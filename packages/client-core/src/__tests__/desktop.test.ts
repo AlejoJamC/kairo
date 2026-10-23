@@ -8,7 +8,7 @@ function deps(overrides: Partial<DesktopPlatformDeps> = {}): DesktopPlatformDeps
     appFocus: { subscribe: vi.fn(() => () => {}) },
     openExternal: vi.fn(),
     takeHandoffTokens: vi.fn(async () => null),
-    host: { os: 'macos', setBadge: vi.fn(), setMenu: vi.fn(), setWindowSize: vi.fn(), startSignInListener: vi.fn(async () => 4010), onMenuAction: vi.fn(() => () => {}), notify: vi.fn() },
+    host: { os: 'macos', setBadge: vi.fn(), setMenu: vi.fn(), setWindowSize: vi.fn(), setMinWindowSize: vi.fn(), startSignInListener: vi.fn(async () => 4010), onMenuAction: vi.fn(() => () => {}), notify: vi.fn() },
     ...overrides,
   }
 }
@@ -34,7 +34,7 @@ describe('createDesktopPlatform', () => {
   })
 
   it('exposes the shell host: menu, icon counter and notifications', () => {
-    const host = { os: 'macos' as const, setBadge: vi.fn(), setMenu: vi.fn(), setWindowSize: vi.fn(), startSignInListener: vi.fn(async () => 4010), onMenuAction: vi.fn(() => () => {}), notify: vi.fn() }
+    const host = { os: 'macos' as const, setBadge: vi.fn(), setMenu: vi.fn(), setWindowSize: vi.fn(), setMinWindowSize: vi.fn(), startSignInListener: vi.fn(async () => 4010), onMenuAction: vi.fn(() => () => {}), notify: vi.fn() }
     const platform = createDesktopPlatform(deps({ host }))
     expect(platform.host).toBe(host)
   })

@@ -21,6 +21,7 @@ import {
 import { useLocale } from "@/hooks/useLocale";
 import { useAppCommands } from "@/lib/app-commands";
 import { disableUnhandled, localizeMenu } from "@/lib/desktop-menu";
+import { APP_WINDOW_MIN_HEIGHT, appWindowMinWidth } from "@/lib/desktop-window";
 import { subscribeNotifications } from "@/lib/notification-feed";
 import { slaDisplay } from "@/lib/sla-display";
 import type { SupportedLanguage } from "@/i18n/types";
@@ -53,6 +54,11 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed, onTog
   const presence = useAppCommands((state) => state.presence);
   const selected = tickets.find((ticket) => ticket.id === selectedId) ?? null;
   const selectedShortId = selected?.ticket_number ? `KAI-${selected.ticket_number}` : null;
+
+  // The window never gets narrower than the columns need; collapsing the sidebar lowers the floor.
+  useEffect(() => {
+    host?.setMinWindowSize(appWindowMinWidth(sidebarCollapsed), APP_WINDOW_MIN_HEIGHT);
+  }, [host, sidebarCollapsed]);
 
   // ── Native menu ───────────────────────────────────────────────────────────
   const handlers: Record<string, () => void> = {

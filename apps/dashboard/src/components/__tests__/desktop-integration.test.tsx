@@ -10,6 +10,7 @@ const host = {
   setBadge: vi.fn(),
   setMenu: vi.fn(),
   setWindowSize: vi.fn(),
+  setMinWindowSize: vi.fn(),
   startSignInListener: vi.fn(),
   onMenuAction: vi.fn(),
   notify: vi.fn(),

@@ -33,7 +33,7 @@ const HIGHLIGHT_DURATION_MS = 2000;
 // Smallest comfortable width for this column — same constant already used as
 // `centerMin` by useResizablePanel (apps/dashboard/src/hooks/use-resizable-panel.ts)
 // to keep this exact column readable when the right panel is dragged wider.
-const CENTER_PANEL_MIN_WIDTH = 520;
+export const CENTER_PANEL_MIN_WIDTH = 520;
 
 // Name of the queue the open ticket belongs to, for the breadcrumb of the ticket bar.
 const VIEW_LABEL_KEY = {
