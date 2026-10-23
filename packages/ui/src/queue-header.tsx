@@ -5,6 +5,7 @@ import { PriorityGlyph, type PriorityLevel } from './priority-glyph'
 import { Segmented } from './segmented'
 import { VisuallyHidden } from './lib/visually-hidden'
 import { px } from './lib/units'
+import { useWindowChrome } from './window-chrome'
 
 // Header of the queue pane: view title, count, optional action, filter bar and
 // the suggestion under it. The list of ticket rows follows the header.
@@ -29,9 +30,10 @@ type QueueHeaderProps = {
 }
 
 function QueueHeader({ title, count, countLabel, description, action, bar, barVariant = 'filters', suggestion }: QueueHeaderProps) {
+  const macosWindow = useWindowChrome()
   return (
     <Box display="flex" flexDirection="column" flexShrink={0}>
-      <Box display="flex" alignItems="center" gap={8} minHeight={px(tokens['size.header'])} paddingTop={14} paddingRight={12} paddingLeft={20}>
+      <Box dragRegion={macosWindow} display="flex" alignItems="center" gap={8} minHeight={px(tokens['size.header'])} paddingTop={14} paddingRight={12} paddingLeft={20}>
         <Text tag="h1" margin={0} fontSize={16} fontWeight={600} letterSpacing={-0.16} color={tokens['text.primary']}>
           {title}
         </Text>
@@ -41,7 +43,7 @@ function QueueHeader({ title, count, countLabel, description, action, bar, barVa
             {countLabel && <VisuallyHidden>{countLabel}</VisuallyHidden>}
           </Text>
         )}
-        <Box flexGrow={1} />
+        <Box dragRegion={macosWindow} flexGrow={1} alignSelf="stretch" />
         {action}
       </Box>
       {description && (

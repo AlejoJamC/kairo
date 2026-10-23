@@ -5,6 +5,7 @@
  * exactly like apiCall.
  */
 import { apiCall, getLandingUrl } from "./api-client";
+import { isDesktop } from "./config";
 import { getPlatform } from "./config";
 
 const json = (value: unknown) => JSON.stringify(value);
@@ -104,4 +105,33 @@ export const syncGmail = () => apiCall("/bff/gmail/sync", { method: "POST" });
 /** Sends the user through the Gmail consent flow (system browser on desktop). */
 export function startGmailConnect(): void {
   getPlatform().navigation.navigate(getLandingUrl("/bff/auth/google"));
+}
+
+/**
+ * Address of the Google sign-in. From the desktop app it carries the desktop
+ * destination and the loopback port the app listens on, so the sign-in ends by
+ * handing the session back to the app.
+ */
+export function googleSignInUrl(port?: number): string {
+  const query = isDesktop() ? `?desktop=1${port ? `&port=${port}` : ""}` : "";
+  return getLandingUrl(`/bff/auth/google${query}`);
+}
+
+/** Starts the Google sign-in (system browser on desktop) and returns its address. */
+export async function startGoogleSignIn(): Promise<string> {
+  const host = getPlatform().host;
+  const port = host ? await host.startSignInListener() : undefined;
+  const url = googleSignInUrl(port);
+  getPlatform().navigation.navigate(url);
+  return url;
+}
+
+/** Opens the landing site (system browser on desktop), for what the app does not do itself: sign-up and password reset. */
+export function openLanding(path: string): void {
+  getPlatform().navigation.navigate(getLandingUrl(path));
+}
+
+/** Copies text through the platform clipboard. */
+export function copyText(text: string): Promise<void> {
+  return getPlatform().clipboard.writeText(text);
 }

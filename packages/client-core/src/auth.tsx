@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "./supabase";
-import { getLandingUrl } from "./api-client";
-import { getPlatform } from "./config";
+import { getLandingUrl, redirectToSignIn } from "./api-client";
+import { getPlatform, isDesktop } from "./config";
 import type { User } from "@supabase/supabase-js";
 
 export interface UserProfile {
@@ -10,6 +10,11 @@ export interface UserProfile {
   name: string;
   company_name?: string;
   // gmail_connected removed in KAI-173 — use support_channels presence instead
+}
+
+/** Names a failed password sign-in without exposing the provider's text. */
+export function classifySignInError(message: string): "invalid" | "unexpected" {
+  return message.includes("Invalid login credentials") ? "invalid" : "unexpected";
 }
 
 export type DashboardRole = 'owner' | 'admin' | 'supervisor' | 'agent';
@@ -21,6 +26,8 @@ interface AuthContextType {
   accountId: string | null;   // active account — send as x-account-id header to API
   isAdmin: boolean;
   loading: boolean;
+  /** Email and password sign-in; the error names what failed, never the provider's text. */
+  signInWithPassword: (email: string, password: string) => Promise<"invalid" | "unexpected" | null>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -57,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // If no existing session, but we have hash tokens from a redirect
-        const handoffTokens = getPlatform().authHandoff.takeHandoffTokens();
+        const handoffTokens = await getPlatform().authHandoff.takeHandoffTokens();
         if (handoffTokens) {
           const { data, error } = await supabase.auth.setSession({
             access_token: handoffTokens.access_token,
@@ -74,12 +81,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Neither existing session nor valid hash tokens
         if (!cancelled) {
           setLoading(false);
-          getPlatform().navigation.navigate(getLandingUrl("/wizard/"));
+          redirectToSignIn();
         }
       } catch {
         if (!cancelled) {
           setLoading(false);
-          getPlatform().navigation.navigate(getLandingUrl("/wizard/"));
+          redirectToSignIn();
         }
       }
     };
@@ -98,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (event === "SIGNED_OUT") {
         setUser(null);
         setProfile(null);
-        getPlatform().navigation.navigate(getLandingUrl("/wizard/"));
+        redirectToSignIn();
       }
     });
 
@@ -155,12 +162,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setProfile(null);
     setAccountId(null);
-    getPlatform().navigation.navigate(getLandingUrl("/"));
+    if (!isDesktop()) getPlatform().navigation.navigate(getLandingUrl("/"));
+  };
+
+  const signInWithPassword = async (email: string, password: string) => {
+    try {
+      const { error } = await createClient().auth.signInWithPassword({ email, password });
+      if (!error) return null;
+      return classifySignInError(error.message);
+    } catch {
+      return "unexpected";
+    }
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, userRole, accountId, isAdmin, loading, signOut, refreshProfile }}
+      value={{ user, profile, userRole, accountId, isAdmin, loading, signInWithPassword, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./platform": "./src/platform.ts",
     "./web": "./src/web.ts",
+    "./desktop": "./src/desktop.ts",
     "./config": "./src/config.ts",
     "./api-client": "./src/api-client.ts",
     "./supabase": "./src/supabase.ts",

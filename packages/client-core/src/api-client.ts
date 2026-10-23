@@ -6,7 +6,7 @@
  * /bff/* are served next to the app.
  */
 import { createClient } from "./supabase";
-import { getClientConfig, getPlatform } from "./config";
+import { getClientConfig, getPlatform, isDesktop } from "./config";
 
 export function getApiUrl(): string {
   return getClientConfig().apiBaseUrl;
@@ -14,6 +14,15 @@ export function getApiUrl(): string {
 
 export function getLandingUrl(path: string): string {
   return `${getClientConfig().landingUrl}${path}`;
+}
+
+/**
+ * Sends the person to sign in. The browser app leaves for the sign-in surface;
+ * the desktop app shows its own sign-in view instead of opening the system browser.
+ */
+export function redirectToSignIn(): void {
+  if (isDesktop()) return;
+  getPlatform().navigation.navigate(getLandingUrl("/wizard/"));
 }
 
 function resolveUrl(endpoint: string): string {
@@ -54,7 +63,7 @@ export async function apiCall(
   // For /api/v1 API calls, let the caller handle 401 so product flows
   // (template picker, reply, classify, etc.) don't trigger hard navigation.
   if (response.status === 401 && endpoint.startsWith("/bff/")) {
-    getPlatform().navigation.navigate(getLandingUrl("/wizard/"));
+    redirectToSignIn();
     throw new Error("Unauthorized");
   }
 

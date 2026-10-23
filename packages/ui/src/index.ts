@@ -82,3 +82,7 @@ export * from "./pricing-table";
 export * from "./product-frame";
 export * from "./section";
 export * from "./top-nav";
+export * from "./window-chrome";
+export * from "./dock-badge";
+export * from "./app-menu";
+export * from "./system-notification";

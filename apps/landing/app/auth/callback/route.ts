@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/env";
 import { dispatchOnboardingClassification } from "@/lib/inngest";
 import { getFlag } from "@kairo/feature-flags";
+import { DESKTOP_COOKIE, DESKTOP_PARAM, PORT_PARAM, handoffPath, isDesktopDestination, parsePort, readDesktopCookie } from "@/lib/desktop-signin";
 import type { Database } from "@/types/supabase";
 
 // ---------------------------------------------------------------------------
@@ -77,6 +78,11 @@ export async function GET(request: Request) {
     );
   }
 
+  // A sign-in started from the desktop app returns to it through a kairo:// link.
+  const remembered = readDesktopCookie(request.headers.get("cookie"));
+  const desktop = isDesktopDestination(requestUrl.searchParams.get(DESKTOP_PARAM)) || remembered.desktop;
+  const desktopPort = parsePort(requestUrl.searchParams.get(PORT_PARAM)) ?? remembered.port;
+
   const code = requestUrl.searchParams.get("code");
   if (!code) {
     return NextResponse.redirect(`${appUrl}/wizard`);
@@ -93,6 +99,8 @@ export async function GET(request: Request) {
   }
 
   const cookieJar: BufferedCookie[] = [];
+  // The desktop sign-in is consumed here: a later sign-in in the browser must not inherit it.
+  if (remembered.desktop) cookieJar.push({ name: DESKTOP_COOKIE, value: "", options: { maxAge: 0, path: "/" } });
 
   const supabase = createServerClient<Database>(
     env.NEXT_PUBLIC_SUPABASE_URL,
@@ -347,6 +355,9 @@ export async function GET(request: Request) {
   // ── Routing ───────────────────────────────────────────────────────────────
   // Scenario 1: returning user with pre-existing membership
   if (existingMembership) {
+    if (desktop) {
+      return attachCookies(NextResponse.redirect(`${appUrl}${handoffPath(true, desktopPort)}`), cookieJar);
+    }
     if (getFlag("enable_detection_ui")) {
       return attachCookies(NextResponse.redirect(`${appUrl}/wizard/detect`), cookieJar);
     }
@@ -355,7 +366,7 @@ export async function GET(request: Request) {
 
   // Scenario 3: invitation just accepted — account already existed, skip wizard
   if (acceptedInvitation) {
-    return attachCookies(NextResponse.redirect(`${appUrl}/auth/handoff`), cookieJar);
+    return attachCookies(NextResponse.redirect(`${appUrl}${handoffPath(desktop, desktopPort)}`), cookieJar);
   }
 
   // Scenario 4: account just provisioned — send to wizard to name the organisation

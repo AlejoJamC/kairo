@@ -736,6 +736,41 @@ describe('AuthCard', () => {
     )
     expect(screen.getByText('Terms').getAttribute('href')).toBe('/terms')
   })
+
+  describe('desktop', () => {
+    const wait = { title: 'Continue in your browser', body: 'We opened kairo.app.', copyLabel: 'Copy link', copiedLabel: 'Link copied', copied: false, onCopy: vi.fn(), cancelLabel: 'Cancel', onCancel: vi.fn() }
+
+    it('replaces the form with the waiting card, announced politely, with the actions', () => {
+      const onCancel = vi.fn()
+      const onCopy = vi.fn()
+      renderUi(<AuthCard title="Sign in" mark={<span>mark</span>} wait={{ ...wait, onCopy, onCancel }} onSubmit={vi.fn()} submitLabel="Sign in" providers={[{ id: 'google', label: 'Google', onPress: vi.fn() }]} />)
+      expect(screen.getByRole('status').textContent).toContain('Continue in your browser')
+      expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull()
+      expect(screen.getByText('mark')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+      expect(onCopy).toHaveBeenCalled()
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(onCancel).toHaveBeenCalled()
+    })
+
+    it('moves the focus to Copy link and reads Link copied after copying', () => {
+      const { rerender } = renderUi(<AuthCard title="Sign in" wait={wait} onSubmit={vi.fn()} submitLabel="Sign in" />)
+      expect(document.activeElement?.textContent).toContain('Copy link')
+      rerender(
+        <UiProvider>
+          <AuthCard title="Sign in" wait={{ ...wait, copied: true }} onSubmit={vi.fn()} submitLabel="Sign in" />
+        </UiProvider>,
+      )
+      expect(screen.getByRole('button', { name: 'Link copied' })).toBeTruthy()
+    })
+
+    it('AuthHeader desktop is a drag bar with the controls and the language, without the brand', () => {
+      renderUi(<AuthHeader brand={<span>Kairo</span>} desktop={{ controls: <span>controls</span> }} language={<span>EN</span>} />)
+      expect(screen.getByText('controls')).toBeTruthy()
+      expect(screen.getByText('EN')).toBeTruthy()
+      expect(screen.queryByText('Kairo')).toBeNull()
+    })
+  })
 })
 
 describe('Public web pieces', () => {

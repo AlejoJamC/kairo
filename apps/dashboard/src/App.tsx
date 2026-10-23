@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Navigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { AuthProvider, useAuth } from "@kairo/client-core/auth";
-import { getPlatform } from "@kairo/client-core/config";
+import { getPlatform, isDesktop } from "@kairo/client-core/config";
 import { useSidebarCounts } from "@kairo/client-core/hooks/use-sidebar-counts";
 import { SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS } from "@/lib/poll-intervals";
 import { AppStatusBar } from "@/components/app-status-bar";
+import { DesktopIntegration } from "@/components/desktop-integration";
+import { DesktopSignIn } from "@/components/desktop-sign-in";
 import { Sidebar } from "@/components/sidebar";
 import { Inbox } from "@/components/inbox";
 import { ClientDirectory } from "@/components/client-directory";
@@ -20,7 +22,7 @@ import { ChannelsSettings } from "@/components/channels-settings";
 import type { AppView } from "@/types";
 import { useActiveView } from "@/hooks/useActiveView";
 import { pathForView } from "@/routes";
-import { Box, Spinner, Text } from "@kairo/ui";
+import { Box, Spinner, Text, WindowChromeProvider } from "@kairo/ui";
 
 const COMING_SOON_VIEWS: AppView[] = ["in-progress"];
 
@@ -43,7 +45,7 @@ function ComingSoon({ view }: { view: AppView }) {
 }
 
 function AppContent() {
-  const { loading } = useAuth();
+  const { loading, user } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => getPlatform().storage.getItem("sidebar-collapsed") === "true"
   );
@@ -69,6 +71,9 @@ function AppContent() {
       </Box>
     );
   }
+
+  // No session in the desktop app: its own sign-in window, never an empty dashboard.
+  if (!user && isDesktop()) return <DesktopSignIn />;
 
   const renderView = () => {
     if (activeView === "triage") return <Inbox />;
@@ -106,6 +111,7 @@ function AppContent() {
       </Box>
 
       <AppStatusBar counts={counts} view={activeView} />
+      {isDesktop() && <DesktopIntegration view={activeView} onViewChange={setActiveView} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={handleToggle} />}
     </Box>
   );
 }
@@ -113,7 +119,9 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <WindowChromeProvider macos={getPlatform().host?.os === "macos"}>
+        <AppContent />
+      </WindowChromeProvider>
     </AuthProvider>
   );
 }

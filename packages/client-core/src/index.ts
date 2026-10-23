@@ -1,4 +1,5 @@
 export * from "./platform";
+export * from "./platform-factory";
 export * from "./config";
 export * from "./api-client";
 export { createClient } from "./supabase";

@@ -4,7 +4,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@kairo/client-core/auth";
-import { AccountMenu as AccountMenuPiece, type AccountPresence, type AccountTheme } from "@kairo/ui";
+import { AccountMenu as AccountMenuPiece, type AccountTheme } from "@kairo/ui";
+import { useAppCommands } from "@/lib/app-commands";
 import type { AppView } from "@/types";
 
 interface AccountMenuProps {
@@ -17,7 +18,8 @@ export function AccountMenu({ collapsed, onViewChange, onOpenShortcuts }: Accoun
   const { t } = useTranslation(["dashboard"]);
   const { profile, signOut } = useAuth();
   const [open, setOpen] = useState(false);
-  const [presence, setPresence] = useState<AccountPresence>("online");
+  const presence = useAppCommands((state) => state.presence);
+  const setPresence = useAppCommands((state) => state.setPresence);
   const [theme, setTheme] = useState<AccountTheme>("light");
 
   // ⌘, opens Settings from anywhere, as the menu advertises.

@@ -1,7 +1,9 @@
-import type { FormEvent, ReactNode } from 'react'
+import { useEffect, useRef, type FormEvent, type ReactNode } from 'react'
 import { tokens } from '@kairo/tokens'
 import { Button } from './button'
 import { Callout } from './callout'
+import { Icon } from './icon'
+import { Spinner } from './loading'
 import { Box, Text } from './layout'
 import { Path, Svg } from './lib/svg'
 import { px } from './lib/units'
@@ -33,7 +35,24 @@ function AuthLayout({ header, footer, wide, children }: AuthLayoutProps) {
 
 type AuthProvider = { id: string; label: string; icon?: ReactNode; onPress: () => void }
 
+/** Desktop: the card that replaces the form while the browser confirms the sign-in. */
+type AuthWait = {
+  title: string
+  body: string
+  copyLabel: string
+  /** Read after the link was copied: "Link copied". */
+  copiedLabel: string
+  copied: boolean
+  onCopy: () => void
+  cancelLabel: string
+  onCancel: () => void
+}
+
 type AuthCardProps = {
+  /** Desktop: the brand mark above a centered title. */
+  mark?: ReactNode
+  /** Desktop, continue in your browser: replaces the form card. */
+  wait?: AuthWait
   title: string
   subtitle?: string
   providers?: readonly AuthProvider[]
@@ -54,19 +73,25 @@ type AuthCardProps = {
   footer?: ReactNode
 }
 
-function AuthCard({ title, subtitle, providers, dividerLabel, children, aside, error, submitLabel, loading, loadingLabel, submitDisabled, onSubmit, footer }: AuthCardProps) {
+function AuthCard({ mark, wait, title, subtitle, providers, dividerLabel, children, aside, error, submitLabel, loading, loadingLabel, submitDisabled, onSubmit, footer }: AuthCardProps) {
   return (
     <Box>
-      <Box marginBottom={24}>
-        <Text tag="h1" display="block" margin={0} fontSize={26} fontWeight={600} color={tokens['text.primary']}>
-          {title}
-        </Text>
-        {subtitle && (
-          <Text tag="p" display="block" margin={0} marginTop={6} fontSize={14.5} color={tokens['text.secondary']}>
-            {subtitle}
+      <Box marginBottom={24} display="flex" flexDirection="column" alignItems={mark ? 'center' : 'flex-start'} gap={12}>
+        {mark}
+        <Box>
+          <Text tag="h1" display="block" margin={0} textAlign={mark ? 'center' : 'left'} fontSize={26} fontWeight={600} color={tokens['text.primary']}>
+            {title}
           </Text>
-        )}
+          {subtitle && (
+            <Text tag="p" display="block" margin={0} marginTop={6} textAlign={mark ? 'center' : 'left'} fontSize={14.5} color={tokens['text.secondary']}>
+              {subtitle}
+            </Text>
+          )}
+        </Box>
       </Box>
+      {wait ? (
+        <AuthWaitCard {...wait} />
+      ) : (
       <Box
         padding={24}
         borderWidth={1}
@@ -112,11 +137,60 @@ function AuthCard({ title, subtitle, providers, dividerLabel, children, aside, e
           </Button>
         </Box>
       </Box>
+      )}
       {footer && (
         <Text tag="div" display="block" marginTop={16} textAlign="center" fontSize={13} color={tokens['text.secondary']}>
           {footer}
         </Text>
       )}
+    </Box>
+  )
+}
+
+/** The slice of the DOM the focus move needs; the native build has no DOM types. */
+type FocusRoot = { querySelector(selector: string): { focus(): void } | null }
+
+function AuthWaitCard({ title, body, copyLabel, copiedLabel, copied, onCopy, cancelLabel, onCancel }: AuthWait) {
+  const ref = useRef<HTMLElement>(null)
+  // Focus moves to Copy link when the card appears.
+  useEffect(() => {
+    (ref.current as unknown as FocusRoot | null)?.querySelector('button')?.focus()
+  }, [])
+  return (
+    <Box
+      ref={ref}
+      role="status"
+      aria-live="polite"
+      display="flex"
+      flexDirection="column"
+      alignItems="center"
+      gap={14}
+      paddingVertical={28}
+      paddingHorizontal={24}
+      borderWidth={1}
+      borderStyle="solid"
+      borderColor={tokens['border.default']}
+      borderRadius={px(tokens['radius.card'])}
+      backgroundColor={tokens['surface.panel']}
+      boxShadow={tokens['shadow.pop']}
+    >
+      <Spinner size="md" />
+      <Box display="flex" flexDirection="column" gap={6}>
+        <Text textAlign="center" fontSize={15} fontWeight={600} color={tokens['text.primary']}>
+          {title}
+        </Text>
+        <Text textAlign="center" maxWidth={300} fontSize={12.5} color={tokens['text.secondary']}>
+          {body}
+        </Text>
+      </Box>
+      <Box display="flex" flexWrap="wrap" justifyContent="center" gap={8}>
+        <Button icon={<Icon name="copy" size={13} />} onPress={onCopy}>
+          {copied ? copiedLabel : copyLabel}
+        </Button>
+        <Button variant="ghost" onPress={onCancel}>
+          {cancelLabel}
+        </Button>
+      </Box>
     </Box>
   )
 }
@@ -179,4 +253,4 @@ function GoogleMark({ size = 16 }: { size?: number }) {
 }
 
 export { AuthLayout, AuthCard, InvitationSummary, GoogleMark }
-export type { AuthLayoutProps, AuthCardProps, AuthProvider, InvitationSummaryProps }
+export type { AuthLayoutProps, AuthWait, AuthCardProps, AuthProvider, InvitationSummaryProps }

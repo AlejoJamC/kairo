@@ -6,6 +6,7 @@ import { Icon } from './icon'
 import { Box, Text } from './layout'
 import { VisuallyHidden } from './lib/visually-hidden'
 import { px } from './lib/units'
+import { useWindowChrome } from './window-chrome'
 
 // Top bar of the ticket: where the agent is, the position in the queue and the
 // ticket status. Single line; the breadcrumb truncates before the status.
@@ -39,9 +40,11 @@ type TicketBarProps = {
 }
 
 function TicketBar({ queueName, ticketId, position, notes, escalatedLabel, status, onPrevious, onNext, hasPrevious = true, hasNext = true, labels }: TicketBarProps) {
+  const macosWindow = useWindowChrome()
   return (
     <Box
       tag="header"
+      dragRegion={macosWindow}
       display="flex"
       alignItems="center"
       gap={8}
@@ -83,7 +86,7 @@ function TicketBar({ queueName, ticketId, position, notes, escalatedLabel, statu
           {escalatedLabel}
         </Badge>
       )}
-      <Box flexGrow={1} />
+      <Box dragRegion={macosWindow} flexGrow={1} alignSelf="stretch" />
       {status}
       <Box display="flex" gap={2} marginLeft={4}>
         <IconButton label={labels.previous} shortcut="K" disabled={!hasPrevious} onPress={onPrevious}>

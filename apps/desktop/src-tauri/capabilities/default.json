@@ -1,0 +1,12 @@
+{
+  "identifier": "default",
+  "description": "Default capability for the Kairo main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "opener:default",
+    "deep-link:default",
+    "notification:default"
+  ]
+}

@@ -20,6 +20,8 @@ export function createWebPlatform(): PlatformPorts {
   const handoff = readHandoffTokens();
 
   return {
+    kind: "web",
+    host: null,
     // localStorage can be missing or throw (private mode, torn-down test
     // environments); reads then return null and writes are dropped.
     storage: {
@@ -65,6 +67,6 @@ export function createWebPlatform(): PlatformPorts {
         };
       },
     },
-    authHandoff: { takeHandoffTokens: () => handoff },
+    authHandoff: { takeHandoffTokens: async () => handoff },
   };
 }

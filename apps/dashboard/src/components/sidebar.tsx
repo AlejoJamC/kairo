@@ -10,6 +10,7 @@ import { AccountMenu } from "@/components/account-menu";
 import { CommandPaletteHost } from "@/components/command-palette-host";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { ShortcutsHost } from "@/components/shortcuts-host";
+import { useAppCommands } from "@/lib/app-commands";
 import { useLocale } from "@/hooks/useLocale";
 import { VIEW_TO_STATUS } from "@/lib/sidebar-view-status";
 import type { SupportedLanguage } from "@/i18n/types";
@@ -32,6 +33,15 @@ export function Sidebar({ collapsed, onToggle, activeView, onViewChange, counts 
   const { language, setLanguage, supportedLanguages, languageMeta } = useLocale();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // The native menu asks for the palette and the shortcuts dialog through the app commands.
+  useEffect(() => {
+    const unsubscribe = useAppCommands.subscribe((state, previous) => {
+      if (state.paletteRequests !== previous.paletteRequests) setPaletteOpen(true);
+      if (state.shortcutsRequests !== previous.shortcutsRequests) setShortcutsOpen(true);
+    });
+    return unsubscribe;
+  }, []);
 
   // ⌘K / Ctrl+K opens the palette from anywhere.
   useEffect(() => {
