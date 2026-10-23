@@ -50,12 +50,15 @@ describe('sign-in entry points', () => {
     expect(googleSignInUrl()).toBe('https://kairo.example/bff/auth/google')
     init(platform('desktop', navigate))
     expect(googleSignInUrl()).toBe('https://kairo.example/bff/auth/google?desktop=1')
+    expect(googleSignInUrl(4010)).toBe('https://kairo.example/bff/auth/google?desktop=1&port=4010')
   })
 
-  it('starts the Google sign-in and opens the landing pages through the navigation port', () => {
-    init(platform('desktop', navigate))
-    startGoogleSignIn()
-    expect(navigate).toHaveBeenLastCalledWith('https://kairo.example/bff/auth/google?desktop=1')
+  it('starts the Google sign-in and opens the landing pages through the navigation port', async () => {
+    const host = { os: 'macos' as const, setBadge: vi.fn(), setMenu: vi.fn(), setWindowSize: vi.fn(), startSignInListener: vi.fn(async () => 4010), onMenuAction: vi.fn(() => () => {}), notify: vi.fn() }
+    init({ ...platform('desktop', navigate), host })
+    await expect(startGoogleSignIn()).resolves.toBe('https://kairo.example/bff/auth/google?desktop=1&port=4010')
+    expect(host.startSignInListener).toHaveBeenCalledTimes(1)
+    expect(navigate).toHaveBeenLastCalledWith('https://kairo.example/bff/auth/google?desktop=1&port=4010')
     openLanding('/set-password')
     expect(navigate).toHaveBeenLastCalledWith('https://kairo.example/set-password')
   })

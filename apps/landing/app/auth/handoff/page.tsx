@@ -20,7 +20,7 @@ import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { getDashboardUrl } from '@/lib/api-config';
 import { useTranslation } from '@/lib/i18n';
-import { DESKTOP_PARAM, desktopHandoffUrl, isDesktopDestination } from '@/lib/desktop-signin';
+import { DESKTOP_PARAM, PORT_PARAM, desktopTarget, isDesktopDestination, parsePort } from '@/lib/desktop-signin';
 import { Box, Icon, ProgressSteps, Text, type ProgressStep } from "@kairo/ui";
 
 type Stage = 'verify' | 'prepare' | 'open' | 'done' | 'failed';
@@ -36,7 +36,9 @@ export default function AuthHandoffPage() {
 function Handoff() {
   const { t } = useTranslation();
   const h = t.handoff;
-  const desktop = isDesktopDestination(useSearchParams().get(DESKTOP_PARAM));
+  const search = useSearchParams();
+  const desktop = isDesktopDestination(search.get(DESKTOP_PARAM));
+  const port = parsePort(search.get(PORT_PARAM));
   const [stage, setStage] = useState<Stage>('verify');
   const [failedAt, setFailedAt] = useState<Stage>('verify');
   const [attempt, setAttempt] = useState(0);
@@ -56,7 +58,7 @@ function Handoff() {
       // The desktop app gets the session through its kairo:// link; the browser app through the URL hash.
       target.current =
         hasSession && desktop
-          ? desktopHandoffUrl({ access_token: session!.access_token, refresh_token: session!.refresh_token })
+          ? desktopTarget(port, { access_token: session!.access_token, refresh_token: session!.refresh_token })
           : hasSession
             ? `${dashboardUrl}#access_token=${encodeURIComponent(session!.access_token)}&refresh_token=${encodeURIComponent(session!.refresh_token)}`
             : dashboardUrl;
@@ -70,7 +72,7 @@ function Handoff() {
       setFailedAt(current);
       setStage('failed');
     }
-  }, [desktop]);
+  }, [desktop, port]);
 
   useEffect(() => {
     void go();

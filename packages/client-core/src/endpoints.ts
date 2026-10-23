@@ -109,15 +109,21 @@ export function startGmailConnect(): void {
 
 /**
  * Address of the Google sign-in. From the desktop app it carries the desktop
- * destination, so the sign-in ends in a kairo:// link back to the app.
+ * destination and the loopback port the app listens on, so the sign-in ends by
+ * handing the session back to the app.
  */
-export function googleSignInUrl(): string {
-  return getLandingUrl(`/bff/auth/google${isDesktop() ? "?desktop=1" : ""}`);
+export function googleSignInUrl(port?: number): string {
+  const query = isDesktop() ? `?desktop=1${port ? `&port=${port}` : ""}` : "";
+  return getLandingUrl(`/bff/auth/google${query}`);
 }
 
-/** Starts the Google sign-in (system browser on desktop). */
-export function startGoogleSignIn(): void {
-  getPlatform().navigation.navigate(googleSignInUrl());
+/** Starts the Google sign-in (system browser on desktop) and returns its address. */
+export async function startGoogleSignIn(): Promise<string> {
+  const host = getPlatform().host;
+  const port = host ? await host.startSignInListener() : undefined;
+  const url = googleSignInUrl(port);
+  getPlatform().navigation.navigate(url);
+  return url;
 }
 
 /** Opens the landing site (system browser on desktop), for what the app does not do itself: sign-up and password reset. */

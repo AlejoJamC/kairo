@@ -86,7 +86,7 @@ function TicketBar({ queueName, ticketId, position, notes, escalatedLabel, statu
           {escalatedLabel}
         </Badge>
       )}
-      <Box flexGrow={1} />
+      <Box dragRegion={macosWindow} flexGrow={1} alignSelf="stretch" />
       {status}
       <Box display="flex" gap={2} marginLeft={4}>
         <IconButton label={labels.previous} shortcut="K" disabled={!hasPrevious} onPress={onPrevious}>

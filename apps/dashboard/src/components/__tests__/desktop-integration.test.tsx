@@ -9,6 +9,8 @@ const host = {
   os: "macos" as const,
   setBadge: vi.fn(),
   setMenu: vi.fn(),
+  setWindowSize: vi.fn(),
+  startSignInListener: vi.fn(),
   onMenuAction: vi.fn(),
   notify: vi.fn(),
 };

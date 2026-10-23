@@ -45,6 +45,10 @@ export interface DesktopHost {
   setMenu(groupsJson: string): void;
   /** Calls the listener with the id of every native menu item the person picks. Returns the unsubscribe function. */
   onMenuAction(listener: (id: string) => void): () => void;
+  /** Starts waiting on the loopback address for the browser sign-in to hand over the session; resolves with the port. */
+  startSignInListener(): Promise<number>;
+  /** Resizes the window (logical pixels) and sets the smallest size it can take. */
+  setWindowSize(width: number, height: number, minWidth: number, minHeight: number): void;
   /** Shows a system notification. */
   notify(title: string, body: string): void;
 }

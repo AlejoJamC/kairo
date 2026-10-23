@@ -43,7 +43,7 @@ function QueueHeader({ title, count, countLabel, description, action, bar, barVa
             {countLabel && <VisuallyHidden>{countLabel}</VisuallyHidden>}
           </Text>
         )}
-        <Box flexGrow={1} />
+        <Box dragRegion={macosWindow} flexGrow={1} alignSelf="stretch" />
         {action}
       </Box>
       {description && (

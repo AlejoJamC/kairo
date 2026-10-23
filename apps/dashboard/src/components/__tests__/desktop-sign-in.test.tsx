@@ -6,17 +6,19 @@ import { renderWithProviders } from "@/test/render-with-providers";
 import { DesktopSignIn } from "@/components/desktop-sign-in";
 
 const signInWithPassword = vi.fn();
-const startGoogleSignIn = vi.fn();
+const startGoogleSignIn = vi.fn(async () => "https://kairo.example/bff/auth/google?desktop=1&port=4010");
 const copyText = vi.fn(async () => {});
 const openLanding = vi.fn();
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key.replace("auth:desktop.", "") }),
 }));
+const setWindowSize = vi.fn();
+vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} unobserve() {} });
+vi.mock("@kairo/client-core/config", () => ({ getPlatform: () => ({ host: { setWindowSize } }) }));
 vi.mock("@kairo/client-core/auth", () => ({ useAuth: () => ({ signInWithPassword }) }));
 vi.mock("@kairo/client-core/endpoints", () => ({
   startGoogleSignIn: () => startGoogleSignIn(),
-  googleSignInUrl: () => "https://kairo.example/bff/auth/google?desktop=1",
   copyText: (text: string) => copyText(text),
   openLanding: (path: string) => openLanding(path),
 }));
@@ -42,11 +44,17 @@ describe("DesktopSignIn", () => {
     renderWithProviders(<DesktopSignIn />);
     await user.click(screen.getByRole("button", { name: /google/ }));
     await user.click(screen.getByRole("button", { name: "copyLink" }));
-    expect(copyText).toHaveBeenCalledWith("https://kairo.example/bff/auth/google?desktop=1");
+    expect(copyText).toHaveBeenCalledWith("https://kairo.example/bff/auth/google?desktop=1&port=4010");
     await waitFor(() => expect(screen.getByRole("button", { name: "linkCopied" })).toBeTruthy());
     await user.click(screen.getByRole("button", { name: "cancel" }));
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByLabelText("emailLabel")).toBeTruthy();
+  });
+
+  it("gives the large window back when it goes away", () => {
+    const { unmount } = renderWithProviders(<DesktopSignIn />);
+    unmount();
+    expect(setWindowSize).toHaveBeenLastCalledWith(1280, 800, 960, 640);
   });
 
   it("keeps the sign-in button disabled until the email and the password are filled", () => {

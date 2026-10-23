@@ -89,7 +89,7 @@ function AuthHeader({ brand, language, desktop }: AuthHeaderProps) {
     return (
       <Box tag="header" dragRegion display="flex" alignItems="center" gap={12} height={44} paddingHorizontal={16} flexShrink={0}>
         {desktop.controls}
-        <Box flexGrow={1} />
+        <Box dragRegion flexGrow={1} alignSelf="stretch" />
         {language}
       </Box>
     )

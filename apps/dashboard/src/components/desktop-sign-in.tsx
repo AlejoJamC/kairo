@@ -2,11 +2,13 @@
 // confirmed in the system browser (the app opens by itself when it finishes);
 // email and password sign in here.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@kairo/client-core/auth";
-import { copyText, googleSignInUrl, openLanding, startGoogleSignIn } from "@kairo/client-core/endpoints";
+import { getPlatform } from "@kairo/client-core/config";
+import { copyText, openLanding, startGoogleSignIn } from "@kairo/client-core/endpoints";
 import { AuthCard, AuthHeader, AuthLayout, Box, Field, FieldInput, GoogleMark, Icon, Pressable, Text, WindowControlsSlot, useWindowChrome } from "@kairo/ui";
+import { useContentHeight } from "@/hooks/useContentHeight";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
 export function DesktopSignIn() {
@@ -19,6 +21,16 @@ export function DesktopSignIn() {
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [signInUrl, setSignInUrl] = useState<string | null>(null);
+
+  // The sign-in window is as tall as its content: the bar, the card and the space around it. The app takes the large window once there is a session.
+  const SIGN_IN_WIDTH = 520;
+  const BAR_AND_SPACE = 44 + 80;
+  const contentRef = useContentHeight<HTMLDivElement>((height) => {
+    const total = height + BAR_AND_SPACE;
+    getPlatform().host?.setWindowSize(SIGN_IN_WIDTH, total, 440, total);
+  });
+  useEffect(() => () => getPlatform().host?.setWindowSize(1280, 800, 960, 640), []);
 
   const submit = async () => {
     setLoading(true);
@@ -35,15 +47,19 @@ export function DesktopSignIn() {
     setError(null);
     setCopied(false);
     setWaiting(true);
-    startGoogleSignIn();
+    void startGoogleSignIn().then(setSignInUrl).catch(() => {
+      setWaiting(false);
+      setError(t("auth:desktop.errorUnexpected"));
+    });
   };
 
   const copyLink = () => {
-    void copyText(googleSignInUrl()).then(() => setCopied(true));
+    if (signInUrl) void copyText(signInUrl).then(() => setCopied(true));
   };
 
   return (
     <AuthLayout header={<AuthHeader desktop={{ controls: macosWindow ? <WindowControlsSlot /> : null }} language={<LanguageSwitcher plain />} />}>
+      <Box ref={contentRef}>
       <AuthCard
         mark={
           <Box width={40} height={40} borderRadius={10} display="flex" alignItems="center" justifyContent="center" backgroundColor="var(--kairo-color-accent)">
@@ -98,6 +114,7 @@ export function DesktopSignIn() {
           <FieldInput secureTextEntry value={password} onChangeText={setPassword} placeholder="••••••••" autoComplete="current-password" readOnly={loading} />
         </Field>
       </AuthCard>
+      </Box>
     </AuthLayout>
   );
 }
