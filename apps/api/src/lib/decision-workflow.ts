@@ -2,17 +2,17 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import {
   buildTicketVerdictQuestions, TicketAnswersSchema, knowledgeImpactQuestions, attentionRecommendation, createDecisionProvider, ProviderError, runDecisionFeature,
-  workflowAnswersSchema, workflowQuestions, WORKFLOW_VERSION, runLlmFeature, ReferencedWorkflowAnalysisSchema, workflowEvidenceFragments, resolveWorkflowEvidence, WorkflowAnalysisSchema, groundWorkflowAnalysis, supportedNextAction, type WorkflowSource,
-  generateEmbedding, resolveModelRoute, workflowLanguageSchema,
+  workflowAnswersSchema, workflowQuestions, WORKFLOW_VERSION, runLlmFeature, ReferencedWorkflowAnalysisSchema, workflowEvidenceFragments, resolveWorkflowEvidence, WorkflowAnalysisSchema, groundWorkflowAnalysis, supportedNextAction, type WorkflowSource, type VectorSpace,
+  resolveModelRoute, workflowLanguageSchema,
 } from '@kairo/intelligence';
 import { computeTicketOperationalSla, buildConfigByPriority } from '@kairo/types';
 import { supabase } from './supabase.js';
 import { recordLlmCall } from './llm-logging.js';
-import { approvedWorkflowKnowledge, knowledgeEmbeddingText, knowledgeReferences, KnowledgeVersionSchema } from './workflow-knowledge.js';
+import { approvedWorkflowKnowledge, enqueueWorkflowKnowledge, knowledgeReferences, KnowledgeVersionSchema } from './workflow-knowledge.js';
 import { resolveSenderIdentity } from './client-identity.js';
 import { contractualSlaFor } from './sla.js';
-import { env } from '@kairo/env';
 import { proposeEmailKnowledge } from './email-knowledge.js';
+import { createBackendSemanticService } from './semantic-service.js';
 
 export interface DecisionWork {
   id: string; account_id: string; ticket_id: string | null; message_id: string | null;
@@ -21,6 +21,7 @@ export interface DecisionWork {
 }
 export interface DecisionWorkDeps {
   embed?: (text: string) => Promise<number[]>;
+  space?: VectorSpace;
   decide?: typeof runDecisionFeature;
   analyze?: typeof runLlmFeature;
   decisionProvider?: (role: 'classification' | 'knowledge_decision') => ReturnType<typeof createDecisionProvider>;
@@ -74,7 +75,7 @@ async function ticketContext(work: DecisionWork, db = supabase, deps: DecisionWo
   const { identity, client } = directory.data;
   const history = [...(messages.data ?? [])].reverse().map(row => ({ ...row, body_plain: String(row.body_plain ?? '').slice(0,2000) }));
   const incoming = source.data ? { ...source.data, body_plain: String(source.data.body_plain ?? '').slice(0,8000) } : null;
-  const versions = await approvedWorkflowKnowledge(work.account_id, [ticket.subject, incoming?.body_plain ?? ticket.body_plain].join('\n'), ticket.id, db, { embed: deps.embed });
+  const versions = await approvedWorkflowKnowledge(work.account_id, [ticket.subject, incoming?.body_plain ?? ticket.body_plain].join('\n'), ticket.id, db, { embed: deps.embed, space: deps.space });
   const sources: WorkflowSource[] = history.filter(row => row.id !== incoming?.id).map(row => ({ id: row.id as string, text: String(row.body_plain ?? ''), authority: 'message' }));
   if (incoming) sources.push({ id: incoming.id, text: incoming.body_plain ?? '', authority: 'message' });
   sources.push(...versions.map(row => ({ id: row.id, text: String(row.snapshot['content'] ?? row.snapshot['summary'] ?? '').slice(0,2000), authority: 'approved_knowledge' as const })));
@@ -103,36 +104,22 @@ async function analyzeContext(ctx: Awaited<ReturnType<typeof ticketContext>>, wo
   return { ...(referenced ? resolveWorkflowEvidence(ReferencedWorkflowAnalysisSchema.parse(result.data), ctx.sources) : groundWorkflowAnalysis(WorkflowAnalysisSchema.parse(result.data), ctx.sources)), model: result.model, promptVersion: result.promptVersion, callId: result.llmCallId };
 }
 
-/**
- * An approved version needs a vector before tickets can be compared with it.
- * Articles usually bring one from kb_articles; learnings are embedded here.
- */
 async function ensureKnowledgeEmbedding(work: DecisionWork, db: typeof supabase, deps: DecisionWorkDeps): Promise<void> {
-  const { data: row, error } = await db.from('knowledge_versions').select('*').eq('id', work.knowledge_version_id).eq('account_id', work.account_id).maybeSingle();
-  if (error) throw new ProviderError('Knowledge version lookup failed', true);
-  if (!row) return;
-  const version = KnowledgeVersionSchema.parse(row);
-  if (version.status !== 'approved') return;
-  const { data: existing, error: existingError } = await db.from('knowledge_embeddings').select('version_id').eq('version_id', version.id).maybeSingle();
-  if (existingError) throw new ProviderError('Knowledge embedding lookup failed', true);
-  if (existing) return;
-  const text = knowledgeEmbeddingText(version);
-  if (!text) return;
-  const embedding = await (deps.embed ?? ((value: string) => generateEmbedding(value, { accountId: work.account_id })))(text);
-  const { error: insertError } = await db.from('knowledge_embeddings').upsert(
-    { version_id: version.id, account_id: work.account_id, embedding, source: 'workflow' },
-    { onConflict: 'version_id', ignoreDuplicates: true });
-  if (insertError) throw new ProviderError('Knowledge embedding persistence failed', true);
+  if (!work.knowledge_version_id) return;
+  const service = createBackendSemanticService({ db, embed: deps.embed, space: deps.space,
+    scope: { accountId: work.account_id, actor: { kind: 'workflow', id: work.id }, permissions: ['index'] } });
+  const result = await service.indexSource({ source: { kind: 'knowledge_version', id: work.knowledge_version_id } });
+  // Withdrawn and replaced versions still need their existing withdrawal workflow.
+  if (result.status === 'failed' && result.reason !== 'not_found') throw new ProviderError('Knowledge index unavailable', true);
 }
 
 const decisionProvider = (deps: DecisionWorkDeps, role: 'classification' | 'knowledge_decision' = 'knowledge_decision') => deps.decisionProvider?.(role) ?? createDecisionProvider('gateway', role);
 
 export async function processDecisionWork(work: DecisionWork, db = supabase, deps: DecisionWorkDeps = {}) {
   if (work.contract === 'knowledge_change') {
+    if (!work.knowledge_version_id) throw new ProviderError('Knowledge version missing', false);
     await ensureKnowledgeEmbedding(work, db, deps);
-    const { error } = await db.rpc('enqueue_knowledge_candidates', { p_version_id: work.knowledge_version_id,
-      p_threshold: env.EMBEDDING_SIMILARITY_THRESHOLD, p_limit: env.KNOWLEDGE_CANDIDATE_LIMIT });
-    if (error) throw new ProviderError('Knowledge candidate selection failed', true);
+    await enqueueWorkflowKnowledge(work.account_id, db, { versionId: work.knowledge_version_id });
     return;
   }
   const ctx = await ticketContext(work, db, deps);

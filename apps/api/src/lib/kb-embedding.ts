@@ -1,62 +1,27 @@
-// KAI-42: KB-article embedding generation.
-//
-// Used by /v1/kb-articles POST and PUT to keep kb_articles.embedding in sync
-// with title + content. Embedding text mirrors the ticket pipeline format
-// (title acts like subject; content is the body).
-
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { generateEmbedding } from "@kairo/intelligence";
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { prepareArticleEmbeddingText, type SemanticFailure, type VectorSpace } from '@kairo/intelligence';
+import { createBackendSemanticService } from './semantic-service.js';
 
 export function buildKbEmbeddingText(title: string, content: string): string | null {
-  const t = (title ?? "").trim();
-  const c = (content ?? "").trim();
-  const combined = [t, c].filter(Boolean).join("\n\n");
-  return combined.length === 0 ? null : combined;
+  return prepareArticleEmbeddingText(title, content) || null;
 }
-
 export interface MaybeGenerateKbEmbeddingArgs {
   supabase: SupabaseClient;
   articleId: string;
-  accountId?: string; // KAI-189: tags the Langfuse generation for per-tenant cost/perf breakdown
+  accountId: string;
   title: string;
   content: string;
   embedFn?: (text: string, context?: { accountId?: string }) => Promise<number[]>;
+  space?: VectorSpace;
 }
+export type KbEmbeddingOutcome = { status: 'ok' } | { status: 'skipped'; reason: 'empty_text' } |
+  { status: 'failed'; reason: SemanticFailure };
 
-export type KbEmbeddingOutcome =
-  | { status: "ok" }
-  | { status: "skipped"; reason: "empty_text" }
-  | { status: "failed"; reason: "embed_error" | "persist_error" };
-
-export async function maybeGenerateKbEmbedding(
-  args: MaybeGenerateKbEmbeddingArgs
-): Promise<KbEmbeddingOutcome> {
-  const text = buildKbEmbeddingText(args.title, args.content);
-  if (!text) return { status: "skipped", reason: "empty_text" };
-
-  const embed = args.embedFn ?? generateEmbedding;
-  let vector: number[];
-  try {
-    vector = await embed(text, { accountId: args.accountId });
-  } catch (err) {
-    console.error(
-      `[kb-embedding] generateEmbedding failed for article ${args.articleId}:`,
-      err instanceof Error ? err.message : err
-    );
-    return { status: "failed", reason: "embed_error" };
-  }
-
-  const { error } = await args.supabase
-    .from("kb_articles")
-    .update({ embedding: vector, updated_at: new Date().toISOString() })
-    .eq("id", args.articleId);
-
-  if (error) {
-    console.error(
-      `[kb-embedding] persist failed for article ${args.articleId}: ${error.message}`
-    );
-    return { status: "failed", reason: "persist_error" };
-  }
-
-  return { status: "ok" };
+export async function maybeGenerateKbEmbedding(args: MaybeGenerateKbEmbeddingArgs): Promise<KbEmbeddingOutcome> {
+  const service = createBackendSemanticService({ db: args.supabase, space: args.space,
+    scope: { accountId: args.accountId, actor: { kind: 'workflow', id: 'article_index' }, permissions: ['index'] },
+    embed: args.embedFn ? text => args.embedFn!(text,{ accountId: args.accountId }) : undefined });
+  const result = await service.indexSource({ source: { kind: 'kb_article', id: args.articleId } });
+  if (result.status === 'failed' || result.status === 'skipped') return result;
+  return { status: 'ok' };
 }

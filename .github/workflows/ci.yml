@@ -10,6 +10,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  semantic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Semantic contracts and consumer tests
+        run: bun --no-env-file run test:semantic
+      - name: Canonical evaluation contracts without inference
+        env:
+          SUPABASE_URL: http://127.0.0.1:54321
+          SUPABASE_SERVICE_ROLE_KEY: acme-test-key
+        run: bun --no-env-file evals/technical.ts
+      - name: SQL guarantees in disposable process memory
+        run: bun --no-env-file run test:semantic:sql
+      - name: Typecheck intelligence and API
+        run: |
+          bun --no-env-file x tsc --noEmit -p packages/intelligence/tsconfig.json
+          bun --no-env-file x tsc --noEmit -p apps/api/tsconfig.json
+          bun --no-env-file x tsc --noEmit -p evals/tsconfig.json
+
   verify:
     runs-on: ubuntu-latest
     steps:

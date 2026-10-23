@@ -71,11 +71,13 @@ Kairo — AI support cockpit for support teams. Monorepo: dashboard (Vite+React1
 
 - When a Linear issue is referenced, its description is the specification and its acceptance criteria define completion. Read the applicable specification in full before implementing.
 - Preserve the approved Linear issue description during execution. Only change existing acceptance-criteria checkbox states, based on evidence. Never append implementation logs, progress, validation reports or explanations to the issue body, and never rewrite or add acceptance criteria without explicit user authorization.
+- Never change a Linear issue's workflow status without an explicit human instruction to change that status. Validating or checking acceptance criteria, finishing implementation, passing tests, or committing does not authorize a status transition; an open, unmerged PR does not authorize marking the issue Done. Omit status fields from all other issue updates.
 - Put relevant implementation findings, validation results and blockers in a brief execution comment on the same issue. Keep the comment factual and useful as a source of knowledge; do not repeat the specification or conversation.
 - If the user explicitly authorizes a specification correction, retain the original text with strikethrough, add the correction date and write the replacement. Never silently replace or delete the original specification. A user-authorized proposed acceptance criterion must remain unchecked and italicized until the user accepts it.
 - Inspect affected files before implementing. Resolve routine implementation choices from the code and existing context; ask about material ambiguity in product behavior.
+- When asked to read, investigate or validate code, complete the relevant search before answering. Locate entry points and follow imports and calls through the implementation, consumers, workers, tests and evals, including scripts outside the application's test directory. Read the relevant function bodies; filenames, search hits and prior conversation are not sufficient evidence. Before claiming that behavior or coverage is absent, search the relevant repository locations and trace indirect calls. Support conclusions with concrete file/function references and distinguish simulated dependencies from real integrations. Never present a search limited to one directory as a conclusion about the whole project. If access or another concrete blocker prevents verification, state the exact unverified scope instead of asserting absence, correctness or completion. Continue authorized read-only investigation without asking the user to repeat the instruction.
 - Values compared across tables: read both column definitions in `supabase/schema.sql` (CHECK constraints, enums, casing) before comparing or joining them, reuse the existing normalizer (e.g. `normalizePlanTier`) instead of comparing raw values, and add a test that covers every allowed value.
-- Data the code reads must have a writer: before depending on a column or field (e.g. `tickets.client_id`), confirm something populates it, or add the writer in the same change together with a backfill for existing rows.
+- Data the code reads must have a writer: before depending on a column or field (e.g. `tickets.client_id`), confirm something populates it, or add the writer in the same change together with a backfill for existing rows. A backfill of business records or operational state requires the explicit data-migration authorization below; without it, stop and ask instead of preparing the backfill.
 - No placeholder literals where the specification requires a derived value (e.g. a fixed `'unknown'`). Derive it from the available sources, or report the field as missing.
 - Inspect Git status and preserve existing work. Do not create or switch branches, create worktrees, or start a Git flow unless the user explicitly instructs it. Never require a clean checkout by discarding changes.
 - All code, code comments and commit messages must be in English. User-facing strings must follow the project's EN/ES localization requirements.
@@ -117,6 +119,34 @@ All schema changes must go through the Supabase CLI workflow.
 Never write raw SQL and paste it into the Supabase dashboard.
 See `supabase/SKILL.md` for the full enforced workflow.
 
+### ⛔ Do not turn schema installation into operational data processing
+
+Schema migrations may define tables, relationships, constraints, indexes,
+permissions and callable persistence/query interfaces. Known column defaults,
+enum values and fixed reference catalogs are allowed when required by the
+approved schema. This rule does not prohibit normal application writes or
+synthetic fixtures inside isolated tests.
+
+**The forbidden case is scanning existing business records during schema
+installation to manufacture derived state or initiate operational work.**
+Examples include `INSERT ... SELECT` over tickets or knowledge to populate a
+job queue, bulk embedding/index generation, workflow replay, copying current
+business records into a new operational representation, or rewriting their
+processing state. Creating an empty index table does not authorize populating
+it, selecting sources for it or scheduling their processing.
+
+Do not hide these effects in `DO` blocks, function calls, seeds or helper
+scripts, or introduce triggers on existing tables that assume responsibility
+for scheduling business processing outside the approved consumer/pipeline
+contract. Defining a callable RPC does not authorize invoking it in a migration.
+
+**If this operational processing is needed, stop before writing or executing
+that part and ask the human to explicitly authorize a data migration.** State
+the affected tables, selection predicates and intended effects. Generic approval
+to implement, apply schema migrations or commit does not authorize it. Without
+that authorization, keep schema installation free of this processing and leave
+source selection and execution with the application's consumers and pipelines.
+
 ### ⛔ Nothing reaches the remote database before the commit is approved
 
 `db push`, `db dump` and `gen types` all write to or read from the linked
@@ -144,3 +174,21 @@ Once the user says "commit", and only then:
 `--linked` on every command: without it they target the local stack on 54322.
 `2>/dev/null` on every redirect: with a bare `>` the CLI's logs land inside the
 file and `gen types` truncates it to 0 bytes.
+
+### Additional gate: validate locally before the approved remote stage
+
+The approval gate above remains mandatory and unchanged. Local application and
+validation do not authorize remote execution or a commit. When the human has
+explicitly authorized the full workflow, execute these dependent steps in order:
+authorized local application and validation → approved remote application →
+canonical schema and generated types → explicitly requested commit.
+
+A local conflict, failed migration, failed test or unavailable local stack blocks
+the remote application, even when the commit instruction has already been given.
+Do not execute the remote stage as independent work while resolving a local
+failure. Destructive local recovery requires explicit authorization and never
+implies permission to reset the remote database. Do not add a repair migration
+or alter migration history to bypass a failure without authorization.
+
+Preserve existing agent rules when adding a compatible rule. An instruction to
+add a rule does not authorize deleting, replacing or weakening an existing one.

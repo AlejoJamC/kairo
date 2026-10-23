@@ -26,6 +26,7 @@ import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
 import { backfillProposalStatus, autoApprovedTypes } from "./backfill-proposal-status.js";
 import { headerValue, headersToRecord, type GmailHeader } from "../../lib/email/headers.js";
+import { enqueueWorkflowKnowledge } from "../../lib/workflow-knowledge.js";
 
 // KAI-191: tier3 writes priority/category onto every ticket it creates, but
 // used to leave no trace of that AI decision — the human correction path did,
@@ -664,9 +665,7 @@ export async function processTier3Messages(input: {
 
 export async function checkTier3PendingKnowledge(accountId: string): Promise<void> {
   if (!getFlag('enable_email_knowledge')) return;
-  const { error } = await supabase.rpc('enqueue_pending_knowledge', { p_account_id: accountId,
-    p_threshold: env.EMBEDDING_SIMILARITY_THRESHOLD, p_limit: env.KNOWLEDGE_CANDIDATE_LIMIT });
-  if (error) throw new Error('Pending knowledge check failed');
+  await enqueueWorkflowKnowledge(accountId, supabase);
 }
 
 export const tier3Deferred = inngest.createFunction(

@@ -6,6 +6,7 @@ import { classificationAudit, feedbackAudit } from "../../lib/classification-aud
 import { correctionAttributes, recordDecision } from "../../lib/decision-telemetry.js";
 import { sendTypeCorrectionScore } from "../../lib/langfuse-scores.js";
 import { classifyEmailWithMeta, ProviderError } from "@kairo/intelligence";
+import { searchTicketMatches } from "../../lib/semantic-ticket-search.js";
 import { suggestReply } from "../../lib/reply-suggestion.js";
 import { findResolvedCases, retrieveTicketContext, ticketQueryText } from "../../lib/ticket-context.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
@@ -324,13 +325,8 @@ tickets.get("/:id/similar", async (c) => {
   // Call pgvector RPC — degrade gracefully if extension/function not yet deployed.
   // p_exclude_same_group: suggestions are for grouping, so tickets already in
   // the caller's group must never come back (KAI-108).
-  const { data, error } = await supabase.rpc("find_similar_tickets", {
-    p_ticket_id: id,
-    p_account_id: ctx.accountId,
-    p_limit: limit,
-    p_threshold: SIMILAR_TICKETS_THRESHOLD,
-    p_exclude_same_group: true,
-  });
+  const { data, error } = await searchTicketMatches({ db: supabase, accountId: ctx.accountId, ticketId: id,
+    limit, threshold: SIMILAR_TICKETS_THRESHOLD, excludeSameGroup: true });
 
   if (error) {
     // RPC missing (42883) or pgvector not installed — not a hard failure
@@ -2105,12 +2101,7 @@ export async function buildEscalationContext(
       : Promise.resolve({ count: 0 }),
 
     // past_l2_case: find similar tickets then cross with escalations table
-    supabase.rpc("find_similar_tickets", {
-      p_ticket_id: ticketId,
-      p_account_id: accountId,
-      p_limit:     5,
-      p_threshold: 0.80,
-    }),
+    searchTicketMatches({ db: supabase, accountId, ticketId, limit: 5, threshold: 0.80 }),
   ]);
 
   // Check if any similar ticket was escalated to L2

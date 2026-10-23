@@ -42,7 +42,11 @@ export type {
   Urgency,
 } from './classification';
 
-export { generateEmbedding, generateEmbeddings } from './embeddings';
+export { generateEmbedding, generateEmbeddings, createSemanticService, sameVectorSpace, SEMANTIC_SOURCE_DEFINITIONS,
+  SEMANTIC_PREPARATIONS, prepareTicketEmbeddingText, prepareArticleEmbeddingText, prepareKnowledgeEmbeddingText } from './embeddings';
+export type { SemanticService, SemanticServiceDeps, IndexRequest, StoredIndexResult, GroupingResult,
+  SemanticScope, SourceReference, VectorSpace, SemanticMatch, SemanticFailure, SourceResult,
+  RetrievalResult, LoadedSemanticSource, IndexResult, RetrievalRequest, RetrievalPurpose, SemanticAdapter } from './embeddings';
 
 export {
   runLlmFeature,
@@ -136,6 +140,7 @@ export { BusinessSynthesisSchema, BUSINESS_SYNTHESIS_CONTRACT, type BusinessSynt
 export { askJudgments, JudgmentRequestSchema, type JudgmentRequest } from './harness/ask-judgments';
 export { GatewayCompletionProvider } from './providers/gateway/completion';
 export { GatewayEmbeddingProvider } from './providers/gateway/embedding';
+export { OllamaEmbeddingProvider } from './providers/ollama/embedding';
 
 export { resolveModelRoute, usesDecisionClassification, MODEL_ROLES, type ModelRoute, type ModelRole } from './config/model-roles';
 export { GatewayDecisionProvider } from './providers/gateway/decision';

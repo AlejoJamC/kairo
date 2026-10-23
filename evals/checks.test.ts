@@ -48,11 +48,13 @@ describe('evaluation accounting', () => {
     expect(evaluationRouting('main',{...env,CLASSIFICATION_MODE:'language',INTELLIGENCE_ENSEMBLE:'gateway:acme/second'})).toMatchObject({classificationCallsPerEmail:2,ensemble:{model:'acme/second'}});
   });
   test('unknown cost, no observations and unreviewed usefulness stay unknown', () => {
-    const report = summarize([row()]);
+    const inventedCorpusCase = { ...row(), case: { ...row().case, dataset: 'main' as const } };
+    const report = summarize([row(), inventedCorpusCase]);
     const cell = report.find(c => c.contract === 'knowledge_impact' && c.dataset === 'synthetic')!;
-    expect(cell).toMatchObject({ completed: 1, reviewPending: 1, costUsd: null, abstention: null });
+    expect(cell).toMatchObject({ completed: 1, reviewPending: 0, costUsd: null, abstention: null });
     expect(cell.enrichment).toMatchObject({ coverage: 1, acceptedImprovements: null, confirmedSolutions: null });
-    expect(report.find(c => c.dataset === 'main')!.latencyMs).toBeNull();
+    expect(report.find(c => c.dataset === 'main' && c.contract === 'knowledge_impact')).toMatchObject({ reviewPending: 1 });
+    expect(report.find(c => c.dataset === 'coverage')!.latencyMs).toBeNull();
   });
   test('execution failure lowers quality and coverage instead of disappearing', () => {
     const failed = { ...row(), status: 'failed' as const, prediction: {} };

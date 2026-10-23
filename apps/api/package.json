@@ -29,6 +29,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.10",
+    "@electric-sql/pglite-pgvector": "0.0.11",
     "@types/bun": "^1.3.13",
     "typescript": "~6.0.3"
   }

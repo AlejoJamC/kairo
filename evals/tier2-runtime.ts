@@ -1,3 +1,4 @@
+import { semanticStorage } from './semantic-storage';
 import { mock } from 'bun:test';
 import type { EvalCase } from './cases';
 import type { Row } from './storage';
@@ -60,6 +61,8 @@ export async function createTier2Runtime(selection: Selection, baseline: Histori
     }
   };
   mock.module('../apps/api/src/lib/supabase.js', () => ({ supabase: storage.db }));
+  const semantic = semanticStorage(storage);
+  mock.module('../apps/api/src/lib/semantic-service.js', () => ({ createBackendSemanticService: semantic.service }));
   mock.module('../apps/api/src/lib/llm-logging.js', () => ({
     recordLlmCall: async (record: LlmCallRecord) => {
       calls.push(record);
@@ -118,10 +121,6 @@ export async function createTier2Runtime(selection: Selection, baseline: Histori
       language: settings['language'] === 'en' ? 'en' : 'es' }),
   }));
   mock.module('../apps/api/src/lib/gmail-token.js', () => ({ getFreshGmailToken: async () => 'synthetic-eval-token', getGmailEmailByAccount: async () => mailboxes[0] ?? '' }));
-  const kb = await import('../apps/api/src/lib/ticket-context');
-  mock.module('../apps/api/src/lib/ticket-context.js', () => ({ ...kb, findRelevantKb: async () => ({ articles: [], degraded: [] }) }));
-  const knowledge = await import('../apps/api/src/lib/workflow-knowledge');
-  mock.module('../apps/api/src/lib/workflow-knowledge.js', () => ({ ...knowledge, approvedWorkflowKnowledge: async () => [] }));
   const shadow = await import('../apps/api/src/lib/jev-shadow-classification');
   originalShadow ??= shadow.classifyJevShadow;
   mock.module('../apps/api/src/lib/jev-shadow-classification.js', () => ({ ...shadow,

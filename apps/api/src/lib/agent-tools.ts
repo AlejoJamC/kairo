@@ -1,3 +1,4 @@
+import { createBackendSemanticService } from './semantic-service.js';
 import { z } from 'zod';
 import {
   askJudgments, classifyEmailWithMeta, JudgmentRequestSchema,
@@ -173,18 +174,16 @@ export function sharedAgentTools(scope: AgentToolScope, deps: AgentToolDeps = {}
       inputSchema: z.object({ ticketIds: z.array(z.string().min(1)).min(2).max(200), minSimilarity: z.number().min(0.5).max(0.99).optional() }).strict(),
       execute: async (input) => {
         const { ticketIds, minSimilarity } = input as { ticketIds: string[]; minSimilarity?: number };
-        const { data, error } = await db.from('tickets').select('id, embedding').eq('account_id', scope.accountId).in('id', ticketIds);
-        if (error) return failed(['ticket_embeddings']);
-        const vectors = new Map<string, number[]>();
-        for (const row of data ?? []) {
-          const vector = typeof row.embedding === 'string' ? JSON.parse(row.embedding) as number[] : row.embedding as number[] | null;
-          if (Array.isArray(vector) && vector.length) vectors.set(row.id as string, vector);
+        const service = createBackendSemanticService({ db,
+          scope: { accountId: scope.accountId, actor: { kind: 'workflow', id: scope.feature }, permissions: ['retrieve'] } });
+        const result = await service.groupSources({ sources: ticketIds.map(id => ({ kind: 'ticket', id })), minSimilarity });
+        if (result.sources.some(source => source.status === 'unavailable' && ['storage_unavailable', 'forbidden', 'invalid_input'].includes(source.reason))) {
+          return failed(['ticket_embeddings']);
         }
-        const groups = groupBySimilarity(vectors, minSimilarity ?? 0.8);
-        const withoutEmbedding = ticketIds.filter((id) => !vectors.has(id));
-        return read({ groups: groups.filter((group) => group.length > 1),
-          alone: groups.filter((group) => group.length === 1).flat(), withoutEmbedding },
-        withoutEmbedding.length ? ['ticket_embeddings'] : []);
+        const groups = result.groups.map(group => group.map(source => source.id));
+        const withoutEmbedding = result.sources.filter(source => source.status === 'unavailable').map(source => source.source.id);
+        return read({ groups: groups.filter(group => group.length > 1), alone: groups.filter(group => group.length === 1).flat(), withoutEmbedding },
+          withoutEmbedding.length ? ['ticket_embeddings'] : []);
       },
     },
     {
@@ -247,34 +246,6 @@ export function sharedAgentTools(scope: AgentToolScope, deps: AgentToolDeps = {}
     },
   ];
   return Object.fromEntries(tools.map((definition) => [definition.name, definition]));
-}
-
-const cosine = (a: number[], b: number[]) => {
-  let dot = 0, normA = 0, normB = 0;
-  for (let i = 0; i < Math.min(a.length, b.length); i++) { dot += a[i]! * b[i]!; normA += a[i]! * a[i]!; normB += b[i]! * b[i]!; }
-  return normA && normB ? dot / Math.sqrt(normA * normB) : 0;
-};
-
-/**
- * Each ticket joins the group whose centroid it most resembles, when that
- * similarity reaches the threshold; otherwise it starts its own group. Comparing
- * against centroids keeps one bridging ticket from chaining unrelated matters.
- */
-export function groupBySimilarity(vectors: Map<string, number[]>, threshold: number): string[][] {
-  const groups: { ids: string[]; centroid: number[] }[] = [];
-  for (const id of [...vectors.keys()].sort()) {
-    const vector = vectors.get(id)!;
-    let best: (typeof groups)[number] | undefined;
-    let bestScore = threshold;
-    for (const group of groups) {
-      const score = cosine(vector, group.centroid);
-      if (score >= bestScore) { best = group; bestScore = score; }
-    }
-    if (!best) { groups.push({ ids: [id], centroid: [...vector] }); continue; }
-    best.centroid = best.centroid.map((value, i) => (value * best!.ids.length + vector[i]!) / (best!.ids.length + 1));
-    best.ids.push(id);
-  }
-  return groups.map((group) => group.ids);
 }
 
 /** The tools a block's contract lists, in contract order; an unknown name is a wiring defect. */

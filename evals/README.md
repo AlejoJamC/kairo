@@ -173,8 +173,19 @@ Keep corpus data, golden labels and results under `scripts/eval/data/`, never in
 ```sh
 bunx --no-install tsc --noEmit -p evals/tsconfig.json
 bun evals/technical.ts
-# Requires a prepared disposable PostgreSQL database on localhost:55494
+# Requires the existing local Supabase SQL connection supplied as SUPABASE_DB_URL
 bun evals/technical.ts --database
+
+# Product pipeline, claimed work, approval and agent retrieval in the existing local Supabase
+bun --no-env-file evals/technical.ts --semantic-flow
+# Same integration with real embeddings from local Ollama; no paid model requests
+bun --no-env-file evals/technical.ts --semantic-flow --ollama
 ```
+
+The semantic flow uses the existing local Supabase on API port 54321 and SQL port 54322. The runner reads its connection from `supabase status`; it never starts or stops services, creates another project, applies migrations or resets the database. The approved schema must already be installed. Test fixtures contain invented data and remain in the local database, including append-only history. Adapter checks remove only their own outstanding jobs; the flow refuses to start if existing jobs are pending or running, because the production worker claims a global queue.
+
+It executes the production pipeline and decision worker, lets those consumers generate jobs and indices, approves a generated draft through the API, and checks the assistant's retrieved version references, account isolation and withdrawal. Gmail, scheduler transport and language/decision responses are explicit fixtures. The default also simulates embedding transport; `--ollama` uses the local embedding provider. Neither mode measures model judgment quality or live Inngest durability. Results use the same private technical-run artifacts as the other checks. Integration commands are run against the existing developer stack; hosted CI runs the offline contracts without provisioning a database.
+
+Workflow evaluations exercise the production embeddings service through a memory adapter. This validates domain integration and index lifecycle; SQL permissions and transactions are covered separately by the local Supabase integration suites.
 
 Model execution permits Vercel AI Gateway and local Ollama. Gateway responses must confirm BYOK; otherwise subsequent requests stop. This check occurs after the response and cannot prevent billing of that first request. Evaluation runs do not connect to Gmail or the product database.
