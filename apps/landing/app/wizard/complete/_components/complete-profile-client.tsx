@@ -8,9 +8,10 @@ import { useTranslation } from "@/lib/i18n";
 import { WizardChrome } from "@/components/wizard-chrome";
 import { WizardSteps } from "@/components/wizard-steps";
 import { DetectionStep } from "./detection-step";
-import { TriageSummary } from "./triage-summary";
+import { TriageStep } from "./triage-step";
 import { WizardHeading } from "@/components/wizard-heading";
-import { Box, Button, Callout, CategoryChip, Field, FieldInput, Icon, KpiStrip, SettingsRow, Spinner, Switch, Text } from "@kairo/ui";
+import { WizardSectionLabel } from "@/components/wizard-section-label";
+import { Box, Button, CategoryChip, Icon, KpiStrip, Spinner } from "@kairo/ui";
 
 interface UserData {
   id: string;
@@ -25,7 +26,7 @@ interface Props {
 
 // Fake scan animation constants (used only when showDetectionStep=false is toggled off — kept for reference)
 const SCAN_DURATION = 1800;
-const SCAN_TARGETS = { mails: 234, tickets: 89, customers: 47 };
+const SCAN_TARGETS = { mails: 234, tickets: 89, urgent: 2 };
 
 const STATIC_CATEGORIES = [
   { label: "Facturación", count: 47, value: "billing" },
@@ -73,7 +74,8 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
   const { t } = useTranslation();
   // When showDetectionStep=true: start at step 1 (detect); false: start at step 2 (triage)
   const [localStep, setLocalStep] = useState(showDetectionStep ? 1 : 2);
-  const [, setUser] = useState<UserData | null>(null);
+  const [user, setUser] = useState<UserData | null>(null);
+  const [askName, setAskName] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -81,7 +83,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
 
   // Fake scan animation state (flag OFF only)
   const [scanned, setScanned] = useState(false);
-  const [detected, setDetected] = useState({ mails: 0, tickets: 0, customers: 0 });
+  const [detected, setDetected] = useState({ mails: 0, tickets: 0, urgent: 0 });
   const rafRef = useRef<number>(0);
 
   // Load user profile + pre-fill organisation name from the provisioned account
@@ -108,9 +110,13 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
           if (accRes.ok) {
             const acc = await accRes.json();
             if (acc.name) setCompanyName(acc.name);
+            else setAskName(true);
+          } else {
+            setAskName(true);
           }
         } catch {
-          // non-fatal: input stays empty, user types manually
+          // non-fatal: the name is asked for on the last step
+          setAskName(true);
         }
 
         setProfileLoading(false);
@@ -132,7 +138,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
       setDetected({
         tickets: Math.round(SCAN_TARGETS.tickets * ease),
         mails: Math.round(SCAN_TARGETS.mails * ease),
-        customers: Math.round(SCAN_TARGETS.customers * ease),
+        urgent: Math.round(SCAN_TARGETS.urgent * ease),
       });
       if (progress < 1) {
         rafRef.current = requestAnimationFrame(tick);
@@ -170,8 +176,6 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
     }
   };
 
-  const [rules, setRules] = useState({ classify: true, drafts: true, spam: true, priority: false });
-
   if (profileLoading && (!showDetectionStep || !scanned)) {
     return (
       <WizardChrome>
@@ -182,53 +186,27 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
     );
   }
 
+  if (localStep === 2) {
+    return <TriageStep onOpen={handleSubmit} saving={saving} error={error} askName={askName} companyName={companyName} onCompanyName={setCompanyName} />;
+  }
+
   const w = t.wizard;
-  const ruleRows = [
-    { id: "classify", name: w.triageAutoClassify, description: w.triageAutoClassifyDesc },
-    { id: "drafts", name: w.triageDraftReplies, description: w.triageDraftRepliesDesc },
-    { id: "spam", name: w.triageAutoResolveSpam, description: w.triageAutoResolveSpamDesc },
-    { id: "priority", name: w.triagePriorityPro, description: w.triagePriorityProDesc },
-  ] as const;
 
   return (
-    <WizardChrome
-      stepper={<WizardSteps current={localStep === 1 ? "detect" : "triage"} />}
-      width={localStep === 1 ? 760 : 540}
-      gap={localStep === 1 ? 32 : 28}
-      aside={localStep === 2 ? <TriageSummary /> : undefined}
-    >
+    <WizardChrome stepper={<WizardSteps current="detect" />} width={760}>
       {/* ── Step 1: Detect (real-time) — flag ON only ──────────────────── */}
-      {localStep === 1 && showDetectionStep && <DetectionStep onContinue={() => setLocalStep(2)} />}
+      {showDetectionStep && <DetectionStep onContinue={() => setLocalStep(2)} mailbox={user?.email} />}
 
       {/* ── Step 1: Detect (fake animation) — flag OFF only ───────────── */}
-      {localStep === 1 && !showDetectionStep && (
+      {!showDetectionStep && (
         <>
           <WizardHeading
-            eyebrow={w.stepOf2}
+            eyebrow={user?.email ? `${w.stepOf2} · ${user.email}` : w.stepOf2}
             title={scanned ? w.detectDoneTitle : w.detectScanningTitle}
             body={scanned ? w.detectDoneNote : w.detectScanningNote}
           />
 
-          <KpiStrip
-            items={[
-              { label: w.detectMails, value: detected.mails },
-              { label: w.detectTickets, value: detected.tickets },
-              { label: w.detectCustomers, value: detected.customers },
-            ]}
-          />
-
-          <Box display="flex" flexDirection="column" gap={10}>
-            <Text tag="span" display="block" font="mono" fontSize={10.5} letterSpacing={0.63} textTransform="uppercase" color="var(--kairo-color-faint)">
-              {w.detectCategories}
-            </Text>
-            <Box display="flex" gap={6} flexWrap="wrap">
-              {STATIC_CATEGORIES.map((cat) => (
-                <CategoryChip key={cat.label} scale="category" value={cat.value} label={`${cat.label} ${cat.count}`} />
-              ))}
-            </Box>
-          </Box>
-
-          <Box display="flex" flexWrap="wrap" alignItems="center" gap={14} borderTopWidth={1} borderStyle="solid" borderTopColor="var(--kairo-color-line)" paddingTop={24}>
+          <Box>
             <Button
               variant="primary"
               size="webLg"
@@ -238,62 +216,25 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
               iconEnd={<Icon name="right" size={14} color="var(--kairo-color-on-accent)" />}
               onPress={() => setLocalStep(2)}
             >
-              {w.detectContinue}
+              {w.detect.continue}
             </Button>
-            <Text fontSize={12.5} color="var(--kairo-color-faint)">
-              {w.detect.rangeNote}
-            </Text>
           </Box>
-        </>
-      )}
 
-      {/* ── Step 2: Triage + company name ─────────────────────────────── */}
-      {localStep === 2 && (
-        <>
-          <WizardHeading eyebrow={w.stepOf3} title={w.triageTitle} body={w.triageSubtitle} />
+          <KpiStrip
+            items={[
+              { label: w.detect.metricMails, value: detected.mails },
+              { label: w.detect.metricTickets, value: detected.tickets },
+              { label: w.detect.metricUrgent, value: detected.urgent, urgent: detected.urgent > 0 },
+            ]}
+          />
 
-          <Box borderWidth={1} borderStyle="solid" borderColor="var(--kairo-color-line)" borderRadius={12} backgroundColor="var(--kairo-color-surface)" overflow="hidden">
-            <Box paddingVertical={12} paddingHorizontal={16}>
-              <Text font="mono" fontSize={10.5} letterSpacing={0.63} textTransform="uppercase" color="var(--kairo-color-faint)">
-                {w.rulesLabel}
-              </Text>
+          <Box display="flex" flexDirection="column" gap={10}>
+            <WizardSectionLabel>{w.detect.metricCategories}</WizardSectionLabel>
+            <Box display="flex" gap={6} flexWrap="wrap">
+              {STATIC_CATEGORIES.map((cat) => (
+                <CategoryChip key={cat.label} scale="category" value={cat.value} label={`${cat.label.toLowerCase()} ${cat.count}`} />
+              ))}
             </Box>
-            {ruleRows.map((rule) => (
-              <SettingsRow key={rule.id} title={rule.name} description={rule.description} divider>
-                <Switch label={rule.name} checked={rules[rule.id]} onCheckedChange={(checked) => setRules((current) => ({ ...current, [rule.id]: checked }))} />
-              </SettingsRow>
-            ))}
-          </Box>
-
-          <Field label={w.companyLabel} size="web">
-            <FieldInput value={companyName} onChangeText={setCompanyName} placeholder={w.companyPlaceholder} autoComplete="organization" />
-          </Field>
-
-          <Callout tone="ai" icon={<Icon name="spark" size={14} />}>
-            {w.aiCallout}
-          </Callout>
-
-          {error && (
-            <Text tag="p" role="alert" display="block" margin={0} fontSize={13} color="var(--kairo-color-bad-ink)">
-              {error}
-            </Text>
-          )}
-
-          <Box display="flex" flexWrap="wrap" alignItems="center" gap={10}>
-            <Button
-              variant="primary"
-              size="webLg"
-              disabled={!companyName.trim()}
-              loading={saving}
-              loadingLabel={w.saving}
-              iconEnd={<Icon name="right" size={14} color="var(--kairo-color-on-accent)" />}
-              onPress={handleSubmit}
-            >
-              {w.openTriage}
-            </Button>
-            <Button variant="ghost" size="webLg" onPress={() => redirectToDashboard()}>
-              {w.configureLater}
-            </Button>
           </Box>
         </>
       )}

@@ -52,15 +52,32 @@ describe('Stepper', () => {
   ]
 
   it('marks only the current step and names the list', () => {
-    renderUi(<Stepper steps={steps} current="detect" label="Setup progress" />)
+    renderUi(<Stepper steps={steps} current="detect" label="Setup progress" doneLabel="done" />)
     expect(screen.getByRole('list', { name: 'Setup progress' })).toBeTruthy()
     const items = screen.getAllByRole('listitem')
     expect(items.map((item) => item.getAttribute('aria-current'))).toEqual([null, 'step', null])
   })
 
-  it('hides the labels when compact', () => {
-    renderUi(<Stepper steps={steps} current="connect" label="Setup progress" compact />)
-    expect(screen.queryByText('Connect')).toBeNull()
+  it('names the completed steps and only those', () => {
+    const { container } = renderUi(<Stepper steps={steps} current="done" label="Setup progress" doneLabel="done" />)
+    const items = screen.getAllByRole('listitem')
+    expect(items[0].textContent).toContain('Connect (done)')
+    expect(items[1].textContent).toContain('Detect (done)')
+    expect(items[2].textContent).not.toContain('(done)')
+    expect(container.querySelectorAll('svg').length).toBe(2)
+  })
+
+  it('keeps the earlier steps completed when going back', () => {
+    renderUi(<Stepper steps={steps} current="detect" label="Setup progress" doneLabel="done" />)
+    const items = screen.getAllByRole('listitem')
+    expect(items[0].textContent).toContain('(done)')
+    expect(items[2].textContent).not.toContain('(done)')
+  })
+
+  it('keeps the names available to screen readers when compact', () => {
+    renderUi(<Stepper steps={steps} current="detect" label="Setup progress" doneLabel="done" compact />)
+    expect(screen.getByText('Connect (done)')).toBeTruthy()
+    expect(screen.getByText('Detect')).toBeTruthy()
   })
 })
 
@@ -591,10 +608,11 @@ describe('PermissionList', () => {
     { id: 'read', name: 'Read messages', description: 'Reads your inbox', required: true, checked: false },
     { id: 'draft', name: 'Draft replies', description: 'Writes drafts', checked: false },
   ]
+  const requirementLabels = { required: 'required', optional: 'optional' }
 
   it('locks required permissions on and toggles optional ones', () => {
     const onChange = vi.fn()
-    renderUi(<PermissionList label="Permissions" provider="Gmail" items={items} onChange={onChange} requirementLabels={{ required: 'required', optional: 'optional' }} />)
+    renderUi(<PermissionList label="Permissions" provider="Gmail" items={items} onChange={onChange} requirementLabels={requirementLabels} />)
     const required = screen.getByRole('switch', { name: 'Read messages, required' }) as HTMLButtonElement
     expect(required.getAttribute('aria-checked')).toBe('true')
     expect(required.disabled).toBe(true)
@@ -602,6 +620,45 @@ describe('PermissionList', () => {
     expect(optional.getAttribute('aria-checked')).toBe('false')
     fireEvent.click(optional)
     expect(onChange).toHaveBeenCalledWith('draft', true)
+  })
+
+  describe('collapsed', () => {
+    const summary = { icon: 'lock' as const, text: 'What we will ask Google for', state: '2 permissions · read-only' }
+
+    it('starts closed and opens with the summary button', () => {
+      renderUi(<PermissionList label="Permissions" items={items} onChange={() => {}} requirementLabels={requirementLabels} collapsed={summary} />)
+      const button = screen.getByRole('button', { name: /What we will ask Google for/ })
+      expect(button.getAttribute('aria-expanded')).toBe('false')
+      expect(screen.queryByRole('switch')).toBeNull()
+      fireEvent.click(button)
+      expect(button.getAttribute('aria-expanded')).toBe('true')
+      const rows = document.getElementById(button.getAttribute('aria-controls') ?? '')
+      expect(rows?.querySelectorAll('[role="switch"]').length).toBe(2)
+      fireEvent.click(button)
+      expect(button.getAttribute('aria-expanded')).toBe('false')
+      expect(screen.queryByRole('switch')).toBeNull()
+    })
+
+    it('shows no header and reads the state as text', () => {
+      renderUi(<PermissionList label="Permissions" provider="Gmail" items={items} onChange={() => {}} requirementLabels={requirementLabels} collapsed={summary} />)
+      expect(screen.queryByText('Gmail')).toBeNull()
+      expect(screen.getByText('2 permissions · read-only')).toBeTruthy()
+    })
+
+    it('holds rules with no requirement state and every switch changeable', () => {
+      const onChange = vi.fn()
+      const rules = [
+        { id: 'classify', name: 'Classify every new ticket', checked: true },
+        { id: 'drafts', name: 'Draft replies', checked: false },
+      ]
+      renderUi(<PermissionList label="Rules" items={rules} onChange={onChange} collapsed={{ icon: 'settings', text: 'Initial rules', state: '1 of 2 on' }} />)
+      fireEvent.click(screen.getByRole('button', { name: /Initial rules/ }))
+      const classify = screen.getByRole('switch', { name: 'Classify every new ticket' }) as HTMLButtonElement
+      expect(classify.disabled).toBe(false)
+      expect(screen.queryByText('required')).toBeNull()
+      fireEvent.click(screen.getByRole('switch', { name: 'Draft replies' }))
+      expect(onChange).toHaveBeenCalledWith('drafts', true)
+    })
   })
 })
 

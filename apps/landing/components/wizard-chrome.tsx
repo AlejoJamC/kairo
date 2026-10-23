@@ -14,12 +14,14 @@ interface WizardChromeProps {
   width?: number;
   /** Vertical gap between the blocks of the column. */
   gap?: number;
+  /** Centers the column vertically. */
+  centered?: boolean;
   /** Panel beside the column on wide screens. */
   aside?: ReactNode;
   children: ReactNode;
 }
 
-export function WizardChrome({ stepper, width = 520, gap = 28, aside, children }: WizardChromeProps) {
+export function WizardChrome({ stepper, width = 520, gap = 28, centered, aside, children }: WizardChromeProps) {
   const { t } = useTranslation();
   const router = useRouter();
   const wide = useMinWidth(980);
@@ -29,7 +31,7 @@ export function WizardChrome({ stepper, width = 520, gap = 28, aside, children }
     <Box minHeight="100vh" backgroundColor="var(--kairo-color-bg)" display="flex" flexDirection="column">
       <WizardHeader brand={<KairoLogo size={26} href="/" />} stepper={stepper} exit={{ label: t.wizard.exitSetup, onPress: () => router.push("/") }} />
       <Box display="flex" flexGrow={1} flexShrink={1} flexBasis="0%">
-        <Box tag="main" display="flex" justifyContent="center" flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0} paddingTop={56} paddingHorizontal={24} paddingBottom={64}>
+        <Box tag="main" display="flex" alignItems={centered ? "center" : "flex-start"} justifyContent="center" flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0} paddingTop={56} paddingHorizontal={24} paddingBottom={centered ? 56 : 64}>
           <Box width="100%" maxWidth={width} display="flex" flexDirection="column" gap={gap}>
             {children}
           </Box>

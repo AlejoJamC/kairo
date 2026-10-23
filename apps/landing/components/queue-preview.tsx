@@ -46,10 +46,11 @@ export function QueuePreviewRow({ item, confidenceLabel }: { item: QueuePreviewI
             {item.age}
           </Text>
         )}
+        {!item.category && item.confidence !== undefined && <ConfidenceRing variant="numeric" value={item.confidence} label={confidenceLabel} />}
       </Box>
       {item.category && (
         <Box display="flex" alignItems="center" gap={8} paddingLeft={22}>
-          <CategoryChip scale="category" size="sm" value={item.category.value} label={item.category.label} />
+          <CategoryChip scale="category" size="sm" value={item.category.value} label={item.category.label.toLowerCase()} />
           <Box flexGrow={1} />
           <ConfidenceRing variant="numeric" value={item.confidence} label={confidenceLabel} />
         </Box>
