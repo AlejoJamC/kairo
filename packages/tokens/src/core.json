@@ -1,45 +1,75 @@
 {
-  "$description": "Kairo design system core tokens. Light theme. Source: Kairo Triage v0.5 (app) and Kairo public web v0.5.",
+  "$description": "Kairo design system core tokens. Light theme values; a token that changes in the dark theme carries its dark value in $extensions['kairo.dark']. Source: Kairo Triage v0.5 (app) and Kairo public web v0.5.",
   "color": {
     "bg": {
       "$type": "color",
-      "$value": "#FFFFFF"
+      "$value": "#FFFFFF",
+      "$extensions": {
+        "kairo.dark": "#0C0C0E"
+      }
     },
     "surface": {
       "$type": "color",
-      "$value": "#FFFFFF"
+      "$value": "#FFFFFF",
+      "$extensions": {
+        "kairo.dark": "#131316"
+      }
     },
     "side": {
       "$type": "color",
-      "$value": "#F7F7F8"
+      "$value": "#F7F7F8",
+      "$extensions": {
+        "kairo.dark": "#0A0A0C"
+      }
     },
     "sunk": {
       "$type": "color",
-      "$value": "#FAFAFA"
+      "$value": "#FAFAFA",
+      "$extensions": {
+        "kairo.dark": "#0F0F12"
+      }
     },
     "hover": {
       "$type": "color",
-      "$value": "#F2F2F4"
+      "$value": "#F2F2F4",
+      "$extensions": {
+        "kairo.dark": "#1B1B20"
+      }
     },
     "line": {
       "$type": "color",
-      "$value": "#ECECEF"
+      "$value": "#ECECEF",
+      "$extensions": {
+        "kairo.dark": "#232328"
+      }
     },
     "line-strong": {
       "$type": "color",
-      "$value": "#DCDCE1"
+      "$value": "#DCDCE1",
+      "$extensions": {
+        "kairo.dark": "#34343B"
+      }
     },
     "text": {
       "$type": "color",
-      "$value": "#09090B"
+      "$value": "#09090B",
+      "$extensions": {
+        "kairo.dark": "#EDEDF0"
+      }
     },
     "muted": {
       "$type": "color",
-      "$value": "#52525B"
+      "$value": "#52525B",
+      "$extensions": {
+        "kairo.dark": "#A6A6B0"
+      }
     },
     "faint": {
       "$type": "color",
-      "$value": "#6C6C75"
+      "$value": "#6C6C75",
+      "$extensions": {
+        "kairo.dark": "#8A8A95"
+      }
     },
     "accent": {
       "$type": "color",
@@ -47,15 +77,24 @@
     },
     "accent-ink": {
       "$type": "color",
-      "$value": "{color.accent}"
+      "$value": "{color.accent}",
+      "$extensions": {
+        "kairo.dark": "#7BA4FF"
+      }
     },
     "accent-soft": {
       "$type": "color",
-      "$value": "rgba(43,91,255,0.08)"
+      "$value": "rgba(43,91,255,0.08)",
+      "$extensions": {
+        "kairo.dark": "rgba(43,91,255,0.17)"
+      }
     },
     "accent-line": {
       "$type": "color",
-      "$value": "rgba(43,91,255,0.24)"
+      "$value": "rgba(43,91,255,0.24)",
+      "$extensions": {
+        "kairo.dark": "rgba(43,91,255,0.40)"
+      }
     },
     "on-accent": {
       "$type": "color",
@@ -83,7 +122,10 @@
     },
     "p3": {
       "$type": "color",
-      "$value": "#A1A1AA"
+      "$value": "#A1A1AA",
+      "$extensions": {
+        "kairo.dark": "#6B6B76"
+      }
     },
     "ok": {
       "$type": "color",
@@ -91,7 +133,10 @@
     },
     "ok-ink": {
       "$type": "color",
-      "$value": "#047857"
+      "$value": "#047857",
+      "$extensions": {
+        "kairo.dark": "#34D399"
+      }
     },
     "ok-solid": {
       "$type": "color",
@@ -107,7 +152,10 @@
     },
     "bad-ink": {
       "$type": "color",
-      "$value": "#C9262C"
+      "$value": "#C9262C",
+      "$extensions": {
+        "kairo.dark": "#FF7A7E"
+      }
     },
     "mood": {
       "$type": "color",
@@ -115,7 +163,10 @@
     },
     "mood-ink": {
       "$type": "color",
-      "$value": "#C2410C"
+      "$value": "#C2410C",
+      "$extensions": {
+        "kairo.dark": "#FB923C"
+      }
     },
     "mood-line": {
       "$type": "color",
@@ -143,19 +194,31 @@
     },
     "note": {
       "$type": "color",
-      "$value": "#B45309"
+      "$value": "#B45309",
+      "$extensions": {
+        "kairo.dark": "#F5B451"
+      }
     },
     "note-ink": {
       "$type": "color",
-      "$value": "#78350F"
+      "$value": "#78350F",
+      "$extensions": {
+        "kairo.dark": "#F8D9A0"
+      }
     },
     "note-soft": {
       "$type": "color",
-      "$value": "#FFFBEB"
+      "$value": "#FFFBEB",
+      "$extensions": {
+        "kairo.dark": "#1F1A10"
+      }
     },
     "note-line": {
       "$type": "color",
-      "$value": "#FDE68A"
+      "$value": "#FDE68A",
+      "$extensions": {
+        "kairo.dark": "#4A3A18"
+      }
     },
     "note-action": {
       "$type": "color",
@@ -163,11 +226,17 @@
     },
     "sla-alert-ink": {
       "$type": "color",
-      "$value": "#B45309"
+      "$value": "#B45309",
+      "$extensions": {
+        "kairo.dark": "#F5B451"
+      }
     },
     "sla-escalate-ink": {
       "$type": "color",
-      "$value": "#C2410C"
+      "$value": "#C2410C",
+      "$extensions": {
+        "kairo.dark": "#FB923C"
+      }
     },
     "sla-on-time": {
       "$type": "color",
@@ -223,7 +292,10 @@
     },
     "glass": {
       "$type": "color",
-      "$value": "rgba(255,255,255,0.82)"
+      "$value": "rgba(255,255,255,0.82)",
+      "$extensions": {
+        "kairo.dark": "rgba(12,12,14,0.78)"
+      }
     },
     "bad-soft": {
       "$type": "color",
@@ -637,6 +709,9 @@
         "offsetY": "1px",
         "blur": "2px",
         "spread": "0px"
+      },
+      "$extensions": {
+        "kairo.dark": "none"
       }
     },
     "pop": {
@@ -656,7 +731,18 @@
           "blur": "6px",
           "spread": "0px"
         }
-      ]
+      ],
+      "$extensions": {
+        "kairo.dark": [
+          {
+            "color": "rgba(0,0,0,0.5)",
+            "offsetX": "0px",
+            "offsetY": "12px",
+            "blur": "32px",
+            "spread": "0px"
+          }
+        ]
+      }
     },
     "knob": {
       "$type": "shadow",
@@ -695,7 +781,18 @@
           "blur": "6px",
           "spread": "0px"
         }
-      ]
+      ],
+      "$extensions": {
+        "kairo.dark": [
+          {
+            "color": "rgba(0,0,0,0.7)",
+            "offsetX": "0px",
+            "offsetY": "32px",
+            "blur": "80px",
+            "spread": "-32px"
+          }
+        ]
+      }
     }
   },
   "size": {
