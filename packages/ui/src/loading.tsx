@@ -47,6 +47,7 @@ const SpinnerFrame = styled(Stack, {
   variants: {
     size: {
       sm: { width: 11, height: 11, borderWidth: 2 },
+      md: { width: 18, height: 18, borderWidth: 2 },
       lg: { width: 28, height: 28, borderWidth: 3 },
     },
     // On an accent fill: white track at 35%, white top.

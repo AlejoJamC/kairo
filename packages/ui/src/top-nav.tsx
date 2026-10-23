@@ -77,9 +77,23 @@ function TopNav({ brand, links, current, language, signIn, cta, label, menu }: T
   )
 }
 
-type AuthHeaderProps = { brand: ReactNode; language?: ReactNode }
+type AuthHeaderProps = {
+  brand?: ReactNode
+  language?: ReactNode
+  /** Desktop sign-in window: a 44px drag bar with the system controls slot on the left and the language on the right; no brand. */
+  desktop?: { controls: ReactNode }
+}
 
-function AuthHeader({ brand, language }: AuthHeaderProps) {
+function AuthHeader({ brand, language, desktop }: AuthHeaderProps) {
+  if (desktop) {
+    return (
+      <Box tag="header" dragRegion display="flex" alignItems="center" gap={12} height={44} paddingHorizontal={16} flexShrink={0}>
+        {desktop.controls}
+        <Box flexGrow={1} />
+        {language}
+      </Box>
+    )
+  }
   return (
     <Box tag="header" display="flex" alignItems="center" justifyContent="space-between" height={64} paddingHorizontal={32}>
       {brand}

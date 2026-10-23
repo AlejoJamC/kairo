@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/env";
 import { dispatchOnboardingClassification } from "@/lib/inngest";
 import { getFlag } from "@kairo/feature-flags";
+import { DESKTOP_PARAM, handoffPath, isDesktopDestination } from "@/lib/desktop-signin";
 import type { Database } from "@/types/supabase";
 
 // ---------------------------------------------------------------------------
@@ -76,6 +77,9 @@ export async function GET(request: Request) {
       `${appUrl}/auth/error?type=oauth_error&description=${encodeURIComponent(oauthErrorDesc || oauthError)}`
     );
   }
+
+  // A sign-in started from the desktop app returns to it through a kairo:// link.
+  const desktop = isDesktopDestination(requestUrl.searchParams.get(DESKTOP_PARAM));
 
   const code = requestUrl.searchParams.get("code");
   if (!code) {
@@ -347,6 +351,9 @@ export async function GET(request: Request) {
   // ── Routing ───────────────────────────────────────────────────────────────
   // Scenario 1: returning user with pre-existing membership
   if (existingMembership) {
+    if (desktop) {
+      return attachCookies(NextResponse.redirect(`${appUrl}${handoffPath(true)}`), cookieJar);
+    }
     if (getFlag("enable_detection_ui")) {
       return attachCookies(NextResponse.redirect(`${appUrl}/wizard/detect`), cookieJar);
     }
@@ -355,7 +362,7 @@ export async function GET(request: Request) {
 
   // Scenario 3: invitation just accepted — account already existed, skip wizard
   if (acceptedInvitation) {
-    return attachCookies(NextResponse.redirect(`${appUrl}/auth/handoff`), cookieJar);
+    return attachCookies(NextResponse.redirect(`${appUrl}${handoffPath(desktop)}`), cookieJar);
   }
 
   // Scenario 4: account just provisioned — send to wizard to name the organisation

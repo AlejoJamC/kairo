@@ -8,11 +8,16 @@ function deps(overrides: Partial<DesktopPlatformDeps> = {}): DesktopPlatformDeps
     appFocus: { subscribe: vi.fn(() => () => {}) },
     openExternal: vi.fn(),
     takeHandoffTokens: vi.fn(async () => null),
+    host: { os: 'macos', setBadge: vi.fn(), setMenu: vi.fn(), onMenuAction: vi.fn(() => () => {}), notify: vi.fn() },
     ...overrides,
   }
 }
 
 describe('createDesktopPlatform', () => {
+  it('identifies itself as the desktop host', () => {
+    expect(createDesktopPlatform(deps()).kind).toBe('desktop')
+  })
+
   it('opens the system browser on navigate, never the embedded webview', () => {
     const openExternal = vi.fn()
     const platform = createDesktopPlatform(deps({ openExternal }))
@@ -26,6 +31,12 @@ describe('createDesktopPlatform', () => {
     const platform = createDesktopPlatform(deps({ takeHandoffTokens }))
     await expect(platform.authHandoff.takeHandoffTokens()).resolves.toEqual(tokens)
     expect(takeHandoffTokens).toHaveBeenCalledTimes(1)
+  })
+
+  it('exposes the shell host: menu, icon counter and notifications', () => {
+    const host = { os: 'macos' as const, setBadge: vi.fn(), setMenu: vi.fn(), onMenuAction: vi.fn(() => () => {}), notify: vi.fn() }
+    const platform = createDesktopPlatform(deps({ host }))
+    expect(platform.host).toBe(host)
   })
 
   it('passes storage, clipboard and appFocus through unchanged', () => {

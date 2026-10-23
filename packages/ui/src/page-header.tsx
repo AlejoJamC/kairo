@@ -7,6 +7,7 @@ import { Box, Text } from './layout'
 import { PlainInput } from './plain'
 import { VisuallyHidden } from './lib/visually-hidden'
 import { px } from './lib/units'
+import { useWindowChrome } from './window-chrome'
 
 // Header and frame of the app page views (Clients, Knowledge and every
 // Settings section): the counterpart of queue-header for views that are not
@@ -19,8 +20,10 @@ type PageFrameProps = {
 }
 
 function PageFrame({ narrow, children }: PageFrameProps) {
+  const macosWindow = useWindowChrome()
   return (
     <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0} minHeight={0} scroll backgroundColor={tokens['surface.page']}>
+      {macosWindow && <Box dragRegion height={14} />}
       <Box
         display="flex"
         flexDirection="column"

@@ -28,3 +28,8 @@ export function getClientConfig(): ClientCoreConfig {
 export function getPlatform(): PlatformPorts {
   return getClientConfig().platform;
 }
+
+/** True inside the desktop shell, where sign-in is the app's own view and the system browser handles OAuth. */
+export function isDesktop(): boolean {
+  return getPlatform().kind === "desktop";
+}

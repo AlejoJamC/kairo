@@ -1,11 +1,11 @@
-import type { PlatformPorts } from './platform'
+import type { DesktopHost, PlatformPorts } from './platform'
 import { createWebPlatform } from './web'
 import { createDesktopPlatform } from './desktop'
 
 // The desktop shell injects this bridge before the dashboard bundle runs, so
 // the same bundle picks the desktop ports (system browser, kairo:// deep link)
 // instead of the web ones. The web build never sets it and keeps the web ports.
-interface DesktopBridge {
+interface DesktopBridge extends DesktopHost {
   openExternal(url: string): void
   takeHandoffTokens(): Promise<{ access_token: string; refresh_token: string } | null>
 }
@@ -22,6 +22,7 @@ export function createPlatform(): PlatformPorts {
       appFocus: web.appFocus,
       openExternal: bridge.openExternal,
       takeHandoffTokens: bridge.takeHandoffTokens,
+      host: { os: bridge.os, setBadge: bridge.setBadge, setMenu: bridge.setMenu, onMenuAction: bridge.onMenuAction, notify: bridge.notify },
     })
   }
   return createWebPlatform()

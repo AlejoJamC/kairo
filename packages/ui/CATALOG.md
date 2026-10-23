@@ -54,7 +54,7 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `ticket-row` | implemented | `TicketRow` | One ticket in a queue list. The full variant is the queue row of the app; the compact variant is the only queue row of the public web, used in the onboarding wizard. |
 | `toast` | implemented | `Toast` | Short confirmation after an action. |
 | `tooltip` | implemented | `Tooltip` | Short text label for controls that show no visible label. Ships on the collapsed sidebar nav items. |
-| `window-chrome` | implemented | `WINDOW_CONTROLS_SLOT`, `WindowControlsSlot`, `WindowDragArea` | Window frame of the desktop app: the space reserved for the system window controls and the areas that drag the window. |
+| `window-chrome` | implemented | `WINDOW_CONTROLS_SLOT`, `WindowChromeProvider`, `WindowControlsSlot`, `WindowDragArea`, `useWindowChrome` | Window frame of the desktop app: the space reserved for the system window controls and the areas that drag the window. |
 
 ## Blocks (37 of 37 implemented)
 

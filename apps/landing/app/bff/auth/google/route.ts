@@ -1,8 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { env } from "@/env";
+import { callbackPath } from "@/lib/desktop-signin";
 
-export async function GET() {
+export async function GET(request: Request) {
+  // The desktop app starts the sign-in with ?desktop=1 so it ends in a kairo:// link.
+  const desktop = new URL(request.url).searchParams.get("desktop") === "1";
   try {
     const supabase = await createClient();
 
@@ -12,7 +15,7 @@ export async function GET() {
         // KAI-114: gmail.send is the minimum scope that unlocks outbound replies
         // (ADR-023 §2 — gmail.modify rejected as over-broad).
         scopes: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send",
-        redirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+        redirectTo: `${env.NEXT_PUBLIC_APP_URL}${callbackPath(desktop)}`,
         queryParams: {
           // access_type: offline is what makes Google issue a refresh_token
           // on first consent — still needed. `prompt: "consent"` used to be

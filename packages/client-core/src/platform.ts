@@ -36,7 +36,24 @@ export interface AuthHandoffPort {
   takeHandoffTokens(): Promise<HandoffTokens | null>;
 }
 
+/** What only the desktop shell can do: the native menu, the app icon counter and system notifications. */
+export interface DesktopHost {
+  os: "macos" | "windows" | "linux";
+  /** Draws the counter on the app icon; null clears it. */
+  setBadge(count: number | null): void;
+  /** Replaces the native menu bar; the argument is the menu groups as JSON. */
+  setMenu(groupsJson: string): void;
+  /** Calls the listener with the id of every native menu item the person picks. Returns the unsubscribe function. */
+  onMenuAction(listener: (id: string) => void): () => void;
+  /** Shows a system notification. */
+  notify(title: string, body: string): void;
+}
+
 export interface PlatformPorts {
+  /** The host: the browser or the desktop shell. */
+  kind: "web" | "desktop";
+  /** The desktop shell's own capabilities; null in the browser. */
+  host: DesktopHost | null;
   storage: StoragePort;
   navigation: NavigationPort;
   clipboard: ClipboardPort;

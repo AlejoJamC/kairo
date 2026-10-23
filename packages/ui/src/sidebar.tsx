@@ -11,6 +11,7 @@ import { PlainSelect } from './plain'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 import { Tooltip } from './tooltip'
 import { px } from './lib/units'
+import { useWindowChrome, WindowControlsSlot } from './window-chrome'
 
 // First column of the app shell: brand, notifications, search, navigation,
 // language and account. Collapses to icons only.
@@ -152,6 +153,7 @@ function LanguageControl({ collapsed, language, label }: { collapsed: boolean; l
 }
 
 function Sidebar({ collapsed, onToggleCollapsed, bell, search, groups, language, account, labels }: SidebarProps) {
+  const macosWindow = useWindowChrome()
   return (
     <Box
       tag="nav"
@@ -161,7 +163,8 @@ function Sidebar({ collapsed, onToggleCollapsed, bell, search, groups, language,
       gap={14}
       flexShrink={0}
       width={px(tokens[collapsed ? 'layout.sidebar-collapsed' : 'layout.sidebar'])}
-      paddingVertical={12}
+      paddingTop={macosWindow ? 14 : 12}
+      paddingBottom={12}
       paddingHorizontal={10}
       backgroundColor={tokens['surface.sidebar']}
       borderRightWidth={1}
@@ -169,6 +172,11 @@ function Sidebar({ collapsed, onToggleCollapsed, bell, search, groups, language,
       borderRightColor={tokens['border.default']}
       transition="width 160ms ease"
     >
+      {macosWindow && (
+        <Box dragRegion height={20} marginHorizontal={-6} display="flex" alignItems="center">
+          <WindowControlsSlot />
+        </Box>
+      )}
       <Box display="flex" flexDirection={collapsed ? 'column' : 'row'} alignItems="center" gap={6} paddingLeft={collapsed ? 0 : 4} paddingRight={collapsed ? 0 : 2}>
         <Brand />
         {!collapsed && (

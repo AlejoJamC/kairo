@@ -2,20 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { getNotifications, markNotificationRead, markAllNotificationsRead } from "@kairo/client-core/endpoints";
+import { markNotificationRead, markAllNotificationsRead } from "@kairo/client-core/endpoints";
 import { fetchTicketById } from "@kairo/client-core/queries";
-import { getNumericFlag } from "@/lib/feature-flags";
+import { subscribeNotifications, type ApiNotification } from "@/lib/notification-feed";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { Avatar, Box, Button, EmptyState, NotificationRow, Popover, PopoverContent, PopoverTrigger, Segmented, SidebarBell, Text } from "@kairo/ui";
 import type { AppView } from "@/types";
-
-// KAI-232 — how often the bell re-fetches /api/v1/notifications, in seconds.
-// ADR-025 §4 chose polling (ADR-010 Tier 2) over Realtime for the bell.
-const NOTIFICATIONS_POLL_INTERVAL_SECONDS = getNumericFlag(
-  import.meta.env.VITE_FF_NOTIFICATIONS_POLL_INTERVAL_SECONDS,
-  30
-);
 
 const T = {
   surface:      "var(--k-surface)",
@@ -44,21 +37,6 @@ interface NotifItem {
   // the thread to this note. Null on every other kind.
   ticketId: string | null;
   ticketEventId: string | null;
-}
-
-// KAI-168 — API notification row (apps/api/src/routes/v1/notifications.ts).
-interface ApiNotification {
-  id: string;
-  kind: string;
-  ticket_id: string | null;
-  /** KAI-232 — note-level deep-link (nullable; only mention rows carry it). */
-  ticket_event_id: string | null;
-  /** KAI-232 — ticket reference for the row's mono chip. */
-  ticket_short_id: string | null;
-  title: string;
-  body: string;
-  read_at: string | null;
-  created_at: string;
 }
 
 function relativeTimeShort(iso: string): string {
@@ -253,25 +231,7 @@ export function NotificationsBell({ onViewChange }: NotificationsBellProps) {
   // KAI-168 — real in-app notifications (SLA escalations + KAI-232 mentions).
   // KAI-232: polled rather than fetched once, so a mention reaches the bell
   // within the interval (ADR-025 §4 — polling, not Realtime).
-  useEffect(() => {
-    let cancelled = false;
-
-    function load() {
-      getNotifications()
-        .then((res) => res.json())
-        .then((body: { data: ApiNotification[] }) => {
-          if (!cancelled) setNotifs(body.data.map(toNotifItem));
-        })
-        .catch(() => {});
-    }
-
-    load();
-    const timer = setInterval(load, NOTIFICATIONS_POLL_INTERVAL_SECONDS * 1000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, []);
+  useEffect(() => subscribeNotifications((rows) => setNotifs(rows.map(toNotifItem))), []);
 
   const unread = notifs.filter((n) => n.unread).length;
   const unreadMentions = notifs.filter((n) => n.unread && n.kind === "mention").length;

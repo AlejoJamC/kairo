@@ -20,7 +20,7 @@ function PulseDot({ width = 6, height = 6, backgroundColor = tokens['accent.defa
   return <View accessibilityElementsHidden style={[{ width, height, borderRadius: Math.max(width, height) / 2, backgroundColor }, style]} />
 }
 
-type SpinnerProps = { size?: 'sm' | 'lg'; label?: string; onAccent?: boolean }
+type SpinnerProps = { size?: 'sm' | 'md' | 'lg'; label?: string; onAccent?: boolean }
 
 function Spinner({ size = 'sm', label, onAccent }: SpinnerProps) {
   return (

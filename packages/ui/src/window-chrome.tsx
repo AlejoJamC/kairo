@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
 import { Box } from './layout'
 
 // Desktop window frame primitives. On macOS the app content reaches the top
@@ -26,4 +26,16 @@ export function WindowDragArea({ children, height }: { children?: ReactNode; hei
       {children}
     </Box>
   )
+}
+
+const WindowChromeContext = createContext(false)
+
+/** Tells the columns of the app that the window has the macOS hidden-inset title bar: they reserve the controls slot and mark their top strip as a drag area. Windows and Linux keep the native frame and do not use it. */
+export function WindowChromeProvider({ macos, children }: { macos: boolean; children: ReactNode }) {
+  return <WindowChromeContext.Provider value={macos}>{children}</WindowChromeContext.Provider>
+}
+
+/** True inside the macOS desktop window. */
+export function useWindowChrome(): boolean {
+  return useContext(WindowChromeContext)
 }

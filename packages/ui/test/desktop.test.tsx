@@ -2,8 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import {
+  PageFrame,
+  QueueHeader,
   UiProvider,
   WINDOW_CONTROLS_SLOT,
+  WindowChromeProvider,
   WindowControlsSlot,
   WindowDragArea,
   buildAppMenu,
@@ -41,6 +44,32 @@ describe('WindowChrome', () => {
     const region = screen.getByText('queue title').parentElement as HTMLElement
     expect(region.getAttribute('data-tauri-drag-region')).toBe('')
     expect(region.getAttribute('role')).toBeNull()
+  })
+})
+
+describe('WindowChromeProvider', () => {
+  it('marks the top row of a column as a drag area only inside the macOS window', () => {
+    const { container, unmount } = renderUi(<QueueHeader title="Triage" />)
+    expect(container.querySelector('[data-tauri-drag-region]')).toBeNull()
+    unmount()
+    const inside = renderUi(
+      <WindowChromeProvider macos>
+        <QueueHeader title="Triage" />
+      </WindowChromeProvider>,
+    )
+    expect(inside.container.querySelector('[data-tauri-drag-region]')).toBeTruthy()
+  })
+
+  it('puts a 14px drag strip above the page frame in the macOS window and none elsewhere', () => {
+    const outside = renderUi(<PageFrame>content</PageFrame>)
+    expect(outside.container.querySelector('[data-tauri-drag-region]')).toBeNull()
+    outside.unmount()
+    const inside = renderUi(
+      <WindowChromeProvider macos>
+        <PageFrame>content</PageFrame>
+      </WindowChromeProvider>,
+    )
+    expect(inside.container.querySelector('[data-tauri-drag-region]')).toBeTruthy()
   })
 })
 

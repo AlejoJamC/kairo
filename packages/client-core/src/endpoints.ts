@@ -5,6 +5,7 @@
  * exactly like apiCall.
  */
 import { apiCall, getLandingUrl } from "./api-client";
+import { isDesktop } from "./config";
 import { getPlatform } from "./config";
 
 const json = (value: unknown) => JSON.stringify(value);
@@ -104,4 +105,27 @@ export const syncGmail = () => apiCall("/bff/gmail/sync", { method: "POST" });
 /** Sends the user through the Gmail consent flow (system browser on desktop). */
 export function startGmailConnect(): void {
   getPlatform().navigation.navigate(getLandingUrl("/bff/auth/google"));
+}
+
+/**
+ * Address of the Google sign-in. From the desktop app it carries the desktop
+ * destination, so the sign-in ends in a kairo:// link back to the app.
+ */
+export function googleSignInUrl(): string {
+  return getLandingUrl(`/bff/auth/google${isDesktop() ? "?desktop=1" : ""}`);
+}
+
+/** Starts the Google sign-in (system browser on desktop). */
+export function startGoogleSignIn(): void {
+  getPlatform().navigation.navigate(googleSignInUrl());
+}
+
+/** Opens the landing site (system browser on desktop), for what the app does not do itself: sign-up and password reset. */
+export function openLanding(path: string): void {
+  getPlatform().navigation.navigate(getLandingUrl(path));
+}
+
+/** Copies text through the platform clipboard. */
+export function copyText(text: string): Promise<void> {
+  return getPlatform().clipboard.writeText(text);
 }
