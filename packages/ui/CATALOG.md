@@ -84,7 +84,7 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `permission-list` | implemented | `PermissionList` | Lists what the product will do with the connected email account, as rows with a switch, before the person accepts. The same block holds the initial rules on the last wizard step. |
 | `plan-card` | implemented | `PlanCard` | One pricing plan. |
 | `pricing-table` | implemented | `PricingTable` | Plan comparison table. |
-| `product-frame` | implemented | `ProductFrame` | Shows the real app inside a frame on the public web. |
+| `product-frame` | implemented | `ProductFrame` | Shows the real app inside a frame on the public web, with invented data. Never an illustration. |
 | `queue-header` | implemented | `PriorityFilterTabs`, `QueueHeader` | Header of the queue pane: view title, count, action, filter bar and the empty text of each view. |
 | `reclassify-popover` | implemented | `ReclassifyPopover` | Correction of the AI classification; every correction teaches Triage. |
 | `section` | implemented | `GridBackground`, `Section`, `SectionHeader` | Anatomy of a public web section. |

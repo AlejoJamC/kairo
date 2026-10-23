@@ -6,7 +6,7 @@ import { WizardHeading } from "@/components/wizard-heading";
 import { WizardSectionLabel } from "@/components/wizard-section-label";
 import { QueueList } from "@/components/queue-list";
 import { formatAge } from "@/lib/format-age";
-import { Box, Button, Chip, Icon, KpiStrip, ProgressBar, Text, TicketRow } from "@kairo/ui";
+import { Box, Button, CategoryChip, Icon, KpiStrip, ProgressBar, TicketRow } from "@kairo/ui";
 
 interface DetectionStepProps {
   onContinue: () => void;
@@ -25,14 +25,7 @@ function CategoryPills({
     <Box tag="ul" margin={0} padding={0} listStyle="none" display="flex" gap={6} flexWrap="wrap">
       {entries.map(([key, count]) => (
         <Box key={key} tag="li">
-          <Chip icon={<Box width={7} height={7} circle backgroundColor={`var(--kairo-category-${key})`} aria-hidden />}>
-            <Text fontSize={12} fontWeight={500} color="var(--kairo-color-muted)">
-              {(labels[key] ?? key).toLowerCase()}
-            </Text>
-            <Text font="mono" fontSize={11} color="var(--kairo-color-faint)">
-              {count}
-            </Text>
-          </Chip>
+          <CategoryChip scale="category" value={key} label={(labels[key] ?? key).toLowerCase()} count={count} />
         </Box>
       ))}
     </Box>
@@ -114,6 +107,7 @@ export function DetectionStep({ onContinue, mailbox }: DetectionStepProps) {
       </Box>
 
       <KpiStrip
+        variant="web"
         items={[
           { label: dt.metricMails, value: data?.messages_total },
           { label: dt.metricTickets, value: data?.tickets_count },

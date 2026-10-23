@@ -12,6 +12,7 @@ Line icons of the system.
 - Signals and meta: clock, msg, link, flag, info, bell, user, mail.
 - Assistant: summary, draft, layers. Interface: search, sidebar, globe, moon, down, up, right, arrow.
 - Spark: four-point star, filled in accent. It only means "this comes from the AI".
+- Outside navigation, settings is also the icon of the rules summary and lock the icon of the permissions summary in permission-list, collapsed (13px, stroke 2, `text.tertiary`). They come from this set; they are never drawn separately.
 
 ## States
 

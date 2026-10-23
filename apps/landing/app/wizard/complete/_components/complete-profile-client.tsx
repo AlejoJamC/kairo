@@ -221,6 +221,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
           </Box>
 
           <KpiStrip
+            variant="web"
             items={[
               { label: w.detect.metricMails, value: detected.mails },
               { label: w.detect.metricTickets, value: detected.tickets },
@@ -232,7 +233,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
             <WizardSectionLabel>{w.detect.metricCategories}</WizardSectionLabel>
             <Box display="flex" gap={6} flexWrap="wrap">
               {STATIC_CATEGORIES.map((cat) => (
-                <CategoryChip key={cat.label} scale="category" value={cat.value} label={`${cat.label.toLowerCase()} ${cat.count}`} />
+                <CategoryChip key={cat.label} scale="category" value={cat.value} label={cat.label.toLowerCase()} count={cat.count} />
               ))}
             </Box>
           </Box>
