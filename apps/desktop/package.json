@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
-    "build": "tauri build",
+    "bundle": "tauri build",
     "check": "cargo check --manifest-path src-tauri/Cargo.toml"
   },
   "devDependencies": {

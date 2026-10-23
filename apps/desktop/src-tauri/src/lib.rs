@@ -190,15 +190,16 @@ pub fn run() {
             use tauri_plugin_deep_link::DeepLinkExt;
             let handle = app.handle().clone();
 
-            tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
+            let window = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
                 .title("Kairo")
                 .inner_size(1500.0, 860.0)
                 .min_inner_size(1296.0, 700.0)
                 .center()
-                .title_bar_style(tauri::TitleBarStyle::Overlay)
-                .hidden_title(true)
-                .initialization_script(init_script())
-                .build()?;
+                .initialization_script(init_script());
+            // The hidden-inset title bar exists on macOS only; Windows and Linux keep the native frame.
+            #[cfg(target_os = "macos")]
+            let window = window.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+            window.build()?;
 
             app.deep_link().on_open_url(move |request| {
                 for url in request.urls() {
