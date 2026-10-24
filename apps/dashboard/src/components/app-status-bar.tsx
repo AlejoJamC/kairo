@@ -2,12 +2,14 @@
 // Queue views offer the ticket shortcuts; page views only commands and shortcuts.
 
 import { useTranslation } from "react-i18next";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { isTicketReadOnly } from "@kairo/client-core/triage-status";
+import { QUEUE_VIEWS } from "@/hooks/use-commands";
+import { useAppCommands } from "@/lib/app-commands";
 import type { SidebarCounts } from "@kairo/client-core/hooks/use-sidebar-counts";
 import { VIEW_TO_STATUS } from "@/lib/sidebar-view-status";
 import type { AppView } from "@/types";
 import { StatusBar, type StatusBarShortcut } from "@kairo/ui";
-
-const QUEUE_VIEWS: AppView[] = ["triage", "awaiting", "resolved", "escalated", "ai-review"];
 
 export function AppStatusBar({ counts, view }: { counts: SidebarCounts | null; view: AppView }) {
   const { t } = useTranslation(["dashboard"]);
@@ -15,13 +17,25 @@ export function AppStatusBar({ counts, view }: { counts: SidebarCounts | null; v
   const openStatuses = VIEW_TO_STATUS.triage ?? [];
   const open = counts ? openStatuses.reduce((sum, status) => sum + (counts[status] ?? 0), 0) : 0;
 
+  const engineBusy = useAppCommands((state) => state.engineBusy);
+
+  // A, R, E and N only apply with an editable ticket open.
+  const editable = useTriageStore((state) => {
+    const ticket = state.tickets.find((entry) => entry.id === state.selectedTicketId);
+    return !!ticket && !isTicketReadOnly(ticket.status);
+  });
+
   const viewShortcuts: StatusBarShortcut[] = QUEUE_VIEWS.includes(view)
     ? [
         { keys: "J K", label: t("dashboard:statusBar.navigate") },
-        { keys: "A", label: t("dashboard:statusBar.acknowledge") },
-        { keys: "R", label: t("dashboard:statusBar.resolve") },
-        { keys: "E", label: t("dashboard:statusBar.escalate") },
-        { keys: "N", label: t("dashboard:statusBar.note") },
+        ...(editable
+          ? [
+              { keys: "A", label: t("dashboard:statusBar.acknowledge") },
+              { keys: "R", label: t("dashboard:statusBar.resolve") },
+              { keys: "E", label: t("dashboard:statusBar.escalate") },
+              { keys: "N", label: t("dashboard:statusBar.note") },
+            ]
+          : []),
       ]
     : [];
 
@@ -29,10 +43,11 @@ export function AppStatusBar({ counts, view }: { counts: SidebarCounts | null; v
     <StatusBar
       shortcuts={viewShortcuts}
       pinned={[
-        { keys: "⌘K", label: t("dashboard:statusBar.commands") },
-        { keys: "?", label: t("dashboard:statusBar.shortcuts") },
+        { keys: "⌘ K", label: t("dashboard:statusBar.commands") },
+        { keys: "⌘ /", label: t("dashboard:statusBar.allCommands") },
       ]}
-      status={t("dashboard:statusBar.open", { count: open })}
+      label={t("dashboard:statusBar.label")}
+      status={engineBusy ? t("dashboard:statusBar.classifying") : t("dashboard:statusBar.open", { count: open })}
     />
   );
 }

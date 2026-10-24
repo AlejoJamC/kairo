@@ -203,7 +203,7 @@ describe('AppMenu', () => {
     const ticket = menu(groups, 'ticket').items
     for (const it of ticket) {
       if (it.kind === 'item') {
-        expect(it.disabled).toBe(it.id === 'ask-assistant' ? false : true)
+        expect(Boolean(it.disabled)).toBe(it.id === 'ask-assistant' ? false : true)
       }
     }
   })

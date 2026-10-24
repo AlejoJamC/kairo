@@ -98,7 +98,7 @@ export function useFocusScope(ref: RefObject<HTMLElement | null>, trap: boolean)
 
 // ─── anchored position ───────────────────────────────────────────────────────
 
-export type Side = 'bottom' | 'top'
+export type Side = 'bottom' | 'top' | 'right'
 export type Align = 'start' | 'end'
 
 const OFFSET = 6
@@ -112,10 +112,17 @@ export function useAnchoredPosition(anchor: Element | null, side: Side, align: A
       const rect = anchor.getBoundingClientRect()
       // Only the anchored edges are set: an undefined edge would be written as 0 and stretch the surface.
       const next: Record<string, number> = {}
-      if (side === 'bottom') next.top = rect.bottom + OFFSET
-      else next.bottom = window.innerHeight - rect.top + OFFSET
-      if (align === 'start') next.left = rect.left
-      else next.right = window.innerWidth - rect.right
+      if (side === 'right') {
+        // Beside the anchor: `start` lines the tops up, `end` lines the bottoms up.
+        next.left = rect.right + OFFSET
+        if (align === 'start') next.top = rect.top
+        else next.bottom = window.innerHeight - rect.bottom
+      } else {
+        if (side === 'bottom') next.top = rect.bottom + OFFSET
+        else next.bottom = window.innerHeight - rect.top + OFFSET
+        if (align === 'start') next.left = rect.left
+        else next.right = window.innerWidth - rect.right
+      }
       setStyle(next)
     }
     update()

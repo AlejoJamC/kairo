@@ -3,6 +3,7 @@ import { act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "@/test/render-with-providers";
 import { DesktopIntegration } from "@/components/desktop-integration";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { useAppCommands } from "@/lib/app-commands";
 
 const host = {
@@ -28,7 +29,7 @@ vi.mock("@kairo/client-core/config", () => ({
   getPlatform: () => ({ host, appFocus: { subscribe: () => () => {} } }),
 }));
 vi.mock("@kairo/client-core/auth", () => ({ useAuth: () => ({ signOut: vi.fn() }) }));
-vi.mock("@/hooks/useLocale", () => ({ useLocale: () => ({ language: "es", setLanguage: vi.fn() }) }));
+vi.mock("@/hooks/useLocale", () => ({ useLocale: () => ({ language: "es", setLanguage: vi.fn(), supportedLanguages: ["es", "en"] }) }));
 vi.mock("@/lib/notification-feed", () => ({
   subscribeNotifications: (listener: (rows: unknown[]) => void) => {
     feedListener = listener;
@@ -49,7 +50,7 @@ const mention = (id: string, readAt: string | null = null) => ({
 });
 
 function setup(onViewChange = vi.fn()) {
-  renderWithProviders(<DesktopIntegration view="triage" onViewChange={onViewChange} sidebarCollapsed={false} onToggleSidebar={vi.fn()} />);
+  renderWithProviders(<DesktopIntegration view="triage" onViewChange={onViewChange} sidebarCollapsed={false} />);
   return { onViewChange };
 }
 
@@ -62,7 +63,7 @@ describe("DesktopIntegration", () => {
       menuListener = listener;
       return () => {};
     });
-    useAppCommands.setState({ presence: "online", paletteRequests: 0, shortcutsRequests: 0 });
+    useAppCommands.setState({ presence: "online", paletteRequests: 0, paletteScope: "all" });
   });
 
   it("sends the native menu with the app language and no dead items", () => {
@@ -81,8 +82,39 @@ describe("DesktopIntegration", () => {
     expect(onViewChange).toHaveBeenCalledWith("resolved");
     act(() => menuListener?.("search"));
     expect(useAppCommands.getState().paletteRequests).toBe(1);
-    act(() => menuListener?.("shortcuts"));
-    expect(useAppCommands.getState().shortcutsRequests).toBe(1);
+    expect(useAppCommands.getState().paletteScope).toBe("all");
+    act(() => menuListener?.("all-commands"));
+    expect(useAppCommands.getState().paletteRequests).toBe(2);
+    expect(useAppCommands.getState().paletteScope).toBe("commands");
+  });
+
+  it("opens the Assistant tab with Ask Kairo Assistant once a ticket is open", () => {
+    useTriageStore.setState({ tickets: [{ id: "t1", status: "open", ticket_number: 1 } as never], selectedTicketId: "t1", panelTabRequest: null });
+    setup();
+    const groups = JSON.parse(host.setMenu.mock.calls.at(-1)?.[0] as string) as { id: string; items: { id?: string; disabled?: boolean; accelerator?: string }[] }[];
+    const ask = groups.find((group) => group.id === "ticket")?.items.find((item) => item.id === "ask-assistant");
+    expect(ask?.disabled).not.toBe(true);
+    expect(ask?.accelerator).toBe("CmdOrCtrl+J");
+    act(() => menuListener?.("ask-assistant"));
+    expect(useTriageStore.getState().panelTabRequest?.tab).toBe("assistant");
+    useTriageStore.setState({ tickets: [], selectedTicketId: null, panelTabRequest: null });
+  });
+
+  it("enables Send once the composer has text and sets priority and status from the Ticket menu", () => {
+    useTriageStore.setState({ tickets: [{ id: "t1", status: "open", priority: "P2", ticket_number: 1 } as never], selectedTicketId: "t1", ticketChangeRequest: null });
+    useAppCommands.setState({ composerEmpty: false });
+    setup();
+    const groups = JSON.parse(host.setMenu.mock.calls.at(-1)?.[0] as string) as { id: string; items: { id?: string; disabled?: boolean; items?: { id?: string; checked?: boolean }[] }[] }[];
+    const ticket = groups.find((group) => group.id === "ticket")?.items ?? [];
+    expect(ticket.find((item) => item.id === "send")?.disabled).not.toBe(true);
+    expect(ticket.find((item) => item.id === "priority")?.items?.find((item) => item.id === "priority-p2")?.checked).toBe(true);
+    expect(ticket.find((item) => item.id === "status")?.items?.map((item) => item.id)).toEqual(["status-open", "status-in_progress", "status-awaiting_customer", "status-resolved"]);
+    act(() => menuListener?.("priority-p1"));
+    expect(useTriageStore.getState().ticketChangeRequest).toMatchObject({ kind: "priority", value: "P1" });
+    act(() => menuListener?.("status-resolved"));
+    expect(useTriageStore.getState().ticketChangeRequest).toMatchObject({ kind: "status", value: "resolved" });
+    useTriageStore.setState({ tickets: [], selectedTicketId: null, ticketChangeRequest: null });
+    useAppCommands.setState({ composerEmpty: true });
   });
 
   it("shows the unread count on the app icon, and clears it at zero", () => {

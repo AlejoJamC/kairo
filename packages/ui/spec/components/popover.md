@@ -16,7 +16,8 @@ Floating surface for menus and small anchored dialogs; the base of every menu of
   - Mention, 300px: mention-menu.
   - Person options, 200px: member-row.
   - More send options, 220px: button (split send).
-  - Language with the sidebar collapsed, 160px: sidebar.
+  - Language with the sidebar collapsed, 160px, opening to the right of the globe: sidebar.
+  - Ticket switcher with the ticket list hidden, `layout.queue` wide: ticket-bar.
 
 ## States
 

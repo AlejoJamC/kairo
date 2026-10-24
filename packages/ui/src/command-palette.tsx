@@ -6,6 +6,7 @@ import { Icon, type IconName } from './icon'
 import { Kbd } from './kbd'
 import { Box, Pressable, Text } from './layout'
 import { PlainInput } from './plain'
+import { Segmented, type SegmentedItem } from './segmented'
 import { Skeleton, Spinner } from './loading'
 import { useEscape, useFocusScope } from './lib/overlay'
 import { px } from './lib/units'
@@ -18,16 +19,32 @@ type PaletteItem = {
   id: string
   label: string
   icon?: IconName
+  /** Color of the icon (a semantic action color); `text.tertiary` by default. */
+  iconColor?: string
+  /** Replaces the icon (the priority glyph of a ticket row). */
+  leading?: ReactNode
   /** Shortcut keys shown at the right. */
   shortcut?: readonly string[]
-  /** Secondary mono text (ticket id). */
+  /** Secondary mono text (ticket id) at the right. */
   meta?: string
+  /** Mono text before the label (ticket id). */
+  code?: string
+  /** Mono text after the label: where it is. */
+  where?: string
+  /** The command does not apply now: shown in `text.tertiary` and not runnable. */
+  disabled?: boolean
+  /** Small mono note of a disabled row ("only in a ticket"). */
+  note?: string
+  /** The row is a quiet pointer (for example "See all commands"). */
+  quiet?: boolean
 }
 
 type PaletteSection = {
   id: string
   title: string
   items: readonly PaletteItem[]
+  /** 34px rows instead of 38px (the Commands list). */
+  dense?: boolean
   loading?: boolean
   error?: { message: string; retryLabel: string; onRetry: () => void }
 }
@@ -43,14 +60,25 @@ type CommandPaletteProps = {
   onSelect: (id: string) => void
   /** The tickets search is running: spinner at the input. */
   searching?: boolean
-  labels: { dialog: string; input: string; placeholder: string; runFirst: string; close: string }
+  /** Scope row (All / Commands): tab switches it. */
+  scope?: {
+    label: string
+    value: string
+    items: readonly SegmentedItem<string>[]
+    onChange: (value: string) => void
+    /** Text at the right of the row ("33 commands"). */
+    summary?: string
+  }
+  /** Shown instead of the results when nothing matches ("Nothing matches "…""). */
+  emptyText?: string
+  labels: { dialog: string; input: string; placeholder: string; runFirst: string; close: string; switchScope?: string; note?: string }
   /** Overrides the portal target (tests, shells). */
   container?: HTMLElement | null
 }
 
 const SECTION_LABEL = { font: 'mono', fontSize: 10.5, letterSpacing: 0.6, textTransform: 'uppercase', color: tokens['text.tertiary'] } as const
 
-function Layer({ onClose, query, onQueryChange, sections, activeId, onSelect, searching, labels }: Omit<CommandPaletteProps, 'open' | 'container'>) {
+function Layer({ onClose, query, onQueryChange, sections, activeId, onSelect, searching, scope, emptyText, labels }: Omit<CommandPaletteProps, 'open' | 'container'>) {
   const ref = useRef<HTMLElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const inputId = useId()
@@ -99,8 +127,14 @@ function Layer({ onClose, query, onQueryChange, sections, activeId, onSelect, se
             placeholder={labels.placeholder}
             onChange={(event) => onQueryChange(event.target.value)}
             onKeyDown={(event) => {
+              if (event.key === 'Tab' && scope) {
+                event.preventDefault()
+                const index = scope.items.findIndex((item) => item.value === scope.value)
+                scope.onChange(scope.items[(index + 1) % scope.items.length]!.value)
+                return
+              }
               if (event.key !== 'Enter') return
-              const first = sections.find((section) => !section.loading && !section.error && section.items.length > 0)?.items[0]
+              const first = sections.find((section) => !section.loading && !section.error)?.items.find((item) => !item.disabled && !item.quiet)
               if (first) onSelect(first.id)
             }}
             flexGrow={1}
@@ -113,7 +147,19 @@ function Layer({ onClose, query, onQueryChange, sections, activeId, onSelect, se
           />
           {searching && <Spinner />}
         </Box>
+        {scope && (
+          <Box display="flex" alignItems="center" gap={8} paddingVertical={8} paddingHorizontal={12} borderBottomWidth={1} borderStyle="solid" borderBottomColor={tokens['border.default']}>
+            <Segmented items={scope.items} value={scope.value} onChange={scope.onChange} label={scope.label} />
+            <Box flexGrow={1} />
+            {scope.summary && <Text font="mono" fontSize={11} color={tokens['text.tertiary']}>{scope.summary}</Text>}
+          </Box>
+        )}
         <Box maxHeight={420} scroll paddingVertical={6}>
+          {emptyText && sections.every((section) => !section.loading && !section.error && section.items.length === 0) && (
+            <Text tag="div" display="block" paddingVertical={22} paddingHorizontal={16} textAlign="center" fontSize={12.5} color={tokens['text.tertiary']}>
+              {emptyText}
+            </Text>
+          )}
           {sections.map((section) => (
             <Box key={section.id} role="group" aria-label={section.title}>
               <Text tag="div" display="block" paddingVertical={6} paddingHorizontal={16} {...SECTION_LABEL}>
@@ -134,34 +180,57 @@ function Layer({ onClose, query, onQueryChange, sections, activeId, onSelect, se
                 </Box>
               ) : (
                 section.items.map((item) => {
-                  const active = item.id === activeId
+                  const active = item.id === activeId && !item.disabled
                   return (
                     <Pressable
                       key={item.id}
                       type="button"
-                      onClick={() => onSelect(item.id)}
+                      disabled={item.disabled}
+                      aria-disabled={item.disabled || undefined}
+                      aria-keyshortcuts={item.shortcut && !item.disabled ? item.shortcut.join('+') : undefined}
+                      onClick={() => !item.disabled && onSelect(item.id)}
                       display="flex"
                       alignItems="center"
                       gap={10}
                       width="100%"
-                      height={36}
+                      height={section.dense ? 34 : 38}
                       paddingHorizontal={16}
                       textAlign="left"
                       fontSize={13.5}
-                      color={tokens['text.primary']}
+                      color={item.disabled || item.quiet ? tokens['text.tertiary'] : tokens['text.primary']}
                       backgroundColor={active ? tokens['surface.hover'] : 'transparent'}
-                      hoverStyle={{ backgroundColor: tokens['surface.hover'] }}
+                      hoverStyle={item.disabled ? undefined : { backgroundColor: tokens['surface.hover'] }}
+                      cursor={item.disabled ? 'default' : 'pointer'}
                     >
-                      {item.icon && <Icon name={item.icon} size={14} color={tokens['text.tertiary']} />}
-                      <Text flexGrow={1} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
+                      {item.leading ?? (item.icon && <Icon name={item.icon} size={14} color={item.disabled ? tokens['text.tertiary'] : (item.iconColor ?? tokens['text.tertiary'])} />)}
+                      {item.code && (
+                        <Text font="mono" fontSize={11.5} color={tokens['text.tertiary']} flexShrink={0}>
+                          {item.code}
+                        </Text>
+                      )}
+                      <Text flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
                         {item.label}
                       </Text>
+                      {item.where && (
+                        <Text font="mono" fontSize={11} color={tokens['text.tertiary']} flexShrink={0}>
+                          {item.where}
+                        </Text>
+                      )}
+                      {item.note && (
+                        <Text font="mono" fontSize={10.5} color={tokens['text.tertiary']} flexShrink={0}>
+                          {item.note}
+                        </Text>
+                      )}
                       {item.meta && (
-                        <Text font="mono" fontSize={11} color={tokens['text.tertiary']}>
+                        <Text font="mono" fontSize={11} color={tokens['text.tertiary']} flexShrink={0}>
                           {item.meta}
                         </Text>
                       )}
-                      {item.shortcut?.map((key) => <Kbd key={key}>{key}</Kbd>)}
+                      {item.shortcut && (
+                        <Box display="flex" alignItems="center" gap={3} aria-hidden>
+                          {item.shortcut.map((key, index) => <Kbd key={`${key}-${index}`} alignSelf="center">{key}</Kbd>)}
+                        </Box>
+                      )}
                     </Pressable>
                   )
                 })
@@ -174,10 +243,22 @@ function Layer({ onClose, query, onQueryChange, sections, activeId, onSelect, se
             <Kbd>↵</Kbd>
             <Text fontSize={11.5} color={tokens['text.tertiary']}>{labels.runFirst}</Text>
           </Box>
+          {scope && labels.switchScope && (
+            <Box display="flex" alignItems="center" gap={6}>
+              <Kbd>tab</Kbd>
+              <Text fontSize={11.5} color={tokens['text.tertiary']}>{labels.switchScope}</Text>
+            </Box>
+          )}
           <Box display="flex" alignItems="center" gap={6}>
             <Kbd>esc</Kbd>
             <Text fontSize={11.5} color={tokens['text.tertiary']}>{labels.close}</Text>
           </Box>
+          {labels.note && (
+            <>
+              <Box flexGrow={1} />
+              <Text fontSize={11} color={tokens['text.tertiary']}>{labels.note}</Text>
+            </>
+          )}
         </Box>
       </Box>
     </Box>

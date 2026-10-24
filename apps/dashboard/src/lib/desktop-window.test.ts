@@ -10,6 +10,10 @@ describe("desktop window size", () => {
     expect(appWindowMinWidth(true)).toBe(60 + 372 + 520 + 344);
   });
 
+  it("gives the width of the ticket list back when it is hidden", () => {
+    expect(appWindowMinWidth(false, true)).toBe(232 + 520 + 344);
+  });
+
   it("opens wider than the minimum", () => {
     expect(appWindowWidth()).toBeGreaterThan(appWindowMinWidth(false));
   });

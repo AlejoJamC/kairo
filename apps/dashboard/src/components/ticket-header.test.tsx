@@ -27,9 +27,14 @@ vi.mock("@kairo/client-core/stores/triage-store", () => {
     updateClassification: vi.fn(),
     selectRelativeTicket: vi.fn(),
     queueIds: ["t-1", "t-2"],
+    tickets: [],
+    selectTicket: vi.fn(),
     noteCounts: {},
   };
-  return { useTriageStore: (selector?: (s: typeof state) => unknown) => (selector ? selector(state) : state) };
+  const useTriageStore = Object.assign((selector?: (s: typeof state) => unknown) => (selector ? selector(state) : state), {
+    subscribe: () => () => {},
+  });
+  return { useTriageStore };
 });
 
 vi.mock("@kairo/client-core/api-client", () => ({

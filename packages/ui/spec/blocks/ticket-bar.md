@@ -17,12 +17,18 @@ Top bar of the ticket: where the agent is, the position in the queue and the tic
 - Editable: with status-chip.
 - Read only (final status): in place of status-chip, a static chip with an 11px lock and "Read only" in `text.secondary`; no status menu.
 - Pending proposal (AI Classification): the bar sits under ai-proposal, otherwise identical.
+- List hidden (⌘⇧F, queue views only): the ticket list does not resize; it is shown or hidden whole, and hidden it gives its `layout.queue` width back to the ticket. The left padding stays 24px; J, K and the previous / next buttons keep working.
+  - Before the breadcrumb: icon button "Show ticket list" with the list icon, tooltip "Show ticket list ⌘⇧F", `aria-keyshortcuts="Meta+Shift+F"`, `aria-controls` pointing to the list and `aria-expanded="false"`.
+  - The queue name becomes a switcher: ghost button 26px, padding 0 8px, 12.5px in `text.tertiary`, with an 11px down chevron. It opens a popover (`role="dialog"`) of `layout.queue` width, 34px below the button and 8px to its left:
+    - header (padding 10px 12px 8px 14px, `border.default` bottom border): queue name 600 · count `.cnt` · flexible space · `.qbtn.xs` "Pin list" with kbd ⌘⇧F, which shows the list again;
+    - 38px menu rows (max height 360px with scroll): 12px priority-glyph · mono ID 11.5px `text.tertiary` · subject in `text.primary` with ellipsis · mono age 11px `text.tertiary`; the current ticket `.on` with `aria-current="true"`;
+    - footer (`surface.sunken`, 11px `text.tertiary`): J K navigate · esc close.
 
 ## States
 
 - **default**: As described in Variants.
 - **hover**: "N NOTES" strengthens its ring to `notes.label`; status-chip and icon buttons as in their components.
-- **active**: With the status menu open, the chip stays in hover and the menu sits on top.
+- **active**: With the status menu open, the chip stays in hover and the menu sits on top. With the queue switcher open, its button carries `.on`.
 - **disabled**: Previous on the first row and Next on the last row are disabled (opacity 0.6).
 - **loading**: While the status changes, the chip shows the chosen value at once; a toast confirms "[ID] → Acknowledged".
 - **error**: If the status change fails, the chip returns to the previous value and a toast explains it.

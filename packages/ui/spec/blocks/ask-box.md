@@ -20,6 +20,7 @@ Input to ask the AI, fixed at the bottom of the assistant panel.
 ## Accessibility
 
 - Textarea with a label; ↵ sends, ⇧↵ adds a line.
+- ⌘J opens the Assistant tab and puts focus in the textarea, with or without a ticket open. With no ticket, the ticket chip is not shown.
 
 ## Domain value
 

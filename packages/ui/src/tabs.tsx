@@ -2,6 +2,9 @@ import type { ReactNode } from 'react'
 import { tokens } from '@kairo/tokens'
 import { Box, Pressable, Text } from './layout'
 import { PulseDot } from './loading'
+import { Tooltip } from './tooltip'
+import { useWindowChrome } from './window-chrome'
+import { TabStrip } from './tab-strip'
 
 // Underlined tabs that switch panels. The active tab carries a 2px accent
 // underline; an AI tab shows an accent dot; a count shows unread or totals.
@@ -13,10 +16,13 @@ type TabsProps = {
 }
 
 function Tabs({ label, children }: TabsProps) {
+  const macosWindow = useWindowChrome()
   return (
-    <Box role="tablist" aria-label={label} display="flex" gap={18} height={42} borderBottomWidth={1} borderStyle="solid" borderBottomColor={tokens['border.default']}>
-      {children}
-    </Box>
+    <TabStrip drag={macosWindow}>
+      <Box dragRegion={macosWindow} role="tablist" aria-label={label} display="flex" gap={18} height={42} minWidth="100%" width="max-content" borderBottomWidth={1} borderStyle="solid" borderBottomColor={tokens['border.default']}>
+        {children}
+      </Box>
+    </TabStrip>
   )
 }
 
@@ -32,15 +38,20 @@ type TabProps = {
   /** Count is a badge for unread items. */
   unread?: boolean
   controls?: string
+  /** Key that selects the tab, shown in its tooltip ("⌘2"). */
+  shortcut?: string
+  /** Same key for assistive technology ("Meta+2"). */
+  keyshortcuts?: string
 }
 
-function Tab({ selected, onPress, children, disabled, ai, count, unread, controls }: TabProps) {
-  return (
+function Tab({ selected, onPress, children, disabled, ai, count, unread, controls, shortcut, keyshortcuts }: TabProps) {
+  const tab = (
     <Pressable
       role="tab"
       aria-selected={selected}
       aria-disabled={disabled || undefined}
       aria-controls={controls}
+      aria-keyshortcuts={keyshortcuts}
       disabled={disabled}
       onClick={() => !disabled && onPress()}
       display="flex"
@@ -72,6 +83,7 @@ function Tab({ selected, onPress, children, disabled, ai, count, unread, control
         ))}
     </Pressable>
   )
+  return shortcut ? <Tooltip label={children} shortcut={shortcut}>{tab}</Tooltip> : tab
 }
 
 export { Tabs, Tab }
