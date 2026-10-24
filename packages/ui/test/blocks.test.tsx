@@ -738,7 +738,7 @@ describe('AuthCard', () => {
   })
 
   describe('desktop', () => {
-    const wait = { title: 'Continue in your browser', body: 'We opened kairo.app.', copyLabel: 'Copy link', copiedLabel: 'Link copied', copied: false, onCopy: vi.fn(), cancelLabel: 'Cancel', onCancel: vi.fn() }
+    const wait = { title: 'Continue in your browser', body: 'We opened holakairo.com.', copyLabel: 'Copy link', copiedLabel: 'Link copied', copied: false, onCopy: vi.fn(), cancelLabel: 'Cancel', onCancel: vi.fn() }
 
     it('replaces the form with the waiting card, announced politely, with the actions', () => {
       const onCancel = vi.fn()

@@ -26,6 +26,7 @@ import {
   ShortcutsDialog,
   Sidebar,
   SidebarBell,
+  WindowChromeProvider,
   SlaIndicator,
   SlaPolicyCard,
   SourceList,
@@ -287,11 +288,31 @@ describe('Sidebar and AccountMenu', () => {
     expect(base.search.onOpen).toHaveBeenCalled()
   })
 
-  it('collapses to icons and toggles with the named button', () => {
+  it('collapses to icons and toggles with the named button', async () => {
     renderUi(<Sidebar {...base} collapsed />)
     fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }))
     expect(base.onToggleCollapsed).toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Search or run a command…' }).getAttribute('title')).toBe('⌘K')
+    fireEvent.focus(screen.getByRole('button', { name: 'Search or run a command…' }))
+    expect((await screen.findByRole('tooltip')).textContent).toContain('⌘K')
+  })
+
+  it('on macOS holds the collapse button in the footer with its shortcut and a shorter search label', async () => {
+    renderUi(
+      <WindowChromeProvider macos>
+        <Sidebar {...base} search={{ ...base.search, shortLabel: 'Search or run…' }} collapseShortcut="⌃⌘S" collapsed={false} />
+      </WindowChromeProvider>,
+    )
+    const collapse = screen.getByRole('button', { name: 'Collapse sidebar' })
+    expect(collapse.getAttribute('aria-keyshortcuts')).toBe('Control+Meta+S')
+    fireEvent.focus(collapse)
+    expect((await screen.findByRole('tooltip')).textContent).toContain('⌃⌘S')
+    expect(screen.getByRole('button', { name: 'Search or run a command…' }).textContent).toContain('Search or run…')
+  })
+
+  it('shows the name and count in the tooltip of a collapsed item and a dot on the flagged one', async () => {
+    renderUi(<Sidebar {...base} groups={[[{ ...entry('Triage', true), dot: true }, entry('Resolved')], [entry('Settings')]]} collapsed />)
+    fireEvent.focus(screen.getByRole('button', { name: 'Triage' }))
+    expect((await screen.findByRole('tooltip')).textContent).toContain('Triage · 4')
   })
 
   function Harness() {

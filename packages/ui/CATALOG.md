@@ -49,12 +49,12 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `status-chip` | implemented | `StatusChip` | Shows and changes the ticket status. |
 | `stepper` | implemented | `Stepper` | Shows where the person is in the onboarding wizard and which steps they have completed. It is a progress indicator, not navigation. |
 | `switch` | implemented | `Switch` | Turns a setting on or off with immediate effect. |
-| `tabs` | implemented | `Tab`, `Tabs` | Switches panels inside the context panel. |
+| `tabs` | implemented | `Tab`, `Tabs` | Switches panels inside the context panel of a ticket. |
 | `thread-message` | implemented | `ThreadMessage` | One message in the ticket thread. |
 | `ticket-row` | implemented | `TicketRow` | One ticket in a queue list. The full variant is the queue row of the app; the compact variant is the only queue row of the public web, used in the onboarding wizard. |
 | `toast` | implemented | `Toast` | Short confirmation after an action. |
-| `tooltip` | implemented | `Tooltip` | Short text label for controls that show no visible label. Ships on the collapsed sidebar nav items. |
-| `window-chrome` | implemented | `WINDOW_CONTROLS_SLOT`, `WindowChromeProvider`, `WindowControlsSlot`, `WindowDragArea`, `useWindowChrome` | Window frame of the desktop app: the space reserved for the system window controls and the areas that drag the window. |
+| `tooltip` | implemented | `Tooltip` | Short floating label that names a control with no visible label and shows its shortcut. |
+| `window-chrome` | implemented | `WINDOW_CONTROLS_SLOT`, `WindowChromeProvider`, `WindowControlsSlot`, `WindowDragArea`, `useWindowChrome` | Window frame of the desktop app: the corner reserved for the system window controls and the areas that drag the window. |
 
 ## Blocks (37 of 37 implemented)
 
@@ -68,7 +68,7 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `assistant-turn` | implemented | `AssistantEmpty`, `AssistantMark`, `AssistantTurn`, `UserTurn` | Kairo Assistant conversation in the context panel. |
 | `auth-card` | implemented | `AuthCard`, `AuthLayout`, `GoogleMark`, `InvitationSummary` | Centered card for sign-in, invitation and password pages. |
 | `client-panel` | implemented | `ClientPanel` | Client tab of the context panel: who wrote, their account and their other tickets. |
-| `command-palette` | implemented | `CommandPalette` | Search tickets, run actions and navigate (⌘K). Uses the dialog overlay pattern; see dialog for task dialogs. |
+| `command-palette` | implemented | `CommandPalette` | Search tickets, run actions, navigate, and list every command of the app with its keys. Opens with ⌘K (All scope) or ? (Commands scope). Uses the dialog overlay pattern; see dialog for task dialogs. |
 | `composer` | implemented | `Composer` | Reply and internal-note composer of a ticket. |
 | `data-table` | implemented | `DataTable`, `DataTableMainCell` | Data table of a page. |
 | `escalate-panel` | implemented | `EscalatePanel` | Escalate tab of the context panel: the signals that justify escalating the ticket and the form to do it. |
@@ -88,10 +88,10 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `queue-header` | implemented | `PriorityFilterTabs`, `QueueHeader` | Header of the queue pane: view title, count, action, filter bar and the empty text of each view. |
 | `reclassify-popover` | implemented | `ReclassifyPopover` | Correction of the AI classification; every correction teaches Triage. |
 | `section` | implemented | `GridBackground`, `Section`, `SectionHeader` | Anatomy of a public web section. |
-| `shortcuts-dialog` | implemented | `ShortcutsDialog` | Keyboard shortcuts dialog: the complete list of app shortcuts. |
+| `shortcuts-dialog` | implemented | `ShortcutsDialog` | Replaced by command-palette in its Commands scope. Not used on any screen. |
 | `sidebar` | implemented | `Sidebar`, `SidebarBell` | First column of the app shell: brand, notifications, search, navigation, language and account. |
 | `sla-policy-card` | implemented | `SlaPolicyCard`, `SlaScale`, `formatSlaMinutes`, `isSlaOrderValid` | SLA policy of one priority in Settings › SLA by priority. |
-| `status-bar` | implemented | `StatusBar` | Fixed bar at the bottom of the app. |
+| `status-bar` | implemented | `StatusBar` | Fixed bar at the bottom of the app: the shortcuts of the current view and the engine status. |
 | `status-panel` | implemented | `StatusPanel` | Single-action status card. |
 | `system-notification` | implemented | `buildSystemNotification`, `clampExcerpt`, `sendSystemNotification`, `shouldSendSystemNotification` | Native operating-system notification that the desktop app sends when something needs the agent outside the window. |
 | `ticket-bar` | implemented | `TicketBar` | Top bar of the ticket: where the agent is, the position in the queue and the ticket status. |

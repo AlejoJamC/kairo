@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { AuthProvider, useAuth } from "@kairo/client-core/auth";
@@ -21,6 +21,9 @@ import { KnowledgeView } from "@/components/knowledge-view";
 import { ChannelsSettings } from "@/components/channels-settings";
 import type { AppView } from "@/types";
 import { useActiveView } from "@/hooks/useActiveView";
+import { useAppShortcuts } from "@/hooks/use-app-shortcuts";
+import { useCommands } from "@/hooks/use-commands";
+import { useAppCommands } from "@/lib/app-commands";
 import { pathForView } from "@/routes";
 import { Box, Spinner, Text, WindowChromeProvider } from "@kairo/ui";
 
@@ -52,13 +55,25 @@ function AppContent() {
   const [routedView, setActiveView] = useActiveView();
   const counts = useSidebarCounts(SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS);
 
-  const handleToggle = () => {
+  const handleToggle = useCallback(() => {
     setSidebarCollapsed((c) => {
       const next = !c;
       getPlatform().storage.setItem("sidebar-collapsed", String(next));
       return next;
     });
-  };
+  }, []);
+
+  // The shortcuts, the palette and the native menu toggle the sidebar through the app commands.
+  useEffect(
+    () =>
+      useAppCommands.subscribe((state, previous) => {
+        if (state.sidebarToggleRequests !== previous.sidebarToggleRequests) handleToggle();
+      }),
+    [handleToggle],
+  );
+
+  const { run } = useCommands(routedView ?? "triage", setActiveView);
+  useAppShortcuts(run);
 
   if (routedView === null) return <Navigate to={pathForView("triage")} replace />;
   const activeView = routedView;
@@ -111,7 +126,7 @@ function AppContent() {
       </Box>
 
       <AppStatusBar counts={counts} view={activeView} />
-      {isDesktop() && <DesktopIntegration view={activeView} onViewChange={setActiveView} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={handleToggle} />}
+      {isDesktop() && <DesktopIntegration view={activeView} onViewChange={setActiveView} sidebarCollapsed={sidebarCollapsed} />}
     </Box>
   );
 }

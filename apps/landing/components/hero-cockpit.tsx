@@ -32,7 +32,7 @@ const SIMILAR = [
 
 export function HeroCockpit() {
   return (
-    <ProductFrame label="Vista de triage de Kairo con la bandeja, un ticket y el contexto del cliente" route="kairo.app/triage">
+    <ProductFrame label="Vista de triage de Kairo con la bandeja, un ticket y el contexto del cliente" route="holakairo.com/triage">
       <Box grid gridTemplateColumns="180px 300px 1fr 260px" height={460} position="relative">
         {/* Sidebar */}
         <Box borderRightWidth={1} borderStyle="solid" borderRightColor="var(--kairo-color-line)" padding={10} backgroundColor="var(--kairo-color-sunk)">

@@ -7,7 +7,11 @@ Triggers an action. One primary action per area; secondary actions use the outli
 ## Variants
 
 - Secondary (`.gbtn`): 30px, 1px `border.default`, `surface.panel`, 12.5px/500, optional 13px icon in its semantic color. Used for Acknowledge, Resolve, Escalate.
-- With key (`.gbtn` + kbd at the end, 2px margin): ticket actions show their shortcut inside the button: "Acknowledge A", "Resolve R", "Escalate E". Only for single-key shortcuts; shortcuts with a modifier (⌘↵) go in `title`.
+- With key (kbd at the end of the button): the shortcut of the action inside the button.
+  - Secondary with a single key, 2px margin: "Acknowledge A", "Resolve R", "Escalate E".
+  - Secondary and `.qbtn.xs` with a modifier shortcut, the keys together in one kbd: "Show ticket list ⌘⇧F", "Pin list ⌘⇧F".
+  - Primary with ↵ in the desktop sign-in (auth-card): kbd with transparent fill, border in `text.onAccent` at 40% and text in `text.onAccent`, 4px margin.
+  - Send keeps its shortcut (⌘↵) in `title`.
 - Primary (`.pbtn`): 30px, `accent.default` fill, `text.onAccent`. `.sm` is 28px for popovers.
 - Ghost (`.qbtn`): 28px, no border, `text.secondary`. Tertiary inline actions such as Cancel. `.qbtn.xs` is 24px with 12px text, for actions inside rows and headers ("Wrong classification?", evidence-panel row actions).
 - Icon (`.ibtn`): 28×28, icon only. `.lg` is 44×44 for the public web mobile menu.
@@ -30,7 +34,7 @@ Triggers an action. One primary action per area; secondary actions use the outli
 ## Accessibility
 
 - Use a real `<button>` or `<a href>`.
-- Icon-only buttons carry `aria-label`; buttons with a modifier shortcut carry it in `title`.
+- Icon-only buttons carry `aria-label` and a tooltip with the name and, when there is one, the key.
 - A button with a key carries `aria-keyshortcuts` ("A", "R", "E"). The kbd inside it is `aria-hidden`, so the accessible name stays "Acknowledge".
 - The split send chevron carries `aria-label` "More send options", `aria-haspopup="menu"` and `aria-expanded`.
 - Web touch targets are at least 44px (`.lg`).

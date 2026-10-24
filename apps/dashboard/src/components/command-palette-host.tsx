@@ -1,71 +1,106 @@
-// Command palette — tickets and views, opened with ⌘K or from the sidebar search.
+// Command palette — tickets, actions and views in the All scope (⌘K), and the
+// complete list of commands with their keys in the Commands scope (?).
 
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
-import { CommandPalette, type IconName, type PaletteSection } from "@kairo/ui";
+import { tokens } from "@kairo/tokens";
+import { CommandPalette, PriorityGlyph, type IconName, type PaletteItem, type PaletteSection } from "@kairo/ui";
+import { COMMAND_GROUPS, COMMANDS, type CommandId } from "@/lib/commands";
+import type { PaletteScope } from "@/lib/app-commands";
+import { useCommands } from "@/hooks/use-commands";
 import type { AppView } from "@/types";
 
 interface CommandPaletteHostProps {
   open: boolean;
+  scope: PaletteScope;
+  onScopeChange: (scope: PaletteScope) => void;
   onClose: () => void;
+  view: AppView;
   onViewChange: (view: AppView) => void;
 }
 
-export function CommandPaletteHost({ open, onClose, onViewChange }: CommandPaletteHostProps) {
+const ACTIONS: { id: CommandId; icon: IconName; color: string }[] = [
+  { id: "acknowledge", icon: "check", color: tokens["accent.default"] },
+  { id: "resolve", icon: "resolve", color: tokens["color.ok"] },
+  { id: "escalate", icon: "escalate", color: tokens["color.mood"] },
+  { id: "note", icon: "lock", color: tokens["notes.label"] },
+];
+
+const VIEWS: { id: CommandId; icon: IconName }[] = [
+  { id: "go-triage", icon: "triage" },
+  { id: "go-awaiting", icon: "awaiting" },
+  { id: "go-resolved", icon: "resolved" },
+  { id: "go-escalated", icon: "escalated" },
+  { id: "go-ai-review", icon: "spark" },
+  { id: "go-knowledge", icon: "knowledge" },
+  { id: "go-clients", icon: "clients" },
+  { id: "go-settings", icon: "settings" },
+];
+
+export function CommandPaletteHost({ open, scope, onScopeChange, onClose, view, onViewChange }: CommandPaletteHostProps) {
   const { t } = useTranslation(["dashboard"]);
   const tickets = useTriageStore((state) => state.tickets);
   const selectTicket = useTriageStore((state) => state.selectTicket);
-  const hasSelection = useTriageStore((state) => state.selectedTicketId !== null);
+  const { run, stateOf, otherLanguage } = useCommands(view, onViewChange);
   const [query, setQuery] = useState("");
+
+  const label = (id: CommandId) => t(`dashboard:commands.items.${id}`, { language: otherLanguage.toUpperCase() });
 
   const sections = useMemo<PaletteSection[]>(() => {
     const needle = query.trim().toLowerCase();
-    const matches = tickets
-      .filter((ticket) => !needle
-        || (ticket.subject ?? "").toLowerCase().includes(needle)
-        || String(ticket.ticket_number ?? "").includes(needle)
-        || (ticket.from_name ?? "").toLowerCase().includes(needle)
-        || (ticket.from_email ?? "").toLowerCase().includes(needle))
+    const matches = (text: string) => !needle || text.toLowerCase().includes(needle);
+
+    if (scope === "commands") {
+      return COMMAND_GROUPS.map((group) => ({
+        id: group,
+        title: t(`dashboard:commands.groups.${group}`),
+        dense: true,
+        items: COMMANDS.filter((command) => command.group === group && matches(label(command.id))).map((command): PaletteItem => {
+          const state = stateOf(command);
+          return {
+            id: `command:${command.id}`,
+            label: label(command.id),
+            shortcut: command.keys,
+            disabled: state.disabled,
+            note: state.needsTicket ? t("dashboard:commands.onlyInTicket") : undefined,
+          };
+        }),
+      })).filter((section) => section.items.length > 0);
+    }
+
+    const ticketItems = tickets
+      .filter((ticket) => matches(`${ticket.subject ?? ""} ${ticket.ticket_number ?? ""} ${ticket.from_name ?? ""} ${ticket.from_email ?? ""}`))
       .slice(0, 6)
-      .map((ticket) => ({
+      .map((ticket): PaletteItem => ({
         id: `ticket:${ticket.id}`,
         label: ticket.subject ?? "—",
-        icon: "ticket" as IconName,
-        meta: ticket.ticket_number ? `KAI-${ticket.ticket_number}` : undefined,
+        leading: ticket.priority ? <PriorityGlyph priority={ticket.priority} size={12} label={false} /> : undefined,
+        icon: ticket.priority ? undefined : "ticket",
+        code: ticket.ticket_number ? `KAI-${ticket.ticket_number}` : undefined,
+        where: ticket.status ? t(`dashboard:ticketStatus.${ticket.status}`, { defaultValue: ticket.status }) : undefined,
       }));
-    const views: { view: AppView; icon: IconName; label: string }[] = [
-      { view: "triage", icon: "triage", label: t("dashboard:sidebar.triage") },
-      { view: "awaiting", icon: "awaiting", label: t("dashboard:sidebar.pendingClient") },
-      { view: "resolved", icon: "resolved", label: t("dashboard:sidebar.resolved") },
-      { view: "escalated", icon: "escalated", label: t("dashboard:sidebar.escalation") },
-      { view: "ai-review", icon: "spark", label: t("dashboard:sidebar.aiReview") },
-      { view: "knowledge", icon: "knowledge", label: t("dashboard:sidebar.knowledge") },
-      { view: "clients", icon: "clients", label: t("dashboard:sidebar.clients") },
-      { view: "settings", icon: "settings", label: t("dashboard:sidebar.settings") },
-    ];
-    const actions: { id: string; icon: IconName; label: string; shortcut: string }[] = hasSelection
-      ? [
-          { id: "action:acknowledge", icon: "check", label: t("dashboard:replyBar.actionReconocer"), shortcut: "A" },
-          { id: "action:resolve", icon: "resolve", label: t("dashboard:replyBar.actionResolver"), shortcut: "R" },
-          { id: "action:escalate", icon: "escalate", label: t("dashboard:replyBar.actionEscalar"), shortcut: "E" },
-          { id: "action:note", icon: "lock", label: t("dashboard:replyBar.modeNote"), shortcut: "N" },
-        ]
-      : [];
+    const actionItems = ACTIONS.filter((action) => matches(label(action.id)) && !stateOf(COMMANDS.find((c) => c.id === action.id)!).disabled).map((action): PaletteItem => ({
+      id: `command:${action.id}`,
+      label: label(action.id),
+      icon: action.icon,
+      iconColor: action.color,
+      shortcut: COMMANDS.find((c) => c.id === action.id)?.keys,
+    }));
+    const viewItems = VIEWS.filter((entry) => matches(label(entry.id))).map((entry): PaletteItem => ({ id: `command:${entry.id}`, label: label(entry.id), icon: entry.icon }));
+
     return [
-      { id: "tickets", title: t("dashboard:topChrome.palette.ticketsSection"), items: matches },
-      {
-        id: "actions",
-        title: t("dashboard:topChrome.palette.actionsSection"),
-        items: actions.filter((entry) => !needle || entry.label.toLowerCase().includes(needle)).map((entry) => ({ id: entry.id, label: entry.label, icon: entry.icon, shortcut: [entry.shortcut] })),
-      },
+      { id: "tickets", title: t("dashboard:topChrome.palette.ticketsSection"), items: ticketItems },
+      { id: "actions", title: t("dashboard:topChrome.palette.actionsSection"), items: actionItems },
       {
         id: "goto",
         title: t("dashboard:topChrome.palette.goToSection"),
-        items: views.filter((entry) => !needle || entry.label.toLowerCase().includes(needle)).map((entry) => ({ id: `view:${entry.view}`, label: entry.label, icon: entry.icon })),
+        items: [...viewItems, { id: "scope:commands", label: t("dashboard:commands.seeAll"), shortcut: ["⌘", "/"], quiet: true }],
       },
     ].filter((section) => section.items.length > 0);
-  }, [tickets, hasSelection, query, t]);
+    // `label` and `stateOf` change with the language, the open ticket and the view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tickets, query, scope, t, stateOf, otherLanguage]);
 
   function close() {
     setQuery("");
@@ -73,20 +108,21 @@ export function CommandPaletteHost({ open, onClose, onViewChange }: CommandPalet
   }
 
   function handleSelect(id: string) {
+    if (id === "scope:commands") {
+      onScopeChange("commands");
+      return;
+    }
     close();
     if (id.startsWith("ticket:")) {
       onViewChange("triage");
       selectTicket(id.slice("ticket:".length));
-    } else if (id.startsWith("action:")) {
-      const { requestTicketAction, requestPanelTab, requestComposeNote } = useTriageStore.getState();
-      const action = id.slice("action:".length);
-      if (action === "acknowledge" || action === "resolve") requestTicketAction(action);
-      else if (action === "escalate") requestPanelTab("escalate");
-      else if (action === "note") requestComposeNote();
-    } else if (id.startsWith("view:")) {
-      onViewChange(id.slice("view:".length) as AppView);
+    } else if (id.startsWith("command:")) {
+      run(id.slice("command:".length) as CommandId);
     }
   }
+
+  const total = COMMANDS.length;
+  const firstRunnable = sections.flatMap((section) => section.items).find((item) => !item.disabled && !item.quiet);
 
   return (
     <CommandPalette
@@ -95,14 +131,27 @@ export function CommandPaletteHost({ open, onClose, onViewChange }: CommandPalet
       query={query}
       onQueryChange={setQuery}
       sections={sections}
-      activeId={sections[0]?.items[0]?.id}
+      activeId={firstRunnable?.id}
       onSelect={handleSelect}
+      scope={{
+        label: t("dashboard:commands.scopeLabel"),
+        value: scope,
+        items: [
+          { value: "all", label: t("dashboard:commands.scopeAll"), shortcut: "⌘K" },
+          { value: "commands", label: t("dashboard:commands.scopeCommands"), shortcut: "⌘/" },
+        ],
+        onChange: (value) => onScopeChange(value as PaletteScope),
+        summary: scope === "commands" ? t("dashboard:commands.count", { count: total }) : undefined,
+      }}
+      emptyText={query.trim() && sections.length === 0 ? t("dashboard:commands.noMatch", { query: query.trim() }) : undefined}
       labels={{
         dialog: t("dashboard:topChrome.palette.searchTitle"),
         input: t("dashboard:topChrome.palette.searchLabel"),
-        placeholder: t("dashboard:topChrome.searchPlaceholder"),
+        placeholder: t("dashboard:commands.placeholder"),
         runFirst: t("dashboard:topChrome.palette.runFirst"),
         close: t("dashboard:topChrome.palette.close"),
+        switchScope: t("dashboard:commands.switchScope"),
+        note: t("dashboard:commands.note"),
       }}
     />
   );

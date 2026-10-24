@@ -28,10 +28,13 @@ fn add_items<'a, R: Runtime>(
         builder = match str_of(item, "kind") {
             "separator" => builder.separator(),
             "checkbox" => {
-                let entry = CheckMenuItemBuilder::with_id(id, label)
+                let mut entry = CheckMenuItemBuilder::with_id(id, label)
                     .checked(bool_of(item, "checked").unwrap_or(false))
-                    .build(app)?;
-                builder.item(&entry)
+                    .enabled(!bool_of(item, "disabled").unwrap_or(false));
+                if let Some(accelerator) = item.get("accelerator").and_then(Value::as_str) {
+                    entry = entry.accelerator(accelerator);
+                }
+                builder.item(&entry.build(app)?)
             }
             "submenu" => {
                 let children = item.get("items").and_then(Value::as_array).cloned().unwrap_or_default();
@@ -51,8 +54,11 @@ fn add_items<'a, R: Runtime>(
                 _ => {
                     let enabled = !bool_of(item, "disabled").unwrap_or(false);
                     if let Some(checked) = bool_of(item, "checked") {
-                        let entry = CheckMenuItemBuilder::with_id(id, label).checked(checked).enabled(enabled).build(app)?;
-                        builder.item(&entry)
+                        let mut entry = CheckMenuItemBuilder::with_id(id, label).checked(checked).enabled(enabled);
+                        if let Some(accelerator) = item.get("accelerator").and_then(Value::as_str) {
+                            entry = entry.accelerator(accelerator);
+                        }
+                        builder.item(&entry.build(app)?)
                     } else {
                         let mut entry = MenuItemBuilder::with_id(id, label).enabled(enabled);
                         if let Some(accelerator) = item.get("accelerator").and_then(Value::as_str) {

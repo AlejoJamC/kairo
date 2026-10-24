@@ -89,6 +89,7 @@ export function DesktopSignIn() {
         loading={loading}
         loadingLabel={t("auth:desktop.submitting")}
         submitDisabled={!email || !password}
+        submitKey="↵"
         onSubmit={submit}
         wait={
           waiting

@@ -82,13 +82,13 @@ export function useResizablePanel({ min, cap, reserveLeft, centerMin }: Resizabl
     [maxFor, min],
   );
 
-  // Re-clamp when the viewport (or sidebar) changes the available space.
+  // Re-clamp when the window or the sidebar changes the space the row has.
   useEffect(() => {
-    function onResize() {
-      setWidth((w) => clampToContainer(w));
-    }
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    const parent = panelRef.current?.parentElement;
+    if (!parent) return;
+    const observer = new ResizeObserver(() => setWidth((w) => clampToContainer(w)));
+    observer.observe(parent);
+    return () => observer.disconnect();
   }, [clampToContainer]);
 
   const reset = useCallback(() => {
@@ -100,8 +100,11 @@ export function useResizablePanel({ min, cap, reserveLeft, centerMin }: Resizabl
   const [max, setMax] = useState<number>(cap);
   useLayoutEffect(() => {
     const parent = panelRef.current?.parentElement;
-    setMax(maxFor(parent?.clientWidth ?? window.innerWidth));
-  }, [maxFor, width]);
+    const ceiling = maxFor(parent?.clientWidth ?? window.innerWidth);
+    setMax(ceiling);
+    // A stored width that no longer fits (a smaller window, a sidebar that opened) is brought back under the ceiling.
+    setWidth((current) => Math.min(Math.max(current, min), ceiling));
+  }, [maxFor, width, min]);
 
   const commit = useCallback((next: number) => persist(next), []);
 

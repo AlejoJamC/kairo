@@ -25,6 +25,8 @@ type TicketHeadingProps = {
   /** Offered priorities; without onPriorityChange the chip is static. */
   priorityOptions?: readonly PriorityLevel[]
   onPriorityChange?: (priority: PriorityLevel) => void
+  /** Controls the priority menu from outside (a command opens it). */
+  priorityMenu?: { open: boolean; onOpenChange: (open: boolean) => void }
   categories: readonly HeadingCategory[]
   /** "Wrong classification?" opens this popover. Hidden when read-only or absent. */
   reclassify?: Omit<ReclassifyPopoverProps, 'trigger'>
@@ -41,7 +43,7 @@ type TicketHeadingProps = {
   }
 }
 
-function TicketHeading({ subject, classifying, priority, priorityOptions, onPriorityChange, categories, reclassify, sla, readOnly, labels }: TicketHeadingProps) {
+function TicketHeading({ subject, classifying, priority, priorityOptions, onPriorityChange, priorityMenu: priorityMenuState, categories, reclassify, sla, readOnly, labels }: TicketHeadingProps) {
   const editable = !readOnly && !!priorityOptions && !!onPriorityChange
   const priorityContent = priority ? (
     <>
@@ -66,7 +68,7 @@ function TicketHeading({ subject, classifying, priority, priorityOptions, onPrio
           <>
             {priority &&
               (editable ? (
-                <Popover>
+                <Popover open={priorityMenuState?.open} onOpenChange={priorityMenuState?.onOpenChange}>
                   <PopoverTrigger>
                     <Pressable
                       aria-label={labels.priorityChip(priority)}

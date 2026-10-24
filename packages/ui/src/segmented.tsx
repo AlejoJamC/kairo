@@ -15,6 +15,8 @@ type SegmentedItem<V extends string> = {
   /** Amber styling for the internal-note mode. */
   tone?: 'note'
   disabled?: boolean
+  /** Key that selects the segment, shown in mono after the label (decorative). */
+  shortcut?: string
 }
 
 type SegmentedProps<V extends string> = {
@@ -81,6 +83,11 @@ function Segmented<V extends string>({ items, value, onChange, label, semantics 
           >
             {item.icon}
             {item.label}
+            {item.shortcut && (
+              <Text font="mono" fontSize={10.5} opacity={0.65} aria-hidden>
+                {item.shortcut}
+              </Text>
+            )}
             {item.count !== undefined && (
               <Text font="mono" fontSize={tabs ? 10.5 : 11} opacity={0.65}>
                 {item.count === null ? '—' : item.count}

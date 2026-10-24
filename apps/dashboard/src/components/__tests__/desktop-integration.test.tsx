@@ -28,7 +28,7 @@ vi.mock("@kairo/client-core/config", () => ({
   getPlatform: () => ({ host, appFocus: { subscribe: () => () => {} } }),
 }));
 vi.mock("@kairo/client-core/auth", () => ({ useAuth: () => ({ signOut: vi.fn() }) }));
-vi.mock("@/hooks/useLocale", () => ({ useLocale: () => ({ language: "es", setLanguage: vi.fn() }) }));
+vi.mock("@/hooks/useLocale", () => ({ useLocale: () => ({ language: "es", setLanguage: vi.fn(), supportedLanguages: ["es", "en"] }) }));
 vi.mock("@/lib/notification-feed", () => ({
   subscribeNotifications: (listener: (rows: unknown[]) => void) => {
     feedListener = listener;
@@ -49,7 +49,7 @@ const mention = (id: string, readAt: string | null = null) => ({
 });
 
 function setup(onViewChange = vi.fn()) {
-  renderWithProviders(<DesktopIntegration view="triage" onViewChange={onViewChange} sidebarCollapsed={false} onToggleSidebar={vi.fn()} />);
+  renderWithProviders(<DesktopIntegration view="triage" onViewChange={onViewChange} sidebarCollapsed={false} />);
   return { onViewChange };
 }
 
@@ -62,7 +62,7 @@ describe("DesktopIntegration", () => {
       menuListener = listener;
       return () => {};
     });
-    useAppCommands.setState({ presence: "online", paletteRequests: 0, shortcutsRequests: 0 });
+    useAppCommands.setState({ presence: "online", paletteRequests: 0, paletteScope: "all" });
   });
 
   it("sends the native menu with the app language and no dead items", () => {
@@ -81,8 +81,10 @@ describe("DesktopIntegration", () => {
     expect(onViewChange).toHaveBeenCalledWith("resolved");
     act(() => menuListener?.("search"));
     expect(useAppCommands.getState().paletteRequests).toBe(1);
-    act(() => menuListener?.("shortcuts"));
-    expect(useAppCommands.getState().shortcutsRequests).toBe(1);
+    expect(useAppCommands.getState().paletteScope).toBe("all");
+    act(() => menuListener?.("all-commands"));
+    expect(useAppCommands.getState().paletteRequests).toBe(2);
+    expect(useAppCommands.getState().paletteScope).toBe("commands");
   });
 
   it("shows the unread count on the app icon, and clears it at zero", () => {
