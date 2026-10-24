@@ -10,7 +10,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { supabase } from "../../lib/supabase.js";
 import { resolveUserAndAccount } from "../../lib/auth.js";
-import { maybeGenerateKbEmbedding } from "../../lib/kb-embedding.js";
+import { requestSemanticIndexing } from "../../lib/semantic-indexing.js";
 
 export const kbArticles = new Hono();
 
@@ -142,13 +142,7 @@ kbArticles.post("/", async (c) => {
     return c.json({ error: "Failed to create article", detail: error?.message }, 500);
   }
 
-  maybeGenerateKbEmbedding({
-    supabase,
-    articleId: data.id,
-    accountId: ctx.accountId,
-    title: parsed.data.title,
-    content: parsed.data.content,
-  }).catch((err: unknown) => {
+  await requestSemanticIndexing(supabase, ctx.accountId, [{ kind: 'kb_article', id: data.id }]).catch((err: unknown) => {
     console.error(`[kb-articles] embedding failed for ${data.id}:`, err);
   });
 
@@ -199,13 +193,7 @@ kbArticles.put("/:id", async (c) => {
   const titleChanged   = parsed.data.title !== undefined;
   const contentChanged = parsed.data.content !== undefined;
   if (titleChanged || contentChanged) {
-    maybeGenerateKbEmbedding({
-      supabase,
-      articleId: data.id,
-      accountId: ctx.accountId,
-      title: data.title,
-      content: data.content,
-    }).catch((err: unknown) => {
+    await requestSemanticIndexing(supabase, ctx.accountId, [{ kind: 'kb_article', id: data.id }]).catch((err: unknown) => {
       console.error(`[kb-articles] embedding refresh failed for ${data.id}:`, err);
     });
   }

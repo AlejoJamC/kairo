@@ -1,3 +1,4 @@
+import { ProviderError } from '../providers/base';
 import { groupBySimilarity } from './similarity';
 
 export type RetrievalPurpose = 'similar_cases' | 'approved_knowledge';
@@ -10,7 +11,7 @@ export interface SemanticScope {
 export interface SourceReference { kind: string; id: string }
 export interface VectorSpace { provider: string; model: string; dimensions: number }
 export type SemanticFailure = 'forbidden' | 'invalid_input' | 'not_found' | 'disabled' | 'index_missing' |
-  'index_incompatible' | 'provider_unavailable' | 'storage_unavailable' | 'revision_changed';
+  'index_incompatible' | 'provider_unavailable' | 'provider_rejected' | 'storage_unavailable' | 'revision_changed';
 export interface SemanticMatch {
   source: SourceReference;
   revision: string;
@@ -60,6 +61,9 @@ export interface SemanticAdapter {
 }
 export interface SemanticServiceDeps {
   scope: SemanticScope;
+  controls?: () => { enabled: boolean; generation: boolean; indexing: boolean; retrieval: boolean };
+  generationTimeoutMs?: number;
+  indexingTimeoutMs?: number;
   space: VectorSpace;
   adapters: readonly SemanticAdapter[];
   embed(text: string): Promise<number[]>;
@@ -104,8 +108,18 @@ export function createSemanticService(deps: SemanticServiceDeps): SemanticServic
     status: 'unavailable', reason, matches: [], sources: sources.map(source => ({ source, status: 'unavailable', reason, matches: [] })),
   });
 
+  const controls = () => deps.controls?.() ?? { enabled: true, generation: true, indexing: true, retrieval: true };
+  const generate = async (text: string, timeoutMs = deps.generationTimeoutMs ?? 10_000) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([deps.embed(text), new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('Embedding generation timed out')), timeoutMs);
+      })]);
+    } finally { clearTimeout(timer); }
+  };
   const service: SemanticService = {
     async indexSource(input: IndexRequest): Promise<IndexResult> {
+      if (!controls().enabled || !controls().indexing) return { status: 'failed', reason: 'disabled' };
       if (!scope.permissions.includes('index')) return { status: 'failed', reason: 'forbidden' };
       if (!validReference(input.source)) return { status: 'failed', reason: 'invalid_input' };
       const adapter = adapters.get(input.source.kind);
@@ -119,9 +133,11 @@ export function createSemanticService(deps: SemanticServiceDeps): SemanticServic
       if (currentIndex(source)) {
         return { status: 'unchanged', revision: source.revision, space: { ...space } };
       }
+      if (!controls().enabled || !controls().generation || !controls().indexing) return { status: 'failed', reason: 'disabled' };
       let vector: number[];
-      try { vector = await deps.embed(source.text); } catch { return { status: 'failed', reason: 'provider_unavailable' }; }
+      try { vector = await generate(source.text, deps.indexingTimeoutMs ?? deps.generationTimeoutMs ?? 120_000); } catch (error) { return { status: 'failed', reason: error instanceof ProviderError && !error.retriable ? 'provider_rejected' : 'provider_unavailable' }; }
       if (!validVector(vector)) return { status: 'failed', reason: 'index_incompatible' };
+      if (!controls().enabled || !controls().indexing) return { status: 'failed', reason: 'disabled' };
       try {
         const status = await adapter.store(source, vector, space);
         return status === 'indexed' ? { status, revision: source.revision, space: { ...space } } : { status: 'failed', reason: status };
@@ -129,6 +145,7 @@ export function createSemanticService(deps: SemanticServiceDeps): SemanticServic
     },
     async readIndexes(input): Promise<StoredIndexResult[]> {
       const invalid = (reference: SourceReference): SemanticFailure | undefined => {
+        if (!controls().enabled || !controls().retrieval) return 'disabled';
         if (!scope.permissions.includes('retrieve')) return 'forbidden';
         if (input.sources.length > 200 || !validReference(reference) || !adapters.has(reference.kind)) return 'invalid_input';
         if (adapters.get(reference.kind)!.enabled === false) return 'disabled';
@@ -191,6 +208,7 @@ export function createSemanticService(deps: SemanticServiceDeps): SemanticServic
     },
     async retrieve(input: RetrievalRequest): Promise<RetrievalResult> {
       const kinds = input.sources ?? [...adapters.values()].filter(adapter => adapter.purposes.includes(input.purpose)).map(adapter => adapter.kind);
+      if (!controls().enabled || !controls().retrieval) return unavailable(kinds, 'disabled');
       if (!scope.permissions.includes('retrieve')) return unavailable(kinds, 'forbidden');
       if (!kinds.length || new Set(kinds).size !== kinds.length || kinds.some(kind => !adapters.get(kind)?.purposes.includes(input.purpose)) ||
         (input.limit !== undefined && (!Number.isInteger(input.limit) || input.limit < 1))) return unavailable(kinds, 'invalid_input');
@@ -209,9 +227,11 @@ export function createSemanticService(deps: SemanticServiceDeps): SemanticServic
         } catch { return unavailable(kinds, 'storage_unavailable'); }
       } else text = input.query.text;
       if (!text.trim()) return unavailable(kinds, 'invalid_input');
+      if (!cachedVector && (!controls().enabled || !controls().generation)) return unavailable(kinds, 'disabled');
       let vector: number[];
-      try { vector = cachedVector ?? await deps.embed(text.slice(0, 2000)); } catch { return unavailable(kinds, 'provider_unavailable'); }
+      try { vector = cachedVector ?? await generate(text.slice(0, 2000)); } catch (error) { return unavailable(kinds, error instanceof ProviderError && !error.retriable ? 'provider_rejected' : 'provider_unavailable'); }
       if (!validVector(vector)) return unavailable(kinds, 'index_incompatible');
+      if (!controls().enabled || !controls().retrieval) return unavailable(kinds, 'disabled');
       const limit = Math.min(input.limit ?? 12, 50);
       const sources = await Promise.all(kinds.map(async (kind: string): Promise<SourceResult> => {
         if (adapters.get(kind)!.enabled === false) return { source: kind, status: 'unavailable', reason: 'disabled', matches: [] };

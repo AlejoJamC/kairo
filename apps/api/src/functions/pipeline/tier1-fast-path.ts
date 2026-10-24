@@ -20,7 +20,7 @@ import { resolveModelVersion } from "../../lib/model-version.js";
 import { buildEscalationContext } from "../../routes/v1/tickets.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
 import { maybeSendTicketAcknowledgement } from "../../lib/ticket-acknowledgement.js";
-import { maybeGenerateTicketEmbedding } from "../../lib/ticket-embedding.js";
+import { requestSemanticIndexing } from "../../lib/semantic-indexing.js";
 import { pipelineLog, pipelineLogRun } from "../../lib/pipeline-logger.js";
 import { NonRetriableError } from "inngest";
 import { upsertConversationByThread } from "../../lib/conversations.js";
@@ -688,13 +688,7 @@ export const tier1FastPath = inngest.createFunction(
                 });
               }
 
-              maybeGenerateTicketEmbedding({
-                supabase,
-                ticketId: ticket.id,
-                accountId,
-                subject,
-                bodyPreview: body_plain || snippet,
-              }).catch((err: unknown) => {
+              await requestSemanticIndexing(supabase, accountId, [{ kind: 'ticket', id: ticket.id }]).catch((err: unknown) => {
                 console.error(`[tier1] Embedding generation failed for ticket ${ticket!.id}:`, err);
               });
             }

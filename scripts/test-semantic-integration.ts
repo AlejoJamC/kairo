@@ -4,7 +4,8 @@ import { localSupabaseTarget, localSupabaseSqlUrl } from '../apps/api/src/test-s
 const root = resolve(import.meta.dir, '..');
 const withOllama = process.argv.includes('--ollama');
 const withFlow = process.argv.includes('--semantic-flow');
-if (process.argv.slice(2).some(arg => !['--ollama', '--semantic-flow'].includes(arg))) throw new Error('Unsupported integration option');
+const withDurability = process.argv.includes('--durability');
+if (process.argv.slice(2).some(arg => !['--ollama', '--semantic-flow', '--durability'].includes(arg))) throw new Error('Unsupported integration option');
 if (withOllama && process.env['CI']) throw new Error('Real Ollama tests are local opt-in only');
 
 async function run(args: string[], env: Record<string, string | undefined> = process.env, display = false): Promise<string> {
@@ -21,7 +22,7 @@ const target = localSupabaseTarget({ ...process.env, RUN_SUPABASE_INTEGRATION: '
 if (!target) throw new Error('The existing local Supabase connection is unavailable');
 const databaseUrl = localSupabaseSqlUrl(status['DB_URL']);
 const env = { ...process.env, SUPABASE_URL: target.url, SUPABASE_SERVICE_ROLE_KEY: status['SERVICE_ROLE_KEY']!,
-  RUN_SUPABASE_INTEGRATION: '1', SUPABASE_DB_URL: databaseUrl, RUN_OLLAMA_EMBEDDING_TESTS: withOllama ? '1' : '0',
+  RUN_SUPABASE_INTEGRATION: '1', RUN_SEMANTIC_DURABILITY: withDurability ? '1' : '0', INNGEST_DEV: '1', SUPABASE_DB_URL: databaseUrl, RUN_OLLAMA_EMBEDDING_TESTS: withOllama ? '1' : '0',
   EMBEDDING_PROVIDER: 'ollama', AI_GATEWAY_EMBEDDING_MODEL: '', OLLAMA_BASE_URL: 'http://127.0.0.1:11434',
   OLLAMA_EMBEDDING_MODEL: 'nomic-embed-text-v2-moe', EMBEDDING_DIMENSIONS: '768',
   LANGFUSE_PUBLIC_KEY: '', LANGFUSE_SECRET_KEY: '', SKIP_LLM_INTEGRATION: '1',
@@ -38,5 +39,5 @@ if (withFlow) Object.assign(env, {
 });
 
 console.log('Using the existing local Supabase on ports 54321/54322. No instance creation, migrations or reset.');
-await run(['bun', '--no-env-file', 'test', withFlow ? 'evals/semantic-flow.test.ts' : 'apps/api/src/lib/semantic-service.supabase.integration.test.ts'], env, true);
+await run(['bun', '--no-env-file', 'test', '--timeout', '30000', withDurability ? 'evals/semantic-durability.test.ts' : withFlow ? 'evals/semantic-flow.test.ts' : 'apps/api/src/lib/semantic-service.supabase.integration.test.ts'], env, true);
 if (withOllama) await run(['bun', '--no-env-file', 'test', 'packages/intelligence/src/providers/ollama/embedding.integration.test.ts'], env, true);

@@ -113,6 +113,13 @@ One component library and one set of design values serve every client (web dashb
 - Never frame feature documentation around Linear issues, AC numbers, implementation phases, agent activity or explanations of previous mistakes. Execution history belongs in the issue's execution comments.
 - Before saving documentation, remove any sentence that does not help someone use or maintain the feature. Do not create extra documentation unless requested or necessary for operation.
 
+## Documentation and execution comments
+
+- Publish only information that helps someone use, maintain, verify or decide on the work. Remove sentences that add no actionable information before saving.
+- Execution summaries contain the implemented outcome, reproducible validation commands and results, evidence references, and material limitations. Distinguish simulated dependencies from real integrations. Update the existing summary instead of adding repetitive comments.
+- Do not publish session diaries, resolved incidental environment problems, agent activity, self-assessment, apologies, justifications, conversation recaps or announcements that the agent understood an instruction. Keep feature documentation independent of execution history.
+- Report material failures, data impact and unresolved blockers truthfully and briefly; never hide them or present failed or omitted checks as successful. This does not authorize deleting existing artifacts without the human's instruction.
+
 ## Database migrations
 
 All schema changes must go through the Supabase CLI workflow.

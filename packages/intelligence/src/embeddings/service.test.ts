@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createSemanticService, type SemanticAdapter, type LoadedSemanticSource, type SemanticMatch } from './service';
+import { ProviderError } from '../providers/base';
 
 const space = { provider: 'synthetic', model: 'acme', dimensions: 2 };
 function fixture(kind = 'ticket') {
@@ -147,4 +148,69 @@ describe('semantic domain', () => {
     expect(f.embed).not.toHaveBeenCalled();
   });
 
+});
+
+
+describe('semantic operation controls', () => {
+  it('enforces all capability combinations without forbidden provider, storage or retrieval effects', async () => {
+    for (let bits = 0; bits < 16; bits++) {
+      const f = fixture();
+      const flags = { enabled: !!(bits & 1), generation: !!(bits & 2), indexing: !!(bits & 4), retrieval: !!(bits & 8) };
+      const service = createSemanticService({ scope: { accountId: 'acme', actor: { kind: 'workflow', id: 'test' }, permissions: ['index','retrieve'] },
+        space, adapters: [f.adapter], embed: f.embed, controls: () => flags });
+      const canIndex = flags.enabled && flags.generation && flags.indexing;
+      const canRetrieve = flags.enabled && flags.generation && flags.retrieval;
+      expect((await service.indexSource({ source: f.source.reference })).status).toBe(canIndex ? 'indexed' : 'failed');
+      expect((await service.retrieve({ purpose: 'similar_cases', query: { text: 'Acme' } })).status).toBe(canRetrieve ? 'ok' : 'unavailable');
+      expect(f.store).toHaveBeenCalledTimes(Number(canIndex));
+      expect(f.search).toHaveBeenCalledTimes(Number(canRetrieve));
+      expect(f.embed).toHaveBeenCalledTimes(Number(canIndex) + Number(canRetrieve));
+    }
+  });
+  it('preserves stored indices across reactivation and distinguishes permanent provider rejection', async () => {
+    const f = fixture();
+    f.source.index = { revision: 'r1', preparation: 'v1', space, vector: [1,0] };
+    const original = structuredClone(f.source.index);
+    const flags = { enabled: false, generation: true, indexing: true, retrieval: true };
+    const service = createSemanticService({ scope: { accountId: 'acme', actor: { kind: 'workflow', id: 'test' }, permissions: ['index','retrieve'] },
+      space, adapters: [f.adapter], embed: f.embed, controls: () => flags });
+    expect(await service.indexSource({ source: f.source.reference })).toMatchObject({ reason: 'disabled' });
+    flags.enabled = true;
+    expect(f.embed).not.toHaveBeenCalled();
+    expect(await service.indexSource({ source: f.source.reference })).toMatchObject({ status: 'unchanged' });
+    expect(f.source.index).toEqual(original);
+    expect(f.store).not.toHaveBeenCalled();
+    f.embed.mockRejectedValue(new ProviderError('Invented provider rejection', false));
+    expect(await service.retrieve({ purpose: 'similar_cases', query: { text: 'Acme' } })).toMatchObject({ reason: 'provider_rejected' });
+  });
+  it('evaluates controls on every operation and never writes after indexing is disabled during generation', async () => {
+    const f = fixture();
+    const flags = { enabled: false, generation: true, indexing: true, retrieval: true };
+    const service = createSemanticService({ scope: { accountId: 'acme', actor: { kind: 'workflow', id: 'test' }, permissions: ['index','retrieve'] },
+      space, adapters: [f.adapter], controls: () => flags, embed: async () => { flags.indexing = false; return [1,0]; } });
+    expect(await service.indexSource({ source: f.source.reference })).toMatchObject({ reason: 'disabled' });
+    expect(f.adapter.load).not.toHaveBeenCalled();
+    flags.enabled = true;
+    expect(await service.indexSource({ source: f.source.reference })).toMatchObject({ reason: 'disabled' });
+    expect(f.store).not.toHaveBeenCalled();
+  });
+  it('uses compatible query vectors with generation off but refuses text queries and retrieval when disabled', async () => {
+    const f = fixture();
+    f.source.index = { revision: 'r1', preparation: 'v1', space, vector: [1,0] };
+    const flags = { enabled: true, generation: false, indexing: true, retrieval: true };
+    const service = createSemanticService({ scope: { accountId: 'acme', actor: { kind: 'workflow', id: 'test' }, permissions: ['index','retrieve'] }, space, adapters: [f.adapter], embed: f.embed, controls: () => flags });
+    expect((await service.retrieve({ purpose: 'similar_cases', query: { source: f.source.reference } })).status).toBe('ok');
+    expect((await service.retrieve({ purpose: 'similar_cases', query: { text: 'Acme' } })).reason).toBe('disabled');
+    expect((await service.indexSource({ source: f.source.reference })).status).toBe('unchanged');
+    f.search.mockClear(); flags.retrieval = false;
+    expect((await service.retrieve({ purpose: 'similar_cases', query: { source: f.source.reference } })).reason).toBe('disabled');
+    expect(f.search).not.toHaveBeenCalled(); expect(f.embed).not.toHaveBeenCalled();
+  });
+  it('bounds generation wait and does not store a late result', async () => {
+    const f = fixture();
+    const service = createSemanticService({ scope: { accountId: 'acme', actor: { kind: 'workflow', id: 'test' }, permissions: ['index','retrieve'] }, space, adapters: [f.adapter], generationTimeoutMs: 5, embed: () => new Promise(() => {}) });
+    expect(await service.indexSource({ source: f.source.reference })).toMatchObject({ reason: 'provider_unavailable' });
+    expect((await service.retrieve({ purpose: 'similar_cases', query: { text: 'Acme' } })).reason).toBe('provider_unavailable');
+    expect(f.store).not.toHaveBeenCalled();
+  });
 });

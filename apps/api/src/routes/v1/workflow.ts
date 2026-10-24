@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { supabase } from '../../lib/supabase.js';
 import { resolveUserAndAccount, resolveMemberRole } from '../../lib/auth.js';
 import { isRoleAllowed } from '../../middleware/rbac-check.js';
-import { maybeGenerateKbEmbedding } from '../../lib/kb-embedding.js';
+import { requestSemanticIndexing } from '../../lib/semantic-indexing.js';
 
 export const workflow = new Hono();
 const UUID = z.string().uuid();
@@ -58,7 +58,8 @@ workflow.post('/knowledge/:id/review', async c => {
     p_title: value.title ?? null, p_content: value.content ?? null });
   if (error) return c.json({ error: 'Review conflict or permission denied; refresh before retrying' }, 409);
   if (value.kind === 'article' && value.title && value.content) {
-    await maybeGenerateKbEmbedding({ supabase, articleId: c.req.param('id'), accountId: ctx.accountId, title: value.title, content: value.content });
+    await requestSemanticIndexing(supabase, ctx.accountId, [{ kind: 'kb_article', id: c.req.param('id') }])
+      .catch(() => console.warn('[workflow] Semantic indexing request was not accepted'));
   }
   return c.json({ status: value.decision });
 });

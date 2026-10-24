@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+import { getFlag } from '@kairo/feature-flags';
 import { RESOLVED_STATUSES } from '@kairo/types';
 import {
   createSemanticService, generateEmbedding, configuredEmbeddingDimensions, resolveModelRoute,
@@ -15,7 +16,7 @@ const SourceSchema = z.object({
   index: z.object({ revision: z.string(), preparation: z.string(), space: SpaceSchema, vector: z.array(z.number()).optional() }).nullish(),
 });
 const ReasonSchema = z.enum(['forbidden','invalid_input','not_found','disabled','index_missing','index_incompatible',
-  'provider_unavailable','storage_unavailable','revision_changed']);
+  'provider_unavailable','provider_rejected','storage_unavailable','revision_changed']);
 const MatchSchema = z.object({
   source: z.object({ kind: z.string(), id: z.string() }), revision: z.string(), version: z.string().nullish(),
   content: z.string(), authority: z.enum(['historical_case','published_article','approved_knowledge']),
@@ -83,7 +84,10 @@ export function createBackendSemanticService(options: SemanticBackendOptions) {
         matches: result.matches.map(match => ({ ...match, version: match.version ?? undefined, similarity: match.similarity ?? undefined })) };
     },
   }));
-  return createSemanticService({ scope, space, adapters, embed: options.embed ?? (text => generateEmbedding(text, {
+  return createSemanticService({ scope, space, adapters,
+    controls: () => ({ enabled: getFlag('enable_embeddings'), generation: getFlag('enable_embedding_generation'),
+      indexing: getFlag('enable_embedding_indexing'), retrieval: getFlag('enable_embedding_retrieval') }),
+    embed: options.embed ?? (text => generateEmbedding(text, {
     accountId: scope.accountId, ...(scope.ticketId ? { ticketId: scope.ticketId } : {}),
   })) });
 }
