@@ -4,6 +4,8 @@ import { root, writePrivate } from './private-files';
 import { createEvaluationRun, finishEvaluationRun } from './results';
 
 export const suites = [
+  { file: 'scripts/observability/embeddings.test.ts', covers: ['read-only telemetry queries', 'explicit diagnostic windows and denominators'] },
+  { file: 'packages/intelligence/src/embeddings/telemetry.test.ts', covers: ['safe semantic operation spans', 'coverage snapshots', 'single generation tracing', 'technical correlation'] },
   { file: 'packages/feature-flags/__tests__/flags.test.ts', covers: ['embedding capabilities enabled without environment overrides', 'explicit capability overrides'] },
   { file: 'apps/api/src/lib/semantic-indexing.test.ts', covers: ['scoped indexing acceptance', 'durable transport failures', 'disabled submission'] },
   { file: 'apps/api/src/functions/semantic-indexing.test.ts', covers: ['indexing pause and resume', 'bounded retry configuration', 'revision and vector space protection'] },

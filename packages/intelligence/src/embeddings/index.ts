@@ -2,6 +2,9 @@ export { generateEmbedding, generateEmbeddings } from './embed';
 export type { EmbeddingResult } from './types';
 export { createSemanticService, sameVectorSpace } from './service';
 export { SEMANTIC_SOURCE_DEFINITIONS } from './sources';
+export { observeSemanticOperation, semanticOperationAttributes } from './telemetry';
+export type { SemanticOperation, SemanticOperationSignal, SemanticOutcomeSummary } from './telemetry';
+export type { CoverageReport, CoverageCounts, CoverageBasis, IndexCoverageState } from './coverage';
 export type { SemanticService, SemanticServiceDeps, IndexRequest, StoredIndexResult, GroupingResult } from './service';
 export { SEMANTIC_PREPARATIONS, prepareTicketEmbeddingText, prepareArticleEmbeddingText, prepareKnowledgeEmbeddingText } from './preparation';
 export type { SemanticScope, SourceReference, VectorSpace, SemanticMatch, SemanticFailure, SourceResult,

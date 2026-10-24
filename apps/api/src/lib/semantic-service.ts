@@ -6,6 +6,7 @@ import {
   createSemanticService, generateEmbedding, configuredEmbeddingDimensions, resolveModelRoute,
   SEMANTIC_SOURCE_DEFINITIONS,
   type SemanticScope, type VectorSpace, type LoadedSemanticSource, type SemanticAdapter,
+  type SemanticOperationSignal,
 } from '@kairo/intelligence';
 
 const SpaceSchema = z.object({ provider: z.string(), model: z.string(), dimensions: z.number().int().positive() });
@@ -29,6 +30,7 @@ export interface SemanticBackendOptions {
   scope: SemanticScope;
   embed?: (text: string) => Promise<number[]>;
   space?: VectorSpace;
+  observe?: (signal: SemanticOperationSignal) => void;
   profile?: { threshold?: number; statusFilter?: string | null; excludeSameGroup?: boolean; knowledgeKind?: 'article' | 'learning' };
 }
 
@@ -85,6 +87,7 @@ export function createBackendSemanticService(options: SemanticBackendOptions) {
     },
   }));
   return createSemanticService({ scope, space, adapters,
+    observe: options.observe,
     controls: () => ({ enabled: getFlag('enable_embeddings'), generation: getFlag('enable_embedding_generation'),
       indexing: getFlag('enable_embedding_indexing'), retrieval: getFlag('enable_embedding_retrieval') }),
     embed: options.embed ?? (text => generateEmbedding(text, {

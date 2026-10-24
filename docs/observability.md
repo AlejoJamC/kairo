@@ -151,6 +151,101 @@ once against a fresh instance.
 provisioned yet — they need a notification channel (Slack/email) configured
 first, which local dev doesn't have.
 
+## Embeddings operations and coverage
+
+The public semantic service emits `embeddings.operation` spans through the existing
+OpenTelemetry exporter. Filter by `kairo.embeddings.operation`, `source`, `provider`,
+`model`, `dimensions`, `outcome` and `reason`. `generation` distinguishes `reused`,
+`attempted` and `none`; actual generation still uses the existing Langfuse trace.
+The span's trace/span IDs provide correlation. Durable attempts also carry the
+engine-generated request ID as a trace attribute, never as a metric label.
+
+`service.inspectCoverage({ sources, basis: 'authorized_references' })` inspects
+explicit references through the registered adapters. Use `known_requests` when
+the selection comes from accepted indexing requests. Inspection never generates
+vectors or schedules processing. It returns counts by source and configured vector
+space: `ready`, `missing`, `stale`, `incompatible` and `unknown`. Duplicate references
+count once. Failed authorization, disabled reads or unavailable storage remain
+unknown. An omitted inventory has a null denominator; an empty selection or any
+unknown entries has a null coverage ratio.
+
+`stale` means the source revision or preparation changed. `incompatible` means the
+stored provider, model, dimensions or vector cannot be used in the configured space.
+
+Indexing emits coverage for its known source; reads, grouping and explicit
+inspection emit `embeddings.coverage` snapshots. These describe the inspected
+selection, not the account's or platform's complete inventory. Repeated snapshots
+can overlap: do not sum their denominators into a unique-source population.
+
+Run these read-only queries against the existing ClickStack `default.otel_traces`
+table. Both use the last hour; change the timestamp predicates for another window.
+The first counts public operation calls, excluding durable transport/attempt spans
+to avoid counting indexing twice. `source` contains registered source kinds;
+multi-source operations list their kinds together.
+
+```sql
+WITH
+  SpanAttributes['kairo.embeddings.operation'] AS operation,
+  SpanAttributes['kairo.embeddings.source'] AS source,
+  SpanAttributes['kairo.embeddings.provider'] AS provider,
+  SpanAttributes['kairo.embeddings.model'] AS model,
+  SpanAttributes['kairo.embeddings.dimensions'] AS dimensions,
+  SpanAttributes['kairo.embeddings.outcome'] AS outcome,
+  SpanAttributes['kairo.embeddings.reason'] AS reason
+SELECT
+  operation, source, provider, model, dimensions,
+  count() AS operations,
+  countIf(outcome = 'disabled') AS disabled,
+  countIf(outcome IN ('failed', 'unavailable', 'partial')) AS degraded,
+  countIf(reason IN ('provider_unavailable', 'provider_rejected')) AS provider_failures,
+  countIf(reason = 'storage_unavailable') AS storage_failures,
+  countIf(operation = 'retrieve' AND outcome = 'ok'
+    AND SpanAttributes['kairo.embeddings.matches'] = '0') AS successful_empty,
+  countIf(SpanAttributes['kairo.embeddings.generation'] = 'reused') AS reused,
+  countIf(SpanAttributes['kairo.embeddings.generation'] = 'attempted') AS generation_attempts,
+  countIf(outcome != 'disabled') AS enabled_operations,
+  degraded / nullIf(enabled_operations, 0) AS degraded_ratio
+FROM default.otel_traces
+WHERE Timestamp >= now() - INTERVAL 1 HOUR AND Timestamp < now()
+  AND SpanName = 'embeddings.operation'
+  AND operation IN ('index', 'retrieve', 'read_indexes', 'group')
+GROUP BY operation, source, provider, model, dimensions
+ORDER BY operations DESC;
+```
+
+Coverage is shown per observation, with its scope and denominator. A null ratio
+means unknown or no measurable population, not zero or complete coverage.
+
+```sql
+WITH
+  toUInt64OrNull(SpanAttributes['kairo.embeddings.coverage.denominator']) AS denominator,
+  toUInt64OrNull(SpanAttributes['kairo.embeddings.coverage.ready']) AS ready,
+  toUInt64OrNull(SpanAttributes['kairo.embeddings.coverage.unknown']) AS unknown
+SELECT
+  Timestamp, TraceId,
+  SpanAttributes['kairo.embeddings.source'] AS source,
+  SpanAttributes['kairo.embeddings.provider'] AS provider,
+  SpanAttributes['kairo.embeddings.model'] AS model,
+  SpanAttributes['kairo.embeddings.dimensions'] AS dimensions,
+  SpanAttributes['kairo.embeddings.coverage.basis'] AS basis,
+  denominator, ready,
+  toUInt64OrNull(SpanAttributes['kairo.embeddings.coverage.missing']) AS missing,
+  toUInt64OrNull(SpanAttributes['kairo.embeddings.coverage.stale']) AS stale,
+  toUInt64OrNull(SpanAttributes['kairo.embeddings.coverage.incompatible']) AS incompatible,
+  unknown,
+  if(denominator > 0 AND unknown = 0, ready / denominator, NULL) AS coverage_ratio
+FROM default.otel_traces
+WHERE Timestamp >= now() - INTERVAL 1 HOUR AND Timestamp < now()
+  AND SpanName = 'embeddings.coverage'
+ORDER BY Timestamp DESC
+LIMIT 100;
+```
+
+To inspect durable execution, filter operation spans by `submit` or `index_job`.
+Acceptance, paused work, execution failures and indexing results are separate
+outcomes. Failure rates count attempts, not unique requests. No source text,
+vectors, business identifiers, provider response bodies or credentials are emitted.
+
 ## `packages/observability`
 
 One shared package, three runtime-specific entry points — not a single
@@ -234,7 +329,6 @@ untested. If Metro can't resolve it, swap the exporter in
 JSON — nothing else in the file would need to change.
 
 Deferred, unrelated to the instrumentation work itself:
-- Structured per-provider logs/metrics for embeddings (KAI-214, separate ticket).
 - Production deployment (Phase 2 of KAI-126) — this doc covers local only. `apps/api`'s
   `start`/`build:api` scripts don't preload `instrumentation.ts` yet; wire that up when
   prod infra for both products actually exists.

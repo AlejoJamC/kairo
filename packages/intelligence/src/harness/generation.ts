@@ -14,6 +14,7 @@ export interface GenerationSpec {
   input: unknown;
   metadata?: Record<string, unknown>;
   context?: LangfuseContext;
+  failureMessage?: string;
 }
 
 /**
@@ -44,7 +45,7 @@ export async function withGeneration<T>(
     try {
       return await fn(generation);
     } catch (err) {
-      generation.update({ level: 'ERROR', statusMessage: err instanceof Error ? err.message : String(err) });
+      generation.update({ level: 'ERROR', statusMessage: spec.failureMessage ?? (err instanceof Error ? err.message : String(err)) });
       throw err;
     } finally {
       generation.end();

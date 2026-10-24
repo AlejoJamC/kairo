@@ -99,6 +99,27 @@ async function waitingForLock(functionName: string) {
 }
 
 describe.skipIf(!target)('semantic application consumers through Supabase REST', () => {
+  it('reports real scoped coverage as indices become current, incompatible and stale without generating during inspection', async () => {
+    const f = await fixture(false);
+    const signals: import('@kairo/intelligence').SemanticOperationSignal[] = [];
+    const service = createBackendSemanticService({ db: admin, embed, space, observe: signal => signals.push(signal),
+      scope: { accountId: f.account, actor: { kind: 'workflow', id: 'synthetic' }, permissions: ['retrieve'] } });
+    const sources = [{ kind: 'ticket', id: f.ticket }];
+    const before = embed.mock.calls.length;
+    expect(await service.inspectCoverage({ sources })).toMatchObject({ denominator: 1, missing: 1, ready: 0, ratio: 0 });
+    expect(embed.mock.calls.length).toBe(before);
+    await indexTicket(f);
+    expect(await service.inspectCoverage({ sources })).toMatchObject({ denominator: 1, ready: 1, ratio: 1 });
+    const otherSpace = createBackendSemanticService({ db: admin, embed, space: { ...space, model: 'acme-other' },
+      scope: { accountId: f.account, actor: { kind: 'workflow', id: 'synthetic' }, permissions: ['retrieve'] } });
+    expect(await otherSpace.inspectCoverage({ sources })).toMatchObject({ incompatible: 1, ready: 0, ratio: 0 });
+    check((await admin.from('tickets').update({ body_plain: 'Invented revised recovery case' }).eq('id', f.ticket)).error);
+    expect(await service.inspectCoverage({ sources })).toMatchObject({ stale: 1, ready: 0, ratio: 0 });
+    const foreign = await fixture(false);
+    expect(await service.inspectCoverage({ sources: [{ kind: 'ticket', id: foreign.ticket }] })).toMatchObject({ unknown: 1, ratio: null });
+    expect(JSON.stringify(signals)).not.toContain(f.account);
+    expect(JSON.stringify(signals)).not.toContain(f.ticket);
+  });
   it('does not manufacture semantic jobs or indices from inserting business sources', async () => {
     const f = await fixture();
     const jobs = await admin.from('decision_work_items').select('id').eq('account_id', f.account).eq('contract', 'semantic_index');

@@ -47,6 +47,9 @@ export { generateEmbedding, generateEmbeddings, createSemanticService, sameVecto
 export type { SemanticService, SemanticServiceDeps, IndexRequest, StoredIndexResult, GroupingResult,
   SemanticScope, SourceReference, VectorSpace, SemanticMatch, SemanticFailure, SourceResult,
   RetrievalResult, LoadedSemanticSource, IndexResult, RetrievalRequest, RetrievalPurpose, SemanticAdapter } from './embeddings';
+export { observeSemanticOperation, semanticOperationAttributes } from './embeddings';
+export type { SemanticOperation, SemanticOperationSignal, SemanticOutcomeSummary,
+  CoverageReport, CoverageCounts, CoverageBasis, IndexCoverageState } from './embeddings';
 
 export {
   runLlmFeature,
