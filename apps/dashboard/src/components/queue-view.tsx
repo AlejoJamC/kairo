@@ -8,6 +8,7 @@ import type { Ticket } from "@kairo/types";
 import { AiAssistant } from "@/components/ai-assistant";
 import { TicketCard } from "@/components/ticket-card";
 import { TicketDetail } from "@/components/ticket-detail";
+import { useTicketListVisibility } from "@/hooks/use-ticket-list-visibility";
 import { Box, EmptyState, QueueHeader, Skeleton, type QueueBarVariant } from "@kairo/ui";
 
 interface QueueViewProps {
@@ -55,10 +56,12 @@ export function QueueView({ title, count, countLabel, description, barVariant = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, firstId]);
 
+  const { hidden: listHidden, hideList } = useTicketListVisibility();
+
   return (
     <>
-      <Box width={372} flexShrink={0} display="flex" flexDirection="column" minHeight={0} backgroundColor="var(--kairo-color-surface)" borderRightWidth={1} borderRightColor="var(--k-border)" borderStyle="solid">
-        <QueueHeader title={title} count={count} countLabel={countLabel} description={description} barVariant={barVariant} bar={bar} />
+      {!listHidden && <Box id="ticket-list" width={372} flexShrink={0} display="flex" flexDirection="column" minHeight={0} backgroundColor="var(--kairo-color-surface)" borderRightWidth={1} borderRightColor="var(--k-border)" borderStyle="solid">
+        <QueueHeader title={title} count={count} countLabel={countLabel} description={description} barVariant={barVariant} bar={bar} hideList={hideList} />
         <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll display="flex" flexDirection="column" gap={2} paddingTop={8} paddingHorizontal={8} paddingBottom={16}>
           {loading &&
             [0, 1, 2].map((index) => (
@@ -73,7 +76,7 @@ export function QueueView({ title, count, countLabel, description, barVariant = 
               <TicketCard key={ticket.id} ticket={ticket} selected={selectedTicketId === ticket.id} onSelect={() => onOpen(ticket)} footer={footer?.(ticket)} />
             ))}
         </Box>
-      </Box>
+      </Box>}
       {aboveTicket ? (
         <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" flexDirection="column" minWidth={0} overflow="hidden">
           {aboveTicket}

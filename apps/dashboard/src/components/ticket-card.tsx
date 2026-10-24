@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { formatRelativeTime } from "@/lib/relative-time";
 import { SlaBadge } from "@/components/sla-badge";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
@@ -60,21 +61,7 @@ function PrioritySlaBadge({ ticket }: { ticket: Ticket }) {
 
 function useRelativeTime(iso: string | null | undefined): string {
   const { t } = useTranslation("dashboard");
-
-  return useMemo(() => {
-    if (!iso) return "";
-    const diffMs = Date.now() - new Date(iso).getTime();
-    const diffMin = Math.floor(diffMs / 60_000);
-
-    if (diffMin < 1) return t("ticketCard.timeJustNow");
-    if (diffMin < 60) return t("ticketCard.timeMinutes_other", { count: diffMin });
-
-    const diffH = Math.floor(diffMin / 60);
-    if (diffH < 24) return t("ticketCard.timeHours_other", { count: diffH });
-
-    const diffD = Math.floor(diffH / 24);
-    return t("ticketCard.timeDays_other", { count: diffD });
-  }, [iso, t]);
+  return useMemo(() => formatRelativeTime(iso, t), [iso, t]);
 }
 
 // ---------------------------------------------------------------------------
