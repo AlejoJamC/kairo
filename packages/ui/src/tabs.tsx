@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { tokens } from '@kairo/tokens'
 import { Box, Pressable, Text } from './layout'
 import { PulseDot } from './loading'
+import { Tooltip } from './tooltip'
 import { TabStrip } from './tab-strip'
 
 // Underlined tabs that switch panels. The active tab carries a 2px accent
@@ -35,15 +36,20 @@ type TabProps = {
   /** Count is a badge for unread items. */
   unread?: boolean
   controls?: string
+  /** Key that selects the tab, shown in its tooltip ("⌘2"). */
+  shortcut?: string
+  /** Same key for assistive technology ("Meta+2"). */
+  keyshortcuts?: string
 }
 
-function Tab({ selected, onPress, children, disabled, ai, count, unread, controls }: TabProps) {
-  return (
+function Tab({ selected, onPress, children, disabled, ai, count, unread, controls, shortcut, keyshortcuts }: TabProps) {
+  const tab = (
     <Pressable
       role="tab"
       aria-selected={selected}
       aria-disabled={disabled || undefined}
       aria-controls={controls}
+      aria-keyshortcuts={keyshortcuts}
       disabled={disabled}
       onClick={() => !disabled && onPress()}
       display="flex"
@@ -75,6 +81,7 @@ function Tab({ selected, onPress, children, disabled, ai, count, unread, control
         ))}
     </Pressable>
   )
+  return shortcut ? <Tooltip label={children} shortcut={shortcut}>{tab}</Tooltip> : tab
 }
 
 export { Tabs, Tab }

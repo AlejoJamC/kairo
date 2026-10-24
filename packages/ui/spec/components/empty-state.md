@@ -7,7 +7,7 @@ Explains an empty view and the next step.
 ## Variants
 
 - List empty: mono ◌ glyph in `border.strong`, 14px/500 title, 12.5/1.5 explanation in `text.tertiary` (max 260px), pulse dot in `accent.default` while scanning. In the queue, padding 110px 20px 48px; the text of each view is in queue-header.
-- No selection (ticket): 44px envelope icon in `border.strong` (stroke 1.4), "Select a ticket to see its details" in 13.5px, J K hint "to move through the queue" in 11.5px; centered in the ticket pane.
+- No selection (ticket): 44px envelope icon in `border.strong` (stroke 1.4), "Select a ticket to see its details" in 13.5px, J K hint "to move through the queue" in 11.5px; centered in the ticket pane. With the ticket list hidden, below it a secondary button "Show ticket list" with kbd ⌘⇧F (6px top margin).
 - No selection (context panel): one 13px line in `text.tertiary`, padding 18px, left aligned, upright text: "Select a ticket to see its context." With no tickets in the inbox: "Client data unavailable."
 - Pending: dashed `border.strong` container, `radius.card`, padding 56px 24px, centered bracketed text in `text.tertiary` ("[Billing — pending reference]"). Only for sections without a design: Settings › Billing and API & Webhooks.
 

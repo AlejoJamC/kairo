@@ -31,7 +31,20 @@ function TabStrip({ children }: { children: ReactNode }) {
 
   ensureMotionStyles()
   return (
-    <div ref={strip} className="kairo-ui-tabstrip" style={{ position: 'relative', overflowX: 'auto', minWidth: 0 }}>
+    <div
+      ref={strip}
+      className="kairo-ui-tabstrip"
+      onKeyDown={(event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+        const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]:not([aria-disabled="true"])'))
+        const index = tabs.indexOf(document.activeElement as HTMLElement)
+        if (index < 0) return
+        event.preventDefault()
+        const next = tabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length]!
+        next.focus()
+        next.click()
+      }}
+      style={{ position: 'relative', overflowX: 'auto', minWidth: 0 }}>
       {children}
     </div>
   )

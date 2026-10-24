@@ -6,8 +6,10 @@ Main cockpit where the support agent works the queue.
 
 ## Variants
 
-- Shell, left to right: sidebar (`layout.sidebar`, collapsible to `layout.sidebar-collapsed`) · queue (`layout.queue`) · ticket (flexible, reading width `layout.reading`) · context panel (`layout.context`); status-bar (`size.statusbar`) at the foot. command-palette (⌘K), shortcuts-dialog (?) and toast sit above everything.
+- Shell, left to right: sidebar (`layout.sidebar`, collapsible to `layout.sidebar-collapsed`) · queue (`layout.queue`) · ticket (flexible, reading width `layout.reading`) · context panel (`layout.context`); status-bar (`size.statusbar`) at the foot. command-palette (⌘K in All, ? in Commands) and toast sit above everything.
 - Queue pane, top to bottom: queue-header · suggestion callout (Triage only) · ticket-row list · loading skeleton or empty-state.
+- Hidden ticket list (⌘⇧F, or the button at the end of queue-header): the list does not resize; it is shown or hidden whole, and its `layout.queue` width goes to the ticket. ticket-bar shows Show ticket list and the queue switcher; J and K keep working; with no selection, the empty-state offers Show ticket list.
+- Sidebar collapse: ⌃⌘S, or the collapse button at the foot of sidebar, next to the language, in both states.
 - Ticket pane, top to bottom: ai-proposal (AI Classification › To review only) · ticket-bar · reading column with ticket-heading, evidence-panel and thread-message entries · composer, or read-only-bar for a ticket in a final status.
 - Context panel: tabs Client · Assistant · Notes · Escalate, with client-panel, assistant-turn plus ask-box, note-card list, and escalate-panel.
 - Views, all with the same shell (queue-header defines title, count, filters and empty text of each):
@@ -17,7 +19,7 @@ Main cockpit where the support agent works the queue.
   - Escalated: escalated tickets; ticket-bar shows the escalated pill.
   - AI Classification: filter-pill tabs To review / Approved by the AI; ai-proposal above ticket-bar in To review.
 - No selection: the ticket pane shows the no-selection empty-state and the context panel its "Select a ticket to see its context." line.
-- Popovers of this screen: status-chip menu, priority menu of ticket-heading, reclassify-popover, mention-menu, split send menu of button, notification-row activity and account-menu (see popover).
+- Popovers of this screen: status-chip menu, priority menu of ticket-heading, reclassify-popover, mention-menu, split send menu of button, notification-row activity, account-menu and the queue switcher of ticket-bar (see popover).
 
 ## States
 
@@ -30,7 +32,7 @@ Main cockpit where the support agent works the queue.
 
 ## Accessibility
 
-- Keyboard first: J/K, A, R, E, N, ⌘K, ⌘↵, ⌘⇧↵, ⌘J, ?; panes are labeled landmarks. The full list is in shortcuts-dialog.
+- Keyboard first: always visible are only the keys used on almost every ticket (A, R, E and N inside their buttons, Send, J/K, ⌘K and ?); the full list, including ⌃⌘S, ⌘⇧F and ⌘1 to ⌘4, is in command-palette (Commands scope) and app-menu. Panes are labeled landmarks.
 
 ## Domain value
 
@@ -39,5 +41,5 @@ Prioritized queue with AI classification, evidence and a human decision on every
 ## Platforms
 
 - **web**: Triage app in the browser. Below `layout.breakpoint` the panes stack and the status bar is hidden.
-- **desktop**: Triage desktop app, same layout. macOS adds window-chrome (controls slot and drag areas), the sidebar desktop variant, app-menu, system-notification and dock-badge; Windows and Linux use the native frame.
+- **desktop**: Triage desktop app, same layout. macOS adds window-chrome (the 80×44px reserved corner, with the controls in the 44px window row of the sidebar, and drag areas), the sidebar desktop variant, app-menu, system-notification and dock-badge; Windows and Linux use the native frame.
 - **mobile**: Not designed.

@@ -12,9 +12,15 @@ First column of the app shell: brand, notifications, search, navigation, languag
 - Search (`.nav.sb-box.sb-search`): `surface.panel`, `border.default`, `shadow.xs`; 14px magnifier, "Search or run a command…" 12.5px in `text.tertiary`, kbd ⌘K. Opens command-palette.
 - Navigation: two groups of nav-item with a 2px gap, separated by `.sb-div` (1px `border.default`, 6px side margin). Group 1: Triage, Awaiting customer, Resolved, Escalated, AI Classification, Knowledge. Group 2: Clients, Settings.
 - Footer (6px gap): language select (`.sb-lang`, `size.control`, globe icon + native select, Español / English) and account button (`.nav.sb-box.sb-acct`, 40px): 24px avatar with an 8px presence dot, workspace name 12.5px/500 with ellipsis, up chevron in `text.tertiary`. Opens account-menu.
-- Collapsed (`.sb.collapsed`, `layout.sidebar-collapsed`): labels (`.lbl`) hidden; the header stacks in a column (brand, bell, expand); search and nav items become centered 30px icon buttons with `title`; language becomes an icon button with the globe that opens a 160px popover with Español / English; account shows only the avatar (40px). Width transition 160ms.
+- Collapsed (`.sb.collapsed`, `layout.sidebar-collapsed`): labels (`.lbl`) hidden; the header stacks in a column (brand, bell, expand); search and nav items become centered 30px icon buttons with a tooltip; language becomes an icon button with the globe that opens a 160px popover with Español / English; account shows only the avatar (40px). Width transition 160ms.
 - Collapsed language: the globe always opens the 160px popover with Español / English (`menuitemradio`, the current one `.on`). A click never switches the language of the whole interface without showing the options; the popover shows the active one and holds more languages without changing the piece.
-- Desktop (`.sb.desk`, macOS): at the very top, a 20px `.win-row` with the slot of the system window controls (see window-chrome), which is also a drag area; top padding 14px and the header 14px below that row. The activity popover of the bell opens 80px from the top instead of 46px so it does not cover the controls. Collapsed, the row keeps the slot with a −6px side margin, because the controls (52px) are wider than the 40px content. The bell count is also the counter of dock-badge.
+- Desktop (`.sb.desk`, macOS), with the reserved corner of window-chrome:
+  - Window row (`.win-row`, 44px, drag area, no top padding on the sidebar): the system controls 14px from the left edge and, expanded, in the same row: brand · "Kairo" · bell. There is no separate `.sb-head`: the row is the header.
+  - Collapse / expand moves from the header to the footer, next to the language, in both states: 30px icon button with the panel icon, tooltip "Collapse sidebar ⌃⌘S" (or "Expand sidebar ⌃⌘S") and `aria-keyshortcuts="Control+Meta+S"`. Expanded, to the right of the language select; collapsed, below the globe and above the account.
+  - Search label: "Search or run…"; `aria-label` and tooltip carry "Search or run a command · ⌘K".
+  - Collapsed: the window row is 60px wide and takes the background of the neighboring column; the sidebar has no right border of its own and `.sb-edge` draws it from 44px. Below the row, stacked: brand and bell. The rail holds search, the eight views with a tooltip (name and count), a dot on Triage when it has tickets (see nav-item), the globe with the 160px language popover (opening to the right of the globe, aligned to its bottom) and the avatar.
+  - Activity popover: 48px from the top edge with the sidebar expanded and 92px collapsed, 10px from the left.
+  - The bell count is also the counter of dock-badge.
 
 ## States
 
@@ -28,8 +34,8 @@ First column of the app shell: brand, notifications, search, navigation, languag
 ## Accessibility
 
 - `<nav aria-label="Workspace">`.
-- Bell: `aria-label="Notifications"`, plus "N unread" when there is a count. Collapse: `aria-label` "Collapse sidebar" / "Expand sidebar" and `aria-expanded`.
-- The language select has a visually hidden label "Language". Collapsed search carries `aria-label` "Search or run a command" and `title="⌘K"`.
+- Bell: `aria-label="Notifications"`, plus "N unread" when there is a count. Collapse: `aria-label` "Collapse sidebar" / "Expand sidebar", `aria-expanded` and, on desktop, `aria-keyshortcuts="Control+Meta+S"`.
+- The language select has a visually hidden label "Language". Collapsed search carries `aria-label` "Search or run a command" and its tooltip carries ⌘K.
 - Account button: `aria-haspopup="dialog"` and `aria-expanded`.
 
 ## Domain value
