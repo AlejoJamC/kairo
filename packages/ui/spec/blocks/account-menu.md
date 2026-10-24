@@ -10,7 +10,7 @@ Account popover: presence, appearance and session actions.
 - Header (padding 12px 14px): 32px avatar · workspace name 600 with ellipsis · current presence 12px in `text.tertiary` ("Online").
 - Status (padding 8px 6px): `label` header "STATUS" and three menu items with an 8px dot: Online `color.ok`, Away `color.warn`, Invisible `color.p3`; the current one `.on`.
 - Appearance (padding 10px 12px, 8px gap): `label` header "APPEARANCE" and a full-width segmented Light / Dark with equal segments.
-- Actions (padding 6px): Settings with kbd ⌘, · All commands with kbd ? (opens command-palette in the Commands scope) · Sign out in `color.bad-ink`, always last.
+- Actions (padding 6px): Settings with kbd ⌘, · All commands with kbd ⌘/ (opens command-palette in the Commands scope) · Sign out in `color.bad-ink`, always last.
 - With the sidebar collapsed the menu anchors to the avatar in the same way.
 
 ## States
@@ -26,7 +26,7 @@ Account popover: presence, appearance and session actions.
 
 - `role="dialog"` with `aria-label="Account"`. On open, focus goes to the current presence; esc or an outside click closes it and returns focus to the account button.
 - Presence is a `role="radiogroup"` with `aria-label="Status"`; each item is `role="radio"` with `aria-checked`. The dot always has its label next to it.
-- Appearance uses `aria-pressed`. The shortcuts ⌘, and ? work without opening the menu.
+- Appearance uses `aria-pressed`. The shortcuts ⌘, and ⌘/ work without opening the menu.
 
 ## Domain value
 

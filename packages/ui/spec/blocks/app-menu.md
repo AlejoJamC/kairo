@@ -14,7 +14,7 @@ Native menu bar of the desktop app: which menus exist, what each contains, its s
   - Go: Search or run a command… ⌘K — Triage · Awaiting customer · Resolved · Escalated · AI Classification · Knowledge — Clients · Settings (single choice, the current view checked) — Next ticket J · Previous ticket K.
   - Ticket: Acknowledge A · Resolve R · Escalate E · Internal note N — Send ⌘↵ · Send and resolve ⌘⇧↵ — Priority › (P1 · P2 · P3) · Status › (the statuses of status-chip) · Wrong classification?… · Group with [ID] — Ask Kairo Assistant ⌘J.
   - Window: the system items: Minimize, Zoom — Bring all to front.
-  - Help: All commands ? (opens command-palette in the Commands scope).
+  - Help: All commands ⌘/ (opens command-palette in the Commands scope).
 - There is no File menu: Kairo does not work with files.
 - Icons only on the ticket actions, 13px in their semantic color, as in the app: Acknowledge (check, `accent.default`), Resolve (`color.ok`), Escalate (arrow, `color.mood`), Internal note (lock, `notes.label`) and Ask Kairo Assistant (filled spark in `accent.default`). The rest of the menu shows text, checkbox or choice marks and keys.
 - Sentence case and the same labels as the app. An item that opens something where the user keeps deciding ends in "…".
@@ -27,7 +27,7 @@ Native menu bar of the desktop app: which menus exist, what each contains, its s
 - **default**: As described in Variants.
 - **hover**: Drawn by the system.
 - **active**: The current view checked in Go; Sidebar and Ticket list checked when shown; the current tab in View › Context; the current language in View › Language; current priority and status checked in their submenus.
-- **disabled**: Outside queue views, View › Ticket list is disabled. With no ticket open, View › Context and the whole Ticket menu are disabled. With an empty composer, Send and Send and resolve are disabled. On a ticket in a final status, every Ticket item is disabled except Ask Kairo Assistant. In Awaiting customer, Acknowledge and Resolve are disabled, as in composer.
+- **disabled**: Outside queue views, View › Ticket list is disabled. With no ticket open, View › Context and the Ticket menu are disabled, except Ask Kairo Assistant (⌘J), which opens Assistant with no ticket. With an empty composer, Send and Send and resolve are disabled. On a ticket in a final status, every Ticket item is disabled except Ask Kairo Assistant. In Awaiting customer, Acknowledge and Resolve are disabled, as in composer.
 - **loading**: Not applicable: the menu reflects the app state when it opens.
 - **error**: Not applicable: if an action fails, the app says so with a toast.
 

@@ -9,7 +9,7 @@ Fixed bar at the bottom of the app: the shortcuts of the current view and the en
 - `.statusbar`: `size.statusbar` on `surface.sidebar`, `border.default` top border, padding 0 14px, 11.5px in `text.tertiary`, single line. Left to right:
   - View group (`.sb-grp.sb-view`, 16px gap): shortcuts (`.sbi`, kbd + verb, 5px gap). J K navigate in every queue view; A acknowledge · R resolve · E escalate · N internal note only with an editable ticket open.
   - Separator (`.sb-sep`): 1×14px in `border.strong`, 12px on each side; only when the view group is shown.
-  - Fixed group (`.sb-grp.sb-fixed`): ⌘K commands · ? all commands. ? opens command-palette in the Commands scope.
+  - Fixed group (`.sb-grp.sb-fixed`): ⌘K commands · ⌘/ all commands. ⌘/ opens command-palette in the Commands scope.
   - Flexible space (16px minimum).
   - Engine status in mono with a 6px ok pulse dot ("kairo · 6 open").
 - Ticket open: view group, separator, fixed group, status.

@@ -10,7 +10,7 @@ Header of the queue pane: view title, count, action, filter bar and the empty te
 - Description (`.qdesc`, optional): 12.5/1.5 in `text.tertiary`, margin 4px 20px 0, `text-wrap: pretty`.
 - Bottom bar (`.qbar`), always with a `border.default` bottom border; its content depends on the view.
 - Per view:
-  - Triage: title "Triage"; count "shown/open" ("6/8"); action secondary button 28px with the spark in `accent.default` and "Classify"; no description; bar with the priority filters of segmented (All, P1, P2, P3) in `role="tablist"`.
+  - Triage: title "Triage"; count "shown/open" ("6/8"); action secondary button 28px with the spark in `accent.default` and "Classify"; no description; bar with the priority filters of segmented (All, P1, P2, P3) in `role="tablist"`, also by keyboard: P and then 0 (All), 1, 2 or 3.
   - Awaiting customer: title "Awaiting customer"; total count; description "Tickets where you sent a reply and the customer has not answered yet."; plain bar (`.qbar.plain`, 14px).
   - Resolved: title "Resolved"; total count; description "Closed tickets, in read-only mode."; plain bar.
   - Escalated: title "Escalated"; total count; description "Tickets that were escalated and need priority attention."; plain bar.

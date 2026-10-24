@@ -68,7 +68,7 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `assistant-turn` | implemented | `AssistantEmpty`, `AssistantMark`, `AssistantTurn`, `UserTurn` | Kairo Assistant conversation in the context panel. |
 | `auth-card` | implemented | `AuthCard`, `AuthLayout`, `GoogleMark`, `InvitationSummary` | Centered card for sign-in, invitation and password pages. |
 | `client-panel` | implemented | `ClientPanel` | Client tab of the context panel: who wrote, their account and their other tickets. |
-| `command-palette` | implemented | `CommandPalette` | Search tickets, run actions, navigate, and list every command of the app with its keys. Opens with ⌘K (All scope) or ? (Commands scope). Uses the dialog overlay pattern; see dialog for task dialogs. |
+| `command-palette` | implemented | `CommandPalette` | Search tickets, run actions, navigate, and list every command of the app with its keys. Opens with ⌘K (All scope) or ⌘/ (Commands scope; also ⌘?, and ? outside text fields). Uses the dialog overlay pattern; see dialog for task dialogs. |
 | `composer` | implemented | `Composer` | Reply and internal-note composer of a ticket. |
 | `data-table` | implemented | `DataTable`, `DataTableMainCell` | Data table of a page. |
 | `escalate-panel` | implemented | `EscalatePanel` | Escalate tab of the context panel: the signals that justify escalating the ticket and the form to do it. |

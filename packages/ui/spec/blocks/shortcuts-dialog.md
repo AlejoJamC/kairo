@@ -6,7 +6,7 @@ Replaced by command-palette in its Commands scope. Not used on any screen.
 
 ## Variants
 
-- ?, "All commands" in account-menu, Help › All commands in app-menu and "? all commands" in status-bar open command-palette in the Commands scope, which lists every command with its keys.
+- ⌘/ (also ⌘?, and ? outside text fields), "All commands" in account-menu, Help › All commands in app-menu and "⌘/ all commands" in status-bar open command-palette in the Commands scope, which lists every command with its keys.
 - The official set of shortcuts lives in command-palette.
 
 ## States

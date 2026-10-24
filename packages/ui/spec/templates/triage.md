@@ -6,7 +6,7 @@ Main cockpit where the support agent works the queue.
 
 ## Variants
 
-- Shell, left to right: sidebar (`layout.sidebar`, collapsible to `layout.sidebar-collapsed`) · queue (`layout.queue`) · ticket (flexible, reading width `layout.reading`) · context panel (`layout.context`); status-bar (`size.statusbar`) at the foot. command-palette (⌘K in All, ? in Commands) and toast sit above everything.
+- Shell, left to right: sidebar (`layout.sidebar`, collapsible to `layout.sidebar-collapsed`) · queue (`layout.queue`) · ticket (flexible, reading width `layout.reading`) · context panel (`layout.context`); status-bar (`size.statusbar`) at the foot. command-palette (⌘K in All, ⌘/ in Commands) and toast sit above everything.
 - Queue pane, top to bottom: queue-header · suggestion callout (Triage only) · ticket-row list · loading skeleton or empty-state.
 - Hidden ticket list (⌘⇧F, or the button at the end of queue-header): the list does not resize; it is shown or hidden whole, and its `layout.queue` width goes to the ticket. ticket-bar shows Show ticket list and the queue switcher; J and K keep working; with no selection, the empty-state offers Show ticket list.
 - Sidebar collapse: ⌃⌘S, or the collapse button at the foot of sidebar, next to the language, in both states.
@@ -32,7 +32,7 @@ Main cockpit where the support agent works the queue.
 
 ## Accessibility
 
-- Keyboard first: always visible are only the keys used on almost every ticket (A, R, E and N inside their buttons, Send, J/K, ⌘K and ?); the full list, including ⌃⌘S, ⌘⇧F and ⌘1 to ⌘4, is in command-palette (Commands scope) and app-menu. Panes are labeled landmarks.
+- Keyboard first: always visible are only the keys used on almost every ticket (A, R, E and N inside their buttons, Send, J/K, ⌘K and ⌘/); the full list, including ⌃⌘S, ⌘⇧F, ⌘1 to ⌘4 and the priority filters P 0 to P 3, is in command-palette (Commands scope) and app-menu. Panes are labeled landmarks.
 
 ## Domain value
 

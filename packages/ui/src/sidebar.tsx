@@ -114,7 +114,7 @@ function LanguageControl({ collapsed, language, label }: { collapsed: boolean; l
             <Icon name="globe" size={14} color={tokens['text.tertiary']} />
           </IconButton>
         </PopoverTrigger>
-        <PopoverContent role="menu" label={label} width={160}>
+        <PopoverContent role="menu" label={label} width={160} side="right" align="end">
           <Menu label={label}>
             {language.options.map((option) => (
               <MenuItem key={option.value} label={option.label} current={option.value === language.value} onSelect={() => language.onChange(option.value)} />

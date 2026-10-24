@@ -24,7 +24,7 @@ Switches panels inside the context panel of a ticket.
 ## Accessibility
 
 - `role="tab"` inside `role="tablist"`. Each tab carries `aria-keyshortcuts` ("Meta+1" to "Meta+4") and its tooltip carries the key.
-- ⌘1 to ⌘4 work with a ticket open, without focus on the tabs. With focus on them, ← → move between tabs.
+- ⌘1 to ⌘4 work with a ticket open, without focus on the tabs. ⌘J opens Assistant and puts focus in its question field, also with no ticket open; then the panel shows Assistant while the other tabs stay empty. With focus on them, ← → move between tabs.
 - The Assistant dot is decorative; the badge carries visually hidden text "unread mention".
 
 ## Domain value
