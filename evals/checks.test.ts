@@ -8,12 +8,26 @@ import { guardNetwork } from './network';
 import { privatePath, privateRoot, root } from './private-files';
 import { loadCorpus } from './corpus';
 import { evaluationRouting, main } from './run';
-import { semanticDurabilityEvidence } from './technical';
+import { semanticDurabilityEvidence, semanticObservabilityEvidence } from './technical';
 
 const row = (): Measurement => ({ case: syntheticCases[6]!, status: 'completed', prediction: { contribution: 'solution', useful: 'true' },
   abstain: null, latencyMs: 10, requests: [], output: { invented: true }, calls: [], safety: { approvedSourcesOnly: true } });
 
 describe('evaluation accounting', () => {
+  test('observability success requires the pipeline and real ingestion evidence', () => {
+    const flow = { semanticFlow: true, storage: 'real_local_supabase',
+      steps: ['tier1-fast-path:scan-and-dispatch', 'decision-workflows:claim-work'],
+      calls: { classification: 1, knowledge: 1, embedding: 1, assistant: 1, reply: 1 } };
+    const observability = { passed: true, transport: 'real_local_otlp', storage: 'real_local_clickhouse',
+      operationSpans: 1, coverageSpans: 1, diagnosticQueries: 2 };
+    expect(semanticObservabilityEvidence(JSON.stringify(flow))).toBeNull();
+    expect(semanticObservabilityEvidence(JSON.stringify({ observability }))).toBeNull();
+    expect(semanticObservabilityEvidence(JSON.stringify({ ...flow, observability }))).not.toBeNull();
+    for (const change of [{ passed: false }, { transport: 'simulated' }, { storage: 'fixture' },
+      { operationSpans: 0 }, { coverageSpans: 0 }, { diagnosticQueries: 0 }]) {
+      expect(semanticObservabilityEvidence(JSON.stringify({ ...flow, observability: { ...observability, ...change } }))).toBeNull();
+    }
+  });
   test('durability success requires explicit real integration evidence rather than a skipped suite', () => {
     expect(semanticDurabilityEvidence('0 pass, 1 skip')).toBeNull();
     const evidence = { semanticDurability: true, storage: 'real_local_supabase', scheduler: 'real_local_inngest',

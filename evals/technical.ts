@@ -37,7 +37,7 @@ export const suites = [
 export function semanticFlowEvidence(output: string) {
   for (const line of output.split('\n')) {
     if (!line.startsWith('{')) continue;
-    let value: { semanticFlow?: boolean; steps?: string[]; calls?: Record<string, number>; storage?: string; embedding?: string; simulated?: string[]; relevanceQuality?: string };
+    let value: { semanticFlow?: boolean; steps?: string[]; calls?: Record<string, number>; storage?: string; embedding?: string; simulated?: string[]; relevanceQuality?: string; observability?: { passed?: boolean; transport?: string; storage?: string; operationSpans?: number; coverageSpans?: number; diagnosticQueries?: number } };
     try { value = JSON.parse(line); } catch { continue; }
     if (value?.semanticFlow !== true || value.storage !== 'real_local_supabase' || !Array.isArray(value.steps) ||
       !value.steps.includes('tier1-fast-path:scan-and-dispatch') || !value.steps.includes('decision-workflows:claim-work') ||
@@ -59,7 +59,15 @@ export function semanticDurabilityEvidence(output: string) {
   return null;
 }
 
-export async function technical(database: boolean, semanticFlow = false, ollama = false, durability = false) {
+export function semanticObservabilityEvidence(output: string) {
+  const evidence = semanticFlowEvidence(output);
+  const telemetry = evidence?.observability;
+  return telemetry?.passed === true && telemetry.transport === 'real_local_otlp' && telemetry.storage === 'real_local_clickhouse'
+    && (telemetry.operationSpans ?? 0) > 0 && (telemetry.coverageSpans ?? 0) > 0 && telemetry.diagnosticQueries === 2 ? evidence : null;
+}
+
+export async function technical(database: boolean, semanticFlow = false, ollama = false, durability = false, observability = false) {
+  if (observability && (!semanticFlow || durability)) throw new Error('Observability requires the semantic pipeline flow');
   const selected = durability ? [{ file: 'evals/semantic-durability.test.ts', covers: ['real durable acceptance', 'worker interruption and recovery'] }] : semanticFlow ? [{ file: 'evals/semantic-flow.test.ts',
     covers: ['production email pipeline', 'real durable work claim and settlement', 'review authorization', 'semantic indexing and agent retrieval', 'tenant isolation and withdrawal'] }] : [...suites, ...(database ? [{ file: 'apps/api/src/lib/decision-workflow.db.test.ts',
     covers: ['permissions', 'human concurrency', 'immutable history', 'idempotency', 'knowledge selection', 'coverage and cost'] }] : [])];
@@ -67,11 +75,11 @@ export async function technical(database: boolean, semanticFlow = false, ollama 
   const results = [];
   for (const suite of selected) {
     // Separate processes prevent Bun module mocks from contaminating other suites.
-    const args = durability ? ['--no-env-file', 'scripts/test-semantic-integration.ts', '--durability'] : semanticFlow ? ['--no-env-file', 'scripts/test-semantic-integration.ts', '--semantic-flow', ...(ollama ? ['--ollama'] : [])]
+    const args = durability ? ['--no-env-file', 'scripts/test-semantic-integration.ts', '--durability'] : semanticFlow ? ['--no-env-file', 'scripts/test-semantic-integration.ts', '--semantic-flow', ...(ollama ? ['--ollama'] : []), ...(observability ? ['--observability'] : [])]
       : ['--no-env-file', 'test', suite.file];
     const result = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8', timeout: semanticFlow || durability ? 600_000 : 120_000,
       env: { ...process.env, SKIP_LLM_INTEGRATION: '1', RUN_GATEWAY_INTEGRATION: '0', RUN_WORKFLOW_DB_TESTS: database ? '1' : '0' } });
-    const flow = semanticFlow ? semanticFlowEvidence(result.stdout ?? '') : null;
+    const flow = semanticFlow ? (observability ? semanticObservabilityEvidence : semanticFlowEvidence)(result.stdout ?? '') : null;
     const recovery = durability ? semanticDurabilityEvidence(result.stdout ?? '') : null;
     const exitCode = (semanticFlow && !flow) || (durability && !recovery) ? 1 : result.status;
     results.push({ ...suite, exitCode, output: result.stdout, errors: result.stderr });
@@ -86,6 +94,10 @@ export async function technical(database: boolean, semanticFlow = false, ollama 
       infrastructure: 'existing local Supabase, local Inngest and local Ollama',
     });
     console.log(JSON.stringify({ suite: suite.file, passed: exitCode === 0 }));
+    if (flow?.observability) {
+      const { passed, transport, storage, operationSpans, coverageSpans, diagnosticQueries } = flow.observability;
+      console.log(JSON.stringify({ observability: { passed, transport, storage, operationSpans, coverageSpans, diagnosticQueries } }));
+    }
     if (exitCode !== 0) break;
   }
   await writePrivate(resolve(run.directory, 'technical.json'), {
@@ -97,8 +109,8 @@ export async function technical(database: boolean, semanticFlow = false, ollama 
   return run.directory;
 }
 if (import.meta.main) {
-  if (process.argv.slice(2).some(arg => !['--database','--semantic-flow','--ollama','--durability'].includes(arg))) throw new Error('Unsupported technical option');
+  if (process.argv.slice(2).some(arg => !['--database','--semantic-flow','--ollama','--durability','--observability'].includes(arg))) throw new Error('Unsupported technical option');
   if (process.argv.includes('--ollama') && !process.argv.includes('--semantic-flow')) throw new Error('Ollama requires the local semantic flow');
-  try { console.log(JSON.stringify({ run: await technical(process.argv.includes('--database'), process.argv.includes('--semantic-flow'), process.argv.includes('--ollama'), process.argv.includes('--durability')) })); }
+  try { console.log(JSON.stringify({ run: await technical(process.argv.includes('--database'), process.argv.includes('--semantic-flow'), process.argv.includes('--ollama'), process.argv.includes('--durability'), process.argv.includes('--observability')) })); }
   catch { console.error('Technical evaluation stopped; inspect the private artifacts.'); process.exitCode = 1; }
 }
