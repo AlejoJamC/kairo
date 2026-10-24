@@ -81,7 +81,7 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: Des
     "send-resolve": () => useTriageStore.getState().requestComposerSend("send-resolve"),
     "wrong-classification": () => useTriageStore.getState().requestTicketMenu("reclassify"),
     "group-with": () => useTriageStore.getState().requestTicketMenu("group"),
-    "ask-assistant": () => useTriageStore.getState().requestPanelTab("assistant"),
+    "ask-assistant": () => run("ask-assistant"),
     "go-triage": () => onViewChange("triage"),
     "go-awaiting": () => onViewChange("awaiting"),
     "go-resolved": () => onViewChange("resolved"),

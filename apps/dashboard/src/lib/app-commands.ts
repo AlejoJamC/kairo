@@ -29,6 +29,10 @@ interface AppCommands {
   sidebarToggleRequests: number;
   /** The ticket list of the queue views is hidden whole (⌘⇧F). */
   ticketListHidden: boolean;
+  /** Cmd+J: the Assistant tab opens and its input takes the focus. */
+  assistantFocusPending: boolean;
+  requestAssistantFocus: () => void;
+  clearAssistantFocus: () => void;
   /** Priority filter of the Triage list asked for by the keys P then 0-3. */
   priorityFilterRequest: { value: PriorityFilterValue; nonce: number } | null;
   requestPriorityFilter: (value: PriorityFilterValue) => void;
@@ -51,6 +55,9 @@ export const useAppCommands = create<AppCommands>((set, get) => ({
   paletteScope: "all",
   sidebarToggleRequests: 0,
   ticketListHidden: readTicketListHidden(),
+  assistantFocusPending: false,
+  requestAssistantFocus: () => set({ assistantFocusPending: true }),
+  clearAssistantFocus: () => set({ assistantFocusPending: false }),
   priorityFilterRequest: null,
   requestPriorityFilter: (value) => set((state) => ({ priorityFilterRequest: { value, nonce: (state.priorityFilterRequest?.nonce ?? 0) + 1 } })),
   similarGroupAvailable: false,

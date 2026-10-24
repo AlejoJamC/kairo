@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { useAppCommands } from "@/lib/app-commands";
 import { AskBox, AssistantEmpty, AssistantMark, AssistantTurn, Bold, Box, Button, DraftCard as DraftCardView, FollowUps, Icon, InlineCode, PromptStarters, SourceList, Text, UserTurn, type IconName } from "@kairo/ui";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -156,6 +157,12 @@ export function AssistantPanel() {
   const { t } = useTranslation("dashboard");
   const { selectedTicketId, tickets, setSuggestedReply } = useTriageStore();
   const selectedTicket = tickets.find((tk) => tk.id === selectedTicketId) ?? null;
+  const focusPending = useAppCommands((state) => state.assistantFocusPending);
+  const clearFocus = useAppCommands((state) => state.clearAssistantFocus);
+  // Without a ticket there is no input to focus: the request ends here.
+  useEffect(() => {
+    if (focusPending && !selectedTicket) clearFocus();
+  }, [focusPending, selectedTicket, clearFocus]);
 
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy]   = useState(false);
@@ -262,6 +269,8 @@ export function AssistantPanel() {
           onChange={setDraft}
           onSend={() => { const text = draft.trim(); if (!text || busy) return; setDraft(""); void ask(text); }}
           onStop={() => { controller.current?.abort(); setBusy(false); }}
+          autoFocus={focusPending}
+          onFocused={clearFocus}
           answering={busy}
           error={Boolean(error)}
           onRetry={() => { setDraft(""); void ask(lastQuestion.current); }}

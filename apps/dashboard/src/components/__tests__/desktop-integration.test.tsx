@@ -3,6 +3,7 @@ import { act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "@/test/render-with-providers";
 import { DesktopIntegration } from "@/components/desktop-integration";
+import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { useAppCommands } from "@/lib/app-commands";
 
 const host = {
@@ -85,6 +86,18 @@ describe("DesktopIntegration", () => {
     act(() => menuListener?.("all-commands"));
     expect(useAppCommands.getState().paletteRequests).toBe(2);
     expect(useAppCommands.getState().paletteScope).toBe("commands");
+  });
+
+  it("opens the Assistant tab with Ask Kairo Assistant once a ticket is open", () => {
+    useTriageStore.setState({ tickets: [{ id: "t1", status: "open", ticket_number: 1 } as never], selectedTicketId: "t1", panelTabRequest: null });
+    setup();
+    const groups = JSON.parse(host.setMenu.mock.calls.at(-1)?.[0] as string) as { id: string; items: { id?: string; disabled?: boolean; accelerator?: string }[] }[];
+    const ask = groups.find((group) => group.id === "ticket")?.items.find((item) => item.id === "ask-assistant");
+    expect(ask?.disabled).not.toBe(true);
+    expect(ask?.accelerator).toBe("CmdOrCtrl+J");
+    act(() => menuListener?.("ask-assistant"));
+    expect(useTriageStore.getState().panelTabRequest?.tab).toBe("assistant");
+    useTriageStore.setState({ tickets: [], selectedTicketId: null, panelTabRequest: null });
   });
 
   it("shows the unread count on the app icon, and clears it at zero", () => {

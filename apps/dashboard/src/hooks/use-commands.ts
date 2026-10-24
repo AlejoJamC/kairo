@@ -81,6 +81,7 @@ export function useCommands(view: AppView, onViewChange: (view: AppView) => void
         case "group-similar":
           return store.requestTicketMenu("group");
         case "ask-assistant":
+          app.requestAssistantFocus();
           return store.requestPanelTab("assistant");
         case "next-ticket":
           return store.selectRelativeTicket(1);

@@ -35,7 +35,7 @@ export const COMMANDS: readonly CommandDef[] = [
   { id: "note", group: "ticket", keys: ["N"], ticket: true, editable: true },
   { id: "send", group: "ticket", keys: ["⌘", "↵"], ticket: true, editable: true },
   { id: "send-resolve", group: "ticket", keys: ["⌘", "⇧", "↵"], ticket: true, editable: true },
-  { id: "ask-assistant", group: "ticket", keys: ["⌘", "J"], ticket: true },
+  { id: "ask-assistant", group: "ticket", keys: ["⌘", "J"] },
   { id: "priority", group: "ticket", ticket: true, editable: true },
   { id: "status", group: "ticket", ticket: true, editable: true },
   { id: "wrong-classification", group: "ticket", ticket: true, editable: true },

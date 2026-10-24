@@ -84,7 +84,7 @@ export function buildAppMenu(state: AppMenuState): AppMenuGroup[] {
     item('wrong-classification', 'Wrong classification?…', { disabled: !state.ticketOpen || state.ticketFinal }),
     ...(state.similarTicketId ? [item('group-with', `Group with ${state.similarTicketId}`, { disabled: !state.ticketOpen || state.ticketFinal })] : []),
     separator(),
-    item('ask-assistant', 'Ask Kairo Assistant', { shortcut: '⌘J', accelerator: 'CmdOrCtrl+J', disabled: !state.ticketOpen }),
+    item('ask-assistant', 'Ask Kairo Assistant', { shortcut: '⌘J', accelerator: 'CmdOrCtrl+J' }),
   ]
 
   return [

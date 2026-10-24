@@ -34,6 +34,9 @@ type AskBoxProps = {
   /** Name of the model, shown in the selector chip. */
   model?: string
   hint?: string
+  /** Moves the focus to the field (Cmd+J); `onFocused` tells the caller it happened. */
+  autoFocus?: boolean
+  onFocused?: () => void
   labels: { placeholder: string; textarea: string; send: string; stop: string; retry: string; error: string }
 }
 
@@ -55,9 +58,14 @@ function grow(element: HTMLElement) {
   target.style.height = `${Math.min(120, target.scrollHeight)}px`
 }
 
-function AskBox({ value, onChange, onSend, onStop, answering, error, onRetry, contexts, model, hint, labels }: AskBoxProps) {
+function AskBox({ value, onChange, onSend, onStop, answering, error, onRetry, contexts, model, hint, autoFocus, onFocused, labels }: AskBoxProps) {
   const filled = value.trim().length > 0
   const field = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (!autoFocus) return
+    field.current?.focus()
+    onFocused?.()
+  }, [autoFocus, onFocused])
   useEffect(() => {
     if (!value && field.current) field.current.style.height = 'auto'
   }, [value])
