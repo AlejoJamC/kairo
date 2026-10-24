@@ -107,6 +107,10 @@ export type FeatureFlags = typeof FLAGS;
 const ENV_PREFIX = "FEATURE_FLAG_";
 
 const FLAG_DEFAULTS = {
+  enable_embeddings: true,
+  enable_embedding_generation: true,
+  enable_embedding_indexing: true,
+  enable_embedding_retrieval: true,
   enable_detection_ui: false,
   enable_contact_extraction: false,
   enable_ticket_acknowledgement: false,

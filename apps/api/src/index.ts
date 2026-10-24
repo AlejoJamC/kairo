@@ -1,3 +1,4 @@
+import { semanticIndexing } from './functions/semantic-indexing';
 import { workflow } from './routes/v1/workflow.js';
 import { decisionWorkflows } from './functions/pipeline/decision-workflows.js';
 import { businessSynthesis } from './functions/pipeline/business-synthesis.js';
@@ -76,7 +77,7 @@ app.use(
   "/api/inngest",
   serve({
     client: inngest,
-    functions: [decisionWorkflows, businessSynthesis, tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill, outboundMessageSend, gmailPoll, gmailPollCron, operationalSlaEscalationCron, classificationRetrySweep, autoApprovalRecomputeCron, knowledgeCandidate, emailKnowledge],
+    functions: [semanticIndexing, decisionWorkflows, businessSynthesis, tier1FastPath, tier2Background, tier3Deferred, batchClassify, incrementalSync, contactExtraction, threadDedupeBackfill, outboundMessageSend, gmailPoll, gmailPollCron, operationalSlaEscalationCron, classificationRetrySweep, autoApprovalRecomputeCron, knowledgeCandidate, emailKnowledge],
   })
 );
 

@@ -208,6 +208,7 @@
       "name": "@kairo/feature-flags",
       "version": "0.0.0",
       "devDependencies": {
+        "@types/bun": "^1.3.13",
         "typescript": "~6.0.3",
       },
     },

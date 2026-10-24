@@ -8,11 +8,19 @@ import { guardNetwork } from './network';
 import { privatePath, privateRoot, root } from './private-files';
 import { loadCorpus } from './corpus';
 import { evaluationRouting, main } from './run';
+import { semanticDurabilityEvidence } from './technical';
 
 const row = (): Measurement => ({ case: syntheticCases[6]!, status: 'completed', prediction: { contribution: 'solution', useful: 'true' },
   abstain: null, latencyMs: 10, requests: [], output: { invented: true }, calls: [], safety: { approvedSourcesOnly: true } });
 
 describe('evaluation accounting', () => {
+  test('durability success requires explicit real integration evidence rather than a skipped suite', () => {
+    expect(semanticDurabilityEvidence('0 pass, 1 skip')).toBeNull();
+    const evidence = { semanticDurability: true, storage: 'real_local_supabase', scheduler: 'real_local_inngest',
+      embedding: 'real_local_ollama', acceptedWhileWorkerStopped: true, completedAfterWorkerRestart: true };
+    expect(semanticDurabilityEvidence(JSON.stringify(evidence))).toEqual(evidence);
+    expect(semanticDurabilityEvidence(JSON.stringify({ ...evidence, completedAfterWorkerRestart: false }))).toBeNull();
+  });
   test('covers each contract and dry plan never reads a corpus or calls a model', async () => {
     expect(new Set(syntheticCases.map(c => c.contract))).toEqual(new Set(contracts));
     const original = globalThis.fetch;

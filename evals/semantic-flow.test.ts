@@ -16,6 +16,7 @@ const events: Event[] = [], steps: string[] = [];
 const calls = { classification: 0, evidence: 0, knowledge: 0, decisions: 0, embedding: 0, assistant: 0, reply: 0 };
 const title = 'Acme access recovery', text = 'Open Settings and select Recover access.';
 let article = '', mail = '', assistantCall = 0;
+let fixtureAccount: string | undefined;
 function check(error: { code?: string } | null) { if (error) throw new Error(`Semantic evaluation operation failed (${error.code ?? 'unknown'})`); }
 function judgment(choice: string, criteria: Record<string, unknown>) {
   expect(Object.keys(criteria)).toContain(choice);
@@ -95,7 +96,7 @@ if (enabled) {
   globalThis.fetch = Object.assign(transport, originalFetch);
   mock.module('../apps/api/src/lib/inngest.js', () => ({ inngest: {
     createFunction: (options: { id: string }, handler: (context: Context) => Promise<unknown>) => { handlers.set(options.id, handler); return { options }; },
-    send: async (event: Event) => { events.push(event); },
+    send: async (event: Event | Event[]) => { const batch = Array.isArray(event) ? event : [event]; events.push(...batch); return { ids: batch.map(() => randomUUID()) }; },
   } }));
   // Keep transport diagnostics in this evaluation, not a global pipeline log.
   mock.module('../apps/api/src/lib/pipeline-logger.js', () => ({ pipelineLog: () => {}, pipelineLogRun: () => {} }));
@@ -106,7 +107,10 @@ beforeAll(async () => {
   check(pending.error);
   if (pending.count) throw new Error('Existing local work is pending; refusing to let the evaluation worker claim unrelated jobs');
 });
-afterAll(() => { globalThis.fetch = originalFetch; });
+afterAll(async () => {
+  globalThis.fetch = originalFetch;
+  if (fixtureAccount) check((await db.from('decision_work_items').delete().eq('account_id', fixtureAccount)).error);
+});
 async function execute(id: string, data: Record<string, unknown> = {}) {
   const handler = handlers.get(id);
   if (!handler) throw new Error('Production function was not registered');
@@ -139,6 +143,7 @@ async function indexed(account: string, source: string) {
 test.skipIf(!enabled)('product pipeline, claimed work and agent consume the same indexed sources through the domain', async () => {
   await import('../apps/api/src/functions/pipeline/tier1-fast-path');
   await import('../apps/api/src/functions/pipeline/decision-workflows');
+  await import('../apps/api/src/functions/semantic-indexing');
   const { consultTicketAssistant } = await import('../apps/api/src/lib/ticket-assistant');
   const { sharedAgentTools } = await import('../apps/api/src/lib/agent-tools');
   const { workflow } = await import('../apps/api/src/routes/v1/workflow');
@@ -150,6 +155,7 @@ test.skipIf(!enabled)('product pipeline, claimed work and agent consume the same
   const authorization = `Bearer ${signed.data.session!.access_token}`;
   const provisioned = await db.rpc('provision_account_for_user', { p_user_id: userId, p_account_name: 'Acme' }); check(provisioned.error);
   const account = provisioned.data!;
+  fixtureAccount = account;
   const configured = await db.from('accounts').update({ language: 'en', business_context: 'Acme provides account access support.' })
     .eq('id', account).select('plan_id').single(); check(configured.error);
   check((await db.from('channel_integrations').insert({ account_id: account, provider: 'gmail', external_account_id: 'support@acme.com' })).error);
@@ -157,6 +163,7 @@ test.skipIf(!enabled)('product pipeline, claimed work and agent consume the same
     access_token_enc: 'acme-fixture-token', expires_at: new Date(Date.now() + 3_600_000).toISOString() })).error);
   mail = `acme-${randomUUID()}`;
   await execute('tier1-fast-path', { userId, gmailAccessToken: 'acme-fixture-token' });
+  for (const event of events.filter(event => event.name === 'embeddings/index.requested')) await execute('semantic-indexing', event.data);
   const tickets = await db.from('tickets').select('id,conversation_id,classification_tier').eq('account_id', account); check(tickets.error);
   expect(tickets.data).toHaveLength(1);
   const ticketId = tickets.data![0]!.id;
@@ -202,4 +209,4 @@ test.skipIf(!enabled)('product pipeline, claimed work and agent consume the same
   console.log(JSON.stringify({ semanticFlow: true, calls, steps, storage: 'real_local_supabase',
     embedding: realVectors ? 'real_local_ollama' : 'simulated_transport',
     simulated: ['gmail', 'inngest_scheduler', 'language_and_decision_responses'], relevanceQuality: 'not_measured' }));
-}, 120_000);
+}, 300_000);

@@ -6,6 +6,30 @@ const ENV_KEY_CONTACT = "FEATURE_FLAG_ENABLE_CONTACT_EXTRACTION";
 const ENV_KEY_ACKNOWLEDGEMENT = "FEATURE_FLAG_ENABLE_TICKET_ACKNOWLEDGEMENT";
 const ENV_KEY_SLA_ESCALATION = "FEATURE_FLAG_ENABLE_OPERATIONAL_SLA_ESCALATION";
 
+describe("embedding capabilities default to enabled in deployments without overrides", () => {
+  for (const name of ["enable_embeddings", "enable_embedding_generation", "enable_embedding_indexing", "enable_embedding_retrieval"] as const) {
+    it(`${name} stays enabled unless explicitly disabled`, () => {
+      const key = `FEATURE_FLAG_${name.toUpperCase()}`;
+      const previous = process.env[key];
+      try {
+        delete process.env[key];
+        expect(getFlag(name)).toBe(true);
+        for (const value of ["", "invalid", "true"]) {
+          process.env[key] = value;
+          expect(getFlag(name)).toBe(true);
+        }
+        process.env[key] = "false";
+        expect(getFlag(name)).toBe(false);
+        delete process.env[key];
+        expect(getFlag(name)).toBe(true);
+      } finally {
+        if (previous === undefined) delete process.env[key];
+        else process.env[key] = previous;
+      }
+    });
+  }
+});
+
 afterEach(() => {
   delete process.env[ENV_KEY];
   delete process.env[ENV_KEY_CONTACT];

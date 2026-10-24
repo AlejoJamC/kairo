@@ -13,7 +13,7 @@ import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
 import { maybeSendTicketAcknowledgement } from "../../lib/ticket-acknowledgement.js";
-import { maybeGenerateTicketEmbedding } from "../../lib/ticket-embedding.js";
+import { requestSemanticIndexing } from "../../lib/semantic-indexing.js";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
@@ -524,13 +524,7 @@ export const incrementalSync = inngest.createFunction(
                 });
               }
 
-              maybeGenerateTicketEmbedding({
-                supabase,
-                ticketId,
-                accountId,
-                subject,
-                bodyPreview: snippet,
-              }).catch((err: unknown) => {
+              await requestSemanticIndexing(supabase, accountId, [{ kind: 'ticket', id: ticketId }]).catch((err: unknown) => {
                 console.error(
                   `[incremental-sync] Embedding generation failed for ticket ${ticketId}:`,
                   err

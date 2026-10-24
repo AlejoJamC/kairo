@@ -4,6 +4,7 @@
     "lib": ["ES2022"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "types": ["bun"],
     "noEmit": true
   },
   "include": ["**/*.ts"],
