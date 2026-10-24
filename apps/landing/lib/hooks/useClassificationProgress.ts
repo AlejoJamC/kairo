@@ -50,6 +50,9 @@ const POLL_INTERVAL_MS      = 1500;
 const TIMEOUT_MS            = 120_000; // 2 minutes
 const MAX_CONSECUTIVE_FAILS = 3;       // tolerate transient errors before showing error screen
 
+/** `error` value when the scan settled with every email failed, as opposed to the progress being unreachable. */
+export const CLASSIFICATION_FAILED = "classification_failed";
+
 export function useClassificationProgress(): UseClassificationProgressResult {
   const [data, setData]         = useState<ClassificationProgress | null>(null);
   const [error, setError]       = useState<string | null>(null);
@@ -100,6 +103,8 @@ export function useClassificationProgress(): UseClassificationProgressResult {
         if (json.status === "complete" || json.status === "failed") {
           stoppedRef.current = true;
           clearTimeout(timeoutRef.current!);
+          // Every email failed: surface it instead of "classifying" with nothing to show.
+          if (json.status === "failed") setError(CLASSIFICATION_FAILED);
           return;
         }
       } catch (err: unknown) {

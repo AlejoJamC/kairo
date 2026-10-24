@@ -190,7 +190,7 @@ export async function ingestMessages(
       } catch (err) {
         deps.logLlmCall({
           feature: "email_classification",
-          model: deps.configuredModel(),
+          model: configuredModelOrUnconfigured(deps),
           promptText: `${from} | ${subject}`,
           latencyMs: Date.now() - llmStart,
           errorCode: "LLM_ERROR",
@@ -297,6 +297,13 @@ export async function ingestMessages(
   return { ticketsCreated, ticketsReopened, skipped, processed };
 }
 
+
+// The configured model is only a label for the failure record. Under a
+// configuration fault resolving it throws the same error the classifier did,
+// which would replace that error and lose the llm_calls entry.
+function configuredModelOrUnconfigured(deps: GmailPollDeps): string {
+  try { return deps.configuredModel(); } catch { return "unconfigured"; }
+}
 
 async function collectHistory(
   deps: GmailPollDeps,

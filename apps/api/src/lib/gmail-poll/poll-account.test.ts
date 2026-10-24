@@ -888,6 +888,30 @@ describe("pollGmailAccount — llm_calls logging", () => {
       errorDetail: "model unavailable",
     });
   });
+
+  it("keeps the classifier's error and its llm_calls entry when the configured model cannot be resolved either", async () => {
+    const { db, upserts } = createFakeDb({
+      integration: { id: INTEGRATION_ID, account_id: ACCOUNT_ID, gmail_history_id: "1000" },
+    });
+    const logLlmCall = mock((_entry: Parameters<GmailPollDeps["logLlmCall"]>[0]) => undefined);
+    const fault = new Error("The classification role requires a Gateway provider/model identifier");
+
+    const failure = await pollGmailAccount(
+      baseDeps({
+        db,
+        ...oneMessage,
+        logLlmCall,
+        classifyEmail: async () => { throw fault; },
+        configuredModel: () => { throw new Error("resolving the model failed again"); },
+      }),
+      ACCOUNT_ID
+    ).catch((error: unknown) => error);
+
+    expect(failure).toBe(fault);
+    expect(upserts.some((u) => u.payload.classification_status === "failed")).toBe(true);
+    expect(logLlmCall).toHaveBeenCalledTimes(1);
+    expect(logLlmCall.mock.calls[0]![0]).toMatchObject({ model: "unconfigured", errorDetail: fault.message });
+  });
 });
 
 

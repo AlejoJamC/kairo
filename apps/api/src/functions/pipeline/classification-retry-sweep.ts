@@ -10,7 +10,11 @@
 // change) not even enough content saved to reclassify it later.
 //
 // Runs on a schedule (default every 30 minutes, configurable via
-// FEATURE_FLAG_CLASSIFICATION_RETRY_SWEEP_CRON_INTERVAL_MINUTES) and re-runs
+// FEATURE_FLAG_CLASSIFICATION_RETRY_SWEEP_CRON_INTERVAL_MINUTES), and on
+// `classification/retry.requested`: each pass asks for a retry when it ends,
+// and the API asks once at startup with a valid model — so a fixed
+// configuration recovers its failed messages without waiting for the
+// schedule or anyone acting by hand. It re-runs
 // classification for every message still in classification_status: 'failed'
 // — reusing the exact same concurrency/circuit-breaker/retry/error-taxonomy
 // infrastructure tier1/tier2/tier3 already use, and the same
@@ -70,9 +74,16 @@ export const classificationRetrySweep = inngest.createFunction(
   {
     id: "classification-retry-sweep",
     retries: 0,
-    triggers: [{ cron: CRON_EXPRESSION }],
+    // One sweep at a time: overlapping runs would list and retry the same rows.
+    concurrency: { limit: 1 },
+    triggers: [{ cron: CRON_EXPRESSION }, { event: "classification/retry.requested" }],
   },
-  async ({ step, logger }) => {
+  async ({ event, step, logger }) => {
+    const delaySeconds = event.name === "classification/retry.requested"
+      ? Number((event.data as { delaySeconds?: number } | undefined)?.delaySeconds ?? 0)
+      : 0;
+    if (delaySeconds > 0) await step.sleep("wait-before-retry", `${delaySeconds}s`);
+
     const failedMessages = (await step.run("list-failed-messages", async () => {
       const { data, error } = await supabase
         .from("messages")

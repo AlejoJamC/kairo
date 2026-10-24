@@ -21,6 +21,18 @@ export type KairoEvents = {
       userId: string;
     };
   };
+  /**
+   * Asks classification-retry-sweep to retry failed messages now instead of
+   * at its next scheduled tick. Sent when a pass ends and when the API starts
+   * with a valid classification model.
+   */
+  "classification/retry.requested": {
+    data: {
+      reason: "pass_completed" | "startup";
+      /** Wait before retrying, so a transient provider fault has time to clear. */
+      delaySeconds?: number;
+    };
+  };
   "tickets/batch-classify.triggered": {
     data: {
       userId: string;
