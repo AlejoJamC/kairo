@@ -160,8 +160,8 @@ function Button({
       </LabelText>
       {iconEnd}
       {keyHint && (
-        <Box tag="span" aria-hidden marginLeft={2}>
-          <Kbd tone={variant === 'primary' ? 'onAccent' : undefined}>{keyHint}</Kbd>
+        <Box tag="span" aria-hidden display="flex" alignItems="center" marginLeft={4}>
+          <Kbd alignSelf="center" tone={variant === 'primary' ? 'onAccent' : undefined}>{keyHint}</Kbd>
         </Box>
       )}
     </ButtonFrame>

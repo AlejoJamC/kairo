@@ -18,6 +18,7 @@ import {
   type AppView as MenuView,
   type SystemNotificationEvent,
 } from "@kairo/ui";
+import { useCommands } from "@/hooks/use-commands";
 import { useLocale } from "@/hooks/useLocale";
 import { useAppCommands } from "@/lib/app-commands";
 import { disableUnhandled, localizeMenu } from "@/lib/desktop-menu";
@@ -40,10 +41,9 @@ interface DesktopIntegrationProps {
   view: AppView;
   onViewChange: (view: AppView) => void;
   sidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
 }
 
-export function DesktopIntegration({ view, onViewChange, sidebarCollapsed, onToggleSidebar }: DesktopIntegrationProps) {
+export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: DesktopIntegrationProps) {
   const host = getPlatform().host;
   const { t, i18n } = useTranslation(["dashboard"]);
   const { signOut } = useAuth();
@@ -63,15 +63,16 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed, onTog
   }, [host, sidebarCollapsed, ticketListHidden]);
 
   // ── Native menu ───────────────────────────────────────────────────────────
+  const { run } = useCommands(view, onViewChange);
   const handlers: Record<string, () => void> = {
     settings: () => onViewChange("settings"),
     "sign-out": () => void signOut(),
-    sidebar: onToggleSidebar,
+    sidebar: () => run("toggle-sidebar"),
     "language-es": () => setLanguage("es" as SupportedLanguage),
     "language-en": () => setLanguage("en" as SupportedLanguage),
     search: () => useAppCommands.getState().requestPalette("all"),
     "all-commands": () => useAppCommands.getState().requestPalette("commands"),
-    "ticket-list": () => useAppCommands.getState().toggleTicketList(),
+    "ticket-list": () => run("toggle-ticket-list"),
     "context-client": () => useTriageStore.getState().requestPanelTab("client"),
     "context-assistant": () => useTriageStore.getState().requestPanelTab("assistant"),
     "context-notes": () => useTriageStore.getState().requestPanelTab("notes"),

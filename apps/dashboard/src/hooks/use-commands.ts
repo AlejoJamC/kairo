@@ -12,6 +12,11 @@ import type { AppView } from "@/types";
 
 export const QUEUE_VIEWS: readonly AppView[] = ["triage", "awaiting", "resolved", "escalated", "ai-review"];
 
+/** Toggles that the native menu and the keyboard can both report for one key press. */
+const DEBOUNCED: ReadonlySet<CommandId> = new Set(["toggle-sidebar", "toggle-ticket-list"]);
+const DOUBLE_REPORT_MS = 250;
+const lastRun: Partial<Record<CommandId, number>> = {};
+
 /** Commands with no action wired in the app yet: they are listed but never runnable (the interface has no dark theme to switch to). */
 const NOT_WIRED: ReadonlySet<CommandId> = new Set(["switch-theme"]);
 
@@ -46,6 +51,11 @@ export function useCommands(view: AppView, onViewChange: (view: AppView) => void
     (id: CommandId) => {
       const command = COMMANDS.find((entry) => entry.id === id);
       if (!command || stateOf(command).disabled) return;
+      if (DEBOUNCED.has(id)) {
+        const now = Date.now();
+        if (now - (lastRun[id] ?? 0) < DOUBLE_REPORT_MS) return;
+        lastRun[id] = now;
+      }
       const store = useTriageStore.getState();
       const app = useAppCommands.getState();
       if (id in GO_VIEWS) return onViewChange(GO_VIEWS[id as keyof typeof GO_VIEWS]);

@@ -64,9 +64,9 @@ export function Inbox() {
 
   return (
     <>
-      {!listHidden && <Box id="ticket-list" width={372} display="flex" flexDirection="column" backgroundColor="var(--kairo-color-surface)" flexShrink={0} borderRightWidth={1} borderRightColor="var(--k-border)" borderStyle="solid">
+      <Box id="ticket-list" display={listHidden ? "none" : "flex"} width={372} flexDirection="column" backgroundColor="var(--kairo-color-surface)" flexShrink={0} borderRightWidth={1} borderRightColor="var(--k-border)" borderStyle="solid">
         <TicketList />
-      </Box>}
+      </Box>
       <TicketDetail />
       <AiAssistant />
     </>

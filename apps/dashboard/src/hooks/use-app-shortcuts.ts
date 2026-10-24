@@ -1,9 +1,9 @@
 // Keyboard shortcuts of the app. Single keys (J K A R E N and ?) are ignored
-// while the agent types in a field. Key combinations are handled here only on
-// the web: in the desktop app the native menu owns them and reports the pick.
+// while the agent types in a field. Key combinations work on the web and in the
+// desktop app, where the native menu also reports them: toggles ignore a repeat
+// of the same command a moment later (see use-commands).
 
 import { useEffect } from "react";
-import { isDesktop } from "@kairo/client-core/config";
 import type { CommandId } from "@/lib/commands";
 
 function isTyping(target: EventTarget | null): boolean {
@@ -46,11 +46,9 @@ function combinationOf(event: KeyboardEvent): CommandId | null {
 
 export function useAppShortcuts(run: (id: CommandId) => void) {
   useEffect(() => {
-    const desktop = isDesktop();
     function onKeyDown(event: KeyboardEvent) {
       const combination = combinationOf(event);
       if (combination) {
-        if (desktop) return;
         event.preventDefault();
         run(combination);
         return;
