@@ -429,6 +429,17 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
       }),
   );
 
+  // Send and Send and resolve from the command palette or the native menu.
+  React.useEffect(
+    () =>
+      useTriageStore.subscribe((state, previous) => {
+        const request = state.composerRequest;
+        if (!request || request === previous.composerRequest) return;
+        state.clearComposerRequest();
+        if (canSend && !isNote) void handleSend(request.command === "send-resolve");
+      }),
+  );
+
   const sendOptions: SendOption[] = [
     { id: "send-resolve", label: t("replyBar.sendAndResolve", "Send & Resolve"), shortcut: "⌘⇧↵", disabled: !canSend, onSelect: () => handleSend(true) },
   ];

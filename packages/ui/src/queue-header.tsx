@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react'
 import { tokens } from '@kairo/tokens'
+import { IconButton } from './button'
+import { Icon } from './icon'
 import { Box, Text } from './layout'
+import { Tooltip } from './tooltip'
 import { PriorityGlyph, type PriorityLevel } from './priority-glyph'
 import { Segmented } from './segmented'
 import { VisuallyHidden } from './lib/visually-hidden'
@@ -27,9 +30,11 @@ type QueueHeaderProps = {
   barVariant?: QueueBarVariant
   /** Suggestion callout under the bar (Triage only). */
   suggestion?: ReactNode
+  /** Button at the end of the title line that hides the ticket list. */
+  hideList?: { label: string; shortcut: string; keyshortcuts: string; controls?: string; onHide: () => void }
 }
 
-function QueueHeader({ title, count, countLabel, description, action, bar, barVariant = 'filters', suggestion }: QueueHeaderProps) {
+function QueueHeader({ title, count, countLabel, description, action, bar, barVariant = 'filters', suggestion, hideList }: QueueHeaderProps) {
   const macosWindow = useWindowChrome()
   return (
     <Box display="flex" flexDirection="column" flexShrink={0}>
@@ -45,6 +50,13 @@ function QueueHeader({ title, count, countLabel, description, action, bar, barVa
         )}
         <Box dragRegion={macosWindow} flexGrow={1} alignSelf="stretch" />
         {action}
+        {hideList && (
+          <Tooltip label={hideList.label} shortcut={hideList.shortcut}>
+            <IconButton label={hideList.label} aria-keyshortcuts={hideList.keyshortcuts} aria-controls={hideList.controls} aria-expanded onPress={hideList.onHide}>
+              <Icon name="panel" size={15} color={tokens['text.tertiary']} />
+            </IconButton>
+          </Tooltip>
+        )}
       </Box>
       {description && (
         <Text tag="p" display="block" margin={0} marginTop={4} marginHorizontal={20} fontSize={12.5} lineHeightRatio={1.5} color={tokens['text.tertiary']}>

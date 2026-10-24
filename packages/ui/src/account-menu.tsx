@@ -152,7 +152,7 @@ function AccountMenu({ name, email, presence, onPresenceChange, theme, onThemeCh
           </Box>
           <Menu label={labels.account}>
             <MenuItem label={labels.settings} shortcut={<Kbd>⌘,</Kbd>} onSelect={onOpenSettings} />
-            <MenuItem label={labels.shortcuts} shortcut={<Kbd>?</Kbd>} onSelect={onOpenShortcuts} />
+            <MenuItem label={labels.shortcuts} shortcut={<Kbd>⌘/</Kbd>} onSelect={onOpenShortcuts} />
             <MenuItem destructive label={labels.signOut} onSelect={onSignOut} />
           </Menu>
         </Box>

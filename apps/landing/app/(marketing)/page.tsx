@@ -106,7 +106,7 @@ export default function HomePage() {
           <Box display="flex" alignItems="center" gap={10} marginTop={14}>
             <GoogleMark size={18} />
             <Text font="mono" fontSize={11} color="var(--kairo-color-faint)">
-              kairo.app
+              holakairo.com
             </Text>
           </Box>
           <Box display="flex" gap={8} marginTop={14} flexWrap="wrap">

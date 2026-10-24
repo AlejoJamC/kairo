@@ -98,7 +98,12 @@
     "similarDismiss": "Dismiss",
     "filterLabel": "Filter by priority",
     "classify": "Classify",
-    "countLabel": "{{shown}} of {{open}} open tickets"
+    "countLabel": "{{shown}} of {{open}} open tickets",
+    "hide": "Hide ticket list",
+    "show": "Show ticket list",
+    "pin": "Pin list",
+    "switcherFooter": "J K navigate · esc close",
+    "switcherLabel": "{{queue}} queue"
   },
   "tickets": {
     "title": "Open Tickets",
@@ -126,7 +131,8 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "ticketsCount_one": "{{count}} ticket",
-    "ticketsCount_other": "{{count}} tickets"
+    "ticketsCount_other": "{{count}} tickets",
+    "searchShort": "Search or run…"
   },
   "topChrome": {
     "searchPlaceholder": "Search or run a command…",
@@ -149,7 +155,7 @@
       "themeLight": "Light",
       "themeDark": "Dark",
       "signOut": "Sign out",
-      "menuShortcuts": "Keyboard shortcuts",
+      "menuShortcuts": "All commands",
       "title": "Account"
     },
     "palette": {
@@ -339,7 +345,7 @@
       "title": "Workspace",
       "nameLabel": "Workspace name",
       "urlLabel": "URL",
-      "urlPlaceholder": "kairo.app/my-company",
+      "urlPlaceholder": "holakairo.com/my-company",
       "timezoneLabel": "Timezone",
       "timezonePlaceholder": "America/Bogotá (UTC-5)",
       "langTitle": "Default workspace language",
@@ -847,7 +853,9 @@
     "resolve": "resolve",
     "escalate": "escalate",
     "note": "internal note",
-    "shortcuts": "shortcuts"
+    "shortcuts": "shortcuts",
+    "allCommands": "all commands",
+    "label": "Shortcuts and engine status"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",
@@ -861,6 +869,7 @@
     "rows": {
       "queue": "Move through the queue",
       "commands": "Commands",
+      "panelTabs": "Go to a panel tab",
       "settings": "Settings",
       "send": "Send",
       "shortcuts": "Keyboard shortcuts",
@@ -986,9 +995,15 @@
       "zoom": "Zoom",
       "bring-all": "Bring all to front",
       "help": "Help",
-      "shortcuts": "Keyboard shortcuts",
       "language-es": "Español",
-      "language-en": "English"
+      "language-en": "English",
+      "ticket-list": "Ticket list",
+      "context": "Context",
+      "context-client": "Client",
+      "context-assistant": "Assistant",
+      "context-notes": "Notes",
+      "context-escalate": "Escalate",
+      "all-commands": "All commands"
     },
     "notify": {
       "mention": "{{from}} mentioned you in {{ticket}}",
@@ -996,5 +1011,62 @@
       "slaEscalating": "SLA almost breached on {{ticket}} · escalates in {{minutes}}m",
       "slaOverdue": "First response overdue on {{ticket}}"
     }
+  },
+  "commands": {
+    "groups": {
+      "ticket": "Ticket",
+      "goTo": "Go to",
+      "view": "View",
+      "general": "General"
+    },
+    "items": {
+      "acknowledge": "Acknowledge",
+      "resolve": "Resolve",
+      "escalate": "Escalate",
+      "note": "Internal note",
+      "send": "Send",
+      "send-resolve": "Send and resolve",
+      "ask-assistant": "Ask Kairo Assistant",
+      "priority": "Change priority",
+      "status": "Change status",
+      "wrong-classification": "Wrong classification?…",
+      "group-similar": "Group with similar ticket",
+      "next-ticket": "Next ticket",
+      "previous-ticket": "Previous ticket",
+      "search": "Search tickets",
+      "go-triage": "Triage",
+      "go-awaiting": "Awaiting customer",
+      "go-resolved": "Resolved",
+      "go-escalated": "Escalated",
+      "go-ai-review": "AI Classification",
+      "go-knowledge": "Knowledge",
+      "go-clients": "Clients",
+      "go-settings": "Settings",
+      "toggle-sidebar": "Show or hide the sidebar",
+      "toggle-ticket-list": "Show or hide the ticket list",
+      "context-client": "Context: Client",
+      "context-assistant": "Context: Assistant",
+      "context-notes": "Context: Notes",
+      "context-escalate": "Context: Escalate",
+      "switch-theme": "Switch theme",
+      "language": "Language: {{language}}",
+      "all-commands": "All commands",
+      "close": "Close",
+      "sign-out": "Sign out",
+      "filter-all": "Filter by priority: All",
+      "filter-p1": "Filter by priority: P1",
+      "filter-p2": "Filter by priority: P2",
+      "filter-p3": "Filter by priority: P3"
+    },
+    "scopeLabel": "Scope",
+    "scopeAll": "All",
+    "scopeCommands": "Commands",
+    "count": "{{count}} commands",
+    "seeAll": "See all commands",
+    "switchScope": "switch tab",
+    "note": "On Windows and Linux, ⌘ is Ctrl.",
+    "onlyInTicket": "only in a ticket",
+    "noMatch": "Nothing matches “{{query}}”",
+    "placeholder": "Search tickets or type a command…"
   }
 }

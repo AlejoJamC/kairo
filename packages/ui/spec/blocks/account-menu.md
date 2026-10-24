@@ -10,7 +10,7 @@ Account popover: presence, appearance and session actions.
 - Header (padding 12px 14px): 32px avatar · workspace name 600 with ellipsis · current presence 12px in `text.tertiary` ("Online").
 - Status (padding 8px 6px): `label` header "STATUS" and three menu items with an 8px dot: Online `color.ok`, Away `color.warn`, Invisible `color.p3`; the current one `.on`.
 - Appearance (padding 10px 12px, 8px gap): `label` header "APPEARANCE" and a full-width segmented Light / Dark with equal segments.
-- Actions (padding 6px): Settings with kbd ⌘, · Keyboard shortcuts with kbd ? (opens shortcuts-dialog) · Sign out in `color.bad-ink`, always last.
+- Actions (padding 6px): Settings with kbd ⌘, · All commands with kbd ? (opens command-palette in the Commands scope) · Sign out in `color.bad-ink`, always last.
 - With the sidebar collapsed the menu anchors to the avatar in the same way.
 
 ## States

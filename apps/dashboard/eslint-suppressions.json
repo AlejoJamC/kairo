@@ -1,10 +1,7 @@
 {
   "src/components/ai-assistant.tsx": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
     "react-hooks/set-state-in-effect": {
-      "count": 5
+      "count": 3
     },
     "react-refresh/only-export-components": {
       "count": 1
@@ -64,11 +61,6 @@
   },
   "src/components/resolved-view.tsx": {
     "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/components/ticket-card.tsx": {
-    "react-hooks/purity": {
       "count": 1
     }
   },
