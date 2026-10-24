@@ -98,7 +98,12 @@
     "similarDismiss": "Descartar",
     "filterLabel": "Filtrar por prioridad",
     "classify": "Clasificar",
-    "countLabel": "{{shown}} de {{open}} tickets abiertos"
+    "countLabel": "{{shown}} de {{open}} tickets abiertos",
+    "hide": "Ocultar la lista de tickets",
+    "show": "Mostrar la lista de tickets",
+    "pin": "Fijar lista",
+    "switcherFooter": "J K navegar · esc cerrar",
+    "switcherLabel": "Cola {{queue}}"
   },
   "tickets": {
     "title": "Tickets Abiertos",
@@ -126,7 +131,8 @@
     "collapse": "Colapsar barra lateral",
     "expand": "Expandir barra lateral",
     "ticketsCount_one": "{{count}} ticket",
-    "ticketsCount_other": "{{count}} tickets"
+    "ticketsCount_other": "{{count}} tickets",
+    "searchShort": "Buscar o ejecutar…"
   },
   "topChrome": {
     "searchPlaceholder": "Buscar o ejecutar un comando…",
@@ -149,7 +155,7 @@
       "themeLight": "Claro",
       "themeDark": "Oscuro",
       "signOut": "Cerrar sesión",
-      "menuShortcuts": "Atajos de teclado",
+      "menuShortcuts": "Todos los comandos",
       "title": "Cuenta"
     },
     "palette": {
@@ -847,7 +853,9 @@
     "resolve": "resolver",
     "escalate": "escalar",
     "note": "nota interna",
-    "shortcuts": "atajos"
+    "shortcuts": "atajos",
+    "allCommands": "todos los comandos",
+    "label": "Atajos y estado del motor"
   },
   "shortcuts": {
     "title": "Atajos de teclado",
@@ -987,9 +995,15 @@
       "zoom": "Zoom",
       "bring-all": "Traer todo al frente",
       "help": "Ayuda",
-      "shortcuts": "Atajos de teclado",
       "language-es": "Español",
-      "language-en": "English"
+      "language-en": "English",
+      "ticket-list": "Lista de tickets",
+      "context": "Contexto",
+      "context-client": "Cliente",
+      "context-assistant": "Asistente",
+      "context-notes": "Notas",
+      "context-escalate": "Escalar",
+      "all-commands": "Todos los comandos"
     },
     "notify": {
       "mention": "{{from}} te mencionó en {{ticket}}",
@@ -997,5 +1011,58 @@
       "slaEscalating": "ANS por vencer en {{ticket}} · escala en {{minutes}} min",
       "slaOverdue": "Primera respuesta vencida en {{ticket}}"
     }
+  },
+  "commands": {
+    "groups": {
+      "ticket": "Ticket",
+      "goTo": "Ir a",
+      "view": "Vista",
+      "general": "General"
+    },
+    "items": {
+      "acknowledge": "Reconocer",
+      "resolve": "Resolver",
+      "escalate": "Escalar",
+      "note": "Nota interna",
+      "send": "Enviar",
+      "send-resolve": "Enviar y resolver",
+      "ask-assistant": "Preguntar al asistente de Kairo",
+      "priority": "Cambiar prioridad",
+      "status": "Cambiar estado",
+      "wrong-classification": "¿Clasificación incorrecta?…",
+      "group-similar": "Agrupar con ticket similar",
+      "next-ticket": "Ticket siguiente",
+      "previous-ticket": "Ticket anterior",
+      "search": "Buscar tickets",
+      "go-triage": "Triage",
+      "go-awaiting": "En espera del cliente",
+      "go-resolved": "Resuelto",
+      "go-escalated": "Escalado",
+      "go-ai-review": "Clasificación IA",
+      "go-knowledge": "Conocimiento",
+      "go-clients": "Clientes",
+      "go-settings": "Configuración",
+      "toggle-sidebar": "Mostrar u ocultar la barra lateral",
+      "toggle-ticket-list": "Mostrar u ocultar la lista de tickets",
+      "context-client": "Contexto: Cliente",
+      "context-assistant": "Contexto: Asistente",
+      "context-notes": "Contexto: Notas",
+      "context-escalate": "Contexto: Escalar",
+      "switch-theme": "Cambiar tema",
+      "language": "Idioma: {{language}}",
+      "all-commands": "Todos los comandos",
+      "close": "Cerrar",
+      "sign-out": "Cerrar sesión"
+    },
+    "scopeLabel": "Alcance",
+    "scopeAll": "Todo",
+    "scopeCommands": "Comandos",
+    "count": "{{count}} comandos",
+    "seeAll": "Ver todos los comandos",
+    "switchScope": "cambiar alcance",
+    "note": "En Windows y Linux, ⌘ es Ctrl.",
+    "onlyInTicket": "solo en un ticket",
+    "noMatch": "Nada coincide con «{{query}}»",
+    "placeholder": "Buscar tickets o escribir un comando…"
   }
 }

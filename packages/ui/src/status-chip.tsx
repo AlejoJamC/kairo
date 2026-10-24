@@ -42,6 +42,8 @@ type StatusChipProps = {
   updating?: boolean
   /** Accessible name of the menu. */
   menuLabel: string
+  /** Controls the menu from outside (a command opens it). */
+  menu?: { open: boolean; onOpenChange: (open: boolean) => void }
 }
 
 function Glyph({ status }: { status: StatusKey }) {
@@ -50,7 +52,7 @@ function Glyph({ status }: { status: StatusKey }) {
   )
 }
 
-function StatusChip({ status, options, onChange, readOnly, readOnlyLabel, updating, menuLabel }: StatusChipProps) {
+function StatusChip({ status, options, onChange, readOnly, readOnlyLabel, updating, menuLabel, menu }: StatusChipProps) {
   const current = options.find((option) => option.status === status)?.label ?? status
 
   if (readOnly) {
@@ -65,7 +67,7 @@ function StatusChip({ status, options, onChange, readOnly, readOnlyLabel, updati
   }
 
   return (
-    <Popover>
+    <Popover open={menu?.open} onOpenChange={menu?.onOpenChange}>
       <PopoverTrigger>
         <Pressable
           disabled={updating}

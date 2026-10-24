@@ -6,6 +6,9 @@ import { useTranslation } from "react-i18next";
 import type { Ticket, TicketStatus } from "@kairo/types";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { assignTicket, setTicketStatus } from "@kairo/client-core/endpoints";
+import { useTicketMenuRequest } from "@/hooks/use-ticket-menu-request";
+import { useTicketListVisibility } from "@/hooks/use-ticket-list-visibility";
+import { formatRelativeTime } from "@/lib/relative-time";
 import { Button, Icon, StatusChip, TicketBar, TicketHeading, type PriorityLevel, type StatusKey } from "@kairo/ui";
 import { normalizeTicketCategory, normalizeTicketType } from "@/lib/ticket-labels";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
@@ -39,8 +42,13 @@ export function TicketHeader({ ticket, queueName, readOnly = false, onOpenNotes 
   const updateClassification = useTriageStore((s) => s.updateClassification);
   const selectRelativeTicket = useTriageStore((s) => s.selectRelativeTicket);
   const queueIds = useTriageStore((s) => s.queueIds);
+  const allTickets = useTriageStore((s) => s.tickets);
+  const selectTicket = useTriageStore((s) => s.selectTicket);
+  const { hidden: listHidden, showList } = useTicketListVisibility();
   const [assigning, setAssigning] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  useTicketMenuRequest("status", () => setStatusOpen(true));
 
   const isAssigned = !!ticket.assigned_to;
 
@@ -107,6 +115,7 @@ export function TicketHeader({ ticket, queueName, readOnly = false, onOpenNotes 
         readOnlyLabel={t("ticketHeader.readOnlyBadge")}
         updating={updating}
         menuLabel={t("ticketHeader.statusMenu")}
+        menu={{ open: statusOpen, onOpenChange: setStatusOpen }}
       />
     </>
   );
@@ -124,6 +133,36 @@ export function TicketHeader({ ticket, queueName, readOnly = false, onOpenNotes 
       }
       escalatedLabel={ticket.status === "escalated" ? t("ticketHeader.escalated") : undefined}
       status={status}
+      listHidden={
+        listHidden
+          ? {
+              showLabel: showList.label,
+              shortcut: showList.shortcut,
+              keyshortcuts: showList.keyshortcuts,
+              controls: showList.controls,
+              onShow: showList.onShow,
+              switcher: {
+                label: t("ticketList.switcherLabel", { queue: queueName }),
+                count: String(queueIds.length),
+                items: queueIds.flatMap((id) => {
+                  const entry = allTickets.find((candidate) => candidate.id === id);
+                  if (!entry) return [];
+                  return [{
+                    id,
+                    priority: entry.priority,
+                    code: entry.ticket_number ? `KAI-${entry.ticket_number}` : "",
+                    subject: entry.subject ?? "—",
+                    age: formatRelativeTime(entry.received_at ?? entry.created_at, t),
+                    current: id === ticket.id,
+                  }];
+                }),
+                onSelect: selectTicket,
+                pinLabel: t("ticketList.pin"),
+                footer: t("ticketList.switcherFooter"),
+              },
+            }
+          : undefined
+      }
       hasPrevious={index > 0}
       hasNext={index >= 0 && index < queueIds.length - 1}
       onPrevious={() => selectRelativeTicket(-1)}
@@ -148,6 +187,9 @@ interface TicketHeadingBlockProps {
 export function TicketHeadingBlock({ ticket, readOnly = false, sla }: TicketHeadingBlockProps) {
   const { t } = useTranslation("dashboard");
   const { reclassify, changePriority } = useTicketCorrection(ticket);
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  useTicketMenuRequest("priority", () => setPriorityOpen(true));
+  useTicketMenuRequest("reclassify", () => reclassify.onOpenChange(true));
   const categoryKey = normalizeTicketCategory(ticket.category);
   const typeKey = ticket.ticket_type ? normalizeTicketType(ticket.ticket_type) : null;
 
@@ -158,6 +200,7 @@ export function TicketHeadingBlock({ ticket, readOnly = false, sla }: TicketHead
       priority={ticket.priority as PriorityLevel | null}
       priorityOptions={["P1", "P2", "P3"]}
       onPriorityChange={(level) => void changePriority(level)}
+      priorityMenu={{ open: priorityOpen, onOpenChange: setPriorityOpen }}
       categories={[
         ...(typeKey ? [{ id: "type", scale: "ticketType" as const, value: typeKey, label: t(`ticketTypes.${typeKey}`) }] : []),
         ...(categoryKey ? [{ id: "category", scale: "category" as const, value: categoryKey, label: t(`ticketCategories.${categoryKey}`) }] : []),

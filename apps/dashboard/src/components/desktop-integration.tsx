@@ -52,13 +52,15 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed, onTog
   const selectedId = useTriageStore((state) => state.selectedTicketId);
   const slaConfig = useTriageStore((state) => state.operationalSlaConfig);
   const presence = useAppCommands((state) => state.presence);
+  const ticketListHidden = useAppCommands((state) => state.ticketListHidden);
+  const contextTab = useAppCommands((state) => state.contextTab);
   const selected = tickets.find((ticket) => ticket.id === selectedId) ?? null;
   const selectedShortId = selected?.ticket_number ? `KAI-${selected.ticket_number}` : null;
 
   // The window never gets narrower than the columns need; collapsing the sidebar lowers the floor.
   useEffect(() => {
-    host?.setMinWindowSize(appWindowMinWidth(sidebarCollapsed), APP_WINDOW_MIN_HEIGHT);
-  }, [host, sidebarCollapsed]);
+    host?.setMinWindowSize(appWindowMinWidth(sidebarCollapsed, ticketListHidden), APP_WINDOW_MIN_HEIGHT);
+  }, [host, sidebarCollapsed, ticketListHidden]);
 
   // ── Native menu ───────────────────────────────────────────────────────────
   const handlers: Record<string, () => void> = {
@@ -67,8 +69,18 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed, onTog
     sidebar: onToggleSidebar,
     "language-es": () => setLanguage("es" as SupportedLanguage),
     "language-en": () => setLanguage("en" as SupportedLanguage),
-    search: () => useAppCommands.getState().requestPalette(),
-    shortcuts: () => useAppCommands.getState().requestShortcuts(),
+    search: () => useAppCommands.getState().requestPalette("all"),
+    "all-commands": () => useAppCommands.getState().requestPalette("commands"),
+    "ticket-list": () => useAppCommands.getState().toggleTicketList(),
+    "context-client": () => useTriageStore.getState().requestPanelTab("client"),
+    "context-assistant": () => useTriageStore.getState().requestPanelTab("assistant"),
+    "context-notes": () => useTriageStore.getState().requestPanelTab("notes"),
+    "context-escalate": () => useTriageStore.getState().requestPanelTab("escalate"),
+    send: () => useTriageStore.getState().requestComposerSend("send"),
+    "send-resolve": () => useTriageStore.getState().requestComposerSend("send-resolve"),
+    "wrong-classification": () => useTriageStore.getState().requestTicketMenu("reclassify"),
+    "group-with": () => useTriageStore.getState().requestTicketMenu("group"),
+    "ask-assistant": () => useTriageStore.getState().requestPanelTab("assistant"),
     "go-triage": () => onViewChange("triage"),
     "go-awaiting": () => onViewChange("awaiting"),
     "go-resolved": () => onViewChange("resolved"),
@@ -93,6 +105,8 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed, onTog
     view: menuView(view),
     language: language === "es" ? "es" : "en",
     sidebarExpanded: !sidebarCollapsed,
+    ticketListShown: !ticketListHidden,
+    contextTab: selected ? (contextTab as AppMenuState["contextTab"]) : null,
     ticketOpen: selected !== null,
     ticketAwaitingCustomer: selected !== null && (AWAITING_STATUSES as string[]).includes(selected.status ?? ""),
     ticketFinal: selected !== null && isTicketReadOnly(selected.status ?? ""),
@@ -108,7 +122,7 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed, onTog
     return JSON.stringify(disableUnhandled(labelled, new Set(Object.keys(handlers))));
     // The menu is a function of the app state it mirrors.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, language, sidebarCollapsed, selected?.id, selected?.status, selected?.priority, t, i18n]);
+  }, [view, language, sidebarCollapsed, ticketListHidden, contextTab, selected?.id, selected?.status, selected?.priority, t, i18n]);
 
   useEffect(() => {
     host?.setMenu(menuJson);

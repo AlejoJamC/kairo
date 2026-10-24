@@ -117,6 +117,8 @@ type ButtonProps = Omit<GetProps<typeof ButtonFrame>, 'variant' | 'size' | 'chil
   shortcut?: string
   /** Single-key shortcut shown inside the button ("A"); the accessible name stays the label. */
   keyHint?: string
+  /** `aria-keyshortcuts` of the key ("Meta+Shift+F"); a plain single key is used as is. */
+  keyshortcuts?: string
   title?: string
 }
 
@@ -130,12 +132,14 @@ function Button({
   loadingLabel,
   shortcut,
   keyHint,
+  keyshortcuts,
   disabled,
   title,
   type,
   ...props
 }: ButtonProps) {
   const inactive = disabled || loading
+  const keys = keyshortcuts ?? (keyHint && /^[A-Za-z0-9]$/.test(keyHint) ? keyHint : undefined)
   return (
     <ButtonFrame
       variant={variant}
@@ -145,7 +149,7 @@ function Button({
       aria-busy={loading || undefined}
       {...domProps({
         title: title ?? (shortcut ? `${children} (${shortcut})` : undefined),
-        ...(keyHint ? { 'aria-keyshortcuts': keyHint } : null),
+        ...(keys ? { 'aria-keyshortcuts': keys } : null),
         ...(type ? { type } : null),
       })}
       {...props}
@@ -157,7 +161,7 @@ function Button({
       {iconEnd}
       {keyHint && (
         <Box tag="span" aria-hidden marginLeft={2}>
-          <Kbd>{keyHint}</Kbd>
+          <Kbd tone={variant === 'primary' ? 'onAccent' : undefined}>{keyHint}</Kbd>
         </Box>
       )}
     </ButtonFrame>

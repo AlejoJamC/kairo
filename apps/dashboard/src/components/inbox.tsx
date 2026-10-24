@@ -12,10 +12,13 @@ import { TicketDetail } from "./ticket-detail";
 import { AiAssistant } from "./ai-assistant";
 import type { TicketPriority, PrioritySlaConfig } from "@kairo/types";
 import { Box } from "@kairo/ui";
+import { useTicketListVisibility } from "@/hooks/use-ticket-list-visibility";
 
 export function Inbox() {
   const { user, accountId } = useAuth();
   const { setTickets, setScanning, setOperationalSlaConfig } = useTriageStore();
+
+  const { hidden: listHidden } = useTicketListVisibility();
 
   useRealtimeTickets();
 
@@ -61,9 +64,9 @@ export function Inbox() {
 
   return (
     <>
-      <Box width={372} display="flex" flexDirection="column" backgroundColor="var(--kairo-color-surface)" flexShrink={0} borderRightWidth={1} borderRightColor="var(--k-border)" borderStyle="solid">
+      {!listHidden && <Box id="ticket-list" width={372} display="flex" flexDirection="column" backgroundColor="var(--kairo-color-surface)" flexShrink={0} borderRightWidth={1} borderRightColor="var(--k-border)" borderStyle="solid">
         <TicketList />
-      </Box>
+      </Box>}
       <TicketDetail />
       <AiAssistant />
     </>

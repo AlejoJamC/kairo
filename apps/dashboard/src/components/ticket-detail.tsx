@@ -9,7 +9,8 @@ import { useTicketThread, type ThreadMessage } from "@kairo/client-core/hooks/us
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
 import { TeamOnlyChip } from "./triage/note-primitives";
-import { Avatar, Box, Chip, Icon, Pressable, ReadOnlyBar, SlaIndicator, Text, ThreadMessage as ThreadMessageView } from "@kairo/ui";
+import { useTicketListVisibility } from "@/hooks/use-ticket-list-visibility";
+import { Avatar, Box, Button, Chip, Icon, Pressable, ReadOnlyBar, SlaIndicator, Text, ThreadMessage as ThreadMessageView } from "@kairo/ui";
 import { startGmailConnect } from "@kairo/client-core/endpoints";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
@@ -178,6 +179,7 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
 export function TicketDetail() {
   const { t } = useTranslation("dashboard");
   const { tickets, selectedTicketId, selectTicket } = useTriageStore();
+  const { hidden: listHidden, showList } = useTicketListVisibility();
   const requestPanelTab = useTriageStore((state) => state.requestPanelTab);
   const [view] = useActiveView();
   const labelKey = (VIEW_LABEL_KEY as Record<string, (typeof VIEW_LABEL_KEY)[keyof typeof VIEW_LABEL_KEY]>)[view ?? "triage"] ?? VIEW_LABEL_KEY.triage;
@@ -257,6 +259,13 @@ export function TicketDetail() {
         <Text tag="p" fontSize={13} color="var(--k-text-tertiary)" display="block">
           {t("ticketDetail.selectPrompt", "Select a ticket to view details")}
         </Text>
+        {listHidden && (
+          <Box marginTop={6}>
+            <Button keyHint={showList.shortcut} onPress={showList.onShow}>
+              {showList.label}
+            </Button>
+          </Box>
+        )}
       </Box>
     );
   }

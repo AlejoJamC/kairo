@@ -68,12 +68,14 @@ type AuthCardProps = {
   loadingLabel?: string
   /** Submit disabled until the form is valid. */
   submitDisabled?: boolean
+  /** Key shown inside the submit button (↵ in the desktop sign-in). */
+  submitKey?: string
   onSubmit: () => void
   /** Text below the card (no account yet, and so on). */
   footer?: ReactNode
 }
 
-function AuthCard({ mark, wait, title, subtitle, providers, dividerLabel, children, aside, error, submitLabel, loading, loadingLabel, submitDisabled, onSubmit, footer }: AuthCardProps) {
+function AuthCard({ mark, wait, title, subtitle, providers, dividerLabel, children, aside, error, submitLabel, loading, loadingLabel, submitDisabled, submitKey, onSubmit, footer }: AuthCardProps) {
   return (
     <Box>
       <Box marginBottom={24} display="flex" flexDirection="column" alignItems={mark ? 'center' : 'flex-start'} gap={12}>
@@ -132,7 +134,7 @@ function AuthCard({ mark, wait, title, subtitle, providers, dividerLabel, childr
           {children}
           {aside}
           {error && <Callout tone="error">{error}</Callout>}
-          <Button variant="primary" size="web" full loading={loading} loadingLabel={loadingLabel} disabled={submitDisabled} type="submit">
+          <Button variant="primary" size="web" full loading={loading} loadingLabel={loadingLabel} disabled={submitDisabled} keyHint={submitKey} type="submit">
             {submitLabel}
           </Button>
         </Box>

@@ -29,6 +29,13 @@ const KbdFrame = styled(Stack, {
         boxShadow: `0 1px 0 ${tokens['border.strong']}`,
       },
     },
+    /** onAccent: on a primary button, transparent with a light border. */
+    tone: {
+      onAccent: {
+        backgroundColor: 'transparent',
+        borderColor: `color-mix(in srgb, ${tokens['text.onAccent']} 40%, transparent)`,
+      },
+    },
   } as const,
   defaultVariants: { size: 'sm' },
 })
@@ -42,6 +49,9 @@ const KbdText = styled(Text, {
       sm: { fontSize: 10.5, color: tokens['text.secondary'] },
       lg: { fontSize: 12, color: tokens['text.primary'] },
     },
+    tone: {
+      onAccent: { color: tokens['text.onAccent'] },
+    },
   } as const,
   defaultVariants: { size: 'sm' },
 })
@@ -51,10 +61,10 @@ type KbdProps = Omit<GetProps<typeof KbdFrame>, 'children'> & {
   children: string
 }
 
-function Kbd({ children, size = 'sm', ...props }: KbdProps) {
+function Kbd({ children, size = 'sm', tone, ...props }: KbdProps) {
   return (
-    <KbdFrame size={size} tag="kbd" {...props}>
-      <KbdText size={size}>{children}</KbdText>
+    <KbdFrame size={size} tone={tone} tag="kbd" {...props}>
+      <KbdText size={size} tone={tone}>{children}</KbdText>
     </KbdFrame>
   )
 }

@@ -9,6 +9,9 @@ import { isTriageActive } from "@kairo/client-core/triage-status";
 import { getSimilarTickets, getRelatedHistory, syncGmail, classifyBatch } from "@kairo/client-core/endpoints";
 import { fetchTicketById, fetchInboxTickets, fetchBatchJobStatus } from "@kairo/client-core/queries";
 import { useAuth } from "@kairo/client-core/auth";
+import { useAppCommands } from "@/lib/app-commands";
+import { useTicketMenuRequest } from "@/hooks/use-ticket-menu-request";
+import { useTicketListVisibility } from "@/hooks/use-ticket-list-visibility";
 import { Box, Button, Callout, EmptyState, Icon, IconButton, Menu, MenuItem, Popover, PopoverContent, PopoverTrigger, PriorityFilterTabs, PulseDot, QueueHeader, type PriorityLevel } from "@kairo/ui";
 import { TicketSkeleton, VirtualTicketList } from "@/components/ticket-list-parts";
 import { INITIAL_FILTERS, applyFilters, assignToGroupOrCreate, deriveGroupName, type BatchTicketResult, type FilterState, type SimilarTicketRow } from "@/components/ticket-list-helpers";
@@ -405,10 +408,19 @@ export function TicketList() {
   // -------------------------------------------------------------------------
 
   const busy = classifyingAll || syncing;
+  const { hideList } = useTicketListVisibility();
+  const setSimilarGroupAvailable = useAppCommands((state) => state.setSimilarGroupAvailable);
+  const canGroupSimilar = TICKET_GROUPING_ENABLED && !!similarTickets && similarTickets.length > 0;
+  useEffect(() => {
+    setSimilarGroupAvailable(canGroupSimilar);
+    return () => setSimilarGroupAvailable(false);
+  }, [canGroupSimilar, setSimilarGroupAvailable]);
+  useTicketMenuRequest("group", () => void handleAcceptSimilar());
 
   return (
     <Box display="flex" flexGrow={1} flexShrink={1} flexBasis="0%" flexDirection="column" overflow="hidden" backgroundColor="white">
       <QueueHeader
+        hideList={hideList}
         title={t("ticketList.header")}
         count={`${filtered.length}/${activeTickets.length}`}
         countLabel={t("ticketList.countLabel", { shown: filtered.length, open: activeTickets.length })}

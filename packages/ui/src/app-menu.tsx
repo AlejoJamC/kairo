@@ -16,7 +16,7 @@ export type AppView =
 export type AppMenuItem =
   | { kind: 'item'; id: string; label: string; shortcut?: string; accelerator?: string; disabled?: boolean; checked?: boolean }
   | { kind: 'separator' }
-  | { kind: 'checkbox'; id: string; label: string; checked: boolean }
+  | { kind: 'checkbox'; id: string; label: string; checked: boolean; shortcut?: string; accelerator?: string; disabled?: boolean }
   | { kind: 'submenu'; id: string; label: string; items: AppMenuItem[] }
 
 export type AppMenuGroup = { id: string; label: string; items: AppMenuItem[] }
@@ -25,6 +25,10 @@ export interface AppMenuState {
   view: AppView
   language: 'en' | 'es'
   sidebarExpanded: boolean
+  /** The ticket list of the queue views is shown (⌘⇧F). */
+  ticketListShown: boolean
+  /** Tab of the context panel that is open, when a ticket is. */
+  contextTab: 'client' | 'assistant' | 'notes' | 'escalate' | null
   /** No ticket open: the whole Ticket menu is disabled. */
   ticketOpen: boolean
   /** Awaiting customer: Acknowledge and Resolve are disabled, as in the composer. */
@@ -53,6 +57,14 @@ export function buildAppMenu(state: AppMenuState): AppMenuGroup[] {
     { id: 'go-ai-review', view: 'ai-review', label: 'AI Classification' },
     { id: 'go-knowledge', view: 'knowledge', label: 'Knowledge' },
   ]
+
+  const queueViews: AppView[] = ['triage', 'awaiting', 'resolved', 'escalated', 'ai-review']
+  const contextTabs = [
+    { id: 'client', label: 'Client' },
+    { id: 'assistant', label: 'Assistant' },
+    { id: 'notes', label: 'Notes' },
+    { id: 'escalate', label: 'Escalate' },
+  ] as const
 
   const ticketItems: AppMenuItem[] = [
     item('acknowledge', 'Acknowledge', { shortcut: 'A', disabled: !state.ticketOpen || state.ticketAwaitingCustomer || state.ticketFinal }),
@@ -105,7 +117,12 @@ export function buildAppMenu(state: AppMenuState): AppMenuGroup[] {
       id: 'view',
       label: 'View',
       items: [
-        { kind: 'checkbox', id: 'sidebar', label: 'Sidebar', checked: state.sidebarExpanded },
+        { kind: 'checkbox', id: 'sidebar', label: 'Sidebar', checked: state.sidebarExpanded, shortcut: '⌃⌘S', accelerator: 'Ctrl+Cmd+S' },
+        { kind: 'checkbox', id: 'ticket-list', label: 'Ticket list', checked: state.ticketListShown, shortcut: '⌘⇧F', accelerator: 'CmdOrCtrl+Shift+F', disabled: !queueViews.includes(state.view) },
+        submenu('context', 'Context', contextTabs.map((tab, index) =>
+          item(`context-${tab.id}`, tab.label, { checked: state.contextTab === tab.id, shortcut: `⌘${index + 1}`, accelerator: `CmdOrCtrl+${index + 1}`, disabled: !state.ticketOpen }),
+        )),
+        separator(),
         item('switch-theme', 'Switch theme', { shortcut: '⌘⇧L', accelerator: 'CmdOrCtrl+Shift+L' }),
         submenu('language', 'Language', [
           radio('language-es', 'Español', state.language === 'es'),
@@ -134,6 +151,6 @@ export function buildAppMenu(state: AppMenuState): AppMenuGroup[] {
       label: 'Window',
       items: [item('minimize', 'Minimize'), item('zoom', 'Zoom'), separator(), item('bring-all', 'Bring all to front')],
     },
-    { id: 'help', label: 'Help', items: [item('shortcuts', 'Keyboard shortcuts', { shortcut: '?' })] },
+    { id: 'help', label: 'Help', items: [item('all-commands', 'All commands', { shortcut: '?' })] },
   ]
 }
