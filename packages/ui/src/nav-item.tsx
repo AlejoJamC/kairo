@@ -25,18 +25,31 @@ type NavItemProps = {
   live?: boolean
   /** The count failed to load: shows a dash and a red dot. */
   countError?: boolean
+  /** Collapsed sidebar: a dot on the icon (Triage with tickets). */
+  railDot?: boolean
   disabled?: boolean
+  /** Handlers a wrapping Tooltip injects. */
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
+  onFocus?: () => void
+  onBlur?: () => void
+  'aria-describedby'?: string
 }
 
-function NavItem({ icon, label, onPress, active, variant = 'sidebar', collapsed, count, countLabel, overdue, live, countError, disabled }: NavItemProps) {
+function NavItem({ icon, label, onPress, active, variant = 'sidebar', collapsed, count, countLabel, overdue, live, countError, railDot, disabled, onMouseEnter, onMouseLeave, onFocus, onBlur, ...aria }: NavItemProps) {
   const settings = variant === 'settings'
   const showCount = !disabled && !collapsed && (countError || count !== undefined)
   return (
     <Pressable
+      {...aria}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      aria-label={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
       aria-disabled={disabled || undefined}
       disabled={disabled}
-      title={collapsed ? label : undefined}
       onClick={() => !disabled && onPress()}
       display="flex"
       width="100%"
@@ -59,7 +72,12 @@ function NavItem({ icon, label, onPress, active, variant = 'sidebar', collapsed,
       opacity={disabled ? 0.6 : 1}
       cursor={disabled ? 'default' : 'pointer'}
     >
-      <Icon name={icon} size={settings ? 15 : 16} />
+      <Box position="relative" display="flex">
+        <Icon name={icon} size={settings ? 15 : 16} />
+        {collapsed && railDot && (
+          <Box position="absolute" top={-3} right={-4} width={6} height={6} circle backgroundColor={tokens['accent.default']} boxShadow={`0 0 0 2px ${tokens['surface.sidebar']}`} aria-hidden />
+        )}
+      </Box>
       {!collapsed && <Text flexGrow={1} flexShrink={1} flexBasis="0%" whiteSpace="nowrap">{label}</Text>}
       {showCount && (
         <Box display="flex" alignItems="center" gap={4}>

@@ -6,7 +6,7 @@ Header of the queue pane: view title, count, action, filter bar and the empty te
 
 ## Variants
 
-- Title line (`.qhead`, min height `size.header`, padding 14px 12px 0 20px): `<h1>` in `typography.pane-title` · count `.cnt` 12px · flexible space · optional action.
+- Title line (`.qhead`, min height `size.header`, padding 14px 12px 0 20px): `<h1>` in `typography.pane-title` · count `.cnt` 12px · flexible space · optional action · at the end, icon button "Hide ticket list" (list icon, tooltip "Hide ticket list ⌘⇧F", `aria-keyshortcuts="Meta+Shift+F"`, `aria-controls` pointing to the list, `aria-expanded="true"`). Hidden, the list comes back from ticket-bar (list hidden variant) or with ⌘⇧F.
 - Description (`.qdesc`, optional): 12.5/1.5 in `text.tertiary`, margin 4px 20px 0, `text-wrap: pretty`.
 - Bottom bar (`.qbar`), always with a `border.default` bottom border; its content depends on the view.
 - Per view:

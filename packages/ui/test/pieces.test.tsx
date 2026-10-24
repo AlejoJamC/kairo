@@ -112,10 +112,10 @@ describe('NavItem', () => {
     expect(item.textContent).toContain('7')
   })
 
-  it('collapses to the icon and keeps the label in the title', () => {
+  it('collapses to the icon and keeps the label as its accessible name', () => {
     renderUi(<NavItem icon="triage" label="Triage" collapsed count={7} onPress={() => {}} />)
     const item = screen.getByRole('button')
-    expect(item.getAttribute('title')).toBe('Triage')
+    expect(item.getAttribute('aria-label')).toBe('Triage')
     expect(item.textContent).toBe('')
   })
 

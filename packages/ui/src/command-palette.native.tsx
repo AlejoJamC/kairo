@@ -7,12 +7,13 @@ import { px } from './lib/units'
 
 // React Native command palette: a modal with a search field and sections.
 
-type PaletteItem = { id: string; label: string; icon?: IconName; shortcut?: readonly string[]; meta?: string }
+type PaletteItem = { id: string; label: string; icon?: IconName; iconColor?: string; shortcut?: readonly string[]; meta?: string; code?: string; where?: string; disabled?: boolean; note?: string; quiet?: boolean }
 
 type PaletteSection = {
   id: string
   title: string
   items: readonly PaletteItem[]
+  dense?: boolean
   loading?: boolean
   error?: { message: string; retryLabel: string; onRetry: () => void }
 }
