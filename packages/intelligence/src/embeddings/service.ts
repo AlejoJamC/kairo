@@ -1,5 +1,7 @@
 import { ProviderError } from '../providers/base';
 import { groupBySimilarity } from './similarity';
+import { summarizeCoverage, type CoverageBasis, type CoverageReport, type IndexInspection, type IndexCoverageState } from './coverage';
+import { observeSemanticOperation, type SemanticOperation, type SemanticOperationContext, type SemanticOperationSignal, type SemanticOutcomeSummary } from './telemetry';
 
 export type RetrievalPurpose = 'similar_cases' | 'approved_knowledge';
 export interface SemanticScope {
@@ -62,6 +64,7 @@ export interface SemanticAdapter {
 export interface SemanticServiceDeps {
   scope: SemanticScope;
   controls?: () => { enabled: boolean; generation: boolean; indexing: boolean; retrieval: boolean };
+  observe?: (signal: SemanticOperationSignal) => void;
   generationTimeoutMs?: number;
   indexingTimeoutMs?: number;
   space: VectorSpace;
@@ -79,6 +82,7 @@ export interface GroupingResult {
 }
 export interface SemanticService {
   indexSource(input: IndexRequest): Promise<IndexResult>;
+  inspectCoverage(input?: { sources?: readonly SourceReference[]; basis?: CoverageBasis }): Promise<CoverageReport>;
   retrieve(input: RetrievalRequest): Promise<RetrievalResult>;
   readIndexes(input: { sources: readonly SourceReference[] }): Promise<StoredIndexResult[]>;
   groupSources(input: { sources: readonly SourceReference[]; minSimilarity?: number }): Promise<GroupingResult>;
@@ -91,7 +95,7 @@ export function sameVectorSpace(left: VectorSpace, right: VectorSpace): boolean 
 /** A scoped capability. Storage and authorization are supplied by the server. */
 export function createSemanticService(deps: SemanticServiceDeps): SemanticService {
   const scope: SemanticScope = { ...deps.scope, actor: { ...deps.scope.actor }, permissions: [...deps.scope.permissions] };
-  const space = { ...deps.space };
+  const space = { provider: deps.space.provider, model: deps.space.model, dimensions: deps.space.dimensions };
   const adapters = new Map(deps.adapters.map(adapter => [adapter.kind, adapter]));
   if (adapters.size !== deps.adapters.length) throw new Error('Duplicate semantic source adapter');
   const validVector = (vector: number[]) => vector.length === space.dimensions && vector.every(Number.isFinite) && vector.some(value => value !== 0);
@@ -117,136 +121,208 @@ export function createSemanticService(deps: SemanticServiceDeps): SemanticServic
       })]);
     } finally { clearTimeout(timer); }
   };
+  const sourceLabel = (kind: string) => adapters.has(kind) ? kind : 'unregistered';
+  const coverage = (inspections?: readonly IndexInspection[], requested?: number, basis?: CoverageBasis) =>
+    summarizeCoverage({ inspections, requested, basis, space, sourceLabel });
+  const classifyIndex = (source: LoadedSemanticSource): IndexCoverageState => {
+    if (!source.index) return 'missing';
+    if (source.index.revision !== source.revision || source.index.preparation !== source.preparation) return 'stale';
+    if (!sameVectorSpace(source.index.space, space) || !source.index.vector || !validVector(source.index.vector)) return 'incompatible';
+    return 'ready';
+  };
+  const summarizeCoverageOutcome = (report: CoverageReport): SemanticOutcomeSummary => ({
+    outcome: report.reason === 'disabled' ? 'disabled' : report.status, ...(report.reason ? { reason: report.reason } : {}),
+  });
+  const summarizeReadOutcome = (results: readonly ({ status: 'ready' } | { status: 'unavailable'; reason: SemanticFailure })[]): SemanticOutcomeSummary => {
+    const unavailable = results.filter((result): result is { status: 'unavailable'; reason: SemanticFailure } => result.status === 'unavailable');
+    const reason = unavailable.find(result => result.reason !== 'disabled')?.reason ?? unavailable[0]?.reason;
+    const outcome = !unavailable.length ? 'ok' : unavailable.length < results.length ? 'partial' : reason === 'disabled' ? 'disabled' : 'unavailable';
+    return { outcome, ...(reason ? { reason } : {}) };
+  };
+  const observe = <T>(operation: SemanticOperation, kinds: readonly string[], run: (context: SemanticOperationContext) => Promise<T>,
+    summarize: (result: T) => SemanticOutcomeSummary) => observeSemanticOperation({ operation, space,
+      sources: [...new Set(kinds.map(sourceLabel))].sort() }, run, summarize, deps.observe);
+  const inspectIndexes = async (input: { sources: readonly SourceReference[] }) => {
+    const invalid = (reference: SourceReference): SemanticFailure | undefined => {
+      if (!controls().enabled || !controls().retrieval) return 'disabled';
+      if (!scope.permissions.includes('retrieve')) return 'forbidden';
+      if (input.sources.length > 200 || !validReference(reference) || !adapters.has(reference.kind)) return 'invalid_input';
+      if (adapters.get(reference.kind)!.enabled === false) return 'disabled';
+      return undefined;
+    };
+    const key = (reference: SourceReference) => JSON.stringify([reference.kind, reference.id]);
+    const groups = new Map<string, Map<string, SourceReference>>();
+    for (const reference of input.sources) {
+      if (invalid(reference)) continue;
+      if (!groups.has(reference.kind)) groups.set(reference.kind, new Map());
+      groups.get(reference.kind)!.set(key(reference), reference);
+    }
+    const loaded = new Map<string, LoadedSemanticSource>();
+    const failures = new Map<string, SemanticFailure>();
+    await Promise.all([...groups.entries()].map(async ([kind, references]) => {
+      const adapter = adapters.get(kind)!;
+      if (adapter.loadMany) {
+        try {
+          for (const source of await adapter.loadMany([...references.values()])) {
+            if (source.accountId === scope.accountId && source.reference.kind === kind && references.has(key(source.reference))) {
+              loaded.set(key(source.reference), source);
+            }
+          }
+        } catch { for (const id of references.keys()) failures.set(id, 'storage_unavailable'); }
+      } else {
+        await Promise.all([...references.values()].map(async reference => {
+          try { const source = await load(reference); if (source) loaded.set(key(reference), source); }
+          catch { failures.set(key(reference), 'storage_unavailable'); }
+        }));
+      }
+    }));
+    const inspections: IndexInspection[] = [];
+    const indices = input.sources.map((reference): StoredIndexResult => {
+      const failed = (reason: SemanticFailure, state: IndexCoverageState = 'unknown'): StoredIndexResult => {
+        inspections.push({ source: reference, state, reason });
+        return { status: 'unavailable', source: { ...reference }, reason };
+      };
+      const reason = invalid(reference) ?? failures.get(key(reference));
+      if (reason) return failed(reason);
+      const source = loaded.get(key(reference));
+      if (!source) return failed('not_found');
+      const state = classifyIndex(source);
+      if (state === 'missing') return failed('index_missing', state);
+      if (state !== 'ready') return failed('index_incompatible', state);
+      inspections.push({ source: reference, state });
+      return { status: 'ready', source: { ...reference }, revision: source.revision, preparation: source.preparation,
+        space: { ...space }, vector: [...source.index!.vector!] };
+    });
+    return { indices, inspections };
+  };
   const service: SemanticService = {
     async indexSource(input: IndexRequest): Promise<IndexResult> {
-      if (!controls().enabled || !controls().indexing) return { status: 'failed', reason: 'disabled' };
-      if (!scope.permissions.includes('index')) return { status: 'failed', reason: 'forbidden' };
-      if (!validReference(input.source)) return { status: 'failed', reason: 'invalid_input' };
-      const adapter = adapters.get(input.source.kind);
-      if (!adapter) return { status: 'failed', reason: 'invalid_input' };
-      if (adapter.enabled === false) return { status: 'failed', reason: 'disabled' };
-      let source: LoadedSemanticSource | null;
-      try { source = await load(input.source); } catch { return { status: 'failed', reason: 'storage_unavailable' }; }
-      if (!source) return { status: 'failed', reason: 'not_found' };
-      if (input.expectedRevision !== undefined && input.expectedRevision !== source.revision) return { status: 'failed', reason: 'revision_changed' };
-      if (!source.text.trim()) return { status: 'skipped', reason: 'empty_text' };
-      if (currentIndex(source)) {
-        return { status: 'unchanged', revision: source.revision, space: { ...space } };
-      }
-      if (!controls().enabled || !controls().generation || !controls().indexing) return { status: 'failed', reason: 'disabled' };
-      let vector: number[];
-      try { vector = await generate(source.text, deps.indexingTimeoutMs ?? deps.generationTimeoutMs ?? 120_000); } catch (error) { return { status: 'failed', reason: error instanceof ProviderError && !error.retriable ? 'provider_rejected' : 'provider_unavailable' }; }
-      if (!validVector(vector)) return { status: 'failed', reason: 'index_incompatible' };
-      if (!controls().enabled || !controls().indexing) return { status: 'failed', reason: 'disabled' };
-      try {
-        const status = await adapter.store(source, vector, space);
-        return status === 'indexed' ? { status, revision: source.revision, space: { ...space } } : { status: 'failed', reason: status };
-      } catch { return { status: 'failed', reason: 'storage_unavailable' }; }
+      return observe<IndexResult>('index', [input.source.kind], async context => {
+        context.coverage = coverage([{ source: input.source, state: 'unknown' }], 1, 'known_requests');
+        if (!controls().enabled || !controls().indexing) return { status: 'failed', reason: 'disabled' };
+        if (!scope.permissions.includes('index')) return { status: 'failed', reason: 'forbidden' };
+        if (!validReference(input.source)) return { status: 'failed', reason: 'invalid_input' };
+        const adapter = adapters.get(input.source.kind);
+        if (!adapter) return { status: 'failed', reason: 'invalid_input' };
+        if (adapter.enabled === false) return { status: 'failed', reason: 'disabled' };
+        let source: LoadedSemanticSource | null;
+        try { source = await load(input.source); } catch { return { status: 'failed', reason: 'storage_unavailable' }; }
+        if (!source) return { status: 'failed', reason: 'not_found' };
+        context.coverage = coverage([{ source: input.source, state: classifyIndex(source) }], 1, 'known_requests');
+        if (input.expectedRevision !== undefined && input.expectedRevision !== source.revision) return { status: 'failed', reason: 'revision_changed' };
+        if (!source.text.trim()) return { status: 'skipped', reason: 'empty_text' };
+        if (currentIndex(source)) {
+          context.generation = 'reused';
+          return { status: 'unchanged', revision: source.revision, space: { ...space } };
+        }
+        if (!controls().enabled || !controls().generation || !controls().indexing) return { status: 'failed', reason: 'disabled' };
+        let vector: number[];
+        context.generation = 'attempted';
+        try { vector = await generate(source.text, deps.indexingTimeoutMs ?? deps.generationTimeoutMs ?? 120_000); } catch (error) { return { status: 'failed', reason: error instanceof ProviderError && !error.retriable ? 'provider_rejected' : 'provider_unavailable' }; }
+        if (!validVector(vector)) return { status: 'failed', reason: 'index_incompatible' };
+        if (!controls().enabled || !controls().indexing) return { status: 'failed', reason: 'disabled' };
+        try {
+          const status = await adapter.store(source, vector, space);
+          context.coverage = coverage([{ source: input.source, state: status === 'indexed' ? 'ready' : 'unknown',
+            ...(status !== 'indexed' ? { reason: 'revision_changed' as const } : {}) }], 1, 'known_requests');
+          return status === 'indexed' ? { status, revision: source.revision, space: { ...space } } : { status: 'failed', reason: status };
+        } catch {
+          context.coverage = coverage([{ source: input.source, state: 'unknown', reason: 'storage_unavailable' }], 1, 'known_requests');
+          return { status: 'failed', reason: 'storage_unavailable' };
+        }
+      }, result => ({ outcome: result.status === 'failed' && result.reason === 'disabled' ? 'disabled' : result.status,
+        ...('reason' in result ? { reason: result.reason } : {}) }));
     },
     async readIndexes(input): Promise<StoredIndexResult[]> {
-      const invalid = (reference: SourceReference): SemanticFailure | undefined => {
-        if (!controls().enabled || !controls().retrieval) return 'disabled';
-        if (!scope.permissions.includes('retrieve')) return 'forbidden';
-        if (input.sources.length > 200 || !validReference(reference) || !adapters.has(reference.kind)) return 'invalid_input';
-        if (adapters.get(reference.kind)!.enabled === false) return 'disabled';
-        return undefined;
-      };
-      const key = (reference: SourceReference) => JSON.stringify([reference.kind, reference.id]);
-      const groups = new Map<string, Map<string, SourceReference>>();
-      for (const reference of input.sources) {
-        if (invalid(reference)) continue;
-        if (!groups.has(reference.kind)) groups.set(reference.kind, new Map());
-        groups.get(reference.kind)!.set(key(reference), reference);
-      }
-      const loaded = new Map<string, LoadedSemanticSource>();
-      const failures = new Map<string, SemanticFailure>();
-      await Promise.all([...groups.entries()].map(async ([kind, references]) => {
-        const adapter = adapters.get(kind)!;
-        if (adapter.loadMany) {
-          try {
-            for (const source of await adapter.loadMany([...references.values()])) {
-              if (source.accountId === scope.accountId && source.reference.kind === kind && references.has(key(source.reference))) {
-                loaded.set(key(source.reference), source);
-              }
-            }
-          } catch { for (const id of references.keys()) failures.set(id, 'storage_unavailable'); }
-        } else {
-          await Promise.all([...references.values()].map(async reference => {
-            try { const source = await load(reference); if (source) loaded.set(key(reference), source); }
-            catch { failures.set(key(reference), 'storage_unavailable'); }
-          }));
-        }
-      }));
-      return input.sources.map((reference): StoredIndexResult => {
-        const failed = (reason: SemanticFailure): StoredIndexResult => ({ status: 'unavailable', source: { ...reference }, reason });
-        const reason = invalid(reference) ?? failures.get(key(reference));
-        if (reason) return failed(reason);
-        const source = loaded.get(key(reference));
-        if (!source) return failed('not_found');
-        if (!source.index) return failed('index_missing');
-        if (!currentIndex(source) || !source.index.vector || !validVector(source.index.vector)) return failed('index_incompatible');
-        return { status: 'ready', source: { ...reference }, revision: source.revision, preparation: source.preparation,
-          space: { ...space }, vector: [...source.index.vector] };
-      });
+      return observe('read_indexes', input.sources.map(source => source.kind), async context => {
+        const inspected = await inspectIndexes(input);
+        context.coverage = coverage(inspected.inspections, input.sources.length);
+        return inspected.indices;
+      }, summarizeReadOutcome);
+    },
+    async inspectCoverage(input = {}): Promise<CoverageReport> {
+      return observe('coverage', input.sources?.map(source => source.kind) ?? [], async context => {
+        const inspected = input.sources ? await inspectIndexes({ sources: input.sources }) : undefined;
+        const report = coverage(inspected?.inspections, input.sources?.length, input.basis);
+        context.coverage = report;
+        return report;
+      }, summarizeCoverageOutcome);
     },
     async groupSources(input): Promise<GroupingResult> {
       const threshold = input.minSimilarity ?? 0.8;
-      if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) return {
-        status: 'unavailable', groups: [], sources: input.sources.map(source => ({ status: 'unavailable', source: { ...source }, reason: 'invalid_input' })),
-      };
-      const indices = await service.readIndexes({ sources: input.sources });
-      const vectors = new Map<string, number[]>();
-      const references = new Map<string, SourceReference>();
-      for (const index of indices) {
-        if (index.status !== 'ready') continue;
-        const key = JSON.stringify([index.source.kind, index.source.id]);
-        vectors.set(key, index.vector); references.set(key, index.source);
-      }
-      return { status: indices.every(index => index.status === 'ready') ? 'ok' : vectors.size ? 'partial' : 'unavailable',
-        groups: groupBySimilarity(vectors, threshold).map(group => group.map(key => ({ ...references.get(key)! }))),
-        sources: indices.map(index => index.status === 'ready' ? { status: 'ready', source: index.source } : index) };
+      const validThreshold = Number.isFinite(threshold) && threshold >= 0 && threshold <= 1;
+      return observe<GroupingResult>('group', input.sources.map(source => source.kind), async context => {
+        if (!validThreshold) return {
+          status: 'unavailable', groups: [], sources: input.sources.map(source => ({ status: 'unavailable', source: { ...source }, reason: 'invalid_input' })),
+        };
+        const inspected = await inspectIndexes({ sources: input.sources });
+        const indices = inspected.indices;
+        context.coverage = coverage(inspected.inspections, input.sources.length);
+        const vectors = new Map<string, number[]>();
+        const references = new Map<string, SourceReference>();
+        for (const index of indices) {
+          if (index.status !== 'ready') continue;
+          const key = JSON.stringify([index.source.kind, index.source.id]);
+          vectors.set(key, index.vector); references.set(key, index.source);
+        }
+        return { status: indices.every(index => index.status === 'ready') ? 'ok' : vectors.size ? 'partial' : 'unavailable',
+          groups: groupBySimilarity(vectors, threshold).map(group => group.map(key => ({ ...references.get(key)! }))),
+          sources: indices.map(index => index.status === 'ready' ? { status: 'ready', source: index.source } : index) };
+      }, result => {
+        const summary = summarizeReadOutcome(result.sources);
+        return { ...summary, outcome: summary.outcome === 'disabled' ? 'disabled' : result.status,
+          ...(!validThreshold ? { reason: 'invalid_input' as const } : {}) };
+      });
     },
     async retrieve(input: RetrievalRequest): Promise<RetrievalResult> {
       const kinds = input.sources ?? [...adapters.values()].filter(adapter => adapter.purposes.includes(input.purpose)).map(adapter => adapter.kind);
-      if (!controls().enabled || !controls().retrieval) return unavailable(kinds, 'disabled');
-      if (!scope.permissions.includes('retrieve')) return unavailable(kinds, 'forbidden');
-      if (!kinds.length || new Set(kinds).size !== kinds.length || kinds.some(kind => !adapters.get(kind)?.purposes.includes(input.purpose)) ||
-        (input.limit !== undefined && (!Number.isInteger(input.limit) || input.limit < 1))) return unavailable(kinds, 'invalid_input');
-      if (kinds.every(kind => adapters.get(kind)!.enabled === false)) return unavailable(kinds, 'disabled');
-      let text: string;
-      let cachedVector: number[] | undefined;
-      if ('source' in input.query) {
-        const reference = input.query.source;
-        if (!validReference(reference) || !adapters.has(reference.kind)) return unavailable(kinds, 'invalid_input');
-        if (adapters.get(reference.kind)!.enabled === false) return unavailable(kinds, 'disabled');
-        try {
-          const source = await load(reference);
-          if (!source) return unavailable(kinds, 'not_found');
-          text = source.text;
-          if (currentIndex(source)) cachedVector = source.index?.vector;
-        } catch { return unavailable(kinds, 'storage_unavailable'); }
-      } else text = input.query.text;
-      if (!text.trim()) return unavailable(kinds, 'invalid_input');
-      if (!cachedVector && (!controls().enabled || !controls().generation)) return unavailable(kinds, 'disabled');
-      let vector: number[];
-      try { vector = cachedVector ?? await generate(text.slice(0, 2000)); } catch (error) { return unavailable(kinds, error instanceof ProviderError && !error.retriable ? 'provider_rejected' : 'provider_unavailable'); }
-      if (!validVector(vector)) return unavailable(kinds, 'index_incompatible');
-      if (!controls().enabled || !controls().retrieval) return unavailable(kinds, 'disabled');
-      const limit = Math.min(input.limit ?? 12, 50);
-      const sources = await Promise.all(kinds.map(async (kind: string): Promise<SourceResult> => {
-        if (adapters.get(kind)!.enabled === false) return { source: kind, status: 'unavailable', reason: 'disabled', matches: [] };
-        try { return await adapters.get(kind)!.search({ purpose: input.purpose, vector, space, limit }); }
-        catch { return { source: kind, status: 'unavailable', reason: 'storage_unavailable', matches: [] }; }
-      }));
-      const seen = new Set<string>();
-      const matches = sources.flatMap(source => source.matches).sort((left, right) => (right.similarity ?? -Infinity) - (left.similarity ?? -Infinity)).filter(match => {
-        const key = match.version ?? `${match.source.kind}:${match.source.id}:${match.revision}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      }).slice(0, limit);
-      const healthy = sources.filter(source => source.status === 'ok').length;
-      return { status: healthy === sources.length ? 'ok' : healthy || matches.length ? 'partial' : 'unavailable', matches, sources };
+      return observe<RetrievalResult>('retrieve', kinds, async context => {
+        if (!controls().enabled || !controls().retrieval) return unavailable(kinds, 'disabled');
+        if (!scope.permissions.includes('retrieve')) return unavailable(kinds, 'forbidden');
+        if (!kinds.length || new Set(kinds).size !== kinds.length || kinds.some(kind => !adapters.get(kind)?.purposes.includes(input.purpose)) ||
+          (input.limit !== undefined && (!Number.isInteger(input.limit) || input.limit < 1))) return unavailable(kinds, 'invalid_input');
+        if (kinds.every(kind => adapters.get(kind)!.enabled === false)) return unavailable(kinds, 'disabled');
+        let text: string;
+        let cachedVector: number[] | undefined;
+        if ('source' in input.query) {
+          const reference = input.query.source;
+          if (!validReference(reference) || !adapters.has(reference.kind)) return unavailable(kinds, 'invalid_input');
+          if (adapters.get(reference.kind)!.enabled === false) return unavailable(kinds, 'disabled');
+          try {
+            const source = await load(reference);
+            if (!source) return unavailable(kinds, 'not_found');
+            text = source.text;
+            if (currentIndex(source)) cachedVector = source.index?.vector;
+          } catch { return unavailable(kinds, 'storage_unavailable'); }
+        } else text = input.query.text;
+        if (!text.trim()) return unavailable(kinds, 'invalid_input');
+        if (!cachedVector && (!controls().enabled || !controls().generation)) return unavailable(kinds, 'disabled');
+        let vector: number[];
+        context.generation = cachedVector ? 'reused' : 'attempted';
+        try { vector = cachedVector ?? await generate(text.slice(0, 2000)); } catch (error) { return unavailable(kinds, error instanceof ProviderError && !error.retriable ? 'provider_rejected' : 'provider_unavailable'); }
+        if (!validVector(vector)) return unavailable(kinds, 'index_incompatible');
+        if (!controls().enabled || !controls().retrieval) return unavailable(kinds, 'disabled');
+        const limit = Math.min(input.limit ?? 12, 50);
+        const sources = await Promise.all(kinds.map(async (kind: string): Promise<SourceResult> => {
+          if (adapters.get(kind)!.enabled === false) return { source: kind, status: 'unavailable', reason: 'disabled', matches: [] };
+          try { return await adapters.get(kind)!.search({ purpose: input.purpose, vector, space, limit }); }
+          catch { return { source: kind, status: 'unavailable', reason: 'storage_unavailable', matches: [] }; }
+        }));
+        const seen = new Set<string>();
+        const matches = sources.flatMap(source => source.matches).sort((left, right) => (right.similarity ?? -Infinity) - (left.similarity ?? -Infinity)).filter(match => {
+          const key = match.version ?? `${match.source.kind}:${match.source.id}:${match.revision}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).slice(0, limit);
+        const healthy = sources.filter(source => source.status === 'ok').length;
+        return { status: healthy === sources.length ? 'ok' : healthy || matches.length ? 'partial' : 'unavailable', matches, sources };
+      }, result => {
+        const reason = result.reason ?? result.sources.find(source => source.reason && source.reason !== 'disabled')?.reason
+          ?? result.sources.find(source => source.reason)?.reason;
+        return { outcome: result.reason === 'disabled' ? 'disabled' : result.status, matches: result.matches.length,
+          ...(reason ? { reason } : {}) };
+      });
     },
   };
   return service;

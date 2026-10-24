@@ -7,6 +7,8 @@ import { localSupabaseTarget, createSemanticTestClient } from '../apps/api/src/t
 const target = localSupabaseTarget();
 const enabled = !!target && process.env['RUN_SEMANTIC_FLOW_EVAL'] === '1';
 const realVectors = process.env['RUN_OLLAMA_EMBEDDING_TESTS'] === '1';
+const withObservability = process.env['RUN_SEMANTIC_OBSERVABILITY'] === '1';
+let telemetry: Awaited<ReturnType<typeof import('./semantic-observability')['startSemanticObservability']>> | undefined;
 const originalFetch = globalThis.fetch;
 const db = target ? createSemanticTestClient(target) : null!;
 type Event = { name: string; data: Record<string, unknown> };
@@ -44,6 +46,9 @@ function language(body: Record<string, unknown>) {
 async function transport(input: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> {
   const url = new URL(input instanceof Request ? input.url : String(input));
   if (url.origin === new URL(target!.url).origin) return originalFetch(input, { ...init, redirect: 'error' });
+  if (withObservability && url.origin === 'http://127.0.0.1:4318' && url.pathname === '/v1/traces') {
+    return originalFetch(input, { ...init, redirect: 'error' });
+  }
   if (url.hostname === 'gmail.googleapis.com') {
     expect(init?.method ?? 'GET').toBe('GET');
     if (url.pathname.endsWith('/profile')) return Response.json({ emailAddress: 'support@acme.com' });
@@ -106,9 +111,11 @@ beforeAll(async () => {
   const pending = await db.from('decision_work_items').select('id', { count: 'exact', head: true }).in('status', ['pending', 'running']);
   check(pending.error);
   if (pending.count) throw new Error('Existing local work is pending; refusing to let the evaluation worker claim unrelated jobs');
+  if (withObservability) telemetry = await (await import('./semantic-observability')).startSemanticObservability();
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
+  await telemetry?.stop();
   if (fixtureAccount) check((await db.from('decision_work_items').delete().eq('account_id', fixtureAccount)).error);
 });
 async function execute(id: string, data: Record<string, unknown> = {}) {
@@ -188,6 +195,14 @@ test.skipIf(!enabled)('product pipeline, claimed work and agent consume the same
   await drain();
   const current = await db.from('current_knowledge').select('id').eq('source_id', article).single(); check(current.error);
   const versionId = current.data!.id; await indexed(account, versionId);
+  if (telemetry) {
+    const { createBackendSemanticService } = await import('../apps/api/src/lib/semantic-service');
+    const service = createBackendSemanticService({ db, scope: { accountId: account,
+      actor: { kind: 'user', id: userId }, permissions: ['retrieve','index'] } });
+    expect(await service.inspectCoverage({ sources: [{ kind: 'ticket', id: ticketId }, { kind: 'knowledge_version', id: versionId }] }))
+      .toMatchObject({ denominator: 2, ready: 2, ratio: 1 });
+    expect(await service.inspectCoverage()).toMatchObject({ denominator: null, ratio: null });
+  }
   expect((await read()).data['approvedKnowledge']).toContainEqual(expect.objectContaining({ id: article, version: versionId }));
   const answer = await consultTicketAssistant({ accountId: account, ticketId, userId,
     messages: [{ role: 'user', content: 'Draft a reply using approved knowledge.' }] });
@@ -206,7 +221,9 @@ test.skipIf(!enabled)('product pipeline, claimed work and agent consume the same
   expect(settled.data!.every(job => job.status === 'done')).toBe(true);
   expect(steps).toContain('decision-workflows:claim-work');
   for (const count of Object.values(calls)) expect(count).toBeGreaterThan(0);
+  const observability = await telemetry?.verify([account, ticketId, article, versionId, userId, title, text, userEmail, password, 'acme-fixture-token']);
   console.log(JSON.stringify({ semanticFlow: true, calls, steps, storage: 'real_local_supabase',
+    ...(observability ? { observability } : {}),
     embedding: realVectors ? 'real_local_ollama' : 'simulated_transport',
     simulated: ['gmail', 'inngest_scheduler', 'language_and_decision_responses'], relevanceQuality: 'not_measured' }));
 }, 300_000);

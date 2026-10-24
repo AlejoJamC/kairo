@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createSemanticService, type SemanticAdapter, type LoadedSemanticSource, type SemanticMatch } from './service';
 import { ProviderError } from '../providers/base';
+import { semanticOperationAttributes, type SemanticOperationSignal } from './telemetry';
 
 const space = { provider: 'synthetic', model: 'acme', dimensions: 2 };
 function fixture(kind = 'ticket') {
@@ -212,5 +213,114 @@ describe('semantic operation controls', () => {
     expect(await service.indexSource({ source: f.source.reference })).toMatchObject({ reason: 'provider_unavailable' });
     expect((await service.retrieve({ purpose: 'similar_cases', query: { text: 'Acme' } })).reason).toBe('provider_unavailable');
     expect(f.store).not.toHaveBeenCalled();
+  });
+});
+
+describe('semantic coverage and diagnostics', () => {
+  it('distinguishes current, absent, stale, incompatible and unknown indices over unique selected references', async () => {
+    const f = fixture();
+    const signals: SemanticOperationSignal[] = [];
+    const references = ['ready','missing','revision','preparation','model','vector','foreign','unreadable'].map(id => ({ kind: 'ticket', id }));
+    f.adapter.load = vi.fn(async reference => {
+      if (reference.id === 'unreadable') throw new Error('Acme-private-storage-secret');
+      if (reference.id === 'foreign') return { ...f.source, reference, accountId: 'outside' };
+      const index = { revision: reference.id === 'revision' ? 'old' : 'r1',
+        preparation: reference.id === 'preparation' ? 'old' : 'v1',
+        space: reference.id === 'model' ? { ...space, model: 'different' } : space,
+        vector: reference.id === 'vector' ? [NaN,0] : [1,0] };
+      return { ...f.source, reference, ...(reference.id === 'missing' ? {} : { index }) };
+    });
+    const service = createSemanticService({ scope: { accountId: 'acme', actor: { kind: 'workflow', id: 'test' }, permissions: ['retrieve'] },
+      space, adapters: [f.adapter], embed: f.embed, observe: signal => signals.push(signal) });
+    const report = await service.inspectCoverage({ sources: [...references, references[0]!] });
+    expect(report).toMatchObject({ status: 'partial', basis: 'authorized_references', requested: 9, denominator: 8,
+      ready: 1, missing: 1, stale: 2, incompatible: 2, unknown: 2, ratio: null,
+      sources: [{ source: 'ticket', denominator: 8, ready: 1, missing: 1, stale: 2, incompatible: 2, unknown: 2 }] });
+    expect(f.adapter.load).toHaveBeenCalledTimes(8);
+    expect(f.embed).not.toHaveBeenCalled(); expect(f.store).not.toHaveBeenCalled();
+    expect(signals).toHaveLength(1);
+    expect(JSON.stringify(signals)).not.toContain('Acme-private-storage-secret');
+    expect(JSON.stringify(report)).not.toContain('vector');
+    expect(JSON.stringify(report)).not.toContain('foreign');
+  });
+  it('never turns missing inventory or an empty selection into total coverage', async () => {
+    const f = fixture();
+    const service = f.create();
+    expect(await service.inspectCoverage()).toMatchObject({ basis: 'unknown', status: 'unavailable', denominator: null, unknown: null, ratio: null });
+    expect(await service.inspectCoverage({ sources: [] })).toMatchObject({ basis: 'authorized_references', status: 'ok', denominator: 0, unknown: 0, ratio: null });
+    expect(f.adapter.load).not.toHaveBeenCalled(); expect(f.embed).not.toHaveBeenCalled();
+  });
+  it('reports selected coverage per source and the configured space without reading unrelated sources', async () => {
+    const f = fixture();
+    f.source.index = { revision: 'r1', preparation: 'v1', space, vector: [1,0] };
+    const second = { ...f.adapter, kind: 'synthetic_note', load: vi.fn(async reference => ({ ...f.source, reference, index: undefined })) };
+    const service = f.create(['retrieve'], [f.adapter, second]);
+    expect(await service.inspectCoverage({ sources: [f.source.reference, { kind: 'synthetic_note', id: 'note' }], basis: 'known_requests' }))
+      .toMatchObject({ basis: 'known_requests', denominator: 2, ratio: 0.5, ready: 1, missing: 1, unknown: 0, space,
+        sources: [{ source: 'ticket', denominator: 1, ratio: 1 }, { source: 'synthetic_note', denominator: 1, ratio: 0 }] });
+    expect(f.adapter.load).toHaveBeenCalledTimes(1); expect(second.load).toHaveBeenCalledTimes(1);
+  });
+  it('reports disabled and forbidden inspections as unknown without effects', async () => {
+    const f = fixture();
+    const disabled = createSemanticService({ scope: { accountId: 'acme', actor: { kind: 'workflow', id: 'test' }, permissions: ['retrieve'] },
+      space, adapters: [f.adapter], embed: f.embed, controls: () => ({ enabled: false, generation: true, indexing: true, retrieval: true }) });
+    expect(await disabled.inspectCoverage({ sources: [f.source.reference] })).toMatchObject({ reason: 'disabled', denominator: 1, unknown: 1, ratio: null });
+    expect(await f.create([]).inspectCoverage({ sources: [f.source.reference] })).toMatchObject({ reason: 'forbidden', unknown: 1, ratio: null });
+    expect(f.adapter.load).not.toHaveBeenCalled(); expect(f.store).not.toHaveBeenCalled(); expect(f.embed).not.toHaveBeenCalled();
+  });
+  it('distinguishes reuse, generation, successful empty retrieval, disabling and provider/storage failures without leaking content', async () => {
+    const f = fixture();
+    f.source.reference.id = 'Acme-private-source-id';
+    f.source.text = 'Acme-private-source-text';
+    f.source.index = { revision: 'r1', preparation: 'v1', space, vector: [1,0] };
+    f.search.mockResolvedValue({ source: 'ticket', status: 'ok', matches: [] });
+    const signals: SemanticOperationSignal[] = [];
+    const flags = { enabled: true, generation: true, indexing: true, retrieval: true };
+    const service = createSemanticService({ scope: { accountId: 'Acme-private-account', actor: { kind: 'user', id: 'Acme-private-actor' }, permissions: ['index','retrieve'] },
+      space, adapters: [f.adapter], embed: f.embed, observe: signal => signals.push(signal), controls: () => flags });
+    f.source.accountId = 'Acme-private-account';
+    await service.indexSource({ source: f.source.reference });
+    await service.retrieve({ purpose: 'similar_cases', query: { source: f.source.reference } });
+    await service.retrieve({ purpose: 'similar_cases', query: { text: 'Acme-private-query' } });
+    flags.enabled = false;
+    await service.retrieve({ purpose: 'similar_cases', query: { text: 'Acme-private-query' } });
+    flags.enabled = true;
+    f.embed.mockRejectedValue(new ProviderError('Acme-private-provider-secret', false));
+    await service.retrieve({ purpose: 'similar_cases', query: { text: 'Acme-private-query' } });
+    f.adapter.load = vi.fn(async () => { throw new Error('Acme-private-storage-secret'); });
+    await service.indexSource({ source: f.source.reference });
+    expect(signals.map(({ operation, outcome, generation, reason, matches }) => ({ operation, outcome, generation, reason, matches }))).toEqual([
+      { operation: 'index', outcome: 'unchanged', generation: 'reused', reason: undefined, matches: undefined },
+      { operation: 'retrieve', outcome: 'ok', generation: 'reused', reason: undefined, matches: 0 },
+      { operation: 'retrieve', outcome: 'ok', generation: 'attempted', reason: undefined, matches: 0 },
+      { operation: 'retrieve', outcome: 'disabled', generation: 'none', reason: 'disabled', matches: 0 },
+      { operation: 'retrieve', outcome: 'unavailable', generation: 'attempted', reason: 'provider_rejected', matches: 0 },
+      { operation: 'index', outcome: 'failed', generation: 'none', reason: 'storage_unavailable', matches: undefined },
+    ]);
+    expect(JSON.stringify(signals)).not.toContain('Acme-private');
+    for (const signal of signals) {
+      expect(signal.durationMs).toBeGreaterThanOrEqual(0);
+      expect(semanticOperationAttributes(signal)).toMatchObject({ 'kairo.embeddings.source': 'ticket', 'kairo.embeddings.model': 'acme' });
+    }
+  });
+  it('keeps diagnostics independent across concurrent operations and tolerates a broken observer', async () => {
+    const f = fixture();
+    f.source.index = { revision: 'r1', preparation: 'v1', space, vector: [1,0] };
+    const signals: SemanticOperationSignal[] = [];
+    const service = createSemanticService({ scope: { accountId: 'acme', actor: { kind: 'workflow', id: 'test' }, permissions: ['retrieve'] },
+      space, adapters: [f.adapter], embed: f.embed, observe: signal => { signals.push(signal); throw new Error('Acme-private-observer'); } });
+    const results = await Promise.all([service.retrieve({ purpose: 'similar_cases', query: { text: 'Acme' } }),
+      service.retrieve({ purpose: 'similar_cases', query: { source: f.source.reference } })]);
+    expect(results.every(result => result.status === 'ok')).toBe(true);
+    expect(signals.map(signal => signal.generation).sort()).toEqual(['attempted','reused']);
+  });
+  it('never records invalid empty grouping as a successful empty operation', async () => {
+    const f = fixture();
+    const signals: SemanticOperationSignal[] = [];
+    const service = createSemanticService({ scope: { accountId: 'acme', actor: { kind: 'workflow', id: 'test' }, permissions: ['retrieve'] },
+      space, adapters: [f.adapter], embed: f.embed, observe: signal => signals.push(signal) });
+    expect(await service.groupSources({ sources: [], minSimilarity: NaN })).toMatchObject({ status: 'unavailable' });
+    expect(signals).toMatchObject([{ operation: 'group', outcome: 'unavailable', reason: 'invalid_input' }]);
+    expect(f.adapter.load).not.toHaveBeenCalled(); expect(f.embed).not.toHaveBeenCalled();
   });
 });

@@ -5,7 +5,9 @@ const root = resolve(import.meta.dir, '..');
 const withOllama = process.argv.includes('--ollama');
 const withFlow = process.argv.includes('--semantic-flow');
 const withDurability = process.argv.includes('--durability');
-if (process.argv.slice(2).some(arg => !['--ollama', '--semantic-flow', '--durability'].includes(arg))) throw new Error('Unsupported integration option');
+const withObservability = process.argv.includes('--observability');
+if (withObservability && !withFlow) throw new Error('Observability requires the semantic pipeline flow');
+if (process.argv.slice(2).some(arg => !['--ollama', '--semantic-flow', '--durability', '--observability'].includes(arg))) throw new Error('Unsupported integration option');
 if (withOllama && process.env['CI']) throw new Error('Real Ollama tests are local opt-in only');
 
 async function run(args: string[], env: Record<string, string | undefined> = process.env, display = false): Promise<string> {
@@ -29,6 +31,7 @@ const env = { ...process.env, SUPABASE_URL: target.url, SUPABASE_SERVICE_ROLE_KE
 };
 if (withFlow) Object.assign(env, {
   RUN_SEMANTIC_FLOW_EVAL: '1', NODE_ENV: 'test', INTELLIGENCE_PROVIDER: 'ollama', TEXT_PROVIDER: 'ollama', CLASSIFICATION_MODE: 'language',
+  RUN_SEMANTIC_OBSERVABILITY: withObservability ? '1' : '0',
   AI_GATEWAY_API_KEY: 'acme-simulated-key', AI_GATEWAY_ASSISTANT_MODEL: 'acme/flow-assistant',
   AI_GATEWAY_CLASSIFICATION_MODEL: '', AI_GATEWAY_REPLY_MODEL: '', AI_GATEWAY_KNOWLEDGE_DRAFT_MODEL: '',
   AI_GATEWAY_EVIDENCE_ANALYSIS_MODEL: '', AI_GATEWAY_TEXT_MODEL: '', AI_GATEWAY_MODEL: '',

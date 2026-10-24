@@ -180,11 +180,15 @@ bun evals/technical.ts --database
 bun --no-env-file evals/technical.ts --semantic-flow
 # Same integration with real embeddings from local Ollama; no paid model requests
 bun --no-env-file evals/technical.ts --semantic-flow --ollama
+# Also verify real OpenTelemetry ingestion and diagnostic queries in the existing local ClickStack
+bun --no-env-file evals/technical.ts --semantic-flow --ollama --observability
 ```
 
 The semantic flow uses the existing local Supabase on API port 54321 and SQL port 54322. The runner reads its connection from `supabase status`; it never starts or stops services, creates another project, applies migrations or resets the database. The approved schema must already be installed. Test fixtures contain invented data and remain in the local database, including append-only history. Adapter checks remove only their own outstanding jobs; the flow refuses to start if existing jobs are pending or running, because the production worker claims a global queue.
 
 It executes the production pipeline and decision worker, lets those consumers generate jobs and indices, approves a generated draft through the API, and checks the assistant's retrieved version references, account isolation and withdrawal. Gmail, scheduler transport and language/decision responses are explicit fixtures. The default also simulates embedding transport; `--ollama` uses the local embedding provider. Neither mode measures model judgment quality or live Inngest durability. Results use the same private technical-run artifacts as the other checks. Integration commands are run against the existing developer stack; hosted CI runs the offline contracts without provisioning a database.
+
+`--observability` requires the existing local ClickStack containers to be running. It uses the application's real telemetry bootstrap and exporter, reads the single local team's ingestion credential in memory, and checks the resulting spans in ClickHouse under a unique synthetic service name. The documented queries must agree with the received operations and scoped coverage; content, business identifiers and fixture credentials must be absent from embedding signals. The console prints the ingestion result and span counts; `report.json` retains query results. Missing ingestion or evidence fails the run.
 
 Workflow evaluations exercise the production embeddings service through a memory adapter. This validates domain integration and index lifecycle; SQL permissions and transactions are covered separately by the local Supabase integration suites.
 
