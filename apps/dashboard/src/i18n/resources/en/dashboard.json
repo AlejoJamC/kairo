@@ -1052,7 +1052,11 @@
       "language": "Language: {{language}}",
       "all-commands": "All commands",
       "close": "Close",
-      "sign-out": "Sign out"
+      "sign-out": "Sign out",
+      "filter-all": "Filter by priority: All",
+      "filter-p1": "Filter by priority: P1",
+      "filter-p2": "Filter by priority: P2",
+      "filter-p3": "Filter by priority: P3"
     },
     "scopeLabel": "Scope",
     "scopeAll": "All",

@@ -7,6 +7,8 @@ import { create } from "zustand";
 import { getPlatform } from "@kairo/client-core/config";
 import type { AccountPresence } from "@kairo/ui";
 
+export type PriorityFilterValue = "all" | "P1" | "P2" | "P3";
+
 export type PaletteScope = "all" | "commands";
 
 const TICKET_LIST_KEY = "ticket-list-hidden";
@@ -27,6 +29,9 @@ interface AppCommands {
   sidebarToggleRequests: number;
   /** The ticket list of the queue views is hidden whole (⌘⇧F). */
   ticketListHidden: boolean;
+  /** Priority filter of the Triage list asked for by the keys P then 0-3. */
+  priorityFilterRequest: { value: PriorityFilterValue; nonce: number } | null;
+  requestPriorityFilter: (value: PriorityFilterValue) => void;
   /** The open ticket has a similar ticket that is not grouped yet (and the list is shown). */
   similarGroupAvailable: boolean;
   setSimilarGroupAvailable: (available: boolean) => void;
@@ -46,6 +51,8 @@ export const useAppCommands = create<AppCommands>((set, get) => ({
   paletteScope: "all",
   sidebarToggleRequests: 0,
   ticketListHidden: readTicketListHidden(),
+  priorityFilterRequest: null,
+  requestPriorityFilter: (value) => set((state) => ({ priorityFilterRequest: { value, nonce: (state.priorityFilterRequest?.nonce ?? 0) + 1 } })),
   similarGroupAvailable: false,
   setSimilarGroupAvailable: (similarGroupAvailable) => set({ similarGroupAvailable }),
   contextTab: null,

@@ -415,6 +415,16 @@ export function TicketList() {
     setSimilarGroupAvailable(canGroupSimilar);
     return () => setSimilarGroupAvailable(false);
   }, [canGroupSimilar, setSimilarGroupAvailable]);
+  // P then 0-3 (or the command palette) pick the priority filter, as a click on its tab does.
+  useEffect(
+    () =>
+      useAppCommands.subscribe((state, previous) => {
+        const request = state.priorityFilterRequest;
+        if (!request || request === previous.priorityFilterRequest) return;
+        setFilters((current) => (request.value === "all" ? INITIAL_FILTERS : { ...current, priority: request.value }));
+      }),
+    [],
+  );
   useTicketMenuRequest("group", () => void handleAcceptSimilar());
 
   return (

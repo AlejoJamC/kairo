@@ -5,7 +5,7 @@ import { useCallback } from "react";
 import { useAuth } from "@kairo/client-core/auth";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { isTicketReadOnly } from "@kairo/client-core/triage-status";
-import { COMMANDS, CONTEXT_TABS, GO_VIEWS, type CommandDef, type CommandId } from "@/lib/commands";
+import { COMMANDS, CONTEXT_TABS, GO_VIEWS, PRIORITY_FILTERS, type CommandDef, type CommandId } from "@/lib/commands";
 import { useAppCommands } from "@/lib/app-commands";
 import { useLocale } from "@/hooks/useLocale";
 import type { AppView } from "@/types";
@@ -40,7 +40,7 @@ export function useCommands(view: AppView, onViewChange: (view: AppView) => void
     (command: CommandDef): CommandState => {
       const needsTicket = !!command.ticket && !selectedTicketId;
       const final = !!command.editable && status !== null && isTicketReadOnly(status);
-      const outsideQueue = !!command.queue && !QUEUE_VIEWS.includes(view);
+      const outsideQueue = (!!command.queue && !QUEUE_VIEWS.includes(view)) || (!!command.triage && view !== "triage");
       const notApplicable = (command.id === "wrong-classification" && !classified) || (command.id === "group-similar" && !similarGroupAvailable);
       return { needsTicket, disabled: NOT_WIRED.has(command.id) || needsTicket || final || outsideQueue || notApplicable };
     },
@@ -59,6 +59,7 @@ export function useCommands(view: AppView, onViewChange: (view: AppView) => void
       const store = useTriageStore.getState();
       const app = useAppCommands.getState();
       if (id in GO_VIEWS) return onViewChange(GO_VIEWS[id as keyof typeof GO_VIEWS]);
+      if (id in PRIORITY_FILTERS) return app.requestPriorityFilter(PRIORITY_FILTERS[id as keyof typeof PRIORITY_FILTERS]);
       if (id in CONTEXT_TABS) return store.requestPanelTab(CONTEXT_TABS[id]!);
       switch (id) {
         case "acknowledge":
