@@ -345,7 +345,7 @@
       "title": "Workspace",
       "nameLabel": "Workspace name",
       "urlLabel": "URL",
-      "urlPlaceholder": "kairo.app/my-company",
+      "urlPlaceholder": "holakairo.com/my-company",
       "timezoneLabel": "Timezone",
       "timezonePlaceholder": "America/Bogotá (UTC-5)",
       "langTitle": "Default workspace language",
