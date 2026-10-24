@@ -126,7 +126,7 @@ function AppContent() {
       </Box>
 
       <AppStatusBar counts={counts} view={activeView} />
-      {isDesktop() && <DesktopIntegration view={activeView} onViewChange={setActiveView} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={handleToggle} />}
+      {isDesktop() && <DesktopIntegration view={activeView} onViewChange={setActiveView} sidebarCollapsed={sidebarCollapsed} />}
     </Box>
   );
 }

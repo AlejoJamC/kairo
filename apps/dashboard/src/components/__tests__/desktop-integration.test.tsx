@@ -28,7 +28,7 @@ vi.mock("@kairo/client-core/config", () => ({
   getPlatform: () => ({ host, appFocus: { subscribe: () => () => {} } }),
 }));
 vi.mock("@kairo/client-core/auth", () => ({ useAuth: () => ({ signOut: vi.fn() }) }));
-vi.mock("@/hooks/useLocale", () => ({ useLocale: () => ({ language: "es", setLanguage: vi.fn() }) }));
+vi.mock("@/hooks/useLocale", () => ({ useLocale: () => ({ language: "es", setLanguage: vi.fn(), supportedLanguages: ["es", "en"] }) }));
 vi.mock("@/lib/notification-feed", () => ({
   subscribeNotifications: (listener: (rows: unknown[]) => void) => {
     feedListener = listener;
@@ -49,7 +49,7 @@ const mention = (id: string, readAt: string | null = null) => ({
 });
 
 function setup(onViewChange = vi.fn()) {
-  renderWithProviders(<DesktopIntegration view="triage" onViewChange={onViewChange} sidebarCollapsed={false} onToggleSidebar={vi.fn()} />);
+  renderWithProviders(<DesktopIntegration view="triage" onViewChange={onViewChange} sidebarCollapsed={false} />);
   return { onViewChange };
 }
 

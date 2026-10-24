@@ -60,7 +60,7 @@ export function QueueView({ title, count, countLabel, description, barVariant = 
 
   return (
     <>
-      {!listHidden && <Box id="ticket-list" width={372} flexShrink={0} display="flex" flexDirection="column" minHeight={0} backgroundColor="var(--kairo-color-surface)" borderRightWidth={1} borderRightColor="var(--k-border)" borderStyle="solid">
+      <Box id="ticket-list" display={listHidden ? "none" : "flex"} width={372} flexShrink={0} flexDirection="column" minHeight={0} backgroundColor="var(--kairo-color-surface)" borderRightWidth={1} borderRightColor="var(--k-border)" borderStyle="solid">
         <QueueHeader title={title} count={count} countLabel={countLabel} description={description} barVariant={barVariant} bar={bar} hideList={hideList} />
         <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll display="flex" flexDirection="column" gap={2} paddingTop={8} paddingHorizontal={8} paddingBottom={16}>
           {loading &&
@@ -76,7 +76,7 @@ export function QueueView({ title, count, countLabel, description, barVariant = 
               <TicketCard key={ticket.id} ticket={ticket} selected={selectedTicketId === ticket.id} onSelect={() => onOpen(ticket)} footer={footer?.(ticket)} />
             ))}
         </Box>
-      </Box>}
+      </Box>
       {aboveTicket ? (
         <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" flexDirection="column" minWidth={0} overflow="hidden">
           {aboveTicket}

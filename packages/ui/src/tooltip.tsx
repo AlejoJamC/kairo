@@ -100,9 +100,14 @@ function Tooltip({ label, shortcut, side = 'top', disabled, children }: TooltipP
       next(event)
     }
 
+  // Near the top edge of the window there is no room above: the label goes below.
+  const below = !!anchor && side === 'top' && anchor.top < 40
+  const clampedX = anchor ? Math.min(Math.max(anchor.left + anchor.width / 2, 130), window.innerWidth - 130) : 0
   const placement =
     anchor && side === 'top'
-      ? { top: anchor.top - GAP, left: anchor.left + anchor.width / 2, transform: 'translate(-50%, -100%)' }
+      ? below
+        ? { top: anchor.bottom + GAP, left: clampedX, transform: 'translateX(-50%)' }
+        : { top: anchor.top - GAP, left: clampedX, transform: 'translate(-50%, -100%)' }
       : anchor
         ? { top: anchor.top + anchor.height / 2, left: anchor.right + GAP, transform: 'translateY(-50%)' }
         : null
