@@ -31,6 +31,9 @@ import type { AppView } from "@/types";
 const SLA_CHECK_INTERVAL_MS = 30_000;
 
 /** The views the menu knows; the settings sub-pages read as Settings and in-progress as Triage. */
+/** Statuses an agent can set from the bar and from the Ticket menu; escalation has its own flow. */
+const MENU_STATUSES = ["open", "in_progress", "awaiting_customer", "resolved"] as const;
+
 function menuView(view: AppView): MenuView {
   if (view === "change-password" || view === "channels") return "settings";
   if (view === "in-progress") return "triage";
@@ -54,6 +57,7 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: Des
   const presence = useAppCommands((state) => state.presence);
   const ticketListHidden = useAppCommands((state) => state.ticketListHidden);
   const contextTab = useAppCommands((state) => state.contextTab);
+  const composerEmpty = useAppCommands((state) => state.composerEmpty);
   const selected = tickets.find((ticket) => ticket.id === selectedId) ?? null;
   const selectedShortId = selected?.ticket_number ? `KAI-${selected.ticket_number}` : null;
 
@@ -79,6 +83,10 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: Des
     "context-escalate": () => useTriageStore.getState().requestPanelTab("escalate"),
     send: () => useTriageStore.getState().requestComposerSend("send"),
     "send-resolve": () => useTriageStore.getState().requestComposerSend("send-resolve"),
+    "priority-p1": () => useTriageStore.getState().requestTicketChange("priority", "P1"),
+    "priority-p2": () => useTriageStore.getState().requestTicketChange("priority", "P2"),
+    "priority-p3": () => useTriageStore.getState().requestTicketChange("priority", "P3"),
+    ...Object.fromEntries(MENU_STATUSES.map((status) => [`status-${status}`, () => useTriageStore.getState().requestTicketChange("status", status)])),
     "wrong-classification": () => useTriageStore.getState().requestTicketMenu("reclassify"),
     "group-with": () => useTriageStore.getState().requestTicketMenu("group"),
     "ask-assistant": () => run("ask-assistant"),
@@ -113,8 +121,8 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: Des
     ticketFinal: selected !== null && isTicketReadOnly(selected.status ?? ""),
     ticketPriority: (["P1", "P2", "P3"] as const).find((level) => level === selected?.priority) ?? "P3",
     ticketStatus: selected?.status ?? "",
-    statusOptions: [],
-    composerEmpty: true,
+    statusOptions: [...MENU_STATUSES],
+    composerEmpty,
     similarTicketId: null,
   };
   const menuJson = useMemo(() => {
@@ -123,7 +131,7 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: Des
     return JSON.stringify(disableUnhandled(labelled, new Set(Object.keys(handlers))));
     // The menu is a function of the app state it mirrors.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, language, sidebarCollapsed, ticketListHidden, contextTab, selected?.id, selected?.status, selected?.priority, t, i18n]);
+  }, [view, language, sidebarCollapsed, ticketListHidden, contextTab, composerEmpty, selected?.id, selected?.status, selected?.priority, t, i18n]);
 
   useEffect(() => {
     host?.setMenu(menuJson);

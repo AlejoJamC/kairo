@@ -100,6 +100,23 @@ describe("DesktopIntegration", () => {
     useTriageStore.setState({ tickets: [], selectedTicketId: null, panelTabRequest: null });
   });
 
+  it("enables Send once the composer has text and sets priority and status from the Ticket menu", () => {
+    useTriageStore.setState({ tickets: [{ id: "t1", status: "open", priority: "P2", ticket_number: 1 } as never], selectedTicketId: "t1", ticketChangeRequest: null });
+    useAppCommands.setState({ composerEmpty: false });
+    setup();
+    const groups = JSON.parse(host.setMenu.mock.calls.at(-1)?.[0] as string) as { id: string; items: { id?: string; disabled?: boolean; items?: { id?: string; checked?: boolean }[] }[] }[];
+    const ticket = groups.find((group) => group.id === "ticket")?.items ?? [];
+    expect(ticket.find((item) => item.id === "send")?.disabled).not.toBe(true);
+    expect(ticket.find((item) => item.id === "priority")?.items?.find((item) => item.id === "priority-p2")?.checked).toBe(true);
+    expect(ticket.find((item) => item.id === "status")?.items?.map((item) => item.id)).toEqual(["status-open", "status-in_progress", "status-awaiting_customer", "status-resolved"]);
+    act(() => menuListener?.("priority-p1"));
+    expect(useTriageStore.getState().ticketChangeRequest).toMatchObject({ kind: "priority", value: "P1" });
+    act(() => menuListener?.("status-resolved"));
+    expect(useTriageStore.getState().ticketChangeRequest).toMatchObject({ kind: "status", value: "resolved" });
+    useTriageStore.setState({ tickets: [], selectedTicketId: null, ticketChangeRequest: null });
+    useAppCommands.setState({ composerEmpty: true });
+  });
+
   it("shows the unread count on the app icon, and clears it at zero", () => {
     setup();
     act(() => feedListener?.([mention("a"), mention("b"), mention("c", "2030-01-01T00:00:00Z")]));

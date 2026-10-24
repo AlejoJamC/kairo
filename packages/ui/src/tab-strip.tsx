@@ -13,7 +13,7 @@ function reveal(strip: HTMLElement, tab: HTMLElement) {
 }
 
 /** Horizontal strip that keeps the selected tab in view and shows no scrollbar. */
-function TabStrip({ children }: { children: ReactNode }) {
+function TabStrip({ children, drag }: { children: ReactNode; drag?: boolean }) {
   const strip = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -34,6 +34,7 @@ function TabStrip({ children }: { children: ReactNode }) {
     <div
       ref={strip}
       className="kairo-ui-tabstrip"
+      {...(drag ? { 'data-tauri-drag-region': '' } : null)}
       onKeyDown={(event) => {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
         const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]:not([aria-disabled="true"])'))

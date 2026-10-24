@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { Ticket, TicketStatus } from "@kairo/types";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { assignTicket, setTicketStatus } from "@kairo/client-core/endpoints";
-import { useTicketMenuRequest } from "@/hooks/use-ticket-menu-request";
+import { useTicketChangeRequest, useTicketMenuRequest } from "@/hooks/use-ticket-menu-request";
 import { useTicketListVisibility } from "@/hooks/use-ticket-list-visibility";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { Button, Icon, StatusChip, TicketBar, TicketHeading, type PriorityLevel, type StatusKey } from "@kairo/ui";
@@ -49,6 +49,7 @@ export function TicketHeader({ ticket, queueName, readOnly = false, onOpenNotes 
   const [updating, setUpdating] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   useTicketMenuRequest("status", () => setStatusOpen(true));
+  useTicketChangeRequest("status", (value) => { if (!readOnly) void handleStatus(value as StatusKey); });
 
   const isAssigned = !!ticket.assigned_to;
 
@@ -190,6 +191,7 @@ export function TicketHeadingBlock({ ticket, readOnly = false, sla }: TicketHead
   const [priorityOpen, setPriorityOpen] = useState(false);
   useTicketMenuRequest("priority", () => setPriorityOpen(true));
   useTicketMenuRequest("reclassify", () => reclassify.onOpenChange(true));
+  useTicketChangeRequest("priority", (value) => { if (!readOnly && (value === "P1" || value === "P2" || value === "P3")) void changePriority(value); });
   const categoryKey = normalizeTicketCategory(ticket.category);
   const typeKey = ticket.ticket_type ? normalizeTicketType(ticket.ticket_type) : null;
 

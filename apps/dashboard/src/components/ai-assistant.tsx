@@ -75,6 +75,7 @@ export function AiAssistant() {
   const notesBadge = selectedTicketId
     ? (noteCounts[selectedTicketId]?.unread_mentions ?? 0)
     : 0;
+  const notesTotal = selectedTicketId ? (noteCounts[selectedTicketId]?.notes ?? 0) : 0;
 
   // Single fetch owned here — runs on ticket change regardless of active tab.
   // The client tab reads the profile from the store.
@@ -141,8 +142,8 @@ export function AiAssistant() {
               shortcut={`⌘${TAB_KEYS[id]}`}
               keyshortcuts={`Meta+${TAB_KEYS[id]}`}
               onPress={() => setActiveTab(id)}
-              count={id === "notes" && notesBadge > 0 ? notesBadge : undefined}
-              unread
+              count={id === "notes" ? (notesBadge > 0 ? notesBadge : notesTotal > 0 ? notesTotal : undefined) : undefined}
+              unread={id === "notes" && notesBadge > 0}
             >
               {label}
             </Tab>

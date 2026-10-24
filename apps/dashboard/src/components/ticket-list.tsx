@@ -409,6 +409,11 @@ export function TicketList() {
 
   const busy = classifyingAll || syncing;
   const { hideList } = useTicketListVisibility();
+  const setEngineBusy = useAppCommands((state) => state.setEngineBusy);
+  useEffect(() => {
+    setEngineBusy(busy);
+    return () => setEngineBusy(false);
+  }, [busy, setEngineBusy]);
   const setSimilarGroupAvailable = useAppCommands((state) => state.setSimilarGroupAvailable);
   const canGroupSimilar = TICKET_GROUPING_ENABLED && !!similarTickets && similarTickets.length > 0;
   useEffect(() => {

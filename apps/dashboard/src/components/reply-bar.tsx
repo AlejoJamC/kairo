@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { TemplatePicker, type TemplatePreviewVars } from "./template-picker";
+import { useAppCommands } from "@/lib/app-commands";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { replyToTicket, addTicketNote, setTicketStatus } from "@kairo/client-core/endpoints";
 import { isFlagEnabled } from "@/lib/feature-flags";
@@ -428,6 +429,14 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
         if (visibleActions.includes(action)) void handleAction(action);
       }),
   );
+
+  // The native menu and the command list enable Send only while there is text to send.
+  const setComposerEmpty = useAppCommands((state) => state.setComposerEmpty);
+  const composerHasText = draft.trim().length > 0;
+  React.useEffect(() => {
+    setComposerEmpty(!composerHasText);
+    return () => setComposerEmpty(true);
+  }, [composerHasText, setComposerEmpty]);
 
   // Send and Send and resolve from the command palette or the native menu.
   React.useEffect(

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { isTicketReadOnly } from "@kairo/client-core/triage-status";
 import { QUEUE_VIEWS } from "@/hooks/use-commands";
+import { useAppCommands } from "@/lib/app-commands";
 import type { SidebarCounts } from "@kairo/client-core/hooks/use-sidebar-counts";
 import { VIEW_TO_STATUS } from "@/lib/sidebar-view-status";
 import type { AppView } from "@/types";
@@ -15,6 +16,8 @@ export function AppStatusBar({ counts, view }: { counts: SidebarCounts | null; v
 
   const openStatuses = VIEW_TO_STATUS.triage ?? [];
   const open = counts ? openStatuses.reduce((sum, status) => sum + (counts[status] ?? 0), 0) : 0;
+
+  const engineBusy = useAppCommands((state) => state.engineBusy);
 
   // A, R, E and N only apply with an editable ticket open.
   const editable = useTriageStore((state) => {
@@ -44,7 +47,7 @@ export function AppStatusBar({ counts, view }: { counts: SidebarCounts | null; v
         { keys: "⌘ /", label: t("dashboard:statusBar.allCommands") },
       ]}
       label={t("dashboard:statusBar.label")}
-      status={t("dashboard:statusBar.open", { count: open })}
+      status={engineBusy ? t("dashboard:statusBar.classifying") : t("dashboard:statusBar.open", { count: open })}
     />
   );
 }

@@ -20,3 +20,21 @@ export function useTicketMenuRequest(menu: TicketMenu, open: () => void) {
     [menu],
   );
 }
+
+/** Runs `apply` when the native menu asks to set the priority or the status of the open ticket. */
+export function useTicketChangeRequest(kind: "priority" | "status", apply: (value: string) => void) {
+  const latest = useRef(apply);
+  useEffect(() => {
+    latest.current = apply;
+  });
+  useEffect(
+    () =>
+      useTriageStore.subscribe((state, previous) => {
+        const request = state.ticketChangeRequest;
+        if (!request || request === previous.ticketChangeRequest || request.kind !== kind) return;
+        state.clearTicketChangeRequest();
+        latest.current(request.value);
+      }),
+    [kind],
+  );
+}

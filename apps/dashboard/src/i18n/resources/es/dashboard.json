@@ -855,7 +855,8 @@
     "note": "nota interna",
     "shortcuts": "atajos",
     "allCommands": "todos los comandos",
-    "label": "Atajos y estado del motor"
+    "label": "Atajos y estado del motor",
+    "classifying": "kairo · clasificando…"
   },
   "shortcuts": {
     "title": "Atajos de teclado",
@@ -1003,7 +1004,11 @@
       "context-assistant": "Asistente",
       "context-notes": "Notas",
       "context-escalate": "Escalar",
-      "all-commands": "Todos los comandos"
+      "all-commands": "Todos los comandos",
+      "status-open": "Abierto",
+      "status-in_progress": "Reconocido",
+      "status-awaiting_customer": "En espera del cliente",
+      "status-resolved": "Resuelto"
     },
     "notify": {
       "mention": "{{from}} te mencionó en {{ticket}}",

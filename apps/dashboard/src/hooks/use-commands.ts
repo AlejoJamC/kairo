@@ -33,6 +33,7 @@ export function useCommands(view: AppView, onViewChange: (view: AppView) => void
   const status = useTriageStore((state) => state.tickets.find((ticket) => ticket.id === state.selectedTicketId)?.status ?? null);
   const classified = useTriageStore((state) => !!state.tickets.find((ticket) => ticket.id === state.selectedTicketId)?.classified_at);
   const similarGroupAvailable = useAppCommands((state) => state.similarGroupAvailable);
+  const composerEmpty = useAppCommands((state) => state.composerEmpty);
 
   const otherLanguage = supportedLanguages.find((lang: string) => lang !== language) ?? language;
 
@@ -41,10 +42,13 @@ export function useCommands(view: AppView, onViewChange: (view: AppView) => void
       const needsTicket = !!command.ticket && !selectedTicketId;
       const final = !!command.editable && status !== null && isTicketReadOnly(status);
       const outsideQueue = (!!command.queue && !QUEUE_VIEWS.includes(view)) || (!!command.triage && view !== "triage");
-      const notApplicable = (command.id === "wrong-classification" && !classified) || (command.id === "group-similar" && !similarGroupAvailable);
+      const notApplicable =
+        (command.id === "wrong-classification" && !classified) ||
+        (command.id === "group-similar" && !similarGroupAvailable) ||
+        ((command.id === "send" || command.id === "send-resolve") && composerEmpty);
       return { needsTicket, disabled: NOT_WIRED.has(command.id) || needsTicket || final || outsideQueue || notApplicable };
     },
-    [selectedTicketId, status, view, classified, similarGroupAvailable],
+    [selectedTicketId, status, view, classified, similarGroupAvailable, composerEmpty],
   );
 
   const run = useCallback(

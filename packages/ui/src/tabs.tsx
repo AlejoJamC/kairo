@@ -3,6 +3,7 @@ import { tokens } from '@kairo/tokens'
 import { Box, Pressable, Text } from './layout'
 import { PulseDot } from './loading'
 import { Tooltip } from './tooltip'
+import { useWindowChrome } from './window-chrome'
 import { TabStrip } from './tab-strip'
 
 // Underlined tabs that switch panels. The active tab carries a 2px accent
@@ -15,9 +16,10 @@ type TabsProps = {
 }
 
 function Tabs({ label, children }: TabsProps) {
+  const macosWindow = useWindowChrome()
   return (
-    <TabStrip>
-      <Box role="tablist" aria-label={label} display="flex" gap={18} height={42} minWidth="100%" width="max-content" borderBottomWidth={1} borderStyle="solid" borderBottomColor={tokens['border.default']}>
+    <TabStrip drag={macosWindow}>
+      <Box dragRegion={macosWindow} role="tablist" aria-label={label} display="flex" gap={18} height={42} minWidth="100%" width="max-content" borderBottomWidth={1} borderStyle="solid" borderBottomColor={tokens['border.default']}>
         {children}
       </Box>
     </TabStrip>

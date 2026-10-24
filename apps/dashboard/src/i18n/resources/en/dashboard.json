@@ -855,7 +855,8 @@
     "note": "internal note",
     "shortcuts": "shortcuts",
     "allCommands": "all commands",
-    "label": "Shortcuts and engine status"
+    "label": "Shortcuts and engine status",
+    "classifying": "kairo · classifying…"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",
@@ -1003,7 +1004,11 @@
       "context-assistant": "Assistant",
       "context-notes": "Notes",
       "context-escalate": "Escalate",
-      "all-commands": "All commands"
+      "all-commands": "All commands",
+      "status-open": "Open",
+      "status-in_progress": "Acknowledged",
+      "status-awaiting_customer": "Awaiting customer",
+      "status-resolved": "Resolved"
     },
     "notify": {
       "mention": "{{from}} mentioned you in {{ticket}}",

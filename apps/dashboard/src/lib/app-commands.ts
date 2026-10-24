@@ -29,6 +29,12 @@ interface AppCommands {
   sidebarToggleRequests: number;
   /** The ticket list of the queue views is hidden whole (⌘⇧F). */
   ticketListHidden: boolean;
+  /** The reply composer has no text: Send and Send and resolve do not apply. */
+  composerEmpty: boolean;
+  setComposerEmpty: (empty: boolean) => void;
+  /** The engine is classifying or syncing the queue. */
+  engineBusy: boolean;
+  setEngineBusy: (busy: boolean) => void;
   /** Cmd+J: the Assistant tab opens and its input takes the focus. */
   assistantFocusPending: boolean;
   requestAssistantFocus: () => void;
@@ -55,6 +61,10 @@ export const useAppCommands = create<AppCommands>((set, get) => ({
   paletteScope: "all",
   sidebarToggleRequests: 0,
   ticketListHidden: readTicketListHidden(),
+  composerEmpty: true,
+  setComposerEmpty: (composerEmpty) => set({ composerEmpty }),
+  engineBusy: false,
+  setEngineBusy: (engineBusy) => set({ engineBusy }),
   assistantFocusPending: false,
   requestAssistantFocus: () => set({ assistantFocusPending: true }),
   clearAssistantFocus: () => set({ assistantFocusPending: false }),

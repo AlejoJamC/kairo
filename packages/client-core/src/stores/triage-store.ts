@@ -161,6 +161,10 @@ interface TriageStore {
   ticketMenuRequest: { menu: TicketMenu; nonce: number } | null;
   requestTicketMenu: (menu: TicketMenu) => void;
   clearTicketMenuRequest: () => void;
+  /** Sets the priority or the status of the open ticket from the native menu. */
+  ticketChangeRequest: { kind: "priority" | "status"; value: string; nonce: number } | null;
+  requestTicketChange: (kind: "priority" | "status", value: string) => void;
+  clearTicketChangeRequest: () => void;
   /** Send from outside the composer (command palette, native menu). */
   composerRequest: { command: "send" | "send-resolve"; nonce: number } | null;
   requestComposerSend: (command: "send" | "send-resolve") => void;
@@ -302,6 +306,9 @@ export const useTriageStore = create<TriageStore>((set) => ({
   ticketMenuRequest: null,
   requestTicketMenu: (menu) => set((state) => ({ ticketMenuRequest: { menu, nonce: (state.ticketMenuRequest?.nonce ?? 0) + 1 } })),
   clearTicketMenuRequest: () => set({ ticketMenuRequest: null }),
+  ticketChangeRequest: null,
+  requestTicketChange: (kind, value) => set((state) => ({ ticketChangeRequest: { kind, value, nonce: (state.ticketChangeRequest?.nonce ?? 0) + 1 } })),
+  clearTicketChangeRequest: () => set({ ticketChangeRequest: null }),
   composerRequest: null,
   requestComposerSend: (command) => set((state) => ({ composerRequest: { command, nonce: (state.composerRequest?.nonce ?? 0) + 1 } })),
   clearComposerRequest: () => set({ composerRequest: null }),
