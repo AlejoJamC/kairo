@@ -35,6 +35,12 @@ export interface OnboardingClassificationInput {
   gmailAccessToken: string;
   /** Days of inbox history to consider on first classification. */
   sinceDays?: number;
+  /**
+   * Which dispatch of the pass this is (see lib/onboarding-state.ts). Part of
+   * the event id, so a re-dispatch after a failed pass is not discarded as a
+   * duplicate of the first one.
+   */
+  attempt?: string;
 }
 
 /**
@@ -43,12 +49,11 @@ export interface OnboardingClassificationInput {
  *
  * Design notes:
  *  - Idempotency: the Inngest event `id` field deduplicates events with the
- *    same key within Inngest's window. Key = `tier1-onboard:{accountId}`, no
- *    date component — tier1 runs at most once per account, ever (see the
- *    "already onboarded" guard in tier1-fast-path.ts), so the key matches
- *    that lifetime, not a day. Keying on userId instead would collide across
- *    two different accounts the same user opens the same day, and reset
- *    every midnight even for the same account.
+ *    same key within Inngest's window. Key = `tier1-onboard:{accountId}`,
+ *    plus `:{attempt}` when the caller names the attempt — repeated logins
+ *    for the same attempt collapse into one run, while a new attempt after a
+ *    failed pass gets through. Keying on userId instead would collide across
+ *    two different accounts the same user opens the same day.
  *  - Failure isolation: this never throws. The OAuth callback uses the
  *    return value purely for logging — auth flow must always proceed.
  *  - Token hygiene: the access token is never written to any log line.
@@ -81,7 +86,9 @@ export async function dispatchOnboardingClassification(
   const since = new Date(
     Date.now() - sinceDays * 24 * 60 * 60 * 1000
   ).toISOString();
-  const idempotencyKey = `tier1-onboard:${input.accountId}`;
+  const idempotencyKey = input.attempt
+    ? `tier1-onboard:${input.accountId}:${input.attempt}`
+    : `tier1-onboard:${input.accountId}`;
 
   try {
     await inngest.send({

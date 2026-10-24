@@ -218,3 +218,17 @@ describe("dispatchOnboardingClassification — failure isolation", () => {
     }
   });
 });
+
+describe("dispatchOnboardingClassification — attempt key", () => {
+  it("appends the attempt to the event id so a re-dispatch after a failed pass is not deduplicated", async () => {
+    sendMock.mockClear();
+    await dispatchOnboardingClassification({
+      userId: "user-9",
+      accountId: "acc-9",
+      gmailAccessToken: "token",
+      attempt: "failed:2026-10-24T22",
+    });
+    const payload = sendMock.mock.calls[0]?.[0] as { id: string };
+    expect(payload.id).toBe("tier1-onboard:acc-9:failed:2026-10-24T22");
+  });
+});

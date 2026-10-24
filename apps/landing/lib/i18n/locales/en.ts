@@ -218,6 +218,8 @@ export const en = {
       categoryNotApplicable: "Not applicable",
       errorTitle: "Could not load pipeline data.",
       errorBody: "The classification is still running in the background. You can continue anyway.",
+      failedTitle: "Your emails could not be classified.",
+      failedBody: "Kairo read your inbox, but every classification failed. It retries automatically, and the tickets appear as soon as it succeeds. You can continue in the meantime.",
       retry: "Retry",
       skip: "Skip",
       continue: "See my Triage",

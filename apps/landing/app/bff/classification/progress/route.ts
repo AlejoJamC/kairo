@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { deriveScanStatus } from "@/lib/scan-status";
 
 // Category mapping: DB labels → 5 canonical keys
 const CATEGORY_MAP: Record<string, keyof typeof EMPTY_CATEGORIES> = {
@@ -87,10 +88,13 @@ export async function GET() {
     }
   }
 
-  // How far the scan is: messages of the account and how many are classified.
-  const [{ count: messagesTotal }, { count: messagesClassified }] = await Promise.all([
+  // How far the scan is: messages of the account, how many are classified or
+  // failed, and when the scan last wrote anything.
+  const [{ count: messagesTotal }, { count: messagesClassified }, { count: messagesFailed }, { data: lastCreated }] = await Promise.all([
     supabase.from("messages").select("id", { count: "exact", head: true }).eq("account_id", accountId),
     supabase.from("messages").select("id", { count: "exact", head: true }).eq("account_id", accountId).eq("classification_status", "classified"),
+    supabase.from("messages").select("id", { count: "exact", head: true }).eq("account_id", accountId).in("classification_status", ["failed", "failed_permanent"]),
+    supabase.from("messages").select("created_at").eq("account_id", accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   const urgent_count = rows.filter((row) => row.priority === "P1").length;
@@ -110,16 +114,15 @@ export async function GET() {
       classified_at: row.classified_at,
     }));
 
-  // Derive status from tickets: if any tickets classified in the last 2 min, still running
-  const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-  let status: "idle" | "in_progress" | "complete" | "failed";
-  if (tickets_count === 0) {
-    status = "idle";
-  } else if (last_classified_at && last_classified_at > twoMinAgo) {
-    status = "in_progress";
-  } else {
-    status = "complete";
-  }
+  const activity = [last_classified_at, lastCreated?.created_at ?? null]
+    .filter((value): value is string => value !== null)
+    .sort((a, b) => Date.parse(b) - Date.parse(a));
+  const status = deriveScanStatus({
+    messagesTotal: messagesTotal ?? 0,
+    messagesClassified: messagesClassified ?? 0,
+    messagesFailed: messagesFailed ?? 0,
+    lastActivityAt: activity[0] ?? null,
+  });
 
   // Wizard Continue button activates once enough tickets are classified.
   // Mirrors FAST_PATH_CONTINUE_THRESHOLD in @kairo/env (default 3).

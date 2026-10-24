@@ -1,6 +1,6 @@
 "use client";
 
-import { useClassificationProgress, type ClassificationProgress } from "@/lib/hooks/useClassificationProgress";
+import { CLASSIFICATION_FAILED, useClassificationProgress, type ClassificationProgress } from "@/lib/hooks/useClassificationProgress";
 import { useTranslation } from "@/lib/i18n";
 import { WizardHeading } from "@/components/wizard-heading";
 import { WizardSectionLabel } from "@/components/wizard-section-label";
@@ -61,7 +61,11 @@ export function DetectionStep({ onContinue, mailbox }: DetectionStepProps) {
   if (error) {
     return (
       <>
-        <WizardHeading eyebrow={eyebrow} title={dt.errorTitle} body={dt.errorBody} />
+        <WizardHeading
+          eyebrow={eyebrow}
+          title={error === CLASSIFICATION_FAILED ? dt.failedTitle : dt.errorTitle}
+          body={error === CLASSIFICATION_FAILED ? dt.failedBody : dt.errorBody}
+        />
         <Box display="flex" gap={8} alignItems="center">
           <Button size="web" icon={<Icon name="refresh" size={14} />} onPress={retry}>
             {dt.retry}

@@ -220,6 +220,8 @@ export const es: Translations = {
       categoryNotApplicable: "No aplica",
       errorTitle: "No se pudo cargar el progreso del pipeline.",
       errorBody: "La clasificación continúa en segundo plano. Podés continuar igual.",
+      failedTitle: "No se pudieron clasificar los correos.",
+      failedBody: "Kairo leyó la bandeja, pero todas las clasificaciones fallaron. El reintento es automático y los tickets aparecen en cuanto funcione. Mientras tanto, es posible continuar.",
       retry: "Reintentar",
       skip: "Omitir",
       continue: "Ver mi Triage",

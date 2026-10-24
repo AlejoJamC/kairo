@@ -146,6 +146,7 @@ export { GatewayEmbeddingProvider } from './providers/gateway/embedding';
 export { OllamaEmbeddingProvider } from './providers/ollama/embedding';
 
 export { resolveModelRoute, usesDecisionClassification, MODEL_ROLES, type ModelRoute, type ModelRole } from './config/model-roles';
+export { verifyClassificationModel, type ModelVerification } from './config/model-verification';
 export { GatewayDecisionProvider } from './providers/gateway/decision';
 export { classifyEmailWithDecision } from './classification/classify-with-decision';
 

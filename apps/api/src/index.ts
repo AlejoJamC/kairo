@@ -8,6 +8,7 @@ import { serve } from "inngest/hono";
 import { env } from "./env.js";
 import { supabase } from "./lib/supabase.js";
 import { checkEmbeddingDimensions, type ColumnDimensions } from "./lib/embedding-dimensions.js";
+import { verifyClassificationModel } from "@kairo/intelligence";
 import { inngest } from "./lib/inngest.js";
 import { tier1FastPath } from "./functions/pipeline/tier1-fast-path.js";
 import { tier2Background } from "./functions/pipeline/tier2-background.js";
@@ -96,6 +97,23 @@ if (process.env["NODE_ENV"] !== "test") {
     process.exit(1);
   }
   if (check.status === "unverified") console.warn(`[startup] Embedding dimensions not verified: ${check.reason}`);
+
+  // A classification model that does not resolve or is missing from the
+  // Gateway catalog fails every email of every account: refuse to serve
+  // rather than process inboxes into failed rows. With a valid model, ask
+  // the retry sweep to recover what failed before — a fixed and restarted
+  // configuration needs nothing else.
+  const classificationModel = await verifyClassificationModel();
+  if (classificationModel.status === "invalid") {
+    console.error(`[startup] Classification model is misconfigured: ${classificationModel.reason}; check CLASSIFICATION_MODE and AI_GATEWAY_CLASSIFICATION_MODEL`);
+    process.exit(1);
+  }
+  if (classificationModel.status === "unverified") {
+    console.warn(`[startup] Classification model not verified: ${classificationModel.reason}`);
+  } else {
+    await inngest.send({ name: "classification/retry.requested", data: { reason: "startup" } })
+      .catch((err: unknown) => console.warn(`[startup] Classification retry request not sent: ${err instanceof Error ? err.message : String(err)}`));
+  }
 }
 
 export default {

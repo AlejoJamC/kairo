@@ -33,6 +33,8 @@ import { createSemaphore } from "../../lib/semaphore.js";
 import { withRetry } from "../../lib/retry.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
+import { createConfigurationFaultTracker } from "../../lib/configuration-fault.js";
+import { tier1PassState } from "../../lib/tier1-pass-state.js";
 import { headerValue, headersToRecord, type GmailHeader } from "../../lib/email/headers.js";
 
 // ---------------------------------------------------------------------------
@@ -165,25 +167,19 @@ export const tier1FastPath = inngest.createFunction(
         );
       }
 
-      // Tier 1 is the onboarding fast-path — it must run at most ONCE per
-      // account, ever. The intended gate lives in apps/landing's auth
-      // callback (only dispatch for a brand-new account), but that is a
-      // caller-side check outside this function's control. This is the
-      // structural backstop: `messages` is the first table Tier 1 ever
-      // writes to for an account, so any pre-existing row there proves
-      // onboarding already ran — abort before touching Gmail/the LLM at all.
-      const { data: anyExistingMessage } = await supabase
-        .from("messages")
-        .select("id")
-        .eq("account_id", accountId)
-        .limit(1)
-        .maybeSingle();
-      if (anyExistingMessage) {
+      // Tier 1 is the onboarding fast-path: once it has produced a result for
+      // an account it never runs again. The auth callback dispatches on the
+      // same rule; this is the structural backstop. A pass that ran into an
+      // error and classified nothing is not a result, so it may run again —
+      // otherwise one failure would leave the account empty for good.
+      const passState = await tier1PassState(supabase, accountId);
+      if (passState === "done") {
         throw new NonRetriableError(
           `tier1-fast-path: account ${accountId} was already onboarded — refusing to re-run. ` +
-          "This event should never have been dispatched for an existing account; check /auth/callback's dispatch gate."
+          "Check /auth/callback's dispatch gate."
         );
       }
+      pipelineLog("tier1:guard", `account_id=${accountId} pass_state=${passState}`);
 
       const token = await getFreshGmailToken(accountId);
       const [profile, msgs, ctx] = await Promise.all([
@@ -237,6 +233,7 @@ export const tier1FastPath = inngest.createFunction(
       // after it — the slot frees the instant classification resolves.
       const llmSemaphore = createSemaphore(env.FAST_PATH_LLM_CONCURRENCY);
       const circuitBreaker = createCircuitBreaker(env.FAST_PATH_CIRCUIT_BREAKER_THRESHOLD);
+      const configurationFault = createConfigurationFaultTracker();
 
       for (const message of messages) {
         const headers = message.payload?.headers ?? [];
@@ -695,6 +692,7 @@ export const tier1FastPath = inngest.createFunction(
           })
           .catch(async (err: unknown) => {
             circuitBreaker.recordFailure();
+            configurationFault.record(err);
             const detail = err instanceof Error ? err.message : String(err);
             console.error(`[tier1] Classification failed for ${messageId}: ${detail}`);
 
@@ -738,6 +736,7 @@ export const tier1FastPath = inngest.createFunction(
       await Promise.all(classificationPromises);
 
       pipelineLog("tier1:summary", `classified=${classifiedIds.length} skipped=${skippedIds.length} relevant_total=${relevantDispatched}`);
+      configurationFault.throwIfRecorded();
       return { classifiedIds, skippedIds, learningSources };
     });
 
@@ -754,5 +753,12 @@ export const tier1FastPath = inngest.createFunction(
     await step.run('enqueue-sample-learning', () => enqueueOnboardingLearning(resolvedAccountId, result.learningSources ?? [], supabase));
     await step.sendEvent('trigger-sample-learning', { name: 'decisions/work.requested', data: {} });
     await step.sendEvent('trigger-business-synthesis', { name: 'knowledge/synthesis.requested', data: { accountId: resolvedAccountId, scope: 'onboarding' } });
+    // Messages that failed on their own (the provider stayed down through
+    // every attempt) are retried shortly instead of at the next sweep tick.
+    // The sweep returns at once when nothing is failed.
+    await step.sendEvent("request-classification-retry", {
+      name: "classification/retry.requested",
+      data: { reason: "pass_completed", delaySeconds: 120 },
+    });
   }
 );

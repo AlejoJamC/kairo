@@ -3,6 +3,7 @@ import { createClient as createBaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { env } from "@/env";
 import { dispatchOnboardingClassification } from "@/lib/inngest";
+import { onboardingDispatchAttempt } from "@/lib/onboarding-state";
 import { getFlag } from "@kairo/feature-flags";
 import { DESKTOP_COOKIE, DESKTOP_PARAM, PORT_PARAM, handoffPath, isDesktopDestination, parsePort, readDesktopCookie } from "@/lib/desktop-signin";
 import type { Database } from "@/types/supabase";
@@ -239,7 +240,7 @@ export async function GET(request: Request) {
   // connect, a newly-granted scope, or a re-consent after revocation.
   // /bff/auth/google no longer forces `prompt: "consent"` on every login
   // (that was the root cause of Tier 1 re-firing on every login — fixed at
-  // the source now, not just via !existingMembership below), so a routine
+  // the source now, and Tier 1 is gated on the account's own state), so a routine
   // returning-user login typically has no provider_token at all and this
   // whole block is skipped — nothing needs refreshing when Google didn't
   // reissue anything.
@@ -333,22 +334,27 @@ export async function GET(request: Request) {
         cookieJar
       );
     }
+  }
 
-    // ── KAI-202: all preconditions verified — safe to dispatch pipeline ────
-    // Tier 1 onboarding classification must fire at most once per account,
-    // ever — `existingMembership` (Scenario 1) means this account was
-    // already onboarded, so a repeat login must never re-dispatch it.
-    if (!existingMembership) {
-      try {
-        await dispatchOnboardingClassification({
-          userId:           user.id,
-          accountId:        resolvedAccountId,
-          gmailAccessToken: session.provider_token,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[KAI-202] dispatch wrapper threw: ${msg}`);
-      }
+  // ── KAI-202: dispatch the first classification pass ─────────────────────
+  // Whether the pass still has to run is a property of the account, not of
+  // the login (see lib/onboarding-state.ts): a pass that never ran, or ran
+  // into an error and classified nothing, is dispatched again by the next
+  // login. Tier 1 applies the same rule as its own backstop.
+  const onboardingAttempt = resolvedAccountId && session.access_token && session.user.id === user.id
+    ? await onboardingDispatchAttempt(admin, resolvedAccountId)
+    : null;
+  if (resolvedAccountId && onboardingAttempt) {
+    try {
+      await dispatchOnboardingClassification({
+        userId:           user.id,
+        accountId:        resolvedAccountId,
+        gmailAccessToken: session.provider_token ?? "",
+        attempt:          onboardingAttempt,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[KAI-202] dispatch wrapper threw: ${msg}`);
     }
   }
 

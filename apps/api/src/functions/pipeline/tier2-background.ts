@@ -23,6 +23,7 @@ import { createSemaphore } from "../../lib/semaphore.js";
 import { withRetry } from "../../lib/retry.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
+import { createConfigurationFaultTracker } from "../../lib/configuration-fault.js";
 import { backfillProposalStatus, autoApprovedTypes } from "./backfill-proposal-status.js";
 import { headerValue, headersToRecord, type GmailHeader } from "../../lib/email/headers.js";
 
@@ -281,6 +282,7 @@ export const tier2Background = inngest.createFunction(
       // after it — see tier1-fast-path.ts for the full rationale.
       const llmSemaphore = createSemaphore(env.FAST_PATH_LLM_CONCURRENCY);
       const circuitBreaker = createCircuitBreaker(env.FAST_PATH_CIRCUIT_BREAKER_THRESHOLD);
+      const configurationFault = createConfigurationFaultTracker();
 
       for (const message of unprocessed) {
         const headers = message.payload?.headers ?? [];
@@ -654,6 +656,7 @@ export const tier2Background = inngest.createFunction(
           })
           .catch(async (err: unknown) => {
             circuitBreaker.recordFailure();
+            configurationFault.record(err);
             const detail = err instanceof Error ? err.message : String(err);
             console.error(
               `[tier2] Classification failed for ${messageId}: ${detail}`
@@ -696,6 +699,7 @@ export const tier2Background = inngest.createFunction(
       }
 
       await Promise.allSettled(classificationPromises);
+      configurationFault.throwIfRecorded();
     });
 
     // -----------------------------------------------------------------------

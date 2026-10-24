@@ -24,6 +24,7 @@ import { createSemaphore } from "../../lib/semaphore.js";
 import { withRetry } from "../../lib/retry.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
 import { recordClassificationFailure } from "../../lib/classification-outcome.js";
+import { createConfigurationFaultTracker, type ConfigurationFaultTracker } from "../../lib/configuration-fault.js";
 import { backfillProposalStatus, autoApprovedTypes } from "./backfill-proposal-status.js";
 import { headerValue, headersToRecord, type GmailHeader } from "../../lib/email/headers.js";
 import { enqueueWorkflowKnowledge } from "../../lib/workflow-knowledge.js";
@@ -210,7 +211,9 @@ async function classifyWindow(
   daysTo: number
 ): Promise<void> {
   const messages = await fetchGmailRange(accessToken, daysFrom, daysTo);
-  await processTier3Messages({ userId, accountId, classifierContext, autoApproved, channelIntegrationId, messages });
+  const configurationFault = createConfigurationFaultTracker();
+  await processTier3Messages({ userId, accountId, classifierContext, autoApproved, channelIntegrationId, messages, configurationFault });
+  configurationFault.throwIfRecorded();
 }
 
 export async function processTier3Messages(input: {
@@ -220,8 +223,10 @@ export async function processTier3Messages(input: {
   autoApproved: TicketType[];
   channelIntegrationId: string | null;
   messages: GmailMessage[];
+  /** Collects a configuration fault so the Inngest step can fail on it; callers outside a step omit it. */
+  configurationFault?: ConfigurationFaultTracker;
 }): Promise<void> {
-  const { userId, accountId, classifierContext, autoApproved, channelIntegrationId, messages } = input;
+  const { userId, accountId, classifierContext, autoApproved, channelIntegrationId, messages, configurationFault } = input;
   if (messages.length === 0) return;
 
   // Dedup: check tickets table directly by (account_id, gmail_message_id).
@@ -615,6 +620,7 @@ export async function processTier3Messages(input: {
       })
       .catch(async (err: unknown) => {
         circuitBreaker.recordFailure();
+        configurationFault?.record(err);
         const detail = err instanceof Error ? err.message : String(err);
         console.error(
           `[tier3] Classification failed for ${messageId}: ${detail}`
@@ -784,6 +790,11 @@ export const tier3Deferred = inngest.createFunction(
     });
     if (getFlag('enable_email_knowledge')) await step.run('check-pending-knowledge', async () => {
       await checkTier3PendingKnowledge(accountId);
+    });
+    // Same as the end of Tier 1: retry what failed in Tiers 2 and 3 shortly.
+    await step.sendEvent("request-classification-retry", {
+      name: "classification/retry.requested",
+      data: { reason: "pass_completed", delaySeconds: 120 },
     });
   }
 );
