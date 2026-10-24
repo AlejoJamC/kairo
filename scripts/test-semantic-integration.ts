@@ -6,8 +6,10 @@ const withOllama = process.argv.includes('--ollama');
 const withFlow = process.argv.includes('--semantic-flow');
 const withDurability = process.argv.includes('--durability');
 const withObservability = process.argv.includes('--observability');
+const withRetrieval = process.argv.includes('--retrieval-quality');
+if (withRetrieval && (!withOllama || withFlow || withDurability || withObservability)) throw new Error('Retrieval quality requires only the local Ollama option');
 if (withObservability && !withFlow) throw new Error('Observability requires the semantic pipeline flow');
-if (process.argv.slice(2).some(arg => !['--ollama', '--semantic-flow', '--durability', '--observability'].includes(arg))) throw new Error('Unsupported integration option');
+if (process.argv.slice(2).some(arg => !['--ollama', '--semantic-flow', '--durability', '--observability', '--retrieval-quality'].includes(arg))) throw new Error('Unsupported integration option');
 if (withOllama && process.env['CI']) throw new Error('Real Ollama tests are local opt-in only');
 
 async function run(args: string[], env: Record<string, string | undefined> = process.env, display = false): Promise<string> {
@@ -42,5 +44,5 @@ if (withFlow) Object.assign(env, {
 });
 
 console.log('Using the existing local Supabase on ports 54321/54322. No instance creation, migrations or reset.');
-await run(['bun', '--no-env-file', 'test', '--timeout', '30000', withDurability ? 'evals/semantic-durability.test.ts' : withFlow ? 'evals/semantic-flow.test.ts' : 'apps/api/src/lib/semantic-service.supabase.integration.test.ts'], env, true);
-if (withOllama) await run(['bun', '--no-env-file', 'test', 'packages/intelligence/src/providers/ollama/embedding.integration.test.ts'], env, true);
+await run(withRetrieval ? ['bun','--no-env-file','evals/retrieval.ts','execute','synthetic'] : ['bun', '--no-env-file', 'test', '--timeout', '30000', withDurability ? 'evals/semantic-durability.test.ts' : withFlow ? 'evals/semantic-flow.test.ts' : 'apps/api/src/lib/semantic-service.supabase.integration.test.ts'], env, true);
+if (withOllama && !withRetrieval) await run(['bun', '--no-env-file', 'test', 'packages/intelligence/src/providers/ollama/embedding.integration.test.ts'], env, true);

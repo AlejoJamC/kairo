@@ -4,6 +4,7 @@ import { root, writePrivate } from './private-files';
 import { createEvaluationRun, finishEvaluationRun } from './results';
 
 export const suites = [
+  { file: 'evals/retrieval.test.ts', covers: ['independent retrieval judgments', 'ranking metrics and paired uncertainty', 'technical availability and safe recommendations'] },
   { file: 'scripts/observability/embeddings.test.ts', covers: ['read-only telemetry queries', 'explicit diagnostic windows and denominators'] },
   { file: 'packages/intelligence/src/embeddings/telemetry.test.ts', covers: ['safe semantic operation spans', 'coverage snapshots', 'single generation tracing', 'technical correlation'] },
   { file: 'packages/feature-flags/__tests__/flags.test.ts', covers: ['embedding capabilities enabled without environment overrides', 'explicit capability overrides'] },
