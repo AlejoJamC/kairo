@@ -9,9 +9,12 @@ import { AssistantPanel } from "@/components/triage/AssistantPanel";
 import { NotesPanel } from "@/components/triage/NotesPanel";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { isTicketReadOnly } from "@kairo/client-core/triage-status";
+import { tokens } from "@kairo/tokens";
 import { Box, Button, Chip, Icon, Resizer, Skeleton, Tab, Tabs, Text } from "@kairo/ui";
 
-const RESIZE_MIN = 340;
+// The sizes of the neighbours come from the layout tokens, so the panel and the window floor agree.
+const RESIZE_MIN = Number.parseFloat(tokens["layout.context"]);
+const QUEUE_WIDTH = Number.parseFloat(tokens["layout.queue"]);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Dashboard > Right Panel — Feature Flags (VITE_FF_*)
@@ -327,6 +330,22 @@ export function AiAssistant() {
     if (tabs.some((entry) => entry.id === requested)) setActiveTab(requested);
   }, [panelTabRequest, clearPanelTabRequest, tabs]);
 
+  // 1–9 jump to the tab in that position of the strip while a ticket is open.
+  useEffect(() => {
+    if (!selectedTicketId) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      const entry = /^[1-9]$/.test(event.key) ? tabs[Number(event.key) - 1] : undefined;
+      if (!entry || entry.disabled) return;
+      event.preventDefault();
+      setActiveTab(entry.id);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selectedTicketId, tabs]);
+
   // Reset to the first tab (per VITE_FF_RIGHT_PANEL_TAB_ORDER) when ticket changes.
   useEffect(() => { setActiveTab(defaultTabId); }, [selectedTicketId, defaultTabId]);
 
@@ -336,7 +355,7 @@ export function AiAssistant() {
   const { panelRef, width, max, setWidth, commit, reset } = useResizablePanel({
     min: RESIZE_MIN,   // current fixed design width — the minimum
     cap: 720,          // absolute ceiling (optimal reading/chat line length)
-    reserveLeft: 360,  // fixed ticket-list column to the panel's left
+    reserveLeft: QUEUE_WIDTH,  // fixed ticket-list column to the panel's left
     centerMin: 520,    // smallest comfortable width for the email/composer column
   });
 

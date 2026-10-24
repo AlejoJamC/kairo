@@ -19,6 +19,8 @@ const CSS = `
 .kairo-ui-caret { animation: kairo-ui-caret 1s steps(2) infinite }
 .kairo-ui-slide { animation: kairo-ui-slide-in 160ms ease-out }
 .kairo-ui-fade { animation: kairo-ui-fade .26s ease both }
+.kairo-ui-tabstrip { scrollbar-width: none }
+.kairo-ui-tabstrip::-webkit-scrollbar { display: none }
 .kairo-ui-knob { transition: transform 150ms }
 .kairo-ui-chev { transition: transform 150ms }
 .kairo-ui-faq > summary { list-style: none }

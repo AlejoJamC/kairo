@@ -43,12 +43,13 @@ export function Sidebar({ collapsed, onToggle, activeView, onViewChange, counts 
     return unsubscribe;
   }, []);
 
-  // ⌘K / Ctrl+K opens the palette from anywhere.
+  // ⌘K / Ctrl+K opens the palette from anywhere. It only opens: in the desktop app the
+  // native menu item answers the same key, and a toggle would close what the menu opened.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setPaletteOpen((open) => !open);
+        setPaletteOpen(true);
       }
     }
     document.addEventListener("keydown", onKeyDown);

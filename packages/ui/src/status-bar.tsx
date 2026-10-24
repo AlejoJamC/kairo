@@ -20,13 +20,13 @@ type StatusBarProps = {
 
 function Shortcut({ shortcut }: { shortcut: StatusBarShortcut }) {
   return (
-    <Box display="flex" alignItems="center" gap={5} flexShrink={0}>
+    <Box display="flex" alignItems="center" gap={6} flexShrink={0}>
       <Box display="flex" alignItems="center" gap={3}>
         {shortcut.keys.split(' ').map((key) => (
-          <Kbd key={key}>{key}</Kbd>
+          <Kbd key={key} alignSelf="center">{key}</Kbd>
         ))}
       </Box>
-      <Text fontSize={11.5} color={tokens['text.tertiary']} whiteSpace="nowrap">{shortcut.label}</Text>
+      <Text fontSize={11.5} lineHeightRatio={1} color={tokens['text.tertiary']} whiteSpace="nowrap">{shortcut.label}</Text>
     </Box>
   )
 }
@@ -37,7 +37,7 @@ function StatusBar({ shortcuts, pinned = [], status, offline }: StatusBarProps) 
       display="flex"
       alignItems="center"
       justifyContent="space-between"
-      gap={16}
+      gap={20}
       height={28}
       paddingHorizontal={14}
       borderTopWidth={1}
@@ -45,12 +45,13 @@ function StatusBar({ shortcuts, pinned = [], status, offline }: StatusBarProps) 
       borderTopColor={tokens['border.default']}
       backgroundColor={tokens['surface.sidebar']}
     >
-      <Box display="flex" alignItems="center" gap={14} minWidth={0} flexGrow={1} flexShrink={1} flexBasis="0%">
-        <Box display="flex" alignItems="center" gap={14} minWidth={0} flexShrink={1} overflowX="hidden" overflowY="hidden">
+      <Box display="flex" alignItems="center" gap={16} minWidth={0} flexGrow={1} flexShrink={1} flexBasis="0%">
+        <Box display="flex" alignItems="center" gap={16} minWidth={0} flexShrink={1} overflowX="hidden" overflowY="hidden">
           {shortcuts.map((shortcut) => (
             <Shortcut key={shortcut.keys} shortcut={shortcut} />
           ))}
         </Box>
+        {shortcuts.length > 0 && pinned.length > 0 && <Box width={1} height={12} flexShrink={0} backgroundColor={tokens['border.default']} aria-hidden />}
         {pinned.map((shortcut) => (
           <Shortcut key={shortcut.keys} shortcut={shortcut} />
         ))}

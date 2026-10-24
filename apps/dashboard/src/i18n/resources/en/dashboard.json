@@ -861,6 +861,7 @@
     "rows": {
       "queue": "Move through the queue",
       "commands": "Commands",
+      "panelTabs": "Go to a panel tab",
       "settings": "Settings",
       "send": "Send",
       "shortcuts": "Keyboard shortcuts",

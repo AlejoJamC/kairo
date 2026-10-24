@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { tokens } from '@kairo/tokens'
 import { Box, Pressable, Text } from './layout'
 import { PulseDot } from './loading'
+import { TabStrip } from './tab-strip'
 
 // Underlined tabs that switch panels. The active tab carries a 2px accent
 // underline; an AI tab shows an accent dot; a count shows unread or totals.
@@ -14,9 +15,11 @@ type TabsProps = {
 
 function Tabs({ label, children }: TabsProps) {
   return (
-    <Box role="tablist" aria-label={label} display="flex" gap={18} height={42} borderBottomWidth={1} borderStyle="solid" borderBottomColor={tokens['border.default']}>
-      {children}
-    </Box>
+    <TabStrip>
+      <Box role="tablist" aria-label={label} display="flex" gap={18} height={42} minWidth="100%" width="max-content" borderBottomWidth={1} borderStyle="solid" borderBottomColor={tokens['border.default']}>
+        {children}
+      </Box>
+    </TabStrip>
   )
 }
 

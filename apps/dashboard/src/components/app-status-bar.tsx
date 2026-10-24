@@ -29,7 +29,7 @@ export function AppStatusBar({ counts, view }: { counts: SidebarCounts | null; v
     <StatusBar
       shortcuts={viewShortcuts}
       pinned={[
-        { keys: "⌘K", label: t("dashboard:statusBar.commands") },
+        { keys: "⌘ K", label: t("dashboard:statusBar.commands") },
         { keys: "?", label: t("dashboard:statusBar.shortcuts") },
       ]}
       status={t("dashboard:statusBar.open", { count: open })}

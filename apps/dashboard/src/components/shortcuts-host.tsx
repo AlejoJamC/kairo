@@ -75,6 +75,7 @@ export function ShortcutsHost({ open, onOpenChange }: ShortcutsHostProps) {
         { label: t("dashboard:replyBar.actionReconocer"), keys: ["A"] },
         { label: t("dashboard:replyBar.actionResolver"), keys: ["R"] },
         { label: t("dashboard:replyBar.actionEscalar"), keys: ["E"] },
+        { label: t("dashboard:shortcuts.rows.panelTabs"), keys: ["1", "–", "6"] },
         { label: t("dashboard:replyBar.modeNote"), keys: ["N"] },
         { label: t("dashboard:shortcuts.rows.send"), keys: ["⌘", "↵"] },
         { label: t("dashboard:replyBar.sendAndResolve"), keys: ["⌘", "⇧", "↵"] },

@@ -54,8 +54,7 @@ fn start_sign_in_listener(app: tauri::AppHandle, state: tauri::State<'_, Handoff
                     let mut buffer = [0u8; 8192];
                     let read = stream.read(&mut buffer).unwrap_or(0);
                     let request = String::from_utf8_lossy(&buffer[..read]);
-                    let path = request.lines().next().and_then(|line| line.split_whitespace().nth(1)).unwrap_or("/");
-                    let tokens = url::Url::parse(&format!("http://127.0.0.1{path}")).ok().and_then(|url| parse_handoff(&url));
+                    let tokens = tokens_from_request(&request);
                     let (status, body) = if tokens.is_some() { ("200 OK", LOOPBACK_PAGE) } else { ("400 Bad Request", "") };
                     let _ = write!(stream, "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
                     if let Some(tokens) = tokens {
@@ -91,6 +90,14 @@ fn open_external(url: String) {
 fn notify(title: String, body: String, app: tauri::AppHandle) {
     use tauri_plugin_notification::NotificationExt;
     let _ = app.notification().builder().title(title).body(body).show();
+}
+
+/// The session tokens carried by the request line of an HTTP request to the
+/// loopback listener (`GET /auth?access_token=…&refresh_token=… HTTP/1.1`).
+fn tokens_from_request(request: &str) -> Option<serde_json::Value> {
+    let path = request.lines().next().and_then(|line| line.split_whitespace().nth(1))?;
+    let url = url::Url::parse(&format!("http://127.0.0.1{path}")).ok()?;
+    parse_handoff(&url)
 }
 
 /// Extracts `access_token` and `refresh_token` from a `kairo://` URL.
@@ -216,4 +223,45 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![take_handoff_tokens, open_external, notify, set_badge, set_menu, set_window_size, set_min_window_size, start_sign_in_listener])
         .run(tauri::generate_context!())
         .expect("error while running the Kairo desktop app");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_loopback_request_gives_both_tokens() {
+        let tokens = tokens_from_request("GET /auth?access_token=a%2Bb&refresh_token=c HTTP/1.1\r\nHost: 127.0.0.1:4010\r\n\r\n").unwrap();
+        assert_eq!(tokens["access_token"], "a+b");
+        assert_eq!(tokens["refresh_token"], "c");
+    }
+
+    #[test]
+    fn a_request_missing_a_token_or_malformed_gives_none() {
+        assert!(tokens_from_request("GET /auth?access_token=a HTTP/1.1").is_none());
+        assert!(tokens_from_request("GET /auth HTTP/1.1").is_none());
+        assert!(tokens_from_request("").is_none());
+    }
+
+    #[test]
+    fn the_deep_link_gives_the_same_tokens() {
+        let url = url::Url::parse("kairo://auth?access_token=a&refresh_token=b").unwrap();
+        assert_eq!(parse_handoff(&url).unwrap()["refresh_token"], "b");
+    }
+
+    #[test]
+    fn the_security_policy_lets_supabase_http_and_realtime_in() {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let csp = config["app"]["security"]["csp"].as_str().unwrap();
+        assert!(csp.contains("connect-src"));
+        assert!(csp.contains("https://*.supabase.co"));
+        assert!(csp.contains("wss://*.supabase.co"));
+    }
+
+    #[test]
+    fn the_window_can_be_dragged() {
+        let capabilities: serde_json::Value = serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let permissions = capabilities["permissions"].as_array().unwrap();
+        assert!(permissions.iter().any(|p| p == "core:window:allow-start-dragging"));
+    }
 }

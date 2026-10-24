@@ -200,7 +200,7 @@ function Sidebar({ collapsed, onToggleCollapsed, bell, search, groups, language,
           onClick={search.onOpen}
           display="flex"
           alignItems="center"
-          gap={10}
+          gap={8}
           width="100%"
           height={30}
           paddingHorizontal={10}
@@ -216,7 +216,7 @@ function Sidebar({ collapsed, onToggleCollapsed, bell, search, groups, language,
           <Text flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0} fontSize={12.5} color={tokens['text.tertiary']} textAlign="left" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
             {search.label}
           </Text>
-          <Kbd>{search.shortcut}</Kbd>
+          <Kbd alignSelf="center">{search.shortcut}</Kbd>
         </Pressable>
       )}
 

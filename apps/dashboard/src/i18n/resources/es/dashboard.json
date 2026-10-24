@@ -861,6 +861,7 @@
     "rows": {
       "queue": "Moverse por la cola",
       "commands": "Comandos",
+      "panelTabs": "Ir a una pestaña del panel",
       "settings": "Configuración",
       "send": "Enviar",
       "shortcuts": "Atajos de teclado",
