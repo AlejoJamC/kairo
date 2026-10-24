@@ -34,18 +34,30 @@ function combinationOf(event: KeyboardEvent): CommandId | null {
   const primary = event.metaKey || event.ctrlKey;
   if (!primary || event.altKey) return null;
   if (event.shiftKey) {
+    if (key === "?" || key === "/") return "all-commands";
     if (key === "f") return "toggle-ticket-list";
     if (key === "l") return "switch-theme";
     return null;
   }
   if (key === "k") return "search";
+  if (key === "/" || key === "?") return "all-commands";
   if (key === "j") return "ask-assistant";
   if (key === ",") return "go-settings";
   return CONTEXT_KEYS[key] ?? null;
 }
 
+const FILTER_KEYS: Record<string, CommandId> = {
+  "0": "filter-all",
+  "1": "filter-p1",
+  "2": "filter-p2",
+  "3": "filter-p3",
+};
+/** After P, the next key within this time picks the priority filter. */
+const CHORD_MS = 1500;
+
 export function useAppShortcuts(run: (id: CommandId) => void) {
   useEffect(() => {
+    let chordStart = 0;
     function onKeyDown(event: KeyboardEvent) {
       const combination = combinationOf(event);
       if (combination) {
@@ -54,6 +66,19 @@ export function useAppShortcuts(run: (id: CommandId) => void) {
         return;
       }
       if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
+      if (chordStart && Date.now() - chordStart < CHORD_MS) {
+        chordStart = 0;
+        const filter = FILTER_KEYS[event.key];
+        if (filter) {
+          event.preventDefault();
+          run(filter);
+          return;
+        }
+      }
+      if (event.key === "p") {
+        chordStart = Date.now();
+        return;
+      }
       const single = SINGLE_KEYS[event.key];
       if (!single) return;
       if (single === "all-commands" || single === "note") event.preventDefault();

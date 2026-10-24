@@ -151,6 +151,6 @@ export function buildAppMenu(state: AppMenuState): AppMenuGroup[] {
       label: 'Window',
       items: [item('minimize', 'Minimize'), item('zoom', 'Zoom'), separator(), item('bring-all', 'Bring all to front')],
     },
-    { id: 'help', label: 'Help', items: [item('all-commands', 'All commands', { shortcut: '?' })] },
+    { id: 'help', label: 'Help', items: [item('all-commands', 'All commands', { shortcut: '⌘/', accelerator: 'CmdOrCtrl+/' })] },
   ]
 }

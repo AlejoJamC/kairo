@@ -95,7 +95,7 @@ export function CommandPaletteHost({ open, scope, onScopeChange, onClose, view, 
       {
         id: "goto",
         title: t("dashboard:topChrome.palette.goToSection"),
-        items: [...viewItems, { id: "scope:commands", label: t("dashboard:commands.seeAll"), shortcut: ["?"], quiet: true }],
+        items: [...viewItems, { id: "scope:commands", label: t("dashboard:commands.seeAll"), shortcut: ["⌘", "/"], quiet: true }],
       },
     ].filter((section) => section.items.length > 0);
     // `label` and `stateOf` change with the language, the open ticket and the view.
@@ -138,7 +138,7 @@ export function CommandPaletteHost({ open, scope, onScopeChange, onClose, view, 
         value: scope,
         items: [
           { value: "all", label: t("dashboard:commands.scopeAll"), shortcut: "⌘K" },
-          { value: "commands", label: t("dashboard:commands.scopeCommands"), shortcut: "?" },
+          { value: "commands", label: t("dashboard:commands.scopeCommands"), shortcut: "⌘/" },
         ],
         onChange: (value) => onScopeChange(value as PaletteScope),
         summary: scope === "commands" ? t("dashboard:commands.count", { count: total }) : undefined,

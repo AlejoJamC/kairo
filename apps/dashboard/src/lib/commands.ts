@@ -9,6 +9,7 @@ export type CommandId =
   | "priority" | "status" | "wrong-classification" | "group-similar"
   | "next-ticket" | "previous-ticket" | "search"
   | "go-triage" | "go-awaiting" | "go-resolved" | "go-escalated" | "go-ai-review" | "go-knowledge" | "go-clients" | "go-settings"
+  | "filter-all" | "filter-p1" | "filter-p2" | "filter-p3"
   | "toggle-sidebar" | "toggle-ticket-list" | "context-client" | "context-assistant" | "context-notes" | "context-escalate" | "switch-theme" | "language"
   | "all-commands" | "close" | "sign-out";
 
@@ -23,6 +24,8 @@ export interface CommandDef {
   editable?: boolean;
   /** Only in the queue views. */
   queue?: boolean;
+  /** Only in the Triage view. */
+  triage?: boolean;
 }
 
 export const COMMANDS: readonly CommandDef[] = [
@@ -48,6 +51,10 @@ export const COMMANDS: readonly CommandDef[] = [
   { id: "go-knowledge", group: "goTo" },
   { id: "go-clients", group: "goTo" },
   { id: "go-settings", group: "goTo", keys: ["⌘", ","] },
+  { id: "filter-all", group: "view", keys: ["P", "0"], triage: true },
+  { id: "filter-p1", group: "view", keys: ["P", "1"], triage: true },
+  { id: "filter-p2", group: "view", keys: ["P", "2"], triage: true },
+  { id: "filter-p3", group: "view", keys: ["P", "3"], triage: true },
   { id: "toggle-sidebar", group: "view", keys: ["⌃", "⌘", "S"] },
   { id: "toggle-ticket-list", group: "view", keys: ["⌘", "⇧", "F"], queue: true },
   { id: "context-client", group: "view", keys: ["⌘", "1"], ticket: true },
@@ -56,7 +63,7 @@ export const COMMANDS: readonly CommandDef[] = [
   { id: "context-escalate", group: "view", keys: ["⌘", "4"], ticket: true },
   { id: "switch-theme", group: "view", keys: ["⌘", "⇧", "L"] },
   { id: "language", group: "view" },
-  { id: "all-commands", group: "general", keys: ["?"] },
+  { id: "all-commands", group: "general", keys: ["⌘", "/"] },
   { id: "close", group: "general", keys: ["esc"] },
   { id: "sign-out", group: "general" },
 ];
@@ -81,4 +88,12 @@ export const GO_VIEWS = {
   "go-knowledge": "knowledge",
   "go-clients": "clients",
   "go-settings": "settings",
+} as const;
+
+/** Priority each filter command selects in the Triage list. */
+export const PRIORITY_FILTERS = {
+  "filter-all": "all",
+  "filter-p1": "P1",
+  "filter-p2": "P2",
+  "filter-p3": "P3",
 } as const;

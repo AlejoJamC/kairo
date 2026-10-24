@@ -1052,7 +1052,11 @@
       "language": "Idioma: {{language}}",
       "all-commands": "Todos los comandos",
       "close": "Cerrar",
-      "sign-out": "Cerrar sesión"
+      "sign-out": "Cerrar sesión",
+      "filter-all": "Filtrar por prioridad: Todos",
+      "filter-p1": "Filtrar por prioridad: P1",
+      "filter-p2": "Filtrar por prioridad: P2",
+      "filter-p3": "Filtrar por prioridad: P3"
     },
     "scopeLabel": "Alcance",
     "scopeAll": "Todo",
