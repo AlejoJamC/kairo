@@ -56,6 +56,8 @@ Kairo — AI support cockpit for support teams. Monorepo: dashboard (Vite+React1
 - `.env.example` is the only environment file in the repository and the only one agents may read, cite or edit.
 - Every other environment file (`.env`, `.env.local` or any other name) is gitignored and off limits: never read, grep, print, filter, edit or suggest editing it, and never mention its name or contents.
 - A command that needs a different value receives it inline (`VAR=value bun --env-file=.env.local ...`); the user's ignored files are never changed.
+- The Vercel CLI writes a token into an environment file inside the app directory when it runs `vercel link`, `vercel env pull` or `vercel dev` without `--local`. Never run them or tell the user to run them; deploy through git.
+- A `.gitignore` pattern that matches environment files must never come after `!.env.example`, because the last matching pattern wins and would ignore `.env.example` again.
 
 ## Business value premises
 
