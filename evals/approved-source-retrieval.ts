@@ -44,7 +44,7 @@ export function knownSourceMetrics(rows: Array<{ position: number; expected: str
       const rank = row.returned.findIndex(id => row.expected.includes(id)); return sum + (rank < 0 ? 0 : 1/(rank+1));
     },0)/rows.length : null,
     precision: null, noAnswerAccuracy: null, unjudgedResultsAreNegative: false,
-    passed: rows.length > 0 && eligible.length === rows.length && fullyRecovered === rows.length };
+    allKnownSourcesRecovered: rows.length > 0 && eligible.length === rows.length && fullyRecovered === rows.length };
 }
 
 export async function evaluateApprovedSources(input: ApprovedSourceInput, embed: (text: string) => Promise<number[]>, space: VectorSpace) {
@@ -102,7 +102,12 @@ export async function evaluateApprovedSources(input: ApprovedSourceInput, embed:
     }
     comparisons.push({ profile, metrics: knownSourceMetrics(rows) });
   }
-  return { passed: technicalChecks.passed && comparisons[0]!.metrics.passed,
+  const executionPassed = technicalChecks.passed && comparisons.every(row => row.metrics.available === row.metrics.queries);
+  return { executionPassed,
+    quality: { status: 'not_approved' as const,
+      reason: 'Source provenance is not a complete relevance judgment; no quality acceptance target has been supplied.',
+      baselineAllKnownSourcesRecovered: comparisons[0]!.metrics.allKnownSourcesRecovered,
+      minimumThresholdAllKnownSourcesRecovered: comparisons.find(row => row.profile.name === 'minimum_threshold_same_limit')!.metrics.allKnownSourcesRecovered },
     technicalChecks, identityChecks, comparisons, coverage, observations,
     preparations: { knowledge: SEMANTIC_SOURCE_DEFINITIONS.knowledge_version.preparation, query: 'source subject and body, first 2000 characters' },
     boundaries: { service: 'production public embeddings domain', embeddings: 'injected provider',
@@ -156,7 +161,7 @@ export async function approvedSourceMain(args: string[]) {
     return response;
   },originalFetch);
   const provider = new OllamaEmbeddingProvider('http://127.0.0.1:11434',space.model,space.dimensions);
-  let passed = false;
+  let executionPassed = false;
   try {
     const metadata = await fetch('http://127.0.0.1:11434/api/tags',{ signal: AbortSignal.timeout(10_000) });
     if (!metadata.ok) throw new Error('Local model metadata unavailable');
@@ -175,22 +180,24 @@ export async function approvedSourceMain(args: string[]) {
         cache[key] = vector; await writePrivate(cachePath,cache); return [...vector];
       } catch (error) { failedInputs.add(key); throw error; }
     },space);
-    passed = result.passed;
-    const summary = { evaluation: plan.evaluation, completed: true, passed, approvedKnowledge: input.documents.length, sourceQueries: input.cases.length,
+    executionPassed = result.executionPassed;
+    const summary = { evaluation: plan.evaluation, completed: true, executionPassed, quality: result.quality,
+      approvedKnowledge: input.documents.length, sourceQueries: input.cases.length,
       technicalChecks: result.technicalChecks,
       comparisons: result.comparisons, localEmbeddingRequests: requests, httpStatuses,legacyContextRejections: contextLengthFailures,boundedEmbeddingRequests,providerBilledUsd: 0,
       providerContextHandling: 'Inputs rejected by the legacy endpoint use /api/embed with truncate=true; Ollama limits the trailing input to the model context.',
       infrastructureCostUsd: null, productConfigurationChanged: false, persistence: 'existing memory adapter', run: run.directory };
     await writePrivate(resolve(run.directory,'report.json'),{ evaluation: plan.evaluation,...result,summary,space });
-    if (!passed) process.exitCode = 1;
+    if (!executionPassed) process.exitCode = 1;
     return summary;
   } catch {
     await writePrivate(resolve(run.directory,'report.json'),{ evaluation: plan.evaluation,
-      summary: { completed: false,passed: false,error: 'Approved source evaluation failed; no private content is emitted' } });
+      summary: { completed: false,executionPassed: false,quality: { status: 'not_approved' },
+        error: 'Approved source evaluation failed; no private content is emitted' } });
     throw new Error('Approved source evaluation failed; inspect the private report');
   } finally {
     globalThis.fetch = originalFetch;
-    await finishEvaluationRun(run,passed ? 'completed' : 'failed');
+    await finishEvaluationRun(run,executionPassed ? 'completed' : 'failed');
   }
 }
 if (import.meta.main) {

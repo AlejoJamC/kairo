@@ -31,7 +31,7 @@ export const env = createEnv({
         // Dimensions of the configured embedding model. Must equal the vector columns in the database (768); the API refuses to start otherwise.
         EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().optional(),
         // Minimum cosine similarity for knowledge retrieval and for selecting tickets affected by approved knowledge.
-        EMBEDDING_SIMILARITY_THRESHOLD: z.coerce.number().min(0.75).max(0.9).default(0.8),
+        EMBEDDING_SIMILARITY_THRESHOLD: z.coerce.number().min(0.7).max(0.9).default(0.8),
         // Most tickets queued for evaluation per approved knowledge version.
         KNOWLEDGE_CANDIDATE_LIMIT: z.coerce.number().int().min(1).max(200).default(25),
         FAST_PATH_SCAN_SIZE: z.coerce.number().int().positive().default(30),
