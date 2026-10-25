@@ -68,12 +68,24 @@ const SelectFrame = styled(Stack, {
 
 const PLACEHOLDER = tokens['text.tertiary'] as never
 
+type TextChange = { onChange?: unknown; onChangeText?: (text: string) => void }
+
+/** Tamagui's web inputs drop onChangeText, so the text is read from the change event. */
+function textChange({ onChange, onChangeText }: TextChange) {
+  return domProps({
+    onChange: (event: { target: { value: string } }) => {
+      if (typeof onChange === 'function') onChange(event)
+      onChangeText?.(event.target.value)
+    },
+  })
+}
+
 function FieldInput(props: GetProps<typeof InputFrame>) {
-  return <InputFrame placeholderTextColor={PLACEHOLDER} {...props} />
+  return <InputFrame placeholderTextColor={PLACEHOLDER} {...props} {...textChange(props)} />
 }
 
 function FieldTextarea(props: GetProps<typeof TextareaFrame>) {
-  return <TextareaFrame placeholderTextColor={PLACEHOLDER} {...props} />
+  return <TextareaFrame placeholderTextColor={PLACEHOLDER} {...props} {...textChange(props)} />
 }
 
 type FieldSelectProps = Omit<GetProps<typeof SelectFrame>, 'children' | 'onChange' | 'value'> & {

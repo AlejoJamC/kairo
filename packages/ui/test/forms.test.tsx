@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { Field, FieldInput, FieldRange, FieldSelect, FieldTextarea, Resizer, UiProvider } from '../src'
 
 const renderUi = (ui: ReactElement) => render(<UiProvider>{ui}</UiProvider>)
@@ -65,6 +65,51 @@ describe('Field', () => {
     )
     expect(screen.queryByText('min')).toBeNull()
     expect(container.querySelector('.kairo-ui-spin')).toBeTruthy()
+  })
+
+  it('reports typed text through onChangeText and keeps a controlled value editable', () => {
+    const onChangeText = vi.fn()
+    const Controlled = () => {
+      const [value, setValue] = useState('')
+      return (
+        <Field label="Email">
+          <FieldInput
+            value={value}
+            onChangeText={(text) => {
+              onChangeText(text)
+              setValue(text)
+            }}
+          />
+        </Field>
+      )
+    }
+    renderUi(<Controlled />)
+    const input = screen.getByLabelText('Email') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'user@acme.com' } })
+    expect(onChangeText).toHaveBeenCalledWith('user@acme.com')
+    expect(input.value).toBe('user@acme.com')
+  })
+
+  it('still calls onChange with the event', () => {
+    const onChange = vi.fn()
+    renderUi(
+      <Field label="Email">
+        <FieldInput onChange={onChange} />
+      </Field>,
+    )
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a' } })
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports typed text from a textarea through onChangeText', () => {
+    const onChangeText = vi.fn()
+    renderUi(
+      <Field label="Notes">
+        <FieldTextarea onChangeText={onChangeText} />
+      </Field>,
+    )
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'hello' } })
+    expect(onChangeText).toHaveBeenCalledWith('hello')
   })
 
   it('works with a textarea', () => {
