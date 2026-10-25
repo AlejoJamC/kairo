@@ -76,16 +76,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Detect desktop changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && git diff --quiet "${{ github.event.pull_request.base.sha }}" HEAD -- apps/desktop; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.changes.outputs.changed == 'true'
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install Linux dependencies
+        if: steps.changes.outputs.changed == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 
       - name: Build the desktop shell
+        if: steps.changes.outputs.changed == 'true'
         run: cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml
 
       - name: Test the desktop shell
+        if: steps.changes.outputs.changed == 'true'
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml

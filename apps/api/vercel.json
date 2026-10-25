@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "hono",
+  "bunVersion": "1.x",
+  "installCommand": "cd ../.. && bun install",
+  "ignoreCommand": "npx turbo-ignore --fallback=HEAD^1",
+  "buildCommand": "cd ../.. && bun run --filter=@kairo/intelligence build && bun run --filter=@kairo/identity build"
+}
