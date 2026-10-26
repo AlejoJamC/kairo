@@ -104,3 +104,21 @@ export function resolveIndustry(value: string | null | undefined): Industry {
 export function isIndustryChoice(value: unknown): value is IndustryChoice {
   return typeof value === 'string' && (INDUSTRY_CHOICES as readonly string[]).includes(value);
 }
+
+/**
+ * The industry's interpretation examples as text for the classifier, in the
+ * account's language. Undefined while the account has no industry recorded, so
+ * accounts created before the setting keep classifying as they did.
+ */
+export function industryGuidance(industry: string | null | undefined, lang: IndustryLang): string | undefined {
+  if (!industry) return undefined;
+  const resolved = resolveIndustry(industry);
+  const lines = TICKET_GROUPS.flatMap((group) => {
+    const examples = INDUSTRY_EXAMPLES[resolved][group];
+    return examples?.length ? [`- ${group}: ${examples.map((example) => example[lang]).join('; ')}`] : [];
+  });
+  const intro = lang === 'es'
+    ? `Industria de la cuenta: ${INDUSTRY_NAMES[resolved].es}. Ejemplos de cómo se lee cada tipo de ticket en esta industria (orientativos, no exhaustivos; clasifica por lo que pide quien escribe):`
+    : `Account industry: ${INDUSTRY_NAMES[resolved].en}. Examples of how each ticket type is read in this industry (illustrative, not exhaustive; classify by what the sender is asking for):`;
+  return [intro, ...lines].join('\n');
+}

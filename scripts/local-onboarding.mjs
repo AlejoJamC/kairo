@@ -5,8 +5,8 @@ import { createInterface } from 'node:readline/promises';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const command = process.argv[2];
-if (!['dev', 'reset', 'auth'].includes(command) || process.argv.length !== 3) {
-  console.error('Usage: local-onboarding.mjs dev|reset|auth');
+if (!['dev', 'start', 'reset', 'auth'].includes(command) || process.argv.length !== 3) {
+  console.error('Usage: local-onboarding.mjs dev|start|reset|auth');
   process.exit(1);
 }
 if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
@@ -14,11 +14,22 @@ if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
   process.exit(1);
 }
 
-const status = spawnSync('supabase', ['status', '--output', 'json'], {
+let status = spawnSync('supabase', ['status', '--output', 'json'], {
   cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
 });
-if (status.status !== 0) {
-  console.error('Supabase local is not available. Start the local stack and try again.');
+if (status.status !== 0 && (command === 'dev' || command === 'start' || command === 'auth')) {
+  console.log('Starting local Supabase. Existing local data will be preserved.');
+  const started = spawnSync('supabase', ['start'], { cwd: root, stdio: ['ignore', 'ignore', 'inherit'] });
+  if (started.error || started.status !== 0) {
+    console.error('Could not start local Supabase. Check Docker and the error above.');
+    process.exit(started.status || 1);
+  }
+  status = spawnSync('supabase', ['status', '--output', 'json'], {
+    cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+if (status.error || status.status !== 0) {
+  console.error('Supabase local is not available. Run bun run db:start:local and check Docker.');
   process.exit(1);
 }
 let local;
@@ -36,6 +47,11 @@ try {
 } catch {
   console.error('Supabase returned an invalid local target. No changes were made.');
   process.exit(1);
+}
+
+if (command === 'start') {
+  console.log('Local Supabase is running.');
+  process.exit(0);
 }
 
 if (command === 'reset') {

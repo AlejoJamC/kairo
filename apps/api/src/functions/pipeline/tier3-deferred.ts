@@ -5,7 +5,7 @@ import type { TicketType } from "@kairo/intelligence";
 import { buildEmailClassifierInput, resolveClassifierContext } from "../../lib/classifier-input.js";
 import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
-import { getFlag } from "@kairo/feature-flags";
+import { assertSupabaseTarget, getFlag } from "@kairo/feature-flags";
 import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
 import { isJevCanaryTenant, jevCanaryUpgrade } from "../../lib/jev-canary.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
@@ -682,6 +682,7 @@ export const tier3Deferred = inngest.createFunction(
   },
   async ({ event, step }) => {
     const { userId } = event.data;
+    assertSupabaseTarget(event.data.supabaseTarget, process.env);
 
     // -----------------------------------------------------------------------
     // Fetch Gmail credentials + channel integration id once
