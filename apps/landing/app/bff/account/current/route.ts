@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
     const { data: member, error } = await supabase
       .from("account_members")
-      .select("role, account_id, accounts(id, name, slug, seat_limit, plan_id, plans(code, name, seat_limit_default))")
+      .select("role, account_id, accounts(id, name, slug, seat_limit, plan_id, industry, business_context, onboarding_completed_at, plans(code, name, seat_limit_default))")
       .eq("user_id", user.id)
       .eq("status", "active")
       .order("joined_at", { ascending: true })
@@ -40,6 +40,9 @@ export async function GET(request: Request) {
       plan:       plan ? { code: plan.code, name: plan.name } : null,
       seat_limit: account.seat_limit ?? plan?.seat_limit_default ?? null,
       my_role:    member.role,
+      industry:   account.industry,
+      business_context: account.business_context,
+      onboarding_completed_at: account.onboarding_completed_at,
     });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

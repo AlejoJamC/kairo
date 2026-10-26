@@ -1,5 +1,6 @@
 import { Inngest } from "inngest";
 import { env } from "@/env";
+import { localSupabaseConfig } from "@kairo/feature-flags";
 
 // ---------------------------------------------------------------------------
 // KAI-202 — Landing-side Inngest event sender
@@ -100,6 +101,7 @@ export async function dispatchOnboardingClassification(
         // KAI-202: extra context for observability + future use by
         // the pipeline function. Existing tier1 ignores unknown fields.
         accountId: input.accountId,
+        supabaseTarget: localSupabaseConfig(process.env) ? "local" : "remote",
         since,
         source: "oauth-callback",
       },
@@ -111,6 +113,29 @@ export async function dispatchOnboardingClassification(
     console.error(
       `[KAI-202] onboarding dispatch failed for user=${input.userId} account=${input.accountId}: ${msg}`
     );
+    return "send-failed";
+  }
+}
+
+/**
+ * Tells the pipeline that the owner finished or skipped the onboarding
+ * walkthrough. Tier 1 waits for it before it starts Tier 2 and Tier 3, and
+ * reads the recorded settings again either way, so a lost event only delays
+ * the pipeline until its wait ends. The event id makes a repeated completion
+ * a no-op.
+ */
+export async function dispatchOnboardingCompleted(accountId: string): Promise<DispatchOutcome> {
+  if (env.DISABLE_ONBOARDING_PIPELINE_DISPATCH === "true") return "disabled";
+  if (!isDevMode() && !env.INNGEST_EVENT_KEY) return "missing-config";
+  try {
+    await inngest.send({
+      id: `onboarding-completed:${accountId}`,
+      name: "onboarding/completed",
+      data: { accountId, supabaseTarget: localSupabaseConfig(process.env) ? "local" : "remote" },
+    });
+    return "dispatched";
+  } catch (err) {
+    console.error(`[KAI-118] onboarding completion dispatch failed for account=${accountId}: ${err instanceof Error ? err.message : String(err)}`);
     return "send-failed";
   }
 }

@@ -2,8 +2,15 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { tamaguiPlugin } from '@tamagui/vite-plugin'
 import path from 'path'
+import { localSupabaseConfig } from '../../packages/feature-flags/src/flags'
 
-export default defineConfig({
+export default defineConfig(() => {
+  const localSupabase = localSupabaseConfig(process.env)
+  return {
+  define: localSupabase ? {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(localSupabase.url),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(localSupabase.anonKey),
+  } : {},
   // The web build is served under /dashboard/ by the landing app; other hosts
   // (desktop shell, standalone hosting) override it with DASHBOARD_BASE_PATH.
   base: process.env.DASHBOARD_BASE_PATH ?? '/dashboard/',
@@ -22,6 +29,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // The local Google OAuth client allows 127.0.0.1 only; Vite binds to ::1 by default and refuses it.
+    ...(localSupabase ? { host: '127.0.0.1' } : {}),
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
@@ -40,4 +49,5 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
   },
+  }
 })

@@ -125,6 +125,7 @@
         "@kairo/feature-flags": "workspace:*",
         "@kairo/observability": "workspace:*",
         "@kairo/tokens": "workspace:*",
+        "@kairo/types": "workspace:*",
         "@kairo/ui": "workspace:*",
         "@opentelemetry/api": "^1.9.1",
         "@supabase/auth-helpers-nextjs": "^0.15.0",
@@ -196,6 +197,7 @@
       "name": "@kairo/env",
       "version": "0.0.1",
       "dependencies": {
+        "@kairo/feature-flags": "workspace:*",
         "@t3-oss/env-core": "^0.13.11",
         "zod": "^4.4.3",
       },

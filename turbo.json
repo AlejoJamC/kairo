@@ -1,6 +1,7 @@
 {
   "$schema": "https://v2-10-12.turborepo.dev/schema.json",
   "globalDependencies": ["**/.env.*local"],
+  "globalPassThroughEnv": ["FEATURE_FLAG_LOCAL_SUPABASE", "LOCAL_SUPABASE_URL", "LOCAL_SUPABASE_ANON_KEY", "LOCAL_SUPABASE_SERVICE_ROLE_KEY", "FEATURE_FLAG_ENABLE_DETECTION_UI", "INNGEST_DEV", "API_ORIGIN", "VERCEL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

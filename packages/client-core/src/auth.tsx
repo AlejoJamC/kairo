@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "./supabase";
 import { getLandingUrl, redirectToSignIn } from "./api-client";
+import { completeOnboarding as completeOnboardingRequest } from "./endpoints";
 import { getPlatform, isDesktop } from "./config";
 import type { User } from "@supabase/supabase-js";
 
@@ -10,6 +11,15 @@ export interface UserProfile {
   name: string;
   company_name?: string;
   // gmail_connected removed in KAI-173 — use support_channels presence instead
+}
+
+/**
+ * An owner who has not finished the onboarding goes back to the wizard instead of
+ * the dashboard. Accounts that predate the completion record count as finished
+ * when the owner's profile has a company name.
+ */
+export function ownerNeedsOnboarding(role: string | null, companyName: string | null | undefined, onboardingCompletedAt: string | null): boolean {
+  return role === "owner" && !onboardingCompletedAt && !companyName?.trim();
 }
 
 /** Names a failed password sign-in without exposing the provider's text. */
@@ -30,6 +40,10 @@ interface AuthContextType {
   signInWithPassword: (email: string, password: string) => Promise<"invalid" | "unexpected" | null>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  /** The owner has not finished or skipped the onboarding; the dashboard offers it as an overlay. */
+  onboardingPending: boolean;
+  /** Records the industry and business context (or their omission) and finishes the onboarding. */
+  completeOnboarding: (settings: { industry: string | null; businessContext: string }) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,6 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<DashboardRole | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [onboardingPending, setOnboardingPending] = useState(false);
 
   const isAdmin = userRole === 'owner' || userRole === 'admin' || userRole === 'supervisor';
 
@@ -145,6 +160,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUserRole((memberResult.data?.role as DashboardRole) ?? null);
       setAccountId(memberResult.data?.account_id ?? null);
+
+      if (memberResult.data?.role === "owner" && !isDesktop()) {
+        const accountResult = await supabase
+          .from("accounts")
+          .select("onboarding_completed_at")
+          .eq("id", memberResult.data.account_id)
+          .maybeSingle();
+        setOnboardingPending(
+          !accountResult.error && !!accountResult.data &&
+            ownerNeedsOnboarding("owner", profileResult.data?.company_name, accountResult.data.onboarding_completed_at),
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -153,6 +180,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = async () => {
     if (user) {
       await fetchProfile(user.id);
+    }
+  };
+
+  const completeOnboarding = async (settings: { industry: string | null; businessContext: string }) => {
+    try {
+      const response = await completeOnboardingRequest(settings.industry, settings.businessContext);
+      if (!response.ok) return false;
+      setOnboardingPending(false);
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -177,7 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, userRole, accountId, isAdmin, loading, signInWithPassword, signOut, refreshProfile }}
+      value={{ user, profile, userRole, accountId, isAdmin, loading, signInWithPassword, signOut, refreshProfile, onboardingPending, completeOnboarding }}
     >
       {children}
     </AuthContext.Provider>

@@ -10,6 +10,7 @@ import { DesktopIntegration } from "@/components/desktop-integration";
 import { DesktopSignIn } from "@/components/desktop-sign-in";
 import { Sidebar } from "@/components/sidebar";
 import { Inbox } from "@/components/inbox";
+import { OnboardingWalkthrough } from "@/components/onboarding-walkthrough";
 import { ClientDirectory } from "@/components/client-directory";
 import { ProfileSettings } from "@/components/profile-settings";
 import { ChangePasswordSettings } from "@/components/change-password-settings";
@@ -126,6 +127,7 @@ function AppContent() {
       </Box>
 
       <AppStatusBar counts={counts} view={activeView} />
+      <OnboardingWalkthrough />
       {isDesktop() && <DesktopIntegration view={activeView} onViewChange={setActiveView} sidebarCollapsed={sidebarCollapsed} />}
     </Box>
   );

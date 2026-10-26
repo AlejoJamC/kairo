@@ -136,6 +136,22 @@ describe('Field', () => {
     expect(select.value).toBe('team')
     expect(onChange).toHaveBeenCalledWith('team')
   })
+
+  it('centers the text of a select at both sizes: the line height does the centering, so no vertical padding', () => {
+    for (const size of ['app', 'web'] as const) {
+      renderUi(
+        <Field label={`Plan ${size}`} size={size}>
+          <FieldSelect>
+            <option value="pro">Pro</option>
+          </FieldSelect>
+        </Field>,
+      )
+      const select = screen.getByLabelText(`Plan ${size}`)
+      const style = getComputedStyle(select)
+      expect(parseFloat(style.paddingTop) || 0).toBe(0)
+      expect(parseFloat(style.paddingBottom) || 0).toBe(0)
+    }
+  })
 })
 
 describe('FieldRange', () => {

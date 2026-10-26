@@ -1,5 +1,8 @@
 import {createEnv} from "@t3-oss/env-core";
 import {z} from "zod";
+import {localSupabaseConfig} from "@kairo/feature-flags";
+
+const localSupabase = localSupabaseConfig(process.env);
 
 export const env = createEnv({
     server: {
@@ -104,7 +107,11 @@ export const env = createEnv({
         VITE_SUPABASE_URL: z.string().url().optional(),
         VITE_SUPABASE_ANON_KEY: z.string().min(1).optional(),
     },
-    runtimeEnv: process.env,
+    runtimeEnv: localSupabase ? {
+        ...process.env,
+        SUPABASE_URL: localSupabase.url,
+        SUPABASE_SERVICE_ROLE_KEY: localSupabase.serviceRoleKey,
+    } : process.env,
     skipValidation: !!process.env.SKIP_ENV_VALIDATION,
     emptyStringAsUndefined: true,
 });

@@ -1,10 +1,9 @@
-import { createServerClient } from "@supabase/auth-helpers-nextjs";
 import { createClient as createBaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { env } from "@/env";
 import { dispatchOnboardingClassification } from "@/lib/inngest";
 import { onboardingDispatchAttempt } from "@/lib/onboarding-state";
-import { getFlag } from "@kairo/feature-flags";
+import { createBufferedRouteClient } from "@/lib/supabase/server";
 import { DESKTOP_COOKIE, DESKTOP_PARAM, PORT_PARAM, handoffPath, isDesktopDestination, parsePort, readDesktopCookie } from "@/lib/desktop-signin";
 import type { Database } from "@/types/supabase";
 
@@ -54,13 +53,6 @@ interface BufferedCookie {
   options: Parameters<typeof NextResponse.prototype.cookies.set>[2];
 }
 
-function attachCookies(response: NextResponse, jar: BufferedCookie[]): NextResponse {
-  for (const { name, value, options } of jar) {
-    response.cookies.set(name, value, options);
-  }
-  return response;
-}
-
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const appUrl = env.NEXT_PUBLIC_APP_URL;
@@ -90,36 +82,15 @@ export async function GET(request: Request) {
   }
 
   // ── Build a request-scoped supabase client with a cookie buffer ──────────
-  const requestCookies = new Map<string, string>();
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  for (const pair of cookieHeader.split(/;\s*/)) {
-    if (!pair) continue;
-    const eq = pair.indexOf("=");
-    if (eq === -1) continue;
-    requestCookies.set(pair.slice(0, eq), decodeURIComponent(pair.slice(eq + 1)));
-  }
-
   const cookieJar: BufferedCookie[] = [];
   // The desktop sign-in is consumed here: a later sign-in in the browser must not inherit it.
   if (remembered.desktop) cookieJar.push({ name: DESKTOP_COOKIE, value: "", options: { maxAge: 0, path: "/" } });
 
-  const supabase = createServerClient<Database>(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() {
-          return Array.from(requestCookies, ([name, value]) => ({ name, value }));
-        },
-        setAll(toSet) {
-          for (const c of toSet) {
-            requestCookies.set(c.name, c.value);
-            cookieJar.push({ name: c.name, value: c.value, options: c.options });
-          }
-        },
-      },
-    }
-  );
+  const { client: supabase, attach } = createBufferedRouteClient(request);
+  const attachCookies = (response: NextResponse, jar: BufferedCookie[]): NextResponse => {
+    for (const { name, value, options } of jar) response.cookies.set(name, value, options);
+    return attach(response);
+  };
 
   const admin = createBaseClient<Database>(
     env.NEXT_PUBLIC_SUPABASE_URL,
@@ -130,9 +101,9 @@ export async function GET(request: Request) {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error || !data.session || !data.user) {
-    return NextResponse.redirect(
+    return attachCookies(NextResponse.redirect(
       `${appUrl}/auth/error?type=session_error&description=${encodeURIComponent(error?.message ?? "Unknown error")}`
-    );
+    ), cookieJar);
   }
 
   const user = data.user;
@@ -149,7 +120,7 @@ export async function GET(request: Request) {
 
     if (existingProfile) {
       await admin.auth.admin.deleteUser(user.id);
-      return NextResponse.redirect(`${appUrl}/auth/error?type=duplicate_email`);
+      return attachCookies(NextResponse.redirect(`${appUrl}/auth/error?type=duplicate_email`), cookieJar);
     }
   }
 
@@ -363,9 +334,6 @@ export async function GET(request: Request) {
   if (existingMembership) {
     if (desktop) {
       return attachCookies(NextResponse.redirect(`${appUrl}${handoffPath(true, desktopPort)}`), cookieJar);
-    }
-    if (getFlag("enable_detection_ui")) {
-      return attachCookies(NextResponse.redirect(`${appUrl}/wizard/detect`), cookieJar);
     }
     return attachCookies(NextResponse.redirect(`${appUrl}/auth/handoff`), cookieJar);
   }
