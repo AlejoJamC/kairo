@@ -170,6 +170,24 @@ Keep corpus data, golden labels and results under `scripts/eval/data/`, never in
 
 ## Local checks
 
+### Retrieval relevance
+
+```sh
+bun --no-env-file evals/retrieval.ts plan synthetic
+bun --no-env-file evals/retrieval.ts execute synthetic
+bun --no-env-file evals/retrieval.ts report synthetic latest
+```
+
+The relevance eval indexes invented sources through the public embeddings service and searches through the real Supabase adapters with local Ollama. It reuses the existing integration runner and developer stack; it creates no instance and installs no schema. Execution requires explicit authorization. Fixtures remain in the local database; teardown removes only their own outstanding decision jobs.
+
+Fixed judgments cover paraphrases, hard relevant cases, distractors and unanswered queries independently of search results. The benchmark compares ticket/similar-case and current-knowledge/approved-knowledge searches against their current consumer profiles, varying thresholds and limits without applying them to the product. The -1 threshold is an unfiltered cosine control that separates ranking quality from threshold rejection. Legacy unversioned articles and remote providers are outside this local benchmark.
+
+Reports separate technical availability and successful empty results from precision over returned results, recall, reciprocal rank, graded nDCG at the configured limit and no-answer accuracy. Missing judgments or unavailable searches leave unsupported metrics unknown. Metric counts, label coverage and reproducible query-cluster bootstrap intervals show the evidence available; paired deltas use identical judgments. A successful run means measurement and technical guarantees passed; quality remains `measured_not_approved`. Synthetic relevance cannot justify changing business profiles, so the recommendation retains the current profiles for human review. Local provider billing is zero; infrastructure cost and token usage remain unknown.
+
+Private results live under `scripts/eval/data/output/evals/retrieval/synthetic/<run>/`: `manifest.json` identifies source preparations, model/space, dataset fingerprint, seed, baselines and actual indexed references; `observations.json` preserves ranked matches and failures; `report.json` contains comparisons, latency, cost, mandatory guarantees and the recommendation. Any technical or safety failure fails the run. The offline metric and evidence tests are included in the canonical technical runner used by CI.
+
+### Technical contracts and integration
+
 ```sh
 bunx --no-install tsc --noEmit -p evals/tsconfig.json
 bun evals/technical.ts
