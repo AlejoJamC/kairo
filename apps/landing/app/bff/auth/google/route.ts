@@ -48,6 +48,12 @@ export async function GET(request: Request) {
     }
 
     const response = NextResponse.redirect(data.url);
+    const locale = params.get("locale");
+    if (locale === "en" || locale === "es") {
+      response.cookies.set("kairo-locale", locale, {
+        path: "/", sameSite: "lax", maxAge: 31536000, secure: canonicalUrl.protocol === "https:",
+      });
+    }
     if (desktop) {
       // Remembered in the browser too, in case the redirect URL loses its query on the way back.
       response.cookies.set(DESKTOP_COOKIE, desktopCookieValue(port), { httpOnly: true, sameSite: "lax", maxAge: 600, path: "/" });

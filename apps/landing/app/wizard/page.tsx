@@ -20,7 +20,7 @@ export default function WizardPage() {
 }
 
 function ConnectStep() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const w = t.wizard;
   const [connecting, setConnecting] = useState(false);
   const [, setDrafts] = useState(false);
@@ -29,7 +29,7 @@ function ConnectStep() {
   const handleConnect = () => {
     setConnecting(true);
     const apiUrl = getApiUrl();
-    window.location.href = `${apiUrl}/bff/auth/google`;
+    window.location.href = `${apiUrl}/bff/auth/google?locale=${encodeURIComponent(locale)}`;
   };
 
   return (

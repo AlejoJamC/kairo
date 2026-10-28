@@ -23,6 +23,7 @@ interface UserData {
 
 interface Props {
   showDetectionStep: boolean;
+  localReplay: boolean;
 }
 
 // Fake scan animation constants (used only when showDetectionStep=false is toggled off — kept for reference)
@@ -70,7 +71,7 @@ async function fetchMeWithRetry(): Promise<Response> {
   return lastRes!;
 }
 
-export function CompleteProfileClient({ showDetectionStep }: Props) {
+export function CompleteProfileClient({ showDetectionStep, localReplay }: Props) {
   const router = useRouter();
   const { t } = useTranslation();
   // When showDetectionStep=true: start at step 1 (detect); false: start at step 2 (triage)
@@ -103,7 +104,8 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
         // on the account, or the profile has the company name (accounts that predate the record).
         const accountRes = await apiCall("/bff/account/current");
         const account = accountRes.ok ? await accountRes.json() : null;
-        if (data.user.company_name || account?.onboarding_completed_at) {
+        const localOwnerPending = localReplay && account?.my_role === "owner" && !account.onboarding_completed_at;
+        if (!localOwnerPending && (data.user.company_name || account?.onboarding_completed_at)) {
           redirectToDashboard();
           return;
         }
@@ -130,7 +132,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
         setError("Failed to load profile. Please try again.");
         setProfileLoading(false);
       });
-  }, [router]);
+  }, [router, localReplay]);
 
   // Fake scan animation — only when detection step flag is OFF
   useEffect(() => {

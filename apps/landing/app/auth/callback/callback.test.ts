@@ -21,10 +21,12 @@ describe("OAuth PKCE cookies", () => {
     try {
       const { createBufferedRouteClient } = await import("../../../lib/supabase/server");
       const { GET } = await import("../../bff/auth/google/route");
-      const canonicalRedirect = await GET(new Request("http://localhost:3000/bff/auth/google?desktop=1&port=1234", { headers: { host: "localhost:3000" } }));
-      expect(canonicalRedirect.headers.get("location")).toBe("http://127.0.0.1:3000/bff/auth/google?desktop=1&port=1234");
-      const response = await GET(new Request("http://localhost:3000/bff/auth/google", { headers: { host: "127.0.0.1:3000" } }));
+      const canonicalRedirect = await GET(new Request("http://localhost:3000/bff/auth/google?desktop=1&port=1234&locale=es", { headers: { host: "localhost:3000" } }));
+      expect(canonicalRedirect.headers.get("location")).toBe("http://127.0.0.1:3000/bff/auth/google?desktop=1&port=1234&locale=es");
+      const response = await GET(new Request("http://localhost:3000/bff/auth/google?locale=es", { headers: { host: "127.0.0.1:3000" } }));
       expect(response.status).toBe(307);
+      expect(response.cookies.get("kairo-locale")?.value).toBe("es");
+      expect(response.cookies.get("kairo-locale")?.path).toBe("/");
       const verifier = response.cookies.getAll().find((cookie) => cookie.name.endsWith("-code-verifier"));
       expect(verifier).toBeDefined();
       const callback = createBufferedRouteClient(new Request("http://127.0.0.1:3000/auth/callback", {

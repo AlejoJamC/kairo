@@ -16,6 +16,7 @@
     "dev:remote": "turbo run dev --filter=@kairo/dashboard --filter=@kairo/landing --filter=@kairo/api --filter=@kairo/kelan",
     "db:start:local": "node scripts/local-onboarding.mjs start",
     "db:reset:local": "node scripts/local-onboarding.mjs reset",
+    "wizard:reset:local": "node scripts/local-onboarding.mjs reset-wizard",
     "docker:reset:local": "node scripts/reset-local-docker.mjs",
     "auth:local": "node scripts/local-onboarding.mjs auth",
     "desktop": "bun run --filter @kairo/desktop dev",

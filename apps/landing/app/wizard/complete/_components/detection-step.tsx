@@ -98,7 +98,7 @@ export function DetectionStep({ onContinue, mailbox, onPersonalize }: DetectionS
         running={isStillScanning}
       />
 
-      <Box>
+      <Box display="flex" flexWrap="wrap" alignItems="center" gap={8}>
         <Button
           variant="primary"
           size="webLg"
@@ -110,15 +110,12 @@ export function DetectionStep({ onContinue, mailbox, onPersonalize }: DetectionS
         >
           {dt.continue}
         </Button>
-      </Box>
-
-      {onPersonalize && (
-        <Box alignSelf="flex-start">
+        {onPersonalize && (
           <Button variant="ghost" size="sm" iconEnd={<Icon name="right" size={12} />} onPress={onPersonalize}>
             {t.wizard.setup.personalize}
           </Button>
-        </Box>
-      )}
+        )}
+      </Box>
 
       <KpiStrip
         variant="web"

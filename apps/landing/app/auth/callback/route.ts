@@ -1,4 +1,5 @@
 import { createClient as createBaseClient } from "@supabase/supabase-js";
+import { localSupabaseConfig } from "@kairo/feature-flags";
 import { NextResponse } from "next/server";
 import { env } from "@/env";
 import { dispatchOnboardingClassification } from "@/lib/inngest";
@@ -130,7 +131,7 @@ export async function GET(request: Request) {
   // at the end — Scenario 4 must go to /wizard/complete, not /auth/handoff.
   const { data: existingMembership } = await supabase
     .from("account_members")
-    .select("account_id")
+    .select("account_id, role")
     .eq("user_id", user.id)
     .eq("status", "active")
     .order("joined_at", { ascending: true })
@@ -334,6 +335,12 @@ export async function GET(request: Request) {
   if (existingMembership) {
     if (desktop) {
       return attachCookies(NextResponse.redirect(`${appUrl}${handoffPath(true, desktopPort)}`), cookieJar);
+    }
+    if (localSupabaseConfig(process.env) && existingMembership.role === "owner") {
+      const { data: account, error } = await supabase.from("accounts")
+        .select("onboarding_completed_at").eq("id", existingMembership.account_id).maybeSingle();
+      if (error || !account) return attachCookies(NextResponse.redirect(`${appUrl}/auth/error?type=session_error`), cookieJar);
+      if (!account.onboarding_completed_at) return attachCookies(NextResponse.redirect(`${appUrl}/wizard/complete`), cookieJar);
     }
     return attachCookies(NextResponse.redirect(`${appUrl}/auth/handoff`), cookieJar);
   }

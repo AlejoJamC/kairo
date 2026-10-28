@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 
 interface State {
   user: { id: string } | null;
-  member: { account_id: string } | null;
+  member: { account_id: string; role?: string; accounts?: unknown } | null;
   alreadyCompleted: boolean;
   updateError: boolean;
   update?: Record<string, unknown>;
@@ -11,9 +11,8 @@ interface State {
 }
 const state: State = { user: null, member: null, alreadyCompleted: false, updateError: false, filters: [], dispatched: [] };
 
-mock.module("@/lib/supabase/server", () => ({
-  getUserFromRequest: async () => ({ data: { user: state.user }, error: state.user ? null : { message: "no session" } }),
-  createClient: async () => ({
+function mockClient() {
+  return {
     from: (table: string) => {
       const chain: Record<string, unknown> = {};
       for (const method of ["select", "eq", "in", "order", "limit", "is"]) {
@@ -26,17 +25,24 @@ mock.module("@/lib/supabase/server", () => ({
       chain.maybeSingle = async () => {
         if (table === "account_members") return { data: state.member, error: null };
         if (state.updateError) return { data: null, error: { message: "db down" } };
-        return { data: state.alreadyCompleted ? null : { id: "acc" }, error: null };
+        return { data: state.alreadyCompleted ? null : { id: "acc", business_context: state.update?.business_context }, error: null };
       };
       return chain;
     },
-  }),
+  };
+}
+
+mock.module("@/lib/supabase/server", () => ({
+  getUserFromRequest: async () => ({ data: { user: state.user }, error: state.user ? null : { message: "no session" } }),
+  createClient: async () => mockClient(),
+  createClientForRequest: async () => mockClient(),
 }));
 mock.module("@/lib/inngest", () => ({
   dispatchOnboardingCompleted: async (accountId: string) => { state.dispatched.push(accountId); return "dispatched"; },
 }));
 
 const { POST } = await import("./route");
+const { GET: getAccount, PATCH: updateAccount } = await import("../../account/current/route");
 
 const call = (body: unknown) => POST(new Request("http://127.0.0.1:3000/bff/onboarding/complete", { method: "POST", body: JSON.stringify(body) }));
 
@@ -99,5 +105,49 @@ describe("POST /bff/onboarding/complete", () => {
     state.updateError = true;
     expect((await call({ industry: "financial" })).status).toBe(500);
     expect(state.dispatched).toEqual([]);
+  });
+});
+
+describe("/bff/account/current", () => {
+  const request = (body: unknown) => new Request("http://127.0.0.1:3000/bff/account/current", { method: "PATCH", body: JSON.stringify(body) });
+
+  it("returns the industry's saved value and the account's business context", async () => {
+    state.member = { account_id: "acc", role: "owner", accounts: { id: "acc", industry: "legal", business_context: "A description", plans: null } };
+    const response = await getAccount(new Request("http://127.0.0.1:3000/bff/account/current"));
+    expect(await response.json()).toMatchObject({ industry: "legal", business_context: "A description" });
+  });
+
+  it("allows an owner to update only the business context", async () => {
+    state.member = { account_id: "acc", role: "owner" };
+    const response = await updateAccount(request({ account_id: "acc", business_context: "  A description  " }));
+    expect(response.status).toBe(200);
+    expect(state.update).toMatchObject({ business_context: "A description", business_context_source: "manual" });
+    expect(state.update).not.toHaveProperty("industry");
+    expect(await response.json()).toEqual({ business_context: "A description" });
+  });
+
+  it("allows an admin to clear the optional description", async () => {
+    state.member = { account_id: "acc", role: "admin" };
+    expect((await updateAccount(request({ account_id: "acc", business_context: "  " }))).status).toBe(200);
+    expect(state.update).toMatchObject({ business_context: null, business_context_source: null });
+  });
+
+  it("rejects missing sessions, non-admins, and a different account", async () => {
+    state.user = null;
+    expect((await updateAccount(request({ account_id: "acc", business_context: "text" }))).status).toBe(401);
+    state.user = { id: "u1" };
+    state.member = { account_id: "acc", role: "agent" };
+    expect((await updateAccount(request({ account_id: "acc", business_context: "text" }))).status).toBe(403);
+    state.member = { account_id: "acc", role: "owner" };
+    expect((await updateAccount(request({ account_id: "other", business_context: "text" }))).status).toBe(403);
+    expect(state.update).toBeUndefined();
+  });
+
+  it("rejects invalid or oversized descriptions and reports a failed save", async () => {
+    state.member = { account_id: "acc", role: "owner" };
+    expect((await updateAccount(request({ account_id: "acc", business_context: 1 }))).status).toBe(400);
+    expect((await updateAccount(request({ account_id: "acc", business_context: "x".repeat(2501) }))).status).toBe(400);
+    state.updateError = true;
+    expect((await updateAccount(request({ account_id: "acc", business_context: "text" }))).status).toBe(500);
   });
 });

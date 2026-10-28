@@ -16,4 +16,11 @@ describe("ownerNeedsOnboarding", () => {
     expect(ownerNeedsOnboarding("agent", null, null)).toBe(false);
     expect(ownerNeedsOnboarding(null, null, null)).toBe(false);
   });
+
+  it("allows local onboarding to be replayed without clearing the owner's company name", () => {
+    expect(ownerNeedsOnboarding("owner", "Acme", null, true)).toBe(true);
+    expect(ownerNeedsOnboarding("owner", "Acme", "2026-01-01T00:00:00Z", true)).toBe(false);
+    expect(ownerNeedsOnboarding("agent", "Acme", null, true)).toBe(false);
+    expect(ownerNeedsOnboarding("owner", "Acme", null, false)).toBe(false);
+  });
 });

@@ -32,11 +32,14 @@ i18n
     defaultNS: defaultNamespace,
     supportedLngs: [...supportedLanguages],
 
-    // Detection: localStorage → browser → fallback to English
+    // The shared cookie keeps the choice between the landing and dashboard ports.
     detection: {
-      order: ["localStorage", "navigator"],
+      order: ["cookie", "localStorage", "navigator"],
+      lookupCookie: "kairo-locale",
       lookupLocalStorage: "kairo-lang",
-      caches: ["localStorage"],
+      caches: ["cookie", "localStorage"],
+      cookieMinutes: 525600,
+      cookieOptions: { path: "/", sameSite: "lax" },
     },
 
     interpolation: {

@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "./supabase";
 import { getLandingUrl, redirectToSignIn } from "./api-client";
 import { completeOnboarding as completeOnboardingRequest } from "./endpoints";
-import { getPlatform, isDesktop } from "./config";
+import { getClientConfig, getPlatform, isDesktop } from "./config";
 import type { User } from "@supabase/supabase-js";
 
 export interface UserProfile {
@@ -18,8 +18,8 @@ export interface UserProfile {
  * the dashboard. Accounts that predate the completion record count as finished
  * when the owner's profile has a company name.
  */
-export function ownerNeedsOnboarding(role: string | null, companyName: string | null | undefined, onboardingCompletedAt: string | null): boolean {
-  return role === "owner" && !onboardingCompletedAt && !companyName?.trim();
+export function ownerNeedsOnboarding(role: string | null, companyName: string | null | undefined, onboardingCompletedAt: string | null, localReplay = false): boolean {
+  return role === "owner" && !onboardingCompletedAt && (localReplay || !companyName?.trim());
 }
 
 /** Names a failed password sign-in without exposing the provider's text. */
@@ -167,9 +167,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .select("onboarding_completed_at")
           .eq("id", memberResult.data.account_id)
           .maybeSingle();
+        const supabaseUrl = new URL(getClientConfig().supabaseUrl);
+        const localReplay = supabaseUrl.protocol === "http:" && supabaseUrl.port === "54321" &&
+          ["127.0.0.1", "localhost", "[::1]"].includes(supabaseUrl.hostname);
         setOnboardingPending(
           !accountResult.error && !!accountResult.data &&
-            ownerNeedsOnboarding("owner", profileResult.data?.company_name, accountResult.data.onboarding_completed_at),
+            ownerNeedsOnboarding("owner", profileResult.data?.company_name, accountResult.data.onboarding_completed_at, localReplay),
         );
       }
     } finally {
