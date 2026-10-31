@@ -106,6 +106,8 @@ function FieldSelect({ value, defaultValue, onValueChange, children, width, minW
     <Stack position="relative" width={width ?? '100%'} minWidth={minWidth} maxWidth={maxWidth} flexShrink={0}>
       <SelectFrame
         {...props}
+        // The text is centered by the line height, so the select takes no vertical padding at either size.
+        paddingVertical={0}
         paddingRight={32}
         {...domProps({
           value,

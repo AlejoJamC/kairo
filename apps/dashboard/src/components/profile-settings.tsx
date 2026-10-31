@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@kairo/client-core/auth";
 import { updateProfileName } from "@kairo/client-core/queries";
-import { getOperationalSlaConfig, saveOperationalSlaConfig, listChannels } from "@kairo/client-core/endpoints";
+import { getCurrentAccount, updateAccountBusinessContext, getOperationalSlaConfig, saveOperationalSlaConfig, listChannels } from "@kairo/client-core/endpoints";
+import { INDUSTRIES, INDUSTRY_NAMES, isIndustryChoice } from "@kairo/types/industry";
 import { useAccountMembers } from "@kairo/client-core/hooks/use-account-members";
 import type { AppView } from "@/types";
 import {
-  Avatar, Box, Button, Card, Chip, EmptyState, Field, FieldInput, FieldRange, FieldSelect, Icon, IntegrationCard, MemberRow, MemberTable, NavItem,
+  Avatar, Box, Button, Card, Chip, EmptyState, Field, FieldInput, FieldRange, FieldSelect, FieldTextarea, Icon, IntegrationCard, MemberRow, MemberTable, NavItem,
   PageFormFooter, PageFrame, PageHeader, SettingsNav, SettingsRow, SlaPolicyCard, Spinner, Switch, Text, isSlaOrderValid,
   type IconName, type IntegrationStatus, type SlaPolicyKey,
 } from "@kairo/ui";
@@ -34,24 +35,58 @@ function buildNavItems(t: (...args: any[]) => string): { id: SettingsSection; la
 // ── Workspace ────────────────────────────────────────────────────────────────
 
 function WorkspaceSection() {
-  const { t } = useTranslation(["dashboard"]);
-  const { profile, refreshProfile } = useAuth();
+  const { t, i18n } = useTranslation(["dashboard"]);
+  const { profile, accountId, userRole, refreshProfile } = useAuth();
   const initial = profile?.company_name ?? "";
-  const [name, setName] = useState(initial);
+  const [nameDraft, setName] = useState<string | null>(null);
+  const name = nameDraft ?? initial;
+  const [industry, setIndustry] = useState<string | null>(null);
+  const [businessContext, setBusinessContext] = useState("");
+  const [savedContext, setSavedContext] = useState("");
+  const [accountLoaded, setAccountLoaded] = useState(false);
+  const [accountLoadFailed, setAccountLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const canEditAccount = userRole === "owner" || userRole === "admin";
+  const language = i18n.language.startsWith("es") ? "es" : "en";
 
   useEffect(() => {
-    setName(profile?.company_name ?? "");
-  }, [profile]);
+    let cancelled = false;
+    if (!accountId) return () => { cancelled = true; };
+    getCurrentAccount()
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Account unavailable");
+        return response.json() as Promise<{ id: string; industry: string | null; business_context: string | null }>;
+      })
+      .then((account) => {
+        if (cancelled) return;
+        if (account.id !== accountId) throw new Error("Account mismatch");
+        setIndustry(account.industry);
+        setBusinessContext(account.business_context ?? "");
+        setSavedContext(account.business_context ?? "");
+        setAccountLoaded(true);
+      })
+      .catch(() => { if (!cancelled) setAccountLoadFailed(true); });
+    return () => { cancelled = true; };
+  }, [accountId]);
 
   const save = async () => {
     setSaving(true);
     setError(undefined);
     try {
-      const { error: saveError } = await updateProfileName(profile!.id, name);
-      if (saveError) { setError(t("dashboard:settings.savedError")); return; }
-      await refreshProfile();
+      if (name !== initial) {
+        const { error: saveError } = await updateProfileName(profile!.id, name);
+        if (saveError) { setError(t("dashboard:settings.savedError")); return; }
+        await refreshProfile();
+        setName(null);
+      }
+      if (businessContext !== savedContext && accountId && accountLoaded && canEditAccount) {
+        const response = await updateAccountBusinessContext(accountId, businessContext);
+        if (!response.ok) { setError(t("dashboard:settings.savedError")); return; }
+        const result: { business_context: string | null } = await response.json();
+        setBusinessContext(result.business_context ?? "");
+        setSavedContext(result.business_context ?? "");
+      }
     } catch {
       setError(t("dashboard:settings.savedError"));
     } finally {
@@ -79,6 +114,25 @@ function WorkspaceSection() {
             <FieldInput readOnly placeholder={t("dashboard:settings.workspace.timezonePlaceholder")} />
           </Field>
         </Box>
+        <Box display="flex" flexDirection="column" gap={16} marginTop={20}>
+          <Field label={t("dashboard:settings.workspace.industryLabel")}>
+            <FieldSelect value={industry && isIndustryChoice(industry) ? industry : ""} disabled>
+              <option value="">{t("dashboard:settings.workspace.industryUnselected")}</option>
+              {INDUSTRIES.map((value) => <option key={value} value={value}>{INDUSTRY_NAMES[value][language]}</option>)}
+              <option value="other">{t("dashboard:settings.workspace.industryOther")}</option>
+            </FieldSelect>
+          </Field>
+          <Field label={t("dashboard:settings.workspace.businessContextLabel")}>
+            <FieldTextarea
+              value={businessContext}
+              onChangeText={setBusinessContext}
+              placeholder={t("dashboard:settings.workspace.businessContextPlaceholder")}
+              maxLength={2500}
+              rows={4}
+              disabled={!accountLoaded || !canEditAccount || saving}
+            />
+          </Field>
+        </Box>
       </Card>
       <Card paddingVertical={0}>
         <SettingsRow icon="globe" title={t("dashboard:settings.workspace.langTitle")} description={t("dashboard:settings.workspace.langDesc")} controlId="workspace-language">
@@ -90,11 +144,11 @@ function WorkspaceSection() {
         </SettingsRow>
       </Card>
       <PageFormFooter
-        onDiscard={() => setName(initial)}
+        onDiscard={() => { setName(null); setBusinessContext(savedContext); setError(undefined); }}
         onSave={save}
-        canSave={name !== initial}
+        canSave={name !== initial || (accountLoaded && canEditAccount && businessContext !== savedContext)}
         saving={saving}
-        error={error}
+        error={error ?? (accountLoadFailed ? t("dashboard:settings.workspace.loadError") : undefined)}
         labels={{ discard: t("dashboard:settings.discard"), save: t("dashboard:settings.saveChanges") }}
       />
     </>
@@ -466,7 +520,7 @@ function PendingSection({ title }: { title: string }) {
 // ── Root component ────────────────────────────────────────────────────────────
 
 export function ProfileSettings({ onViewChange }: Props) {
-  const { profile } = useAuth();
+  const { profile, accountId } = useAuth();
   const { t } = useTranslation(["dashboard"]);
   const [section, setSection] = useState<SettingsSection>("workspace");
   const navItems = buildNavItems(t);
@@ -487,7 +541,7 @@ export function ProfileSettings({ onViewChange }: Props) {
         ))}
       </SettingsNav>
       <PageFrame narrow>
-        {section === "workspace" && <WorkspaceSection />}
+        {section === "workspace" && <WorkspaceSection key={accountId ?? "pending"} />}
         {section === "team" && <TeamSection />}
         {section === "integrations" && <IntegrationsSection onViewChange={onViewChange} />}
         {section === "triage" && <TriageSection />}

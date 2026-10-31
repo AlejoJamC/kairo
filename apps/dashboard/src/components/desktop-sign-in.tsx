@@ -24,6 +24,7 @@ export function DesktopSignIn() {
   const [copied, setCopied] = useState(false);
   const [signInUrl, setSignInUrl] = useState<string | null>(null);
 
+
   // The sign-in window is as tall as its content: the bar, the card and the space around it. The app takes the large window once there is a session.
   const SIGN_IN_WIDTH = 520;
   const BAR_AND_SPACE = 44 + 80;

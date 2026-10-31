@@ -9,6 +9,8 @@ import { WizardHeading } from "@/components/wizard-heading";
 import { WizardSectionLabel } from "@/components/wizard-section-label";
 import { WizardSteps } from "@/components/wizard-steps";
 import { QueueList } from "@/components/queue-list";
+import { OnboardingSettingsFields } from "@/components/onboarding-settings-fields";
+import type { OnboardingSettings } from "@/lib/onboarding-settings";
 import { Box, Button, Field, FieldInput, Icon, Kbd, PermissionList, ProductFrame, Text, TicketRow } from "@kairo/ui";
 
 interface TriageStepProps {
@@ -19,10 +21,12 @@ interface TriageStepProps {
   askName: boolean;
   companyName: string;
   onCompanyName: (value: string) => void;
+  settings: OnboardingSettings;
+  onSettings: (settings: OnboardingSettings) => void;
 }
 
 /** Last wizard step: the result of the scan, the way into Triage and the initial rules below it. */
-export function TriageStep({ onOpen, saving, error, askName, companyName, onCompanyName }: TriageStepProps) {
+export function TriageStep({ onOpen, saving, error, askName, companyName, onCompanyName, settings, onSettings }: TriageStepProps) {
   const { t } = useTranslation();
   const { data } = useClassificationProgress();
   const w = t.wizard;
@@ -101,6 +105,8 @@ export function TriageStep({ onOpen, saving, error, askName, companyName, onComp
           <FieldInput value={companyName} onChangeText={onCompanyName} placeholder={w.companyPlaceholder} autoComplete="organization" />
         </Field>
       )}
+
+      <OnboardingSettingsFields settings={settings} onChange={onSettings} disabled={saving} />
 
       {error && (
         <Text tag="p" role="alert" display="block" margin={0} fontSize={13} color="var(--kairo-color-bad-ink)">

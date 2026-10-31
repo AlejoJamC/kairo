@@ -1,0 +1,20 @@
+{
+  "title": "Before you start",
+  "intro": "Kairo reads your inbox, groups each email into a ticket and keeps learning from what you confirm or correct.",
+  "points": [
+    "Every email becomes a ticket with a category, a priority and a type.",
+    "Your corrections teach Kairo how your team works.",
+    "Kairo builds knowledge about your business from your support, so you do not have to write it."
+  ],
+  "industryLabel": "Industry",
+  "industryPlaceholder": "Select an industry (optional)",
+  "industryOther": "Other",
+  "industryHint": "Kairo uses it to read your tickets the way your business does. If none fits, leave it empty or pick Other.",
+  "contextLabel": "What does your company do? (optional)",
+  "contextPlaceholder": "A sentence or two about your products or services",
+  "contextHint": "You can refine this later, and Kairo also learns about your business from your connected channels.",
+  "skip": "Skip",
+  "continue": "Continue",
+  "saving": "Saving…",
+  "error": "We could not save your setup. Try again or skip."
+}

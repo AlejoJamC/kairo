@@ -268,6 +268,18 @@ export const en = {
     companyLabel: "Organisation name",
     companyPlaceholder: "Acme Inc.",
     saving: "Saving…",
+    setup: {
+      personalize: "Personalize my setup (optional)",
+      toggle: "Additional setup (optional)",
+      industryLabel: "Industry",
+      industryPlaceholder: "Select an industry (optional)",
+      industryOther: "Other",
+      industryHint: "Kairo uses it to read your tickets the way your business does. If none fits, leave it empty or pick Other.",
+      contextLabel: "What does your company do? (optional)",
+      contextPlaceholder: "A sentence or two about your products or services",
+      contextHint: "You can refine this later, and Kairo also learns about your business from your connected channels.",
+      error: "We could not save your setup. Try again or skip.",
+    },
     loadingProfile: "Loading your profile…",
   },
   legalPage: {

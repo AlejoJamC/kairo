@@ -1,4 +1,50 @@
 import { describe, it, expect } from "bun:test";
+import { needsProfileCompletion } from "../../../lib/onboarding-state";
+
+describe("OAuth PKCE cookies", () => {
+  it("carries the verifier from the OAuth redirect into the callback exchange", async () => {
+    const keys = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_APP_URL", "SUPABASE_SERVICE_ROLE_KEY", "SKIP_ENV_VALIDATION"] as const;
+    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    Object.assign(process.env, {
+      NEXT_PUBLIC_SUPABASE_URL: "https://acme.com",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "test-key",
+      NEXT_PUBLIC_APP_URL: "http://127.0.0.1:3000",
+      SUPABASE_SERVICE_ROLE_KEY: "test-service-key",
+      SKIP_ENV_VALIDATION: "1",
+    });
+    const originalFetch = globalThis.fetch;
+    let exchange: Record<string, unknown> | undefined;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      exchange = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const { createBufferedRouteClient } = await import("../../../lib/supabase/server");
+      const { GET } = await import("../../bff/auth/google/route");
+      const canonicalRedirect = await GET(new Request("http://localhost:3000/bff/auth/google?desktop=1&port=1234&locale=es", { headers: { host: "localhost:3000" } }));
+      expect(canonicalRedirect.headers.get("location")).toBe("http://127.0.0.1:3000/bff/auth/google?desktop=1&port=1234&locale=es");
+      const response = await GET(new Request("http://localhost:3000/bff/auth/google?locale=es", { headers: { host: "127.0.0.1:3000" } }));
+      expect(response.status).toBe(307);
+      expect(response.cookies.get("kairo-locale")?.value).toBe("es");
+      expect(response.cookies.get("kairo-locale")?.path).toBe("/");
+      const verifier = response.cookies.getAll().find((cookie) => cookie.name.endsWith("-code-verifier"));
+      expect(verifier).toBeDefined();
+      const callback = createBufferedRouteClient(new Request("http://127.0.0.1:3000/auth/callback", {
+        headers: { cookie: `${verifier!.name}=${encodeURIComponent(verifier!.value)}` },
+      }));
+      await callback.client.auth.exchangeCodeForSession("test-code");
+      expect(typeof exchange?.code_verifier).toBe("string");
+      expect(String(exchange?.code_verifier).length).toBeGreaterThan(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+      for (const key of keys) {
+        const value = previous[key];
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // KAI-172 / KAI-218: OAuth callback routing logic — pure unit tests
@@ -35,7 +81,8 @@ function resolveCallbackDestination(opts: {
   hasExistingMembership: boolean;
   acceptedInvitation: boolean;
   provisioningFailed: boolean;
-  enableDetectionUi?: boolean;
+  role?: string;
+  companyName?: string | null;
 }): string {
   if (opts.oauthError) {
     const kind = detectOauthError(opts.oauthError);
@@ -48,7 +95,9 @@ function resolveCallbackDestination(opts: {
 
   // Scenario 1 — pre-existing member
   if (opts.hasExistingMembership) {
-    return opts.enableDetectionUi ? "/wizard/detect" : "/auth/handoff";
+    return needsProfileCompletion(opts.role ?? "agent", opts.companyName ?? null)
+      ? "/wizard/complete"
+      : "/auth/handoff";
   }
 
   // Scenario 3 — invitation just accepted
@@ -117,20 +166,20 @@ describe("resolveCallbackDestination — Scenario 2 (OAuth / duplicate errors)",
 // ── Scenario 1 — returning user ───────────────────────────────────────────
 
 describe("resolveCallbackDestination — Scenario 1 (returning user)", () => {
-  it("existing member → /auth/handoff (detection UI off)", () => {
+  it("completed owner → /auth/handoff", () => {
     expect(resolveCallbackDestination({
       oauthError: null, sessionError: false,
       hasExistingMembership: true, acceptedInvitation: false,
-      provisioningFailed: false, enableDetectionUi: false,
+      provisioningFailed: false, role: "owner", companyName: "Acme",
     })).toBe("/auth/handoff");
   });
 
-  it("existing member → /wizard/detect (detection UI on)", () => {
+  it("owner with incomplete onboarding → /wizard/complete", () => {
     expect(resolveCallbackDestination({
       oauthError: null, sessionError: false,
       hasExistingMembership: true, acceptedInvitation: false,
-      provisioningFailed: false, enableDetectionUi: true,
-    })).toBe("/wizard/detect");
+      provisioningFailed: false, role: "owner", companyName: null,
+    })).toBe("/wizard/complete");
   });
 });
 

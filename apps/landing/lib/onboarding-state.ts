@@ -3,6 +3,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbClient = SupabaseClient<any>;
 
+/**
+ * An owner still has onboarding to finish until the completion is recorded on
+ * the account. Accounts that predate that record are complete when the owner's
+ * profile has a company name, which the wizard saves only after recording it.
+ */
+export function needsProfileCompletion(
+  role: string,
+  companyName: string | null,
+  onboardingCompletedAt: string | null = null,
+): boolean {
+  return role === "owner" && !onboardingCompletedAt && !companyName?.trim();
+}
+
 async function hasRow(
   client: DbClient,
   table: "oauth_credentials" | "messages",

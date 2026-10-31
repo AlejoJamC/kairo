@@ -49,19 +49,17 @@ function Handoff() {
     try {
       setStage('verify');
       const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session?.access_token || !session.refresh_token) throw new Error('Session unavailable');
 
       current = 'prepare';
       setStage('prepare');
       const dashboardUrl = getDashboardUrl();
-      const hasSession = Boolean(session?.access_token && session?.refresh_token);
       // The desktop app gets the session through its kairo:// link; the browser app through the URL hash.
       target.current =
-        hasSession && desktop
-          ? desktopTarget(port, { access_token: session!.access_token, refresh_token: session!.refresh_token })
-          : hasSession
-            ? `${dashboardUrl}#access_token=${encodeURIComponent(session!.access_token)}&refresh_token=${encodeURIComponent(session!.refresh_token)}`
-            : dashboardUrl;
+        desktop
+          ? desktopTarget(port, { access_token: session.access_token, refresh_token: session.refresh_token })
+          : `${dashboardUrl}#access_token=${encodeURIComponent(session.access_token)}&refresh_token=${encodeURIComponent(session.refresh_token)}`;
 
       current = 'open';
       setStage('open');
@@ -100,7 +98,7 @@ function Handoff() {
         retryLabel={h.retry}
         onRetry={() => setAttempt((value) => value + 1)}
         cta={stage === 'done' ? { label: h.ctaDesktop, onPress: () => { window.location.href = target.current ?? getDashboardUrl(); } } : undefined}
-        fallback={failed ? undefined : { label: desktop ? h.fallbackDesktop : h.fallbackLink, href: getDashboardUrl() }}
+        fallback={failed || !target.current ? undefined : { label: desktop ? h.fallbackDesktop : h.fallbackLink, href: target.current }}
       />
       {failed && (
         <Text tag="a" href="/login" fontSize={13} color="var(--kairo-color-accent-ink)">

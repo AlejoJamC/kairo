@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createClient } from "./supabase";
 import { getLandingUrl, redirectToSignIn } from "./api-client";
-import { getPlatform, isDesktop } from "./config";
+import { completeOnboarding as completeOnboardingRequest } from "./endpoints";
+import { getClientConfig, getPlatform, isDesktop } from "./config";
 import type { User } from "@supabase/supabase-js";
 
 export interface UserProfile {
@@ -10,6 +11,15 @@ export interface UserProfile {
   name: string;
   company_name?: string;
   // gmail_connected removed in KAI-173 — use support_channels presence instead
+}
+
+/**
+ * An owner who has not finished the onboarding goes back to the wizard instead of
+ * the dashboard. Accounts that predate the completion record count as finished
+ * when the owner's profile has a company name.
+ */
+export function ownerNeedsOnboarding(role: string | null, companyName: string | null | undefined, onboardingCompletedAt: string | null, localReplay = false): boolean {
+  return role === "owner" && !onboardingCompletedAt && (localReplay || !companyName?.trim());
 }
 
 /** Names a failed password sign-in without exposing the provider's text. */
@@ -30,6 +40,10 @@ interface AuthContextType {
   signInWithPassword: (email: string, password: string) => Promise<"invalid" | "unexpected" | null>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  /** The owner has not finished or skipped the onboarding; the dashboard offers it as an overlay. */
+  onboardingPending: boolean;
+  /** Records the industry and business context (or their omission) and finishes the onboarding. */
+  completeOnboarding: (settings: { industry: string | null; businessContext: string }) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,54 +54,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<DashboardRole | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [onboardingPending, setOnboardingPending] = useState(false);
+  const authVersion = useRef(0);
 
   const isAdmin = userRole === 'owner' || userRole === 'admin' || userRole === 'supervisor';
 
   useEffect(() => {
     let cancelled = false;
+    let initializing = true;
+    const version = ++authVersion.current;
     const supabase = createClient();
+    const diagnostic = (stage: string) => getPlatform().host?.authDiagnostic?.(stage);
 
     const init = async () => {
       try {
-        const {
-          data: { session: existingSession },
-          error: existingError,
-        } = await supabase.auth.getSession();
-
-        if (existingSession && !existingError) {
-          if (!cancelled) {
-            setUser(existingSession.user);
-            // Fire and forget to avoid any internal promise chaining deadlocks
-            fetchProfile(existingSession.user.id).catch(console.error);
-          }
+        // A new sign-in must take precedence over any older stored session.
+        const handoffTokens = await getPlatform().authHandoff.takeHandoffTokens();
+        diagnostic(handoffTokens ? "handoff_received" : "handoff_missing");
+        if (cancelled || version !== authVersion.current) return;
+        const { data: { session }, error } = handoffTokens
+          ? await supabase.auth.setSession(handoffTokens)
+          : await supabase.auth.getSession();
+        if (cancelled || version !== authVersion.current) return;
+        if (error || !session) {
+          diagnostic("session_unavailable");
+          setLoading(false);
+          redirectToSignIn();
           return;
         }
 
-        // If no existing session, but we have hash tokens from a redirect
-        const handoffTokens = await getPlatform().authHandoff.takeHandoffTokens();
-        if (handoffTokens) {
-          const { data, error } = await supabase.auth.setSession({
-            access_token: handoffTokens.access_token,
-            refresh_token: handoffTokens.refresh_token,
-          });
-
-          if (!error && data.session && !cancelled) {
-            setUser(data.session.user);
-            fetchProfile(data.session.user.id).catch(console.error);
-            return;
-          }
-        }
-
-        // Neither existing session nor valid hash tokens
-        if (!cancelled) {
+        // A cached session is not proof that the server still accepts it.
+        const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
+        if (cancelled || version !== authVersion.current) return;
+        if (userError || !verifiedUser || verifiedUser.id !== session.user.id) {
+          diagnostic("user_verification_failed");
           setLoading(false);
           redirectToSignIn();
+          return;
         }
+        setUser(verifiedUser);
+        diagnostic("session_verified");
+        fetchProfile(verifiedUser.id, version).catch(() => console.error("[auth] Profile lookup failed"));
       } catch {
-        if (!cancelled) {
+        diagnostic("initialization_failed");
+        if (!cancelled && version === authVersion.current) {
           setLoading(false);
           redirectToSignIn();
         }
+      } finally {
+        initializing = false;
       }
     };
 
@@ -97,25 +112,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
-      if (event === "SIGNED_IN" && session) {
+      if (event === "SIGNED_IN" && session && !initializing) {
+        const nextVersion = ++authVersion.current;
         setUser(session.user);
+        setProfile(null);
+        setAccountId(null);
+        setUserRole(null);
+        setOnboardingPending(false);
+        setLoading(true);
         // Do NOT await this. If we await an async function that queries Supabase inside this subscriber,
         // we will deadlock the gotrue-js lock manager (which waits for subscribers to finish before releasing init locks).
-        fetchProfile(session.user.id).catch(err => console.error("fetchProfile err:", err));
+        fetchProfile(session.user.id, nextVersion).catch(() => console.error("[auth] Profile lookup failed"));
       } else if (event === "SIGNED_OUT") {
+        diagnostic("signed_out");
+        ++authVersion.current;
         setUser(null);
         setProfile(null);
+        setAccountId(null);
+        setUserRole(null);
+        setOnboardingPending(false);
+        setLoading(false);
         redirectToSignIn();
       }
     });
 
     return () => {
       cancelled = true;
+      ++authVersion.current;
       subscription.unsubscribe();
     };
   }, []);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, version = authVersion.current) => {
     try {
       const supabase = createClient();
       const [profileResult, memberResult] = await Promise.all([
@@ -137,6 +165,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle(),
       ]);
 
+      if (version !== authVersion.current) return;
+
       if (!profileResult.error && profileResult.data) {
         setProfile(profileResult.data as UserProfile);
       }
@@ -145,8 +175,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUserRole((memberResult.data?.role as DashboardRole) ?? null);
       setAccountId(memberResult.data?.account_id ?? null);
+
+      if (memberResult.data?.role === "owner" && !isDesktop()) {
+        const accountResult = await supabase
+          .from("accounts")
+          .select("onboarding_completed_at")
+          .eq("id", memberResult.data.account_id)
+          .maybeSingle();
+        if (version !== authVersion.current) return;
+        const supabaseUrl = new URL(getClientConfig().supabaseUrl);
+        const localReplay = supabaseUrl.protocol === "http:" && supabaseUrl.port === "54321" &&
+          ["127.0.0.1", "localhost", "[::1]"].includes(supabaseUrl.hostname);
+        setOnboardingPending(
+          !accountResult.error && !!accountResult.data &&
+            ownerNeedsOnboarding("owner", profileResult.data?.company_name, accountResult.data.onboarding_completed_at, localReplay),
+        );
+      }
     } finally {
-      setLoading(false);
+      if (version === authVersion.current) setLoading(false);
     }
   };
 
@@ -156,12 +202,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const completeOnboarding = async (settings: { industry: string | null; businessContext: string }) => {
+    try {
+      const response = await completeOnboardingRequest(settings.industry, settings.businessContext);
+      if (!response.ok) return false;
+      setOnboardingPending(false);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const signOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
     setAccountId(null);
+    setUserRole(null);
+    setOnboardingPending(false);
     if (!isDesktop()) getPlatform().navigation.navigate(getLandingUrl("/"));
   };
 
@@ -177,7 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, userRole, accountId, isAdmin, loading, signInWithPassword, signOut, refreshProfile }}
+      value={{ user, profile, userRole, accountId, isAdmin, loading, signInWithPassword, signOut, refreshProfile, onboardingPending, completeOnboarding }}
     >
       {children}
     </AuthContext.Provider>

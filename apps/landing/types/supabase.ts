@@ -95,25 +95,40 @@ export type Database = {
       }
       accounts: {
         Row: {
+          business_context: string | null
+          business_context_source: string | null
+          business_context_updated_at: string | null
           created_at: string
           id: string
+          industry: string | null
           name: string
+          onboarding_completed_at: string | null
           plan_id: string
           seat_limit: number | null
           slug: string
         }
         Insert: {
+          business_context?: string | null
+          business_context_source?: string | null
+          business_context_updated_at?: string | null
           created_at?: string
           id?: string
+          industry?: string | null
           name: string
+          onboarding_completed_at?: string | null
           plan_id: string
           seat_limit?: number | null
           slug: string
         }
         Update: {
+          business_context?: string | null
+          business_context_source?: string | null
+          business_context_updated_at?: string | null
           created_at?: string
           id?: string
+          industry?: string | null
           name?: string
+          onboarding_completed_at?: string | null
           plan_id?: string
           seat_limit?: number | null
           slug?: string

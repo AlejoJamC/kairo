@@ -1,4 +1,5 @@
 import { Inngest } from "inngest";
+import { localSupabaseConfig } from "@kairo/feature-flags";
 
 export type KairoEvents = {
   'messages/knowledge.requested': {
@@ -8,17 +9,24 @@ export type KairoEvents = {
     data: {
       userId: string;
       gmailAccessToken: string;
+      supabaseTarget?: "local" | "remote";
     };
+  };
+  /** The owner finished or skipped the onboarding walkthrough; Tier 1 waits for it before Tier 2. */
+  "onboarding/completed": {
+    data: { accountId: string; supabaseTarget?: "local" | "remote" };
   };
   "pipeline/tier2.triggered": {
     data: {
       userId: string;
       processedMessageIds: string[];
+      supabaseTarget?: "local" | "remote";
     };
   };
   "pipeline/tier3.triggered": {
     data: {
       userId: string;
+      supabaseTarget?: "local" | "remote";
     };
   };
   /**
@@ -89,4 +97,4 @@ export type KairoEvents = {
 
 // In inngest v4, EventSchemas was removed. Event types are enforced via
 // KairoEvents below and used at createFunction call sites via generics.
-export const inngest = new Inngest({ id: "kairo-api" });
+export const inngest = new Inngest({ id: "kairo-api", ...(localSupabaseConfig(process.env) ? { isDev: true } : {}) });

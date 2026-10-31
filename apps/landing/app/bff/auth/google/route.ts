@@ -1,15 +1,23 @@
-import { createClient } from "@/lib/supabase/server";
+import { createBufferedRouteClient } from "../../../../lib/supabase/server";
 import { NextResponse } from "next/server";
-import { env } from "@/env";
-import { DESKTOP_COOKIE, callbackPath, desktopCookieValue, parsePort } from "@/lib/desktop-signin";
+import { env } from "../../../../env";
+import { DESKTOP_COOKIE, callbackPath, desktopCookieValue, parsePort } from "../../../../lib/desktop-signin";
 
 export async function GET(request: Request) {
   // The desktop app starts the sign-in with ?desktop=1 so it ends in a kairo:// link.
-  const params = new URL(request.url).searchParams;
+  const requestUrl = new URL(request.url);
+  const canonicalUrl = new URL(env.NEXT_PUBLIC_APP_URL);
+  // request.url reports the dev server's bind hostname, so the browser's host is read from the header.
+  if (request.headers.get("host") !== canonicalUrl.host) {
+    canonicalUrl.pathname = requestUrl.pathname;
+    canonicalUrl.search = requestUrl.search;
+    return NextResponse.redirect(canonicalUrl);
+  }
+  const params = requestUrl.searchParams;
   const desktop = params.get("desktop") === "1";
   const port = parsePort(params.get("port"));
   try {
-    const supabase = await createClient();
+    const { client: supabase, attach } = createBufferedRouteClient(request);
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -40,11 +48,17 @@ export async function GET(request: Request) {
     }
 
     const response = NextResponse.redirect(data.url);
+    const locale = params.get("locale");
+    if (locale === "en" || locale === "es") {
+      response.cookies.set("kairo-locale", locale, {
+        path: "/", sameSite: "lax", maxAge: 31536000, secure: canonicalUrl.protocol === "https:",
+      });
+    }
     if (desktop) {
       // Remembered in the browser too, in case the redirect URL loses its query on the way back.
       response.cookies.set(DESKTOP_COOKIE, desktopCookieValue(port), { httpOnly: true, sameSite: "lax", maxAge: 600, path: "/" });
     }
-    return response;
+    return attach(response);
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },

@@ -5,10 +5,11 @@ import type { TicketStatus } from "@kairo/types";
 export type SidebarCounts = Partial<Record<TicketStatus, number>>;
 
 /** Polls the nav badge counts every `pollIntervalSeconds`; null until the first answer. */
-export function useSidebarCounts(pollIntervalSeconds: number): SidebarCounts | null {
+export function useSidebarCounts(pollIntervalSeconds: number, enabled = true): SidebarCounts | null {
   const [counts, setCounts] = useState<SidebarCounts | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
 
     const fetchCounts = async () => {
@@ -29,7 +30,7 @@ export function useSidebarCounts(pollIntervalSeconds: number): SidebarCounts | n
       cancelled = true;
       clearInterval(interval);
     };
-  }, [pollIntervalSeconds]);
+  }, [pollIntervalSeconds, enabled]);
 
   return counts;
 }

@@ -59,9 +59,36 @@ export async function apiCall(
     headers,
   });
 
-  // Only force auth redirect for BFF-owned session endpoints.
-  // For /api/v1 API calls, let the caller handle 401 so product flows
-  // (template picker, reply, classify, etc.) don't trigger hard navigation.
+  // A product endpoint can return 401 for its own reasons. Verify the session
+  // before treating that response as a sign-out.
+  if (response.status === 401 && endpoint.startsWith("/api/") && session) {
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      const invalidSession = (!error && !data.user) || error?.status === 401 || error?.name === "AuthSessionMissingError";
+      if (invalidSession) {
+        const { data: current } = await supabase.auth.getSession();
+        if (!current.session || current.session.access_token === session.access_token) {
+          try {
+            await supabase.auth.signOut({ scope: "local" });
+          } finally {
+            redirectToSignIn();
+          }
+        }
+      }
+    } catch {
+      // A temporary auth service failure is not proof that the session is invalid.
+    }
+  } else if (response.status === 401 && endpoint.startsWith("/api/") && !session) {
+    const { data: current } = await supabase.auth.getSession();
+    if (!current.session) {
+      try {
+        await supabase.auth.signOut({ scope: "local" });
+      } finally {
+        redirectToSignIn();
+      }
+    }
+  }
+
   if (response.status === 401 && endpoint.startsWith("/bff/")) {
     redirectToSignIn();
     throw new Error("Unauthorized");

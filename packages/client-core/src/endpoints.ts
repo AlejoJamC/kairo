@@ -135,3 +135,11 @@ export function openLanding(path: string): void {
 export function copyText(text: string): Promise<void> {
   return getPlatform().clipboard.writeText(text);
 }
+
+/** Records the onboarding setup chosen by the owner (both parts optional) and marks it finished. */
+export const completeOnboarding = (industry: string | null, businessContext: string) =>
+  apiCall("/bff/onboarding/complete", post({ industry, business_context: businessContext.trim() || null }));
+
+export const getCurrentAccount = () => apiCall("/bff/account/current");
+export const updateAccountBusinessContext = (accountId: string, businessContext: string) =>
+  apiCall("/bff/account/current", patch({ account_id: accountId, business_context: businessContext }));

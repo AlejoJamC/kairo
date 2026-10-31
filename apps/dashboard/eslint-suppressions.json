@@ -46,11 +46,6 @@
       "count": 2
     }
   },
-  "src/components/profile-settings.tsx": {
-    "react-hooks/set-state-in-effect": {
-      "count": 1
-    }
-  },
   "src/components/reply-bar.tsx": {
     "react-hooks/preserve-manual-memoization": {
       "count": 1

@@ -15,6 +15,7 @@
     "@kairo/feature-flags": "workspace:*",
     "@kairo/observability": "workspace:*",
     "@kairo/tokens": "workspace:*",
+    "@kairo/types": "workspace:*",
     "@kairo/ui": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
     "@supabase/auth-helpers-nextjs": "^0.15.0",

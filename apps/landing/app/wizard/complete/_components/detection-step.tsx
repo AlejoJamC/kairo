@@ -12,6 +12,8 @@ interface DetectionStepProps {
   onContinue: () => void;
   /** The connected mailbox, shown in the eyebrow. */
   mailbox?: string;
+  /** Opens the optional last step, where the industry and the business context are asked. */
+  onPersonalize?: () => void;
 }
 
 function CategoryPills({
@@ -32,7 +34,7 @@ function CategoryPills({
   );
 }
 
-export function DetectionStep({ onContinue, mailbox }: DetectionStepProps) {
+export function DetectionStep({ onContinue, mailbox, onPersonalize }: DetectionStepProps) {
   const { t } = useTranslation();
   const dt = t.wizard.detect;
   const { data, error, retry } = useClassificationProgress();
@@ -96,7 +98,7 @@ export function DetectionStep({ onContinue, mailbox }: DetectionStepProps) {
         running={isStillScanning}
       />
 
-      <Box>
+      <Box display="flex" flexWrap="wrap" alignItems="center" gap={8}>
         <Button
           variant="primary"
           size="webLg"
@@ -108,6 +110,11 @@ export function DetectionStep({ onContinue, mailbox }: DetectionStepProps) {
         >
           {dt.continue}
         </Button>
+        {onPersonalize && (
+          <Button variant="ghost" size="sm" iconEnd={<Icon name="right" size={12} />} onPress={onPersonalize}>
+            {t.wizard.setup.personalize}
+          </Button>
+        )}
       </Box>
 
       <KpiStrip
