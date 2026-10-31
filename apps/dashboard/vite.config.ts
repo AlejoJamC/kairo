@@ -29,8 +29,8 @@ export default defineConfig(() => {
   },
   server: {
     port: 5173,
-    // The local Google OAuth client allows 127.0.0.1 only; Vite binds to ::1 by default and refuses it.
-    ...(localSupabase ? { host: '127.0.0.1' } : {}),
+    // Keep the browser and desktop dev hosts on the same loopback origin.
+    host: '127.0.0.1',
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

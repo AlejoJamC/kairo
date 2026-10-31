@@ -5,7 +5,7 @@
   "identifier": "com.kairo.desktop",
   "build": {
     "beforeDevCommand": "bun run --filter @kairo/dashboard dev",
-    "devUrl": "http://localhost:5173/dashboard/",
+    "devUrl": "http://127.0.0.1:5173/dashboard/",
     "beforeBuildCommand": "DASHBOARD_BASE_PATH=/ bun run --filter @kairo/dashboard build",
     "frontendDist": "../../dashboard/dist"
   },

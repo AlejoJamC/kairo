@@ -22,7 +22,7 @@ export function createPlatform(): PlatformPorts {
       appFocus: web.appFocus,
       openExternal: bridge.openExternal,
       takeHandoffTokens: bridge.takeHandoffTokens,
-      host: { os: bridge.os, setBadge: bridge.setBadge, setMenu: bridge.setMenu, setWindowSize: bridge.setWindowSize, setMinWindowSize: bridge.setMinWindowSize, startSignInListener: bridge.startSignInListener, onMenuAction: bridge.onMenuAction, notify: bridge.notify },
+      host: { os: bridge.os, authDiagnostic: bridge.authDiagnostic, setBadge: bridge.setBadge, setMenu: bridge.setMenu, setWindowSize: bridge.setWindowSize, setMinWindowSize: bridge.setMinWindowSize, startSignInListener: bridge.startSignInListener, onMenuAction: bridge.onMenuAction, notify: bridge.notify },
     })
   }
   return createWebPlatform()

@@ -41,13 +41,13 @@ const STATIC_CATEGORIES = [
 
 async function redirectToDashboard() {
   const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session }, error } = await supabase.auth.getSession();
   const dashboardUrl = getDashboardUrl();
-  if (session?.access_token && session?.refresh_token) {
+  if (!error && session?.access_token && session?.refresh_token) {
     const hash = `#access_token=${encodeURIComponent(session.access_token)}&refresh_token=${encodeURIComponent(session.refresh_token)}`;
     window.location.href = `${dashboardUrl}${hash}`;
   } else {
-    window.location.href = dashboardUrl;
+    window.location.href = "/wizard/";
   }
 }
 

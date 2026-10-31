@@ -30,6 +30,7 @@ describe('createDesktopPlatform', () => {
     const takeHandoffTokens = vi.fn(async () => tokens)
     const platform = createDesktopPlatform(deps({ takeHandoffTokens }))
     await expect(platform.authHandoff.takeHandoffTokens()).resolves.toEqual(tokens)
+    await expect(platform.authHandoff.takeHandoffTokens()).resolves.toEqual(tokens)
     expect(takeHandoffTokens).toHaveBeenCalledTimes(1)
   })
 

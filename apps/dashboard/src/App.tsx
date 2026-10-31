@@ -54,7 +54,7 @@ function AppContent() {
     () => getPlatform().storage.getItem("sidebar-collapsed") === "true"
   );
   const [routedView, setActiveView] = useActiveView();
-  const counts = useSidebarCounts(SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS);
+  const counts = useSidebarCounts(SIDEBAR_COUNTS_POLL_INTERVAL_SECONDS, Boolean(user) && !loading);
 
   const handleToggle = useCallback(() => {
     setSidebarCollapsed((c) => {
@@ -88,8 +88,8 @@ function AppContent() {
     );
   }
 
-  // No session in the desktop app: its own sign-in window, never an empty dashboard.
-  if (!user && isDesktop()) return <DesktopSignIn />;
+  // The web client is redirected by the auth provider; neither client renders the dashboard without a user.
+  if (!user) return isDesktop() ? <DesktopSignIn /> : null;
 
   const renderView = () => {
     if (activeView === "triage") return <Inbox />;

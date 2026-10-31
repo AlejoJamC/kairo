@@ -19,6 +19,7 @@ struct Handoff {
 /// Keeps the tokens for the dashboard, brings the window forward and reloads it
 /// so the dashboard reads them through AuthHandoffPort (take_handoff_tokens).
 fn deliver_tokens(handle: &tauri::AppHandle, tokens: serde_json::Value) {
+    eprintln!("[desktop-auth] handoff_received");
     if let Some(state) = handle.try_state::<Handoff>() {
         *state.tokens.lock().unwrap() = Some(tokens);
     }
@@ -26,11 +27,24 @@ fn deliver_tokens(handle: &tauri::AppHandle, tokens: serde_json::Value) {
     if let Some(window) = handle.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.set_focus();
-        let _ = window.eval("window.location.reload()");
+        if window.eval("window.location.reload()").is_err() {
+            eprintln!("[desktop-auth] reload_failed");
+        }
+    } else {
+        eprintln!("[desktop-auth] window_missing");
     }
 }
 
-const LOOPBACK_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Kairo</title><body style=\"font-family:system-ui;margin:15vh auto;max-width:360px;text-align:center\"><h1 style=\"font-size:20px\">Kairo</h1><p>You can close this tab and go back to the app.</p>";
+fn loopback_page(tokens: &serde_json::Value) -> Option<String> {
+    let access = tokens.get("access_token")?.as_str()?;
+    let refresh = tokens.get("refresh_token")?.as_str()?;
+    let query = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("access_token", access)
+        .append_pair("refresh_token", refresh)
+        .finish()
+        .replace('&', "&amp;");
+    Some(format!("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta name=\"referrer\" content=\"no-referrer\"><title>Kairo</title><body style=\"font-family:system-ui;margin:15vh auto;max-width:360px;text-align:center\"><h1>Kairo</h1><p>Return to Kairo. If it did not open, try again.</p><p>Vuelve a Kairo. Si no se abrió, inténtalo de nuevo.</p><a href=\"/auth?{query}\">Open Kairo / Abrir Kairo</a></body></html>"))
+}
 
 /// Waits on 127.0.0.1 for the sign-in page of the browser to hand over the
 /// session. Works wherever the app runs, including `tauri dev` on macOS, where
@@ -40,6 +54,7 @@ fn start_sign_in_listener(app: tauri::AppHandle, state: tauri::State<'_, Handoff
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|err| err.to_string())?;
     listener.set_nonblocking(true).map_err(|err| err.to_string())?;
     let port = listener.local_addr().map_err(|err| err.to_string())?.port();
+    eprintln!("[desktop-auth] listener_started");
     let generation = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
     let handle = app.clone();
     std::thread::spawn(move || {
@@ -55,11 +70,12 @@ fn start_sign_in_listener(app: tauri::AppHandle, state: tauri::State<'_, Handoff
                     let read = stream.read(&mut buffer).unwrap_or(0);
                     let request = String::from_utf8_lossy(&buffer[..read]);
                     let tokens = tokens_from_request(&request);
-                    let (status, body) = if tokens.is_some() { ("200 OK", LOOPBACK_PAGE) } else { ("400 Bad Request", "") };
-                    let _ = write!(stream, "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                    let body = tokens.as_ref().and_then(loopback_page);
+                    let status = if body.is_some() { "200 OK" } else { "400 Bad Request" };
+                    let body = body.unwrap_or_default();
+                    let _ = write!(stream, "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
                     if let Some(tokens) = tokens {
                         deliver_tokens(&handle, tokens);
-                        return;
                     }
                 }
                 Err(_) => std::thread::sleep(std::time::Duration::from_millis(200)),
@@ -74,6 +90,14 @@ fn start_sign_in_listener(app: tauri::AppHandle, state: tauri::State<'_, Handoff
 #[tauri::command]
 fn take_handoff_tokens(state: tauri::State<'_, Handoff>) -> Option<serde_json::Value> {
     state.tokens.lock().unwrap().take()
+}
+
+#[tauri::command]
+fn auth_diagnostic(stage: String) {
+    match stage.as_str() {
+        "handoff_received" | "handoff_missing" | "session_unavailable" | "user_verification_failed" | "session_verified" | "initialization_failed" | "signed_out" => eprintln!("[desktop-auth] {stage}"),
+        _ => (),
+    }
 }
 
 /// Opens a URL in the system browser. Identity providers reject embedded
@@ -166,7 +190,7 @@ fn set_menu(groups: String, app: tauri::AppHandle) {
 /// pick the desktop ports instead of the browser ones.
 fn init_script() -> String {
     format!(
-        "Object.defineProperty(window,'__KAIRO_DESKTOP__',{{value:{{os:'{os}',openExternal:function(url){{return window.__TAURI_INTERNALS__.invoke('open_external',{{url:url}});}},takeHandoffTokens:function(){{return window.__TAURI_INTERNALS__.invoke('take_handoff_tokens');}},notify:function(title,body){{return window.__TAURI_INTERNALS__.invoke('notify',{{title:title,body:body}});}},setBadge:function(count){{return window.__TAURI_INTERNALS__.invoke('set_badge',{{count:count}});}},startSignInListener:function(){{return window.__TAURI_INTERNALS__.invoke('start_sign_in_listener');}},setMinWindowSize:function(minWidth,minHeight){{return window.__TAURI_INTERNALS__.invoke('set_min_window_size',{{minWidth:minWidth,minHeight:minHeight}});}},setWindowSize:function(width,height,minWidth,minHeight){{return window.__TAURI_INTERNALS__.invoke('set_window_size',{{width:width,height:height,minWidth:minWidth,minHeight:minHeight}});}},setMenu:function(groups){{return window.__TAURI_INTERNALS__.invoke('set_menu',{{groups:groups}});}},onMenuAction:function(listener){{var handler=function(event){{listener(event.detail);}};window.addEventListener('kairo-menu',handler);return function(){{window.removeEventListener('kairo-menu',handler);}};}}}},configurable:false}});",
+        "Object.defineProperty(window,'__KAIRO_DESKTOP__',{{value:{{os:'{os}',authDiagnostic:function(stage){{return window.__TAURI_INTERNALS__.invoke('auth_diagnostic',{{stage:stage}});}},openExternal:function(url){{return window.__TAURI_INTERNALS__.invoke('open_external',{{url:url}});}},takeHandoffTokens:function(){{return window.__TAURI_INTERNALS__.invoke('take_handoff_tokens');}},notify:function(title,body){{return window.__TAURI_INTERNALS__.invoke('notify',{{title:title,body:body}});}},setBadge:function(count){{return window.__TAURI_INTERNALS__.invoke('set_badge',{{count:count}});}},startSignInListener:function(){{return window.__TAURI_INTERNALS__.invoke('start_sign_in_listener');}},setMinWindowSize:function(minWidth,minHeight){{return window.__TAURI_INTERNALS__.invoke('set_min_window_size',{{minWidth:minWidth,minHeight:minHeight}});}},setWindowSize:function(width,height,minWidth,minHeight){{return window.__TAURI_INTERNALS__.invoke('set_window_size',{{width:width,height:height,minWidth:minWidth,minHeight:minHeight}});}},setMenu:function(groups){{return window.__TAURI_INTERNALS__.invoke('set_menu',{{groups:groups}});}},onMenuAction:function(listener){{var handler=function(event){{listener(event.detail);}};window.addEventListener('kairo-menu',handler);return function(){{window.removeEventListener('kairo-menu',handler);}};}}}},configurable:false}});",
         os = match std::env::consts::OS {
             "macos" => "macos",
             "windows" => "windows",
@@ -220,7 +244,7 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![take_handoff_tokens, open_external, notify, set_badge, set_menu, set_window_size, set_min_window_size, start_sign_in_listener])
+        .invoke_handler(tauri::generate_handler![take_handoff_tokens, auth_diagnostic, open_external, notify, set_badge, set_menu, set_window_size, set_min_window_size, start_sign_in_listener])
         .run(tauri::generate_context!())
         .expect("error while running the Kairo desktop app");
 }
@@ -234,6 +258,14 @@ mod tests {
         let tokens = tokens_from_request("GET /auth?access_token=a%2Bb&refresh_token=c HTTP/1.1\r\nHost: 127.0.0.1:4010\r\n\r\n").unwrap();
         assert_eq!(tokens["access_token"], "a+b");
         assert_eq!(tokens["refresh_token"], "c");
+    }
+
+    #[test]
+    fn the_loopback_page_has_a_retry_link_with_encoded_tokens() {
+        let tokens = serde_json::json!({ "access_token": "a+b", "refresh_token": "c&d" });
+        let page = loopback_page(&tokens).unwrap();
+        assert!(page.contains("href=\"/auth?access_token=a%2Bb&amp;refresh_token=c%26d\""));
+        assert!(page.contains("Abrir Kairo"));
     }
 
     #[test]
@@ -256,6 +288,12 @@ mod tests {
         assert!(csp.contains("connect-src"));
         assert!(csp.contains("https://*.supabase.co"));
         assert!(csp.contains("wss://*.supabase.co"));
+    }
+
+    #[test]
+    fn desktop_development_uses_the_dashboard_loopback_host() {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(config["build"]["devUrl"], "http://127.0.0.1:5173/dashboard/");
     }
 
     #[test]
