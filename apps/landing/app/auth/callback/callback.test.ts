@@ -1,5 +1,4 @@
 import { describe, it, expect } from "bun:test";
-import { needsProfileCompletion } from "../../../lib/onboarding-state";
 
 describe("OAuth PKCE cookies", () => {
   it("carries the verifier from the OAuth redirect into the callback exchange", async () => {
@@ -93,12 +92,9 @@ function resolveCallbackDestination(opts: {
   if (opts.sessionError)        return "/auth/error?type=session_error";
   if (opts.provisioningFailed)  return "/auth/error?type=provisioning_failed";
 
-  // Scenario 1 — pre-existing member
-  if (opts.hasExistingMembership) {
-    return needsProfileCompletion(opts.role ?? "agent", opts.companyName ?? null)
-      ? "/wizard/complete"
-      : "/auth/handoff";
-  }
+  // Scenario 1 — pre-existing member. An owner who has not finished the onboarding
+  // goes to the dashboard too: it offers the setup as an overlay.
+  if (opts.hasExistingMembership) return "/auth/handoff";
 
   // Scenario 3 — invitation just accepted
   if (opts.acceptedInvitation)  return "/auth/handoff";
@@ -174,12 +170,20 @@ describe("resolveCallbackDestination — Scenario 1 (returning user)", () => {
     })).toBe("/auth/handoff");
   });
 
-  it("owner with incomplete onboarding → /wizard/complete", () => {
+  it("owner with incomplete onboarding → /auth/handoff, where the dashboard offers the setup", () => {
     expect(resolveCallbackDestination({
       oauthError: null, sessionError: false,
       hasExistingMembership: true, acceptedInvitation: false,
       provisioningFailed: false, role: "owner", companyName: null,
-    })).toBe("/wizard/complete");
+    })).toBe("/auth/handoff");
+  });
+
+  it("agent without a company name → /auth/handoff", () => {
+    expect(resolveCallbackDestination({
+      oauthError: null, sessionError: false,
+      hasExistingMembership: true, acceptedInvitation: false,
+      provisioningFailed: false, role: "agent", companyName: null,
+    })).toBe("/auth/handoff");
   });
 });
 
