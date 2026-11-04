@@ -1,4 +1,4 @@
-import { createClient, getUserFromRequest } from "@/lib/supabase/server";
+import { createClientForRequest, getUserFromRequest } from "@/lib/supabase/server";
 import { dispatchOnboardingCompleted } from "@/lib/inngest";
 import { isIndustryChoice } from "@kairo/types/industry";
 import { NextResponse } from "next/server";
@@ -12,7 +12,8 @@ const BUSINESS_CONTEXT_MAX = 2500;
 // never overwritten by a retry.
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
+    // Queries run as the caller: the desktop app sends only a Bearer token, never cookies.
+    const supabase = await createClientForRequest(request);
 
     const { data: { user }, error: authError } = await getUserFromRequest(request, supabase);
     if (authError || !user) {

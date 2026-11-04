@@ -103,6 +103,7 @@ export type Database = {
           industry: string | null
           name: string
           onboarding_completed_at: string | null
+          onboarding_offered_at: string | null
           plan_id: string
           seat_limit: number | null
           slug: string
@@ -116,6 +117,7 @@ export type Database = {
           industry?: string | null
           name: string
           onboarding_completed_at?: string | null
+          onboarding_offered_at?: string | null
           plan_id: string
           seat_limit?: number | null
           slug: string
@@ -129,6 +131,7 @@ export type Database = {
           industry?: string | null
           name?: string
           onboarding_completed_at?: string | null
+          onboarding_offered_at?: string | null
           plan_id?: string
           seat_limit?: number | null
           slug?: string

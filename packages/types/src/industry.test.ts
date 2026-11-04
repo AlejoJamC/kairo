@@ -38,3 +38,23 @@ describe('industry catalog', () => {
     expect([...INDUSTRY_CHOICES].sort()).toEqual(['accounting', 'customer_service', 'financial', 'legal', 'other', 'technology']);
   });
 });
+
+import { industryGuidance } from './industry';
+
+describe('industryGuidance', () => {
+  it('gives no guidance to an account with no industry recorded', () => {
+    expect(industryGuidance(null, 'en')).toBeUndefined();
+    expect(industryGuidance(undefined, 'en')).toBeUndefined();
+    expect(industryGuidance('', 'en')).toBeUndefined();
+  });
+
+  it('reads other as the default industry', () => {
+    expect(industryGuidance('other', 'en')).toBe(industryGuidance('customer_service', 'en'));
+    expect(industryGuidance('other', 'en')).toContain('Customer service');
+  });
+
+  it('describes the chosen industry in the account language', () => {
+    expect(industryGuidance('legal', 'es')).toContain('Derecho');
+    expect(industryGuidance('legal', 'en')).toContain('Legal');
+  });
+});

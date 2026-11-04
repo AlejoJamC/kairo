@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createClient } from "./supabase";
 import { getLandingUrl, redirectToSignIn } from "./api-client";
-import { completeOnboarding as completeOnboardingRequest } from "./endpoints";
+import { completeOnboarding as completeOnboardingRequest, markOnboardingOffered } from "./endpoints";
+import { retryWithBackoff } from "./retry";
 import { getClientConfig, getPlatform, isDesktop } from "./config";
 import type { User } from "@supabase/supabase-js";
 
@@ -14,11 +15,17 @@ export interface UserProfile {
 }
 
 /**
- * An owner who has not finished the onboarding goes back to the wizard instead of
- * the dashboard. Accounts that predate the completion record count as finished
- * when the owner's profile has a company name.
+ * An owner who has not finished the onboarding is offered it over the dashboard. Accounts that
+ * predate the completion record count as finished when the owner's profile has a company name,
+ * except on a local test stack (`localReplay`), where the company name does not count so the
+ * onboarding can be replayed with the same account.
  */
-export function ownerNeedsOnboarding(role: string | null, companyName: string | null | undefined, onboardingCompletedAt: string | null, localReplay = false): boolean {
+export function ownerNeedsOnboarding(
+  role: string | null,
+  companyName: string | null | undefined,
+  onboardingCompletedAt: string | null,
+  localReplay = false,
+): boolean {
   return role === "owner" && !onboardingCompletedAt && (localReplay || !companyName?.trim());
 }
 
@@ -44,6 +51,8 @@ interface AuthContextType {
   onboardingPending: boolean;
   /** Records the industry and business context (or their omission) and finishes the onboarding. */
   completeOnboarding: (settings: { industry: string | null; businessContext: string }) => Promise<boolean>;
+  /** Records, once per session, that the setup was shown: the evidence that lets the pipeline settle an unanswered choice. */
+  recordOnboardingOffered: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -176,18 +185,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserRole((memberResult.data?.role as DashboardRole) ?? null);
       setAccountId(memberResult.data?.account_id ?? null);
 
-      if (memberResult.data?.role === "owner" && !isDesktop()) {
-        const accountResult = await supabase
-          .from("accounts")
-          .select("onboarding_completed_at")
-          .eq("id", memberResult.data.account_id)
-          .maybeSingle();
+      const member = memberResult.data;
+      if (member?.role === "owner") {
+        // A failed read must not leave the owner without the setup: retry for about a minute.
+        const accountResult = await retryWithBackoff(async () => {
+          const result = await supabase
+            .from("accounts")
+            .select("onboarding_completed_at")
+            .eq("id", member.account_id)
+            .maybeSingle();
+          if (result.error) throw new Error("Account lookup failed");
+          return result;
+        }, { attempts: 6, baseMs: 2000, maxMs: 30_000 }).catch(() => null);
         if (version !== authVersion.current) return;
         const supabaseUrl = new URL(getClientConfig().supabaseUrl);
         const localReplay = supabaseUrl.protocol === "http:" && supabaseUrl.port === "54321" &&
           ["127.0.0.1", "localhost", "[::1]"].includes(supabaseUrl.hostname);
         setOnboardingPending(
-          !accountResult.error && !!accountResult.data &&
+          !!accountResult?.data &&
             ownerNeedsOnboarding("owner", profileResult.data?.company_name, accountResult.data.onboarding_completed_at, localReplay),
         );
       }
@@ -202,13 +217,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const offeredRecorded = useRef(false);
+  const recordOnboardingOffered = async () => {
+    if (offeredRecorded.current) return;
+    offeredRecorded.current = true;
+    try {
+      await retryWithBackoff(async () => {
+        const response = await markOnboardingOffered();
+        if (!response.ok) throw new Error(`Recording the offer failed with status ${response.status}`);
+      });
+    } catch (error) {
+      // Without the record the pipeline never settles the choice on the owner's behalf: it is offered again next time.
+      console.error("[onboarding] the offer could not be recorded", error instanceof Error ? error.message : "unknown error");
+      offeredRecorded.current = false;
+    }
+  };
+
   const completeOnboarding = async (settings: { industry: string | null; businessContext: string }) => {
     try {
       const response = await completeOnboardingRequest(settings.industry, settings.businessContext);
-      if (!response.ok) return false;
+      if (!response.ok) {
+        console.error("[onboarding] the setup was rejected", response.status);
+        return false;
+      }
       setOnboardingPending(false);
       return true;
-    } catch {
+    } catch (error) {
+      console.error("[onboarding] the setup could not be sent", error instanceof Error ? error.message : "unknown error");
       return false;
     }
   };
@@ -236,7 +271,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, userRole, accountId, isAdmin, loading, signInWithPassword, signOut, refreshProfile, onboardingPending, completeOnboarding }}
+      value={{ user, profile, userRole, accountId, isAdmin, loading, signInWithPassword, signOut, refreshProfile, onboardingPending, completeOnboarding, recordOnboardingOffered }}
     >
       {children}
     </AuthContext.Provider>

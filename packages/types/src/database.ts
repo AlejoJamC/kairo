@@ -105,6 +105,7 @@ export type Database = {
           industry: string | null
           language: string
           onboarding_completed_at: string | null
+          onboarding_offered_at: string | null
           name: string
           plan_id: string
           privacy_url: string | null
@@ -126,6 +127,7 @@ export type Database = {
           industry?: string | null
           language?: string
           onboarding_completed_at?: string | null
+          onboarding_offered_at?: string | null
           name: string
           plan_id: string
           privacy_url?: string | null
@@ -147,6 +149,7 @@ export type Database = {
           industry?: string | null
           language?: string
           onboarding_completed_at?: string | null
+          onboarding_offered_at?: string | null
           name?: string
           plan_id?: string
           privacy_url?: string | null

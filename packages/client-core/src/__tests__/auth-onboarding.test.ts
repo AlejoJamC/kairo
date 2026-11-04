@@ -13,7 +13,9 @@ describe("ownerNeedsOnboarding", () => {
   });
 
   it("never holds back other roles", () => {
+    // Invited members join an account that already exists.
     expect(ownerNeedsOnboarding("agent", null, null)).toBe(false);
+    expect(ownerNeedsOnboarding("admin", null, null)).toBe(false);
     expect(ownerNeedsOnboarding(null, null, null)).toBe(false);
   });
 

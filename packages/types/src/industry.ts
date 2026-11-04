@@ -106,9 +106,9 @@ export function isIndustryChoice(value: unknown): value is IndustryChoice {
 }
 
 /**
- * The industry's interpretation examples as text for the classifier, in the
- * account's language. Undefined while the account has no industry recorded, so
- * accounts created before the setting keep classifying as they did.
+ * The industry's interpretation examples as text for the classifier, in the account's language.
+ * Undefined while the account has no industry recorded, so an account that never chose one is not
+ * given a choice it did not make. `other` reads as the default industry.
  */
 export function industryGuidance(industry: string | null | undefined, lang: IndustryLang): string | undefined {
   if (!industry) return undefined;

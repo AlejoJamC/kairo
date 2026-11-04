@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@kairo/client-core/auth";
 import { INDUSTRIES, INDUSTRY_NAMES, isIndustryChoice } from "@kairo/types/industry";
@@ -11,12 +11,17 @@ import { Box, Button, Callout, Dialog, Field, FieldSelect, FieldTextarea, Text }
  */
 export function OnboardingWalkthrough() {
   const { t, i18n } = useTranslation("onboarding");
-  const { onboardingPending, completeOnboarding } = useAuth();
+  const { onboardingPending, completeOnboarding, recordOnboardingOffered } = useAuth();
   const [industry, setIndustry] = useState("");
   const [businessContext, setBusinessContext] = useState("");
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const lang = i18n.language.startsWith("es") ? "es" : "en";
+
+  // The dialog being on screen is the evidence that the choice was offered.
+  useEffect(() => {
+    if (onboardingPending) void recordOnboardingOffered();
+  }, [onboardingPending, recordOnboardingOffered]);
   const points = t("points", { returnObjects: true }) as string[];
 
   const finish = async (chosen: { industry: string; businessContext: string }) => {
