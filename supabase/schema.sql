@@ -1855,6 +1855,10 @@ CREATE TABLE IF NOT EXISTS "public"."accounts" (
     "business_context_updated_at" timestamp with time zone,
     "business_context_source" "text",
     "language" "text" DEFAULT 'es'::"text" NOT NULL,
+    "industry" "text",
+    "onboarding_completed_at" timestamp with time zone,
+    "onboarding_offered_at" timestamp with time zone,
+    CONSTRAINT "chk_accounts_industry" CHECK ((("industry" IS NULL) OR ("industry" = ANY (ARRAY['customer_service'::"text", 'financial'::"text", 'technology'::"text", 'legal'::"text", 'accounting'::"text", 'other'::"text"])))),
     CONSTRAINT "chk_accounts_language" CHECK (("language" = ANY (ARRAY['es'::"text", 'en'::"text"]))),
     CONSTRAINT "chk_business_context_source" CHECK ((("business_context_source" IS NULL) OR ("business_context_source" = ANY (ARRAY['derived'::"text", 'manual'::"text"]))))
 );
@@ -1888,6 +1892,18 @@ COMMENT ON COLUMN "public"."accounts"."business_context_source" IS 'derived = in
 
 
 COMMENT ON COLUMN "public"."accounts"."language" IS 'Rubric language for this tenant. Must match a file in packages/intelligence/prompts/email-classification/ and a member of SUPPORTED_LANGS.';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."industry" IS 'Industry chosen during onboarding; skipping records other. NULL only on accounts that predate the setting, which classify without industry guidance. other reads as customer_service.';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."onboarding_completed_at" IS 'Set once when the owner finishes or skips the onboarding walkthrough. Accounts created before this column are completed when the owner profile has a company name.';
+
+
+
+COMMENT ON COLUMN "public"."accounts"."onboarding_offered_at" IS 'First time the onboarding setup was shown to the owner. Evidence that the choice was offered: only an account with this value can have its industry assigned as other without the owner choosing.';
 
 
 
@@ -2336,6 +2352,8 @@ CREATE TABLE IF NOT EXISTS "public"."tickets" (
     CONSTRAINT "chk_ticket_type" CHECK ((("ticket_type" IS NULL) OR ("ticket_type" = ANY (ARRAY['support'::"text", 'prospect'::"text", 'spam'::"text", 'internal'::"text", 'other'::"text"])))),
     CONSTRAINT "tickets_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'awaiting_customer'::"text", 'in_progress'::"text", 'resolved'::"text", 'ai_resolved'::"text", 'escalated'::"text", 'reopened'::"text", 'closed'::"text"])))
 );
+
+ALTER TABLE ONLY "public"."tickets" REPLICA IDENTITY FULL;
 
 
 ALTER TABLE "public"."tickets" OWNER TO "postgres";
