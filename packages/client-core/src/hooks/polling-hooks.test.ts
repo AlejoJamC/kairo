@@ -8,7 +8,7 @@ const getSidebarCounts = vi.fn();
 
 // The realtime channel the sidebar listens on: `emit` plays a change of the account's tickets.
 type Change = { eventType?: string; old?: { status?: string | null }; new?: { status?: string | null } };
-let onChange: ((payload?: Change) => void) | undefined;
+let onChange: ((payload: Change) => void) | undefined;
 const channel = {
   on: vi.fn((_type: string, _filter: unknown, callback: (payload: Change) => void) => {
     onChange = callback;

@@ -5,6 +5,7 @@ import type { TicketType } from "@kairo/intelligence";
 import { buildEmailClassifierInput, resolveClassifierContext } from "../../lib/classifier-input.js";
 import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
+import { tier3FullInbox, tier3Windows } from "../../lib/tier3-windows.js";
 import { assertSupabaseTarget, getFlag } from "@kairo/feature-flags";
 import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
 import { isJevCanaryTenant, jevCanaryUpgrade } from "../../lib/jev-canary.js";
@@ -132,16 +133,16 @@ function daysAgoDate(days: number): string {
 }
 
 /**
- * Fetch Gmail message headers within a [daysFrom, daysTo] window.
- * Uses both `after:` and `before:` Gmail query params.
+ * Fetch Gmail messages from the inbox. With a `[daysFrom, daysTo]` window it uses both
+ * `after:` and `before:` Gmail query params; without one it returns the whole inbox.
  */
 async function fetchGmailRange(
   token: string,
-  daysFrom: number,
-  daysTo: number
+  window: { daysFrom: number; daysTo: number } | null
 ): Promise<GmailMessage[]> {
-  const afterStr = daysAgoDate(daysTo);
-  const beforeStr = daysAgoDate(daysFrom);
+  const query = window
+    ? `after:${daysAgoDate(window.daysTo)} before:${daysAgoDate(window.daysFrom)}`
+    : undefined;
 
   const allMessages: GmailMessage[] = [];
   let pageToken: string | undefined;
@@ -150,7 +151,7 @@ async function fetchGmailRange(
     const params: Record<string, string> = {
       maxResults: "500",
       labelIds: "INBOX",
-      q: `after:${afterStr} before:${beforeStr}`,
+      ...(query ? { q: query } : {}),
     };
     if (pageToken) params["pageToken"] = pageToken;
 
@@ -207,10 +208,9 @@ async function classifyWindow(
   /** Classes this account may auto-approve. Resolved once per run, like the context. */
   autoApproved: TicketType[],
   channelIntegrationId: string | null,
-  daysFrom: number,
-  daysTo: number
+  window: { daysFrom: number; daysTo: number } | null
 ): Promise<void> {
-  const messages = await fetchGmailRange(accessToken, daysFrom, daysTo);
+  const messages = await fetchGmailRange(accessToken, window);
   const configurationFault = createConfigurationFaultTracker();
   await processTier3Messages({ userId, accountId, classifierContext, autoApproved, channelIntegrationId, messages, configurationFault });
   configurationFault.throwIfRecorded();
@@ -687,7 +687,7 @@ export const tier3Deferred = inngest.createFunction(
     // -----------------------------------------------------------------------
     // Fetch Gmail credentials + channel integration id once
     // -----------------------------------------------------------------------
-    const { accessToken, tenantMailbox, tenantMailboxes, businessContext, language, autoApproved, accountId, channelIntegrationId } = (await step.run(
+    const { accessToken, tenantMailbox, tenantMailboxes, businessContext, industryGuidance, language, autoApproved, accountId, channelIntegrationId } = (await step.run(
       "fetch-credentials",
       async () => {
         // ADR-022 Phase 2: resolve accountId, read tokens from oauth_credentials.
@@ -722,13 +722,14 @@ export const tier3Deferred = inngest.createFunction(
           tenantMailbox: ctx.tenantMailbox,
           tenantMailboxes: ctx.tenantMailboxes,
           businessContext: ctx.businessContext ?? "",
+          industryGuidance: ctx.industryGuidance ?? "",
           language: ctx.language,
           autoApproved: autoApproved as string[],
           accountId,
           channelIntegrationId: channelRow.data?.id ?? null,
         };
       }
-    )) as { accessToken: string | null; tenantMailbox: string; tenantMailboxes: string[]; businessContext: string; language: PromptLang; autoApproved: string[]; accountId: string; channelIntegrationId: string | null };
+    )) as { accessToken: string | null; tenantMailbox: string; tenantMailboxes: string[]; businessContext: string; industryGuidance?: string; language: PromptLang; autoApproved: string[]; accountId: string; channelIntegrationId: string | null };
 
     if (!accessToken || !accountId) return;
 
@@ -740,55 +741,23 @@ export const tier3Deferred = inngest.createFunction(
       tenantMailboxes,
       language,
       ...(businessContext ? { businessContext } : {}),
+      ...(industryGuidance ? { industryGuidance } : {}),
     };
 
-    // -----------------------------------------------------------------------
-    // Batch A: 16–30 days
-    // -----------------------------------------------------------------------
-    await step.run("batch-a-16-30d", async () => {
-      await classifyWindow(
-        userId,
-        accountId,
-        accessToken,
-        classifierContext,
-        autoApproved as TicketType[],
-        channelIntegrationId,
-        16,
-        30
-      );
-    });
-
-    // -----------------------------------------------------------------------
-    // Batch B: 31–60 days
-    // -----------------------------------------------------------------------
-    await step.run("batch-b-31-60d", async () => {
-      await classifyWindow(
-        userId,
-        accountId,
-        accessToken,
-        classifierContext,
-        autoApproved as TicketType[],
-        channelIntegrationId,
-        31,
-        60
-      );
-    });
-
-    // -----------------------------------------------------------------------
-    // Batch C: 61–MAX_EMAIL_AGE_DAYS days
-    // -----------------------------------------------------------------------
-    await step.run("batch-c-61-maxd", async () => {
-      await classifyWindow(
-        userId,
-        accountId,
-        accessToken,
-        classifierContext,
-        autoApproved as TicketType[],
-        channelIntegrationId,
-        61,
-        env.MAX_EMAIL_AGE_DAYS
-      );
-    });
+    // Date windows, or the whole inbox when FEATURE_FLAG_TIER3_FULL_INBOX is true (see tier3Windows).
+    for (const { id, range } of tier3Windows({ localTest: tier3FullInbox(process.env), maxEmailAgeDays: env.MAX_EMAIL_AGE_DAYS })) {
+      await step.run(id, async () => {
+        await classifyWindow(
+          userId,
+          accountId,
+          accessToken,
+          classifierContext,
+          autoApproved as TicketType[],
+          channelIntegrationId,
+          range
+        );
+      });
+    }
     if (getFlag('enable_email_knowledge')) await step.run('check-pending-knowledge', async () => {
       await checkTier3PendingKnowledge(accountId);
     });

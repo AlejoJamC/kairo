@@ -12,7 +12,6 @@ import { logLlmCall } from "../../lib/llm-logging.js";
 import { assertSupabaseTarget, getFlag } from "@kairo/feature-flags";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
-import { isOnboardingRecorded, ONBOARDING_WAIT_ROUND, ONBOARDING_WAIT_ROUNDS } from "../../lib/onboarding-gate.js";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
@@ -743,25 +742,15 @@ export const tier1FastPath = inngest.createFunction(
     });
 
     // -----------------------------------------------------------------------
-    // Step 3: Emit Tier 2 trigger with all IDs already processed
+    // Step 3: Hand over to the Tier 2 start gate, with all IDs already processed
     // -----------------------------------------------------------------------
-    // The industry and business context the owner picks (or skipping it) are
-    // recorded before Tier 2 and Tier 3 start, so both read the settings in force.
-    // The wait is bounded: past it the pass continues with the default settings.
-    if (!(await step.run("check-onboarding-recorded", () => isOnboardingRecorded(supabase, resolvedAccountId)))) {
-      for (let round = 0; round < ONBOARDING_WAIT_ROUNDS; round++) {
-        const completed = await step.waitForEvent(`await-onboarding-${round}`, {
-          event: "onboarding/completed",
-          timeout: ONBOARDING_WAIT_ROUND,
-          if: `async.data.accountId == "${resolvedAccountId}"`,
-        });
-        if (completed || (await step.run(`recheck-onboarding-${round}`, () => isOnboardingRecorded(supabase, resolvedAccountId)))) break;
-      }
-    }
-    await step.sendEvent("trigger-tier2", {
-      name: "pipeline/tier2.triggered",
+    // Tier 1 ends here. The gate holds the start of Tier 2 and Tier 3 until the onboarding
+    // choice is recorded, so the first pass is never left open waiting for the owner.
+    await step.sendEvent("hand-over-to-tier2-gate", {
+      name: "pipeline/tier1.completed",
       data: {
         userId,
+        accountId: resolvedAccountId,
         supabaseTarget: event.data.supabaseTarget,
         processedMessageIds: [...result.classifiedIds, ...result.skippedIds],
       },

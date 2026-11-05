@@ -132,7 +132,7 @@ describe("resolveClassifierContext — backfill", () => {
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
     expect(ctx).toEqual({
-      tenantMailbox: "support@acme.com",
+        tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
       language: "es",
       businessContext: "Acme Logistics moves freight for pharmacies.",
@@ -148,7 +148,7 @@ describe("resolveClassifierContext — backfill", () => {
     // Absent, not empty: the prompt renders `(no disponible)` for an absent
     // field, and an empty string would claim the company does nothing.
     expect(ctx).toEqual({
-      tenantMailbox: "support@acme.com",
+        tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
       language: "es",
     });
@@ -160,7 +160,7 @@ describe("resolveClassifierContext — backfill", () => {
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
     expect(ctx).toEqual({
-      tenantMailbox: "support@acme.com",
+        tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
       language: "es",
     });
@@ -182,7 +182,7 @@ describe("resolveClassifierContext — backfill", () => {
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
     expect(ctx).toEqual({
-      tenantMailbox: "support@acme.com",
+        tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
       language: "es",
     });
@@ -214,7 +214,7 @@ describe("resolveClassifierContext — backfill", () => {
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
     expect(ctx).toEqual({
-      tenantMailbox: "support@acme.com",
+        tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
       language: "es",
     });

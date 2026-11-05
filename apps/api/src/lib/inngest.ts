@@ -16,6 +16,15 @@ export type KairoEvents = {
   "onboarding/completed": {
     data: { accountId: string; supabaseTarget?: "local" | "remote" };
   };
+  /** Tier 1 ended; the Tier 2 start gate decides when Tier 2 and Tier 3 begin. */
+  "pipeline/tier1.completed": {
+    data: {
+      userId: string;
+      accountId: string;
+      processedMessageIds: string[];
+      supabaseTarget?: "local" | "remote";
+    };
+  };
   "pipeline/tier2.triggered": {
     data: {
       userId: string;
