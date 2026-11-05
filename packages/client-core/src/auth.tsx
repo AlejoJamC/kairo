@@ -51,6 +51,8 @@ interface AuthContextType {
   onboardingPending: boolean;
   /** Records the industry and business context (or their omission) and finishes the onboarding. */
   completeOnboarding: (settings: { industry: string | null; businessContext: string }) => Promise<boolean>;
+  /** Changes whenever the account's own data (industry, business context) is rewritten by the session, so open views read it again. */
+  accountRevision: number;
   /** Records, once per session, that the setup was shown: the evidence that lets the pipeline settle an unanswered choice. */
   recordOnboardingOffered: () => Promise<void>;
 }
@@ -64,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accountId, setAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [onboardingPending, setOnboardingPending] = useState(false);
+  const [accountRevision, setAccountRevision] = useState(0);
   const authVersion = useRef(0);
 
   const isAdmin = userRole === 'owner' || userRole === 'admin' || userRole === 'supervisor';
@@ -241,6 +244,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       setOnboardingPending(false);
+      setAccountRevision((revision) => revision + 1);
       return true;
     } catch (error) {
       console.error("[onboarding] the setup could not be sent", error instanceof Error ? error.message : "unknown error");
@@ -271,7 +275,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, userRole, accountId, isAdmin, loading, signInWithPassword, signOut, refreshProfile, onboardingPending, completeOnboarding, recordOnboardingOffered }}
+      value={{ user, profile, userRole, accountId, isAdmin, loading, signInWithPassword, signOut, refreshProfile, onboardingPending, accountRevision, completeOnboarding, recordOnboardingOffered }}
     >
       {children}
     </AuthContext.Provider>

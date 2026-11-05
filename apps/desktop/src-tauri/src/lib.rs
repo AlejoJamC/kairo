@@ -27,7 +27,10 @@ fn deliver_tokens(handle: &tauri::AppHandle, tokens: serde_json::Value) {
     if let Some(window) = handle.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.set_focus();
-        if window.eval("window.location.reload()").is_err() {
+        // The dashboard's router leaves the address without its trailing slash (`/dashboard`), which the
+        // dev server answers with a 404 page. Reload at the address with the slash when it is served over http.
+        let reload = r#"(function(){var p=location.pathname;if(location.protocol==='http:'&&!/\/$/.test(p)){location.replace(p+'/'+location.search+location.hash);}else{location.reload();}})()"#;
+        if window.eval(reload).is_err() {
             eprintln!("[desktop-auth] reload_failed");
         }
     } else {
@@ -155,6 +158,10 @@ fn set_window_size(width: f64, height: f64, min_width: f64, min_height: f64, app
     use tauri::LogicalSize;
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_min_size(Some(LogicalSize::new(min_width, min_height)));
+        // A fullscreen or maximized window keeps its size and place: only the narrowest size applies.
+        if window.is_fullscreen().unwrap_or(false) || window.is_maximized().unwrap_or(false) {
+            return;
+        }
         let _ = window.set_size(LogicalSize::new(width, height));
         let _ = window.center();
         // The system applies the new size a moment later: center again with the final one.

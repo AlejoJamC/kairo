@@ -36,7 +36,7 @@ function buildNavItems(t: (...args: any[]) => string): { id: SettingsSection; la
 
 function WorkspaceSection() {
   const { t, i18n } = useTranslation(["dashboard"]);
-  const { profile, accountId, userRole, refreshProfile } = useAuth();
+  const { profile, accountId, userRole, refreshProfile, accountRevision } = useAuth();
   const initial = profile?.company_name ?? "";
   const [nameDraft, setName] = useState<string | null>(null);
   const name = nameDraft ?? initial;
@@ -68,7 +68,7 @@ function WorkspaceSection() {
       })
       .catch(() => { if (!cancelled) setAccountLoadFailed(true); });
     return () => { cancelled = true; };
-  }, [accountId]);
+  }, [accountId, accountRevision]);
 
   const save = async () => {
     setSaving(true);
