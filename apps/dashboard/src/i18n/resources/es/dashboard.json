@@ -344,6 +344,12 @@
     "workspace": {
       "title": "Workspace",
       "nameLabel": "Nombre del workspace",
+      "industryLabel": "Industria",
+      "industryUnselected": "Ninguna industria seleccionada",
+      "industryOther": "Otro",
+      "businessContextLabel": "Contexto del negocio (opcional)",
+      "businessContextPlaceholder": "Describe a qué se dedica tu empresa",
+      "loadError": "No se pudo cargar la configuración del workspace. Inténtalo de nuevo.",
       "urlLabel": "URL",
       "urlPlaceholder": "holakairo.com/mi-empresa",
       "timezoneLabel": "Zona horaria",

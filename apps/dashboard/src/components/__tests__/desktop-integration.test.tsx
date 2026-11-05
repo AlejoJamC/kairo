@@ -5,6 +5,7 @@ import { renderWithProviders } from "@/test/render-with-providers";
 import { DesktopIntegration } from "@/components/desktop-integration";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { useAppCommands } from "@/lib/app-commands";
+import { APP_WINDOW_HEIGHT, APP_WINDOW_MIN_HEIGHT, appWindowMinWidth, appWindowWidth } from "@/lib/desktop-window";
 
 const host = {
   os: "macos" as const,
@@ -98,6 +99,13 @@ describe("DesktopIntegration", () => {
     act(() => menuListener?.("ask-assistant"));
     expect(useTriageStore.getState().panelTabRequest?.tab).toBe("assistant");
     useTriageStore.setState({ tickets: [], selectedTicketId: null, panelTabRequest: null });
+  });
+
+  it("puts the window at the app size when the app opens, before it sets the narrowest size", () => {
+    setup();
+    expect(host.setWindowSize).toHaveBeenCalledTimes(1);
+    expect(host.setWindowSize).toHaveBeenCalledWith(appWindowWidth(), APP_WINDOW_HEIGHT, appWindowMinWidth(false), APP_WINDOW_MIN_HEIGHT);
+    expect(host.setWindowSize.mock.invocationCallOrder[0]).toBeLessThan(host.setMinWindowSize.mock.invocationCallOrder[0]);
   });
 
   it("enables Send once the composer has text and sets priority and status from the Ticket menu", () => {

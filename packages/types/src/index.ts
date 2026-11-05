@@ -73,3 +73,4 @@ const IS_RESOLVED_STATUS: Record<TicketStatus, boolean> = {
 export const RESOLVED_STATUSES: TicketStatus[] = TICKET_STATUSES.filter(
   (status) => IS_RESOLVED_STATUS[status]
 );
+export * from './industry.js';

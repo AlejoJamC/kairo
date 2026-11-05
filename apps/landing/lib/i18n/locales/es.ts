@@ -270,6 +270,18 @@ export const es: Translations = {
     companyLabel: "Nombre de la organización",
     companyPlaceholder: "Acme Inc.",
     saving: "Guardando…",
+    setup: {
+      personalize: "Personalizar mi configuración (opcional)",
+      toggle: "Configuración adicional (opcional)",
+      industryLabel: "Industria",
+      industryPlaceholder: "Elige una industria (opcional)",
+      industryOther: "Otro",
+      industryHint: "Kairo la usa para leer tus tickets como lo hace tu negocio. Si ninguna encaja, déjala vacía o elige Otro.",
+      contextLabel: "¿A qué se dedica tu empresa? (opcional)",
+      contextPlaceholder: "Una o dos frases sobre tus productos o servicios",
+      contextHint: "Puedes afinarlo después, y Kairo también aprende de tu negocio a partir de tus canales conectados.",
+      error: "No pudimos guardar tu configuración. Inténtalo de nuevo u omítela.",
+    },
     loadingProfile: "Cargando tu perfil…",
   },
   legalPage: {

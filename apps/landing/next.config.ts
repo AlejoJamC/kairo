@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
+import { localSupabaseConfig } from "../../packages/feature-flags/src/flags";
 
 // Next.js only reads .env.local from its own project root (apps/landing/).
 // In the monorepo we keep a single root .env.local, so we load it explicitly
@@ -12,10 +13,19 @@ try {
   // root .env.local may not exist in CI; Next.js will fall back to its own env files
 }
 
+const localSupabase = localSupabaseConfig(process.env);
+if (localSupabase) {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = localSupabase.url;
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = localSupabase.anonKey;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = localSupabase.serviceRoleKey;
+  process.env.INNGEST_DEV = "1";
+}
+
 const nextConfig: NextConfig = {
   trailingSlash: true,
+  allowedDevOrigins: ["127.0.0.1"],
   // The UI packages ship TypeScript source.
-  transpilePackages: ["@kairo/ui", "@kairo/tokens"],
+  transpilePackages: ["@kairo/ui", "@kairo/tokens", "@kairo/types"],
   // Proxies /api/* (dashboard's @kairo/api calls, Inngest's /api/inngest sync
   // target) to the deployed apps/api origin. The dashboard client always uses
   // relative URLs (see apps/dashboard/src/lib/api-client.ts), so without this

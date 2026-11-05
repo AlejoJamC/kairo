@@ -19,6 +19,8 @@ export interface DesktopPlatformDeps {
 }
 
 export function createDesktopPlatform(deps: DesktopPlatformDeps): PlatformPorts {
+  // The native bridge consumes the handoff once; React may initialize twice.
+  let handoff: Promise<HandoffTokens | null> | undefined
   return {
     kind: 'desktop',
     host: deps.host,
@@ -26,6 +28,6 @@ export function createDesktopPlatform(deps: DesktopPlatformDeps): PlatformPorts 
     clipboard: deps.clipboard,
     appFocus: deps.appFocus,
     navigation: { navigate: (url) => deps.openExternal(url) },
-    authHandoff: { takeHandoffTokens: () => deps.takeHandoffTokens() },
+    authHandoff: { takeHandoffTokens: () => handoff ??= deps.takeHandoffTokens() },
   }
 }

@@ -1,0 +1,20 @@
+{
+  "title": "Antes de empezar",
+  "intro": "Kairo lee tu bandeja, agrupa cada correo en un ticket y sigue aprendiendo de lo que confirmas o corriges.",
+  "points": [
+    "Cada correo se convierte en un ticket con categoría, prioridad y tipo.",
+    "Tus correcciones le enseñan a Kairo cómo trabaja tu equipo.",
+    "Kairo construye conocimiento de tu negocio a partir de tu soporte, sin que tengas que escribirlo."
+  ],
+  "industryLabel": "Industria",
+  "industryPlaceholder": "Elige una industria (opcional)",
+  "industryOther": "Otro",
+  "industryHint": "Kairo la usa para leer tus tickets como lo hace tu negocio. Si ninguna encaja, déjala vacía o elige Otro.",
+  "contextLabel": "¿A qué se dedica tu empresa? (opcional)",
+  "contextPlaceholder": "Una o dos frases sobre tus productos o servicios",
+  "contextHint": "Puedes afinarlo después, y Kairo también aprende de tu negocio a partir de tus canales conectados.",
+  "skip": "Omitir",
+  "continue": "Continuar",
+  "saving": "Guardando…",
+  "error": "No pudimos guardar tu configuración. Inténtalo de nuevo u omítela."
+}

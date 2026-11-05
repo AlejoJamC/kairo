@@ -41,13 +41,13 @@ export default function LoginPage() {
 
       // Pass tokens via hash so the dashboard's supabase-js client (localStorage)
       // can call setSession() — same pattern as /wizard/complete.
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       const dashboardUrl = getDashboardUrl();
-      if (session?.access_token && session?.refresh_token) {
+      if (!sessionError && session?.access_token && session?.refresh_token) {
         const hash = `#access_token=${encodeURIComponent(session.access_token)}&refresh_token=${encodeURIComponent(session.refresh_token)}`;
         window.location.href = `${dashboardUrl}${hash}`;
       } else {
-        window.location.href = dashboardUrl;
+        throw new Error('Session unavailable');
       }
     } catch {
       setError(t.login.errorUnexpected);

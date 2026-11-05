@@ -1,9 +1,10 @@
 import { createServerClient } from "@supabase/auth-helpers-nextjs";
 import { createClient as createBaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
-import { env } from "@/env";
+import { env } from "../../env";
 
 /**
  * Authenticates a request by checking the Authorization: Bearer header first,
@@ -66,6 +67,34 @@ export function createAdminClient() {
     env.SUPABASE_SERVICE_ROLE_KEY,
     { auth: { persistSession: false, autoRefreshToken: false } }
   );
+}
+
+export function createBufferedRouteClient(request: Request) {
+  const requestCookies = new Map<string, string>();
+  for (const pair of (request.headers.get("cookie") ?? "").split(/;\s*/)) {
+    const separator = pair.indexOf("=");
+    if (separator < 0) continue;
+    requestCookies.set(pair.slice(0, separator), decodeURIComponent(pair.slice(separator + 1)));
+  }
+  const pending: Array<{ name: string; value: string; options: Parameters<typeof NextResponse.prototype.cookies.set>[2] }> = [];
+  const client = createServerClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+    cookies: {
+      getAll: () => Array.from(requestCookies, ([name, value]) => ({ name, value })),
+      setAll: (items) => {
+        for (const item of items) {
+          requestCookies.set(item.name, item.value);
+          pending.push(item);
+        }
+      },
+    },
+  });
+  return {
+    client,
+    attach(response: NextResponse): NextResponse {
+      for (const item of pending) response.cookies.set(item.name, item.value, item.options);
+      return response;
+    },
+  };
 }
 
 export async function createClient() {

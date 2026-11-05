@@ -17,6 +17,7 @@ import { type MailFacts } from "./email/mail-facts.js";
 import { getGmailEmailByAccount } from "./gmail-token.js";
 import { supabase } from "./supabase.js";
 import { findRelevantKb } from './ticket-context.js';
+import { industryGuidance } from "@kairo/types";
 
 export type ClassifierStage = "onboarding" | "backfill" | "new_email";
 
@@ -53,6 +54,16 @@ export function classifierEnvelope(
   };
 }
 
+/**
+ * What the classifier is told about the company: the account's own description
+ * and, when an industry is recorded, how that industry reads each ticket type.
+ * Only the description counts as business context for the missing-evidence and
+ * auto-approval rules; the industry guidance never stands in for it.
+ */
+export function described(context: Pick<ClassifierContext, 'businessContext' | 'industryGuidance'>): string | undefined {
+  return [context.businessContext, context.industryGuidance].filter(Boolean).join('\n\n') || undefined;
+}
+
 /** Build the same evidence contract for jobs and interactive tools. */
 export function buildEmailClassifierInput(input: {
   stage: NonNullable<EmailMessage['stage']>;
@@ -61,7 +72,7 @@ export function buildEmailClassifierInput(input: {
   bodyPlain: string | null | undefined;
   snippet?: string;
   facts: MailFacts;
-  context: Pick<ClassifierContext, 'tenantMailbox' | 'tenantMailboxes' | 'businessContext'>;
+  context: Pick<ClassifierContext, 'tenantMailbox' | 'tenantMailboxes' | 'businessContext' | 'industryGuidance'>;
   bodySource?: 'full' | 'stored';
   missing?: string[];
 }): EmailMessage {
@@ -72,7 +83,7 @@ export function buildEmailClassifierInput(input: {
     subject: input.subject, from: input.from,
     body: prepared.slice(0, CLASSIFIER_BODY_RULES[ruleStage].maxChars),
     tenantMailbox: input.context.tenantMailbox,
-    ...(input.context.businessContext ? { businessContext: input.context.businessContext } : {}),
+    ...(described(input.context) ? { businessContext: described(input.context) } : {}),
     ...classifierEnvelope(input.facts),
     facts: input.facts,
     stage: input.stage,
@@ -101,6 +112,9 @@ export interface ClassifierContext {
   tenantMailboxes: string[];
 
   businessContext?: string;
+
+  /** How the account's industry reads each ticket type; absent until an industry is recorded. */
+  industryGuidance?: string;
 }
 
 
@@ -134,6 +148,8 @@ async function readTenantMailboxes(
 export interface AccountSettings {
   language: PromptLang;
   businessContext: string | undefined;
+  /** The industry chosen during onboarding; null until one is recorded. */
+  industry?: string | null;
 }
 
 
@@ -142,11 +158,11 @@ async function readAccountSettings(
   degradations: ContextDegradation[],
   db = supabase,
 ): Promise<AccountSettings> {
-  const fallback: AccountSettings = { language: DEFAULT_LANG, businessContext: undefined };
+  const fallback: AccountSettings = { language: DEFAULT_LANG, businessContext: undefined, industry: null };
   try {
     const { data, error } = await db
       .from("accounts")
-      .select("language, business_context")
+      .select("language, business_context, industry")
       .eq("id", accountId)
       .maybeSingle();
 
@@ -163,14 +179,15 @@ async function readAccountSettings(
       degradations.push("unsupported_language");
     }
 
+    const industry = (data?.industry as string | null | undefined) ?? null;
     const text = (data?.business_context as string | null | undefined)?.trim();
-    if (text) return { language, businessContext: text };
+    if (text) return { language, businessContext: text, industry };
     // Without a written description, the business profile the owner approved from the synthesis is the context.
     const { data: profile, error: profileError } = await db.from("operational_learning").select("summary")
       .eq("account_id", accountId).eq("source_key", "business-profile").eq("status", "approved").maybeSingle();
     if (profileError) degradations.push("accounts_unreadable");
     const approved = (profile?.summary as string | null | undefined)?.trim();
-    return { language, businessContext: approved ? approved : undefined };
+    return { language, businessContext: approved ? approved : undefined, industry };
   } catch {
     console.warn('[classifier-input] Account context unavailable');
     degradations.push("accounts_unreadable");
@@ -232,6 +249,8 @@ export async function resolveClassifierContext(
     readAccountSettings(accountId, degradations),
   ]);
 
+  // Tier 1 reads no business context, and the industry is part of it.
+  const guidance = stage === "onboarding" ? undefined : industryGuidance(settings.industry, settings.language === "es" ? "es" : "en");
   const base = {
     tenantMailbox,
     tenantMailboxes: unionMailboxes(tenantMailbox, channels),
@@ -240,7 +259,11 @@ export async function resolveClassifierContext(
   const context: ClassifierContext =
     stage === "onboarding"
       ? base
-      : { ...base, ...(settings.businessContext ? { businessContext: settings.businessContext } : {}) };
+      : {
+          ...base,
+          ...(settings.businessContext ? { businessContext: settings.businessContext } : {}),
+          ...(guidance ? { industryGuidance: guidance } : {}),
+        };
 
   recordDecision(
     "classifier.context",

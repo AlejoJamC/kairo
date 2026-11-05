@@ -125,6 +125,29 @@ const FLAG_DEFAULTS = {
 
 type RuntimeFlagName = keyof typeof FLAG_DEFAULTS;
 
+export function localSupabaseConfig(env: Record<string, string | undefined>): {
+  url: string;
+  anonKey: string;
+  serviceRoleKey: string;
+} | null {
+  if (env.NODE_ENV === "production" || env.VERCEL || env.FEATURE_FLAG_LOCAL_SUPABASE !== "true") return null;
+  const { LOCAL_SUPABASE_URL: url, LOCAL_SUPABASE_ANON_KEY: anonKey, LOCAL_SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey } = env;
+  if (!url || !anonKey || !serviceRoleKey) throw new Error("Local Supabase configuration is incomplete");
+  let endpoint: URL;
+  try { endpoint = new URL(url); } catch { throw new Error("Invalid local Supabase URL"); }
+  if (endpoint.protocol !== "http:" || !["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname) ||
+      endpoint.port !== "54321" || endpoint.username || endpoint.password || endpoint.pathname !== "/" || endpoint.search || endpoint.hash) {
+    throw new Error("Local Supabase must use the local API on port 54321");
+  }
+  return { url, anonKey, serviceRoleKey };
+}
+
+export function assertSupabaseTarget(target: string | undefined, env: Record<string, string | undefined>): void {
+  if (target && target !== (localSupabaseConfig(env) ? "local" : "remote")) {
+    throw new Error("Pipeline Supabase target does not match the worker configuration");
+  }
+}
+
 function readEnvFlag(envKey: string, defaultValue: boolean): boolean {
   if (typeof process === "undefined") return defaultValue;
   const val = process.env[envKey];

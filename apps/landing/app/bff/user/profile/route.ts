@@ -32,12 +32,14 @@ export async function PATCH(request: Request) {
       ...(company_name?.trim() && { company_name: company_name.trim() }),
     };
 
-    const { error } = await supabase
+    const { data: profile, error } = await supabase
       .from("profiles")
       .update(updates)
-      .eq("id", user.id);
+      .eq("id", user.id)
+      .select("id")
+      .maybeSingle();
 
-    if (error) {
+    if (error || !profile) {
       return NextResponse.json(
         { error: "Failed to update profile" },
         { status: 500 }

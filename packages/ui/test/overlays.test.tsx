@@ -4,6 +4,7 @@ import { useState, type ReactElement } from 'react'
 import {
   Dialog,
   Drawer,
+  WindowChromeProvider,
   Icon,
   Menu,
   MenuItem,
@@ -149,6 +150,28 @@ function DialogHarness({ dirty = false, onChange = () => {} }: { dirty?: boolean
 }
 
 describe('Dialog', () => {
+  it('keeps the title bar of the macOS desktop window draggable while it is open', () => {
+    render(
+      <UiProvider>
+        <WindowChromeProvider macos>
+          <DialogHarness />
+        </WindowChromeProvider>
+      </UiProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open dialog' }))
+    const strip = document.querySelector('[data-tauri-drag-region]') as HTMLElement
+    expect(strip).toBeTruthy()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    fireEvent.click(strip)
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
+  it('adds no drag strip outside the macOS desktop window', () => {
+    renderUi(<DialogHarness />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open dialog' }))
+    expect(document.querySelector('[data-tauri-drag-region]')).toBeNull()
+  })
+
   it('is a labelled modal dialog', () => {
     renderUi(<DialogHarness />)
     fireEvent.click(screen.getByRole('button', { name: 'Open dialog' }))

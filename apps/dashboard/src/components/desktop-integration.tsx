@@ -22,7 +22,7 @@ import { useCommands } from "@/hooks/use-commands";
 import { useLocale } from "@/hooks/useLocale";
 import { useAppCommands } from "@/lib/app-commands";
 import { disableUnhandled, localizeMenu } from "@/lib/desktop-menu";
-import { APP_WINDOW_MIN_HEIGHT, appWindowMinWidth } from "@/lib/desktop-window";
+import { APP_WINDOW_HEIGHT, APP_WINDOW_MIN_HEIGHT, appWindowMinWidth, appWindowWidth } from "@/lib/desktop-window";
 import { subscribeNotifications } from "@/lib/notification-feed";
 import { slaDisplay } from "@/lib/sla-display";
 import type { SupportedLanguage } from "@/i18n/types";
@@ -60,6 +60,18 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: Des
   const composerEmpty = useAppCommands((state) => state.composerEmpty);
   const selected = tickets.find((ticket) => ticket.id === selectedId) ?? null;
   const selectedShortId = selected?.ticket_number ? `KAI-${selected.ticket_number}` : null;
+
+  // Reaching the app puts the window at the app size, in the middle of the screen. The sign-in hand-off
+  // reloads the window, so the sign-in view is gone before it can restore the size it shrank.
+  const firstShape = useRef({ sidebarCollapsed, ticketListHidden });
+  useEffect(() => {
+    host?.setWindowSize(
+      appWindowWidth(),
+      APP_WINDOW_HEIGHT,
+      appWindowMinWidth(firstShape.current.sidebarCollapsed, firstShape.current.ticketListHidden),
+      APP_WINDOW_MIN_HEIGHT,
+    );
+  }, [host]);
 
   // The window never gets narrower than the columns need; collapsing the sidebar lowers the floor.
   useEffect(() => {

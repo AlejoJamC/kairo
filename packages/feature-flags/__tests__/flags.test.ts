@@ -1,5 +1,39 @@
 import { describe, it, expect, afterEach } from "bun:test";
-import { getFlag, getNumericFlag } from "../src/flags.js";
+import { assertSupabaseTarget, getFlag, getNumericFlag, localSupabaseConfig } from "../src/flags.js";
+
+describe("local Supabase selector", () => {
+  const local = {
+    NODE_ENV: "development",
+    FEATURE_FLAG_LOCAL_SUPABASE: "true",
+    LOCAL_SUPABASE_URL: "http://127.0.0.1:54321",
+    LOCAL_SUPABASE_ANON_KEY: "local-anon-key",
+    LOCAL_SUPABASE_SERVICE_ROLE_KEY: "local-service-key",
+  };
+
+  it("selects the local stack only when explicitly enabled", () => {
+    expect(localSupabaseConfig(local)).toEqual({ url: local.LOCAL_SUPABASE_URL, anonKey: local.LOCAL_SUPABASE_ANON_KEY, serviceRoleKey: local.LOCAL_SUPABASE_SERVICE_ROLE_KEY });
+    expect(localSupabaseConfig({ ...local, FEATURE_FLAG_LOCAL_SUPABASE: "false" })).toBeNull();
+  });
+
+  it("ignores the selector in deployed environments", () => {
+    expect(localSupabaseConfig({ ...local, NODE_ENV: "production" })).toBeNull();
+    expect(localSupabaseConfig({ ...local, VERCEL: "1" })).toBeNull();
+  });
+
+  it("rejects incomplete or non-local configuration", () => {
+    expect(() => localSupabaseConfig({ ...local, LOCAL_SUPABASE_ANON_KEY: "" })).toThrow();
+    for (const url of ["https://acme.com", "http://127.0.0.1:54322", "http://127.0.0.1:54321/path"]) {
+      expect(() => localSupabaseConfig({ ...local, LOCAL_SUPABASE_URL: url })).toThrow();
+    }
+  });
+
+  it("rejects pipeline events for a different database target", () => {
+    expect(() => assertSupabaseTarget("local", local)).not.toThrow();
+    expect(() => assertSupabaseTarget("remote", local)).toThrow();
+    expect(() => assertSupabaseTarget("local", { NODE_ENV: "production" })).toThrow();
+    expect(() => assertSupabaseTarget("remote", { NODE_ENV: "production" })).not.toThrow();
+  });
+});
 
 const ENV_KEY = "FEATURE_FLAG_ENABLE_DETECTION_UI";
 const ENV_KEY_CONTACT = "FEATURE_FLAG_ENABLE_CONTACT_EXTRACTION";

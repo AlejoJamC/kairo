@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { onboardingDispatchAttempt } from "./onboarding-state";
+import { needsProfileCompletion, onboardingDispatchAttempt } from "./onboarding-state";
 
 type Status = "classified" | "skipped" | "failed" | "failed_permanent";
 interface Message { processing_tier: number; classification_status: Status }
@@ -28,6 +28,22 @@ function client(opts: { credential?: boolean; messages?: Message[]; failTable?: 
 }
 
 const now = new Date("2026-10-24T22:41:00Z");
+
+describe("needsProfileCompletion", () => {
+  it("resumes an owner whose onboarding has not been completed", () => {
+    expect(needsProfileCompletion("owner", null)).toBe(true);
+    expect(needsProfileCompletion("owner", "  ")).toBe(true);
+  });
+
+  it("treats a recorded completion as finished even without a company name", () => {
+    expect(needsProfileCompletion("owner", null, "2026-10-26T12:00:00Z")).toBe(false);
+  });
+
+  it("does not show the wizard to completed owners or other members", () => {
+    expect(needsProfileCompletion("owner", "Acme")).toBe(false);
+    expect(needsProfileCompletion("agent", null)).toBe(false);
+  });
+});
 
 describe("onboardingDispatchAttempt", () => {
   it("dispatches a pass that never ran", async () => {

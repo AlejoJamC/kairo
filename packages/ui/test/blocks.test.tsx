@@ -904,6 +904,11 @@ describe('Public web pieces', () => {
     expect(screen.getByText('steps')).toBeTruthy()
   })
 
+  it('WizardHeader shows the supplied language control', () => {
+    renderUi(<WizardHeader brand={<span>Kairo</span>} stepper={<span>steps</span>} language={<button>ES</button>} />)
+    expect(screen.getByRole('button', { name: 'ES' })).toBeTruthy()
+  })
+
   it('WizardHeader without Exit shows no button', () => {
     renderUi(<WizardHeader brand={<span>Kairo</span>} stepper={<span>steps</span>} />)
     expect(screen.queryByRole('button')).toBeNull()

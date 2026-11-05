@@ -47,11 +47,18 @@ interface UseClassificationProgressResult {
 }
 
 const POLL_INTERVAL_MS      = 1500;
-const TIMEOUT_MS            = 120_000; // 2 minutes
+// The server calls a scan complete after two quiet minutes (lib/scan-status.ts), so the wait for
+// progress has to outlast that quiet window or a scan that ended quickly is reported as a timeout.
+const IDLE_TIMEOUT_MS       = 180_000; // 3 minutes without any progress
 const MAX_CONSECUTIVE_FAILS = 3;       // tolerate transient errors before showing error screen
 
 /** `error` value when the scan settled with every email failed, as opposed to the progress being unreachable. */
 export const CLASSIFICATION_FAILED = "classification_failed";
+
+/** What changes while the scan advances; the wait for progress starts over whenever it does. */
+export function progressSignature(data: Pick<ClassificationProgress, "messages_total" | "messages_classified" | "tickets_count" | "last_classified_at">): string {
+  return [data.messages_total, data.messages_classified, data.tickets_count, data.last_classified_at].join("|");
+}
 
 export function useClassificationProgress(): UseClassificationProgressResult {
   const [data, setData]         = useState<ClassificationProgress | null>(null);
@@ -73,13 +80,18 @@ export function useClassificationProgress(): UseClassificationProgressResult {
     stoppedRef.current  = false;
     failCountRef.current = 0;
 
-    // 2-minute hard stop → error state so users are never stuck
-    timeoutRef.current = setTimeout(() => {
-      if (!stoppedRef.current) {
-        stoppedRef.current = true;
-        setError("timeout");
-      }
-    }, TIMEOUT_MS);
+    // No progress for too long → error state so users are never stuck
+    let lastSignature: string | null = null;
+    const armTimeout = () => {
+      clearTimeout(timeoutRef.current!);
+      timeoutRef.current = setTimeout(() => {
+        if (!stoppedRef.current) {
+          stoppedRef.current = true;
+          setError("timeout");
+        }
+      }, IDLE_TIMEOUT_MS);
+    };
+    armTimeout();
 
     const poll = async () => {
       if (stoppedRef.current) return;
@@ -94,6 +106,11 @@ export function useClassificationProgress(): UseClassificationProgressResult {
         const json = await res.json() as ClassificationProgress;
 
         failCountRef.current = 0; // successful response resets the fail counter
+        const signature = progressSignature(json);
+        if (signature !== lastSignature) {
+          lastSignature = signature;
+          armTimeout();
+        }
         setData(json);
         setError(null);
 

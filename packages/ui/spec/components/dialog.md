@@ -7,6 +7,7 @@ Modal surface for a focused task that blocks the page until it is completed or c
 ## Variants
 
 - Base: `surface.scrim` overlay; panel on `surface.panel` with `border.default`, `radius.dialog` and `shadow.pop`, centered, max width 480px. Header 16px 20px with the title in the `pane-title` style and a close icon button; body 20px; footer 12px 20px on `surface.sunken` with a `border.default` top border and right-aligned actions.
+- Desktop (macOS hidden-inset title bar): the top strip of the window, `size.header` high, stays a drag area above the scrim, so the window can be moved while a dialog is open; pressing it does not close the dialog.
 - Correction: title "Correct the classification", explanation in 12px `text.tertiary` ("Pick the labels that fit. Triage learns from every correction."), type and category chips as buttons (`.on` when chosen), footer with Cancel (ghost) and Save correction (primary sm).
 - Client form: app fields (36px) with labels for name, email and company (example: Acme, support@acme.com), footer with Cancel (secondary) and Save (primary).
 

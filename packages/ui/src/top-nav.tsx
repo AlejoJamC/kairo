@@ -105,18 +105,20 @@ function AuthHeader({ brand, language, desktop }: AuthHeaderProps) {
 type WizardHeaderProps = {
   brand: ReactNode
   stepper: ReactNode
+  language?: ReactNode
   /** Without it (the last step) there is nothing left to leave. */
   exit?: { label: string; onPress: () => void }
 }
 
-function WizardHeader({ brand, stepper, exit }: WizardHeaderProps) {
+function WizardHeader({ brand, stepper, language, exit }: WizardHeaderProps) {
   return (
     <Box tag="header" display="flex" alignItems="center" gap={16} height={60} paddingHorizontal={32} borderBottomWidth={1} borderStyle="solid" borderBottomColor={tokens['border.default']}>
       <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex">
         {brand}
       </Box>
       {stepper}
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" justifyContent="flex-end">
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" alignItems="center" justifyContent="flex-end" gap={8}>
+        {language}
         {exit && (
           <Button variant="ghost" onPress={exit.onPress}>
             {exit.label}

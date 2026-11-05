@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useTranslation } from "@/lib/i18n";
 import { WizardChrome } from "@/components/wizard-chrome";
 import { WizardSteps } from "@/components/wizard-steps";
+import { completionBody, EMPTY_SETTINGS, type OnboardingSettings } from "@/lib/onboarding-settings";
 import { DetectionStep } from "./detection-step";
 import { TriageStep } from "./triage-step";
 import { WizardHeading } from "@/components/wizard-heading";
@@ -22,6 +23,7 @@ interface UserData {
 
 interface Props {
   showDetectionStep: boolean;
+  localReplay: boolean;
 }
 
 // Fake scan animation constants (used only when showDetectionStep=false is toggled off — kept for reference)
@@ -39,13 +41,13 @@ const STATIC_CATEGORIES = [
 
 async function redirectToDashboard() {
   const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session }, error } = await supabase.auth.getSession();
   const dashboardUrl = getDashboardUrl();
-  if (session?.access_token && session?.refresh_token) {
+  if (!error && session?.access_token && session?.refresh_token) {
     const hash = `#access_token=${encodeURIComponent(session.access_token)}&refresh_token=${encodeURIComponent(session.refresh_token)}`;
     window.location.href = `${dashboardUrl}${hash}`;
   } else {
-    window.location.href = dashboardUrl;
+    window.location.href = "/wizard/";
   }
 }
 
@@ -69,7 +71,7 @@ async function fetchMeWithRetry(): Promise<Response> {
   return lastRes!;
 }
 
-export function CompleteProfileClient({ showDetectionStep }: Props) {
+export function CompleteProfileClient({ showDetectionStep, localReplay }: Props) {
   const router = useRouter();
   const { t } = useTranslation();
   // When showDetectionStep=true: start at step 1 (detect); false: start at step 2 (triage)
@@ -80,6 +82,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<OnboardingSettings>(EMPTY_SETTINGS);
 
   // Fake scan animation state (flag OFF only)
   const [scanned, setScanned] = useState(false);
@@ -97,8 +100,12 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
         if (!data) return;
         setUser(data.user);
 
-        // If the user already completed the wizard (company_name set) skip it
-        if (data.user.company_name) {
+        // If the user already completed the wizard skip it: the completion is recorded
+        // on the account, or the profile has the company name (accounts that predate the record).
+        const accountRes = await apiCall("/bff/account/current");
+        const account = accountRes.ok ? await accountRes.json() : null;
+        const localOwnerPending = localReplay && account?.my_role === "owner" && !account.onboarding_completed_at;
+        if (!localOwnerPending && (data.user.company_name || account?.onboarding_completed_at)) {
           redirectToDashboard();
           return;
         }
@@ -106,11 +113,11 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
         // Pre-fill with the account name that was provisioned during OAuth
         // (derived from Google display name / email prefix). The user can edit it.
         try {
-          const accRes = await apiCall("/bff/account/current");
-          if (accRes.ok) {
-            const acc = await accRes.json();
-            if (acc.name) setCompanyName(acc.name);
+          if (account) {
+            if (account.name) setCompanyName(account.name);
             else setAskName(true);
+            // An interrupted onboarding keeps what was already recorded on the account.
+            setSettings({ industry: account.industry ?? null, businessContext: account.business_context ?? "" });
           } else {
             setAskName(true);
           }
@@ -125,7 +132,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
         setError("Failed to load profile. Please try again.");
         setProfileLoading(false);
       });
-  }, [router]);
+  }, [router, localReplay]);
 
   // Fake scan animation — only when detection step flag is OFF
   useEffect(() => {
@@ -150,8 +157,18 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
     return () => cancelAnimationFrame(rafRef.current);
   }, [showDetectionStep]);
 
-  const handleSubmit = async () => {
-    if (!companyName.trim()) return;
+  // "See my Triage" goes straight to Triage; the dashboard offers the setup there as an overlay.
+  // The account name is only asked for (step 3) when the account has none.
+  const handleOpen = () => {
+    if (!companyName.trim()) {
+      setLocalStep(2);
+      return;
+    }
+    void redirectToDashboard();
+  };
+
+  // The last step records the setup the owner personalized (empty keeps the defaults) and opens Triage.
+  const finish = async (chosen: OnboardingSettings) => {
     setSaving(true);
     setError(null);
     try {
@@ -162,16 +179,24 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
       });
       if (!accRes.ok) throw new Error("account_name_update_failed");
 
-      // (B) Sync profiles.company_name — used as the "wizard completed" signal
-      //     and as a personal data point for the user record
-      await apiCall("/bff/user/profile", {
+      // (B) Record the setup (or its omission) and mark the onboarding as finished
+      const doneRes = await apiCall("/bff/onboarding/complete", {
+        method: "POST",
+        body: JSON.stringify(completionBody(chosen)),
+      });
+      if (!doneRes.ok) throw new Error("onboarding_completion_failed");
+
+      // (C) Sync profiles.company_name, saved last so that an interrupted onboarding
+      //     is never mistaken for a finished one on accounts without the record
+      const profileRes = await apiCall("/bff/user/profile", {
         method: "PATCH",
         body: JSON.stringify({ company_name: companyName }),
       });
+      if (!profileRes.ok) throw new Error("profile_update_failed");
 
       await redirectToDashboard();
     } catch {
-      setError("Failed to save. Please try again.");
+      setError(t.wizard.setup.error);
       setSaving(false);
     }
   };
@@ -187,15 +212,29 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
   }
 
   if (localStep === 2) {
-    return <TriageStep onOpen={handleSubmit} saving={saving} error={error} askName={askName} companyName={companyName} onCompanyName={setCompanyName} />;
+    return (
+      <>
+        <TriageStep
+          onOpen={() => void finish(settings)}
+          saving={saving}
+          error={error}
+          askName={askName}
+          companyName={companyName}
+          onCompanyName={setCompanyName}
+          settings={settings}
+          onSettings={setSettings}
+        />
+      </>
+    );
   }
 
   const w = t.wizard;
 
   return (
+    <>
     <WizardChrome stepper={<WizardSteps current="detect" />} width={760}>
       {/* ── Step 1: Detect (real-time) — flag ON only ──────────────────── */}
-      {showDetectionStep && <DetectionStep onContinue={() => setLocalStep(2)} mailbox={user?.email} />}
+      {showDetectionStep && <DetectionStep onContinue={handleOpen} mailbox={user?.email} onPersonalize={() => setLocalStep(2)} />}
 
       {/* ── Step 1: Detect (fake animation) — flag OFF only ───────────── */}
       {!showDetectionStep && (
@@ -214,7 +253,7 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
               loading={!scanned}
               loadingLabel={w.detect.classifying}
               iconEnd={<Icon name="right" size={14} color="var(--kairo-color-on-accent)" />}
-              onPress={() => setLocalStep(2)}
+              onPress={handleOpen}
             >
               {w.detect.continue}
             </Button>
@@ -240,5 +279,6 @@ export function CompleteProfileClient({ showDetectionStep }: Props) {
         </>
       )}
     </WizardChrome>
+    </>
   );
 }

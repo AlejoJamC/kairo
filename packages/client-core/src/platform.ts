@@ -39,6 +39,7 @@ export interface AuthHandoffPort {
 /** What only the desktop shell can do: the native menu, the app icon counter and system notifications. */
 export interface DesktopHost {
   os: "macos" | "windows" | "linux";
+  authDiagnostic?(stage: string): void;
   /** Draws the counter on the app icon; null clears it. */
   setBadge(count: number | null): void;
   /** Replaces the native menu bar; the argument is the menu groups as JSON. */

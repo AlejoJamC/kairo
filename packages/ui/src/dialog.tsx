@@ -3,8 +3,10 @@ import { createPortal } from 'react-dom'
 import { styled, Stack, Text } from '@tamagui/core'
 import { tokens } from '@kairo/tokens'
 import { Icon } from './icon'
+import { Box } from './layout'
 import { px } from './lib/units'
 import { domProps, useEscape, useFocusScope } from './lib/overlay'
+import { useWindowChrome } from './window-chrome'
 
 // Modal surface for a focused task: blocks the page until completed or
 // cancelled. Focus is trapped inside and returns to the trigger on close; esc
@@ -127,10 +129,12 @@ type LayerProps = Omit<DialogProps, 'open' | 'onOpenChange'> & { onClose: () => 
 function DialogLayer({ onClose, title, footer, dirty, closeLabel, maxWidth, children }: LayerProps) {
   const titleId = useId()
   const ref = useRef<HTMLElement | null>(null)
+  const macosWindow = useWindowChrome()
   useEscape(onClose)
   useFocusScope(ref, true)
 
   return (
+    <>
     <Scrim
       {...domProps({
         onClick: (event: { target: unknown; currentTarget: unknown }) => {
@@ -158,6 +162,9 @@ function DialogLayer({ onClose, title, footer, dirty, closeLabel, maxWidth, chil
         {footer && <Footer>{footer}</Footer>}
       </Panel>
     </Scrim>
+    {/* The scrim covers the whole window, title bar included: keep that strip draggable so the window can still be moved. */}
+    {macosWindow && <Box dragRegion position={'fixed' as never} top={0} left={0} right={0} height={px(tokens['size.header'])} zIndex={91} />}
+    </>
   )
 }
 

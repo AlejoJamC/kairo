@@ -1,6 +1,6 @@
 import { extractBody } from "../../lib/email/body.js";
 import { classifyEmailWithMeta, DEFAULT_LANG, type EmailMessage, type PromptLang } from "@kairo/intelligence";
-import { getFlag } from "@kairo/feature-flags";
+import { assertSupabaseTarget, getFlag } from "@kairo/feature-flags";
 import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
 import { isJevCanaryTenant, jevCanaryUpgrade } from "../../lib/jev-canary.js";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
@@ -196,11 +196,12 @@ export const tier2Background = inngest.createFunction(
   },
   async ({ event, step }) => {
     const { userId, processedMessageIds } = event.data;
+    assertSupabaseTarget(event.data.supabaseTarget, process.env);
 
     // -----------------------------------------------------------------------
     // Step 1: Fetch Gmail credentials + full 0–N day window
     // -----------------------------------------------------------------------
-    const { messages, userEmail, tenantMailboxes, businessContext, language, autoApproved, accountId: resolvedAccountId } = await step.run(
+    const { messages, userEmail, tenantMailboxes, businessContext, industryGuidance, language, autoApproved, accountId: resolvedAccountId } = await step.run(
       "fetch-0-15d-headers",
       async () => {
         // ADR-022 Phase 2: resolve accountId, then read tokens from oauth_credentials.
@@ -215,7 +216,7 @@ export const tier2Background = inngest.createFunction(
         const accountId = memberRow?.account_id;
         if (!accountId) {
           console.warn(`[tier2] account_id missing for user ${userId} — aborting`);
-          return { messages: [] as GmailMessage[], userEmail: "", tenantMailboxes: [] as string[], businessContext: "", language: DEFAULT_LANG, autoApproved: [] as string[], accountId: "" };
+          return { messages: [] as GmailMessage[], userEmail: "", tenantMailboxes: [] as string[], businessContext: "", industryGuidance: "", language: DEFAULT_LANG, autoApproved: [] as string[], accountId: "" };
         }
 
         // Resolved once for the whole window, not once per email: the mailbox
@@ -232,13 +233,14 @@ export const tier2Background = inngest.createFunction(
           userEmail: ctx.tenantMailbox,
           tenantMailboxes: ctx.tenantMailboxes,
           businessContext: ctx.businessContext ?? "",
+          industryGuidance: ctx.industryGuidance ?? "",
           language: ctx.language,
           autoApproved: autoApproved as string[],
           accountId,
         };
       }
     // Inngest's JsonifyObject loses interface field types across step boundaries; cast back
-    ) as { messages: GmailMessage[]; userEmail: string; tenantMailboxes: string[]; businessContext: string; language: PromptLang; autoApproved: string[]; accountId: string };
+    ) as { messages: GmailMessage[]; userEmail: string; tenantMailboxes: string[]; businessContext: string; industryGuidance: string; language: PromptLang; autoApproved: string[]; accountId: string };
 
     if (messages.length === 0) {
       console.warn(`[tier2] No messages in window for user ${userId}`);
@@ -360,7 +362,7 @@ export const tier2Background = inngest.createFunction(
         const { body_plain, body_html } = extractBody(message.payload);
         const emailMessage: EmailMessage = buildEmailClassifierInput({
           stage: "backfill", subject, from, bodyPlain: body_plain, snippet,
-          facts: filterResult.facts, context: { tenantMailbox: userEmail, tenantMailboxes, businessContext },
+          facts: filterResult.facts, context: { tenantMailbox: userEmail, tenantMailboxes, businessContext, ...(industryGuidance ? { industryGuidance } : {}) },
         });
 
         const llmStart = Date.now();
@@ -707,7 +709,7 @@ export const tier2Background = inngest.createFunction(
     // -----------------------------------------------------------------------
     await step.sendEvent("trigger-tier3", {
       name: "pipeline/tier3.triggered",
-      data: { userId },
+      data: { userId, supabaseTarget: event.data.supabaseTarget },
     });
   }
 );

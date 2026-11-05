@@ -22,12 +22,13 @@ mock.module("./gmail-token.js", () => ({
 
 let storedContext: string | null = null;
 let storedLanguage: string | null = null;
+let storedIndustry: string | null = null;
 let storedError: { message: string } | null = null;
 let throwOnRead = false;
 const maybeSingleMock = mock(() => {
   if (throwOnRead) throw new Error("connection reset");
   return Promise.resolve({
-    data: storedError ? null : { business_context: storedContext, language: storedLanguage },
+    data: storedError ? null : { business_context: storedContext, language: storedLanguage, industry: storedIndustry },
     error: storedError,
   });
 });
@@ -44,7 +45,7 @@ const profileChain = { eq: () => profileChain, maybeSingle: () => Promise.resolv
 const fromMock = mock((table: string) => table === "operational_learning" ? { select: () => profileChain } : { select: selectMock });
 mock.module("./supabase.js", () => ({ supabase: { from: fromMock } }));
 
-const { loadPreviousCase, buildClassifierBody, resolveClassifierContext, CLASSIFIER_BODY_RULES } =
+const { loadPreviousCase, buildClassifierBody, buildEmailClassifierInput, resolveClassifierContext, CLASSIFIER_BODY_RULES } =
   await import("./classifier-input.js");
 
 beforeEach(() => {
@@ -52,6 +53,7 @@ beforeEach(() => {
   storedContext = null;
   storedProfile = null;
   storedLanguage = "es";
+  storedIndustry = null;
   storedChannels = [];
   storedError = null;
   throwOnRead = false;
@@ -130,7 +132,7 @@ describe("resolveClassifierContext — backfill", () => {
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
     expect(ctx).toEqual({
-      tenantMailbox: "support@acme.com",
+        tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
       language: "es",
       businessContext: "Acme Logistics moves freight for pharmacies.",
@@ -146,7 +148,7 @@ describe("resolveClassifierContext — backfill", () => {
     // Absent, not empty: the prompt renders `(no disponible)` for an absent
     // field, and an empty string would claim the company does nothing.
     expect(ctx).toEqual({
-      tenantMailbox: "support@acme.com",
+        tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
       language: "es",
     });
@@ -158,7 +160,7 @@ describe("resolveClassifierContext — backfill", () => {
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
     expect(ctx).toEqual({
-      tenantMailbox: "support@acme.com",
+        tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
       language: "es",
     });
@@ -180,7 +182,7 @@ describe("resolveClassifierContext — backfill", () => {
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
     expect(ctx).toEqual({
-      tenantMailbox: "support@acme.com",
+        tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
       language: "es",
     });
@@ -212,7 +214,7 @@ describe("resolveClassifierContext — backfill", () => {
     const ctx = await resolveClassifierContext("backfill", "acc-1");
 
     expect(ctx).toEqual({
-      tenantMailbox: "support@acme.com",
+        tenantMailbox: "support@acme.com",
       tenantMailboxes: ["support@acme.com"],
       language: "es",
     });
@@ -275,5 +277,51 @@ describe("resolveClassifierContext — approved business profile", () => {
     storedProfile = "Acme delivers support software to small companies.";
     const ctx = await resolveClassifierContext("onboarding", "acc-1");
     expect("businessContext" in ctx).toBe(false);
+  });
+});
+
+describe("resolveClassifierContext — industry", () => {
+  it("adds how the industry reads each ticket type, in the account language, next to the business context", async () => {
+    storedIndustry = "legal";
+    storedContext = "Acme Legal advises families.";
+
+    const ctx = await resolveClassifierContext("backfill", "acc-1");
+
+    expect(ctx.businessContext).toBe("Acme Legal advises families.");
+    expect(ctx.industryGuidance).toContain("Derecho");
+    expect(ctx.industryGuidance).toContain("- support: Estado del caso; Documentación y evidencias");
+    expect(ctx.industryGuidance).toContain("- prospect: Familiar; Laboral; Penal");
+  });
+
+  it("reads the default industry when the owner picked other", async () => {
+    storedIndustry = "other";
+    storedLanguage = "en";
+
+    const ctx = await resolveClassifierContext("backfill", "acc-1");
+
+    expect(ctx.industryGuidance).toContain("Customer service");
+    expect(ctx.industryGuidance).toContain("- support: Order status");
+    expect(ctx.businessContext).toBeUndefined();
+  });
+
+  it("leaves accounts without an industry as they were", async () => {
+    storedIndustry = null;
+    expect((await resolveClassifierContext("backfill", "acc-1")).industryGuidance).toBeUndefined();
+  });
+
+  it("keeps the industry out of the onboarding stage", async () => {
+    storedIndustry = "financial";
+    const ctx = await resolveClassifierContext("onboarding", "acc-1");
+    expect(ctx).not.toHaveProperty("industryGuidance");
+  });
+
+  it("gives the classifier the guidance without counting it as the business description", async () => {
+    storedIndustry = "technology";
+    const context = await resolveClassifierContext("backfill", "acc-1");
+    const message = buildEmailClassifierInput({
+      stage: "backfill", subject: "s", from: "a@outside.com", bodyPlain: "body", facts: {} as never, context,
+    });
+    expect(message.businessContext).toBe(context.industryGuidance);
+    expect(message.evidence?.missing).toContain("business_context");
   });
 });
