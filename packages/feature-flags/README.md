@@ -42,17 +42,23 @@ const isFeatureEnabled = import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB === "true";
 
 These flags follow the same semantic naming as `FEATURE_FLAG_*` but are suffixed with the framework prefix.
 
-#### Dashboard → Right Panel Tabs (VITE_FF_*)
+#### Dashboard → Right panel and side drawers (VITE_FF_*)
 
-All tabs in the triage right panel are build-time flags. When disabled, the tab does not render and the UI never loads it.
+Each surface is its own build-time flag, off by default. When disabled it does not render and the UI never loads it.
 
-| Flag | Env var | Default | Description |
-|---|---|---|---|
-| assistantTab | `VITE_FF_ENABLE_ASSISTANT_TAB` | `false` | AI copilot chat for ticket resolution (KAI-249) |
-| clientTab | `VITE_FF_ENABLE_CLIENT_TAB` | `false` | Client profile, contact info, KPIs |
-| similarTab | `VITE_FF_ENABLE_SIMILAR_TAB` | `false` | Semantic search for similar resolved cases |
-| articlesTab | `VITE_FF_ENABLE_ARTICLES_TAB` | `false` | Knowledge base article recommendations |
-| escalateTab | `VITE_FF_ENABLE_ESCALATE_TAB` | `false` | Escalation flow & recommendation (KAI-249) |
+| Env var | Default | Description |
+|---|---|---|
+| `VITE_FF_ENABLE_WORK_QUEUE` | `false` | The whole Work Queue panel (ticket list, left) |
+| `VITE_FF_ENABLE_SUPERPOWERS` | `false` | The whole Superpowers panel (right) |
+| `VITE_FF_ENABLE_ASSISTANT_TAB` | `false` | AI copilot chat for ticket resolution |
+| `VITE_FF_ENABLE_CLIENT_TAB` | `false` | Client profile, contact info, KPIs |
+| `VITE_FF_ENABLE_ESCALATE_TAB` | `false` | Escalation flow & recommendation |
+| `VITE_FF_ENABLE_NOTES_TAB` | `false` | Notes tab; also requires `VITE_FF_ENABLE_INTERNAL_NOTES` |
+| `VITE_FF_ENABLE_SIMILAR_TAB` | `false` | Earlier resolved tickets similar to the open one |
+| `VITE_FF_ENABLE_ARTICLES_TAB` | `false` | Knowledge-base articles for the open ticket |
+| `VITE_FF_RIGHT_PANEL_TAB_ORDER` | `client,assistant,notes,escalate,similar,articles` | Tab order, comma-separated ids; unlisted tabs follow in the default order |
+| `VITE_FF_ENABLE_RELATED_HISTORY_DRAWER` | `false` | Drawer with earlier related tickets |
+| `VITE_FF_ENABLE_CONTACT_DETAIL_DRAWER` | `false` | Contact detail slide-out in the client directory |
 
 Valid values: `"true"` and `"false"`. Anything else (empty, missing, typo) falls back to the default declared in `FLAG_DEFAULTS`.
 

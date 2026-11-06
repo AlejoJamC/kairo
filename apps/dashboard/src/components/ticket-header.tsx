@@ -8,6 +8,7 @@ import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { assignTicket, setTicketStatus } from "@kairo/client-core/endpoints";
 import { useTicketChangeRequest, useTicketMenuRequest } from "@/hooks/use-ticket-menu-request";
 import { useTicketListVisibility } from "@/hooks/use-ticket-list-visibility";
+import { useSuperpowersVisibility } from "@/hooks/use-superpowers-visibility";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { Button, Icon, StatusChip, TicketBar, TicketHeading, type PriorityLevel, type StatusKey } from "@kairo/ui";
 import { normalizeTicketCategory, normalizeTicketType } from "@/lib/ticket-labels";
@@ -44,7 +45,9 @@ export function TicketHeader({ ticket, queueName, readOnly = false, onOpenNotes 
   const queueIds = useTriageStore((s) => s.queueIds);
   const allTickets = useTriageStore((s) => s.tickets);
   const selectTicket = useTriageStore((s) => s.selectTicket);
-  const { hidden: listHidden, showList } = useTicketListVisibility();
+  const { hidden: queueHidden, showable, showList } = useTicketListVisibility();
+  const listHidden = queueHidden && showable;
+  const { hidden: superpowersHidden, showPanel } = useSuperpowersVisibility();
   const [assigning, setAssigning] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
@@ -134,6 +137,11 @@ export function TicketHeader({ ticket, queueName, readOnly = false, onOpenNotes 
       }
       escalatedLabel={ticket.status === "escalated" ? t("ticketHeader.escalated") : undefined}
       status={status}
+      superpowersHidden={
+        superpowersHidden
+          ? { showLabel: showPanel.label, shortcut: showPanel.shortcut, keyshortcuts: showPanel.keyshortcuts, controls: showPanel.controls, onShow: showPanel.onShow }
+          : undefined
+      }
       listHidden={
         listHidden
           ? {

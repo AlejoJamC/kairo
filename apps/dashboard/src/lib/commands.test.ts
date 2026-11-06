@@ -5,13 +5,13 @@ import { COMMAND_GROUPS, COMMANDS, CONTEXT_TABS, GO_VIEWS, PRIORITY_FILTERS } fr
 
 describe("commands", () => {
   it("lists the commands once each", () => {
-    expect(COMMANDS).toHaveLength(37);
-    expect(new Set(COMMANDS.map((command) => command.id)).size).toBe(37);
+    expect(COMMANDS).toHaveLength(40);
+    expect(new Set(COMMANDS.map((command) => command.id)).size).toBe(40);
   });
 
   it("splits them into the four groups of the palette", () => {
     const counts = Object.fromEntries(COMMAND_GROUPS.map((group) => [group, COMMANDS.filter((command) => command.group === group).length]));
-    expect(counts).toEqual({ ticket: 11, goTo: 11, view: 12, general: 3 });
+    expect(counts).toEqual({ ticket: 11, goTo: 11, view: 15, general: 3 });
   });
 
   it("has a label in English and Spanish for every command and group", () => {
@@ -21,10 +21,16 @@ describe("commands", () => {
     }
   });
 
-  it("opens the four tabs of the context panel with ⌘1 to ⌘4", () => {
+  it("opens the six tabs of the context panel with ⌘1 to ⌘6, in the order of the panel", () => {
     const keys = COMMANDS.filter((command) => command.id in CONTEXT_TABS).map((command) => command.keys?.join(""));
-    expect(keys).toEqual(["⌘1", "⌘2", "⌘3", "⌘4"]);
-    expect(Object.values(CONTEXT_TABS)).toEqual(["client", "assistant", "notes", "escalate"]);
+    expect(keys).toEqual(["⌘1", "⌘2", "⌘3", "⌘4", "⌘5", "⌘6"]);
+    expect(Object.values(CONTEXT_TABS)).toEqual(["client", "assistant", "notes", "escalate", "similar", "articles"]);
+  });
+
+  it("shows or hides Superpowers with ⌘⇧B in the queue views", () => {
+    const command = COMMANDS.find((entry) => entry.id === "toggle-superpowers");
+    expect(command?.keys?.join("")).toBe("⌘⇧B");
+    expect(command?.queue).toBe(true);
   });
 
   it("filters the Triage priority with P then 0 to 3", () => {

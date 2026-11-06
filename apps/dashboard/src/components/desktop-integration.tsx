@@ -20,6 +20,7 @@ import {
 } from "@kairo/ui";
 import { useCommands } from "@/hooks/use-commands";
 import { useLocale } from "@/hooks/useLocale";
+import { CONTEXT_TAB_ORDER } from "@/lib/context-tab-order";
 import { useAppCommands } from "@/lib/app-commands";
 import { disableUnhandled, localizeMenu } from "@/lib/desktop-menu";
 import { APP_WINDOW_HEIGHT, APP_WINDOW_MIN_HEIGHT, appWindowMinWidth, appWindowWidth } from "@/lib/desktop-window";
@@ -56,6 +57,7 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: Des
   const slaConfig = useTriageStore((state) => state.operationalSlaConfig);
   const presence = useAppCommands((state) => state.presence);
   const ticketListHidden = useAppCommands((state) => state.ticketListHidden);
+  const superpowersHidden = useAppCommands((state) => state.superpowersHidden);
   const contextTab = useAppCommands((state) => state.contextTab);
   const composerEmpty = useAppCommands((state) => state.composerEmpty);
   const selected = tickets.find((ticket) => ticket.id === selectedId) ?? null;
@@ -63,20 +65,20 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: Des
 
   // Reaching the app puts the window at the app size, in the middle of the screen. The sign-in hand-off
   // reloads the window, so the sign-in view is gone before it can restore the size it shrank.
-  const firstShape = useRef({ sidebarCollapsed, ticketListHidden });
+  const firstShape = useRef({ sidebarCollapsed, ticketListHidden, superpowersHidden });
   useEffect(() => {
     host?.setWindowSize(
       appWindowWidth(),
       APP_WINDOW_HEIGHT,
-      appWindowMinWidth(firstShape.current.sidebarCollapsed, firstShape.current.ticketListHidden),
+      appWindowMinWidth(firstShape.current.sidebarCollapsed, firstShape.current.ticketListHidden, firstShape.current.superpowersHidden),
       APP_WINDOW_MIN_HEIGHT,
     );
   }, [host]);
 
   // The window never gets narrower than the columns need; collapsing the sidebar lowers the floor.
   useEffect(() => {
-    host?.setMinWindowSize(appWindowMinWidth(sidebarCollapsed, ticketListHidden), APP_WINDOW_MIN_HEIGHT);
-  }, [host, sidebarCollapsed, ticketListHidden]);
+    host?.setMinWindowSize(appWindowMinWidth(sidebarCollapsed, ticketListHidden, superpowersHidden), APP_WINDOW_MIN_HEIGHT);
+  }, [host, sidebarCollapsed, ticketListHidden, superpowersHidden]);
 
   // ── Native menu ───────────────────────────────────────────────────────────
   const { run } = useCommands(view, onViewChange);
@@ -89,10 +91,8 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: Des
     search: () => useAppCommands.getState().requestPalette("all"),
     "all-commands": () => useAppCommands.getState().requestPalette("commands"),
     "ticket-list": () => run("toggle-ticket-list"),
-    "context-client": () => useTriageStore.getState().requestPanelTab("client"),
-    "context-assistant": () => useTriageStore.getState().requestPanelTab("assistant"),
-    "context-notes": () => useTriageStore.getState().requestPanelTab("notes"),
-    "context-escalate": () => useTriageStore.getState().requestPanelTab("escalate"),
+    "superpowers": () => run("toggle-superpowers"),
+    ...Object.fromEntries(CONTEXT_TAB_ORDER.map((tab) => [`context-${tab}`, () => useTriageStore.getState().requestPanelTab(tab)])),
     send: () => useTriageStore.getState().requestComposerSend("send"),
     "send-resolve": () => useTriageStore.getState().requestComposerSend("send-resolve"),
     "priority-p1": () => useTriageStore.getState().requestTicketChange("priority", "P1"),
@@ -127,6 +127,8 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: Des
     language: language === "es" ? "es" : "en",
     sidebarExpanded: !sidebarCollapsed,
     ticketListShown: !ticketListHidden,
+    superpowersShown: !superpowersHidden,
+    contextTabOrder: CONTEXT_TAB_ORDER,
     contextTab: selected ? (contextTab as AppMenuState["contextTab"]) : null,
     ticketOpen: selected !== null,
     ticketAwaitingCustomer: selected !== null && (AWAITING_STATUSES as string[]).includes(selected.status ?? ""),
@@ -143,7 +145,7 @@ export function DesktopIntegration({ view, onViewChange, sidebarCollapsed }: Des
     return JSON.stringify(disableUnhandled(labelled, new Set(Object.keys(handlers))));
     // The menu is a function of the app state it mirrors.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, language, sidebarCollapsed, ticketListHidden, contextTab, composerEmpty, selected?.id, selected?.status, selected?.priority, t, i18n]);
+  }, [view, language, sidebarCollapsed, ticketListHidden, superpowersHidden, contextTab, composerEmpty, selected?.id, selected?.status, selected?.priority, t, i18n]);
 
   useEffect(() => {
     host?.setMenu(menuJson);

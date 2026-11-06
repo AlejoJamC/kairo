@@ -9,9 +9,14 @@ import { useResizablePanel } from "@/hooks/use-resizable-panel";
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
 import { NotesPanel } from "@/components/triage/NotesPanel";
 import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
+import { SimilarTab } from "@/components/triage/SimilarTab";
+import { ArticlesTab } from "@/components/triage/ArticlesTab";
+import { CONTEXT_TAB_ORDER, parseTabOrder, sortTabs, type ContextTabId } from "@/lib/context-tab-order";
+import { SUPERPOWERS_ENABLED, NOTES_TAB_ENABLED } from "@/lib/panel-flags";
 import { isTicketReadOnly } from "@kairo/client-core/triage-status";
 import { tokens } from "@kairo/tokens";
-import { Box, Resizer, Tab, Tabs } from "@kairo/ui";
+import { Box, Icon, IconButton, Resizer, Tab, Tabs, Tooltip } from "@kairo/ui";
+import { useSuperpowersVisibility } from "@/hooks/use-superpowers-visibility";
 
 // The sizes of the neighbours come from the layout tokens, so the panel and the window floor agree.
 const RESIZE_MIN = Number.parseFloat(tokens["layout.context"]);
@@ -32,9 +37,11 @@ export function isFlagEnabled(value: string | undefined): boolean {
 const assistantTabEnabled = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ASSISTANT_TAB);
 const clientTabEnabled    = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_CLIENT_TAB);
 const escalateTabEnabled  = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ESCALATE_TAB);
+const similarTabEnabled   = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_SIMILAR_TAB);
+const articlesTabEnabled  = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ARTICLES_TAB);
+const tabOrder = parseTabOrder(import.meta.env.VITE_FF_RIGHT_PANEL_TAB_ORDER);
 
-const TAB_KEYS = { client: "1", assistant: "2", notes: "3", escalate: "4" } as const;
-type TabId = keyof typeof TAB_KEYS;
+type TabId = ContextTabId;
 
 // ---------------------------------------------------------------------------
 // AiAssistant — Right Rail (FIG 2.3)
@@ -42,20 +49,27 @@ type TabId = keyof typeof TAB_KEYS;
 // ---------------------------------------------------------------------------
 
 export function AiAssistant() {
-  const { t } = useTranslation("dashboard");
+  return SUPERPOWERS_ENABLED ? <SuperpowersPanel /> : null;
+}
+
+function SuperpowersPanel() {
+  const { hidden, show, hidePanel } = useSuperpowersVisibility();
+  const { t, i18n } = useTranslation("dashboard");
   const { selectedTicketId, tickets, setClientProfile } = useTriageStore();
   const selectedTicket = tickets.find((tk) => tk.id === selectedTicketId) ?? null;
 
-  // Four fixed tabs in this order; a disabled flag only removes its tab.
+  // A disabled flag only removes its tab; VITE_FF_RIGHT_PANEL_TAB_ORDER sets the order.
   const tabs = useMemo(
-    () => [
+    () => sortTabs<{ id: TabId; label: string; ai?: boolean }>([
       ...(clientTabEnabled ? [{ id: "client" as TabId, label: t("ai.tabClient") }] : []),
       ...(assistantTabEnabled ? [{ id: "assistant" as TabId, label: t("ai.tabAssistant"), ai: true }] : []),
       // KAI-232 — gated by the shared internal-notes flag, not a tab-specific
       // one: the whole internal-notes surface lives or dies together.
-      ...(INTERNAL_NOTES_ENABLED ? [{ id: "notes" as TabId, label: t("ai.tabNotes") }] : []),
+      ...(INTERNAL_NOTES_ENABLED && NOTES_TAB_ENABLED ? [{ id: "notes" as TabId, label: t("ai.tabNotes") }] : []),
       ...(escalateTabEnabled ? [{ id: "escalate" as TabId, label: t("ai.tabEscalate") }] : []),
-    ],
+      ...(similarTabEnabled ? [{ id: "similar" as TabId, label: t("ai.tabSimilar") }] : []),
+      ...(articlesTabEnabled ? [{ id: "articles" as TabId, label: t("ai.tabArticles") }] : []),
+    ], tabOrder),
     [t]
   );
   const defaultTabId: TabId = tabs[0]?.id ?? "assistant";
@@ -97,8 +111,9 @@ export function AiAssistant() {
     if (!panelTabRequest) return;
     const requested = panelTabRequest.tab as TabId;
     clearPanelTabRequest();
+    show();
     if (tabs.some((entry) => entry.id === requested)) setActiveTab(requested);
-  }, [panelTabRequest, clearPanelTabRequest, tabs]);
+  }, [panelTabRequest, clearPanelTabRequest, tabs, show]);
 
   // Reset to the first tab when ticket changes.
   useEffect(() => { setActiveTab(defaultTabId); }, [selectedTicketId, defaultTabId]);
@@ -114,7 +129,7 @@ export function AiAssistant() {
   });
 
   return (
-    <Box ref={panelRef} position="relative" width={width} flexShrink={0} display="flex" flexDirection="column" height="100%" borderLeftWidth={1} borderLeftColor="var(--k-border)" borderStyle="solid" backgroundColor="white">
+    <Box ref={panelRef} id="superpowers" position="relative" width={width} flexShrink={0} display={hidden ? "none" : "flex"} flexDirection="column" height="100%" borderLeftWidth={1} borderLeftColor="var(--k-border)" borderStyle="solid" backgroundColor="white">
 
       {/* Resize handle — drag the left edge to widen (steals from center only);
           double-click to reset to the minimum width. */}
@@ -132,15 +147,16 @@ export function AiAssistant() {
       </Box>
 
       {/* Tab bar */}
-      <Box paddingTop={12} paddingHorizontal={14} paddingBottom={0} flexShrink={0}>
+      <Box paddingTop={12} paddingHorizontal={14} paddingBottom={0} flexShrink={0} display="flex" alignItems="center" gap={8}>
+        <Box flexGrow={1} minWidth={0}>
         <Tabs label={t("ai.contextTabs", "Context")}>
           {tabs.map(({ id, label, ai }) => (
             <Tab
               key={id}
               selected={activeTab === id}
               ai={ai}
-              shortcut={`⌘${TAB_KEYS[id]}`}
-              keyshortcuts={`Meta+${TAB_KEYS[id]}`}
+              shortcut={`⌘${CONTEXT_TAB_ORDER.indexOf(id) + 1}`}
+              keyshortcuts={`Meta+${CONTEXT_TAB_ORDER.indexOf(id) + 1}`}
               onPress={() => setActiveTab(id)}
               count={id === "notes" ? (notesBadge > 0 ? notesBadge : notesTotal > 0 ? notesTotal : undefined) : undefined}
               unread={id === "notes" && notesBadge > 0}
@@ -149,6 +165,12 @@ export function AiAssistant() {
             </Tab>
           ))}
         </Tabs>
+        </Box>
+        <Tooltip label={hidePanel.label} shortcut={hidePanel.shortcut}>
+          <IconButton label={hidePanel.label} aria-keyshortcuts={hidePanel.keyshortcuts} aria-controls={hidePanel.controls} aria-expanded onPress={hidePanel.onHide}>
+            <Icon name="panel" size={15} />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       {/* Tab content — the Assistant chat owns full height (internal scroll +
@@ -165,8 +187,14 @@ export function AiAssistant() {
         {escalateTabEnabled && activeTab === "escalate" && (
           selectedTicket && <EscalateTabContainer key={selectedTicket.id} ticket={selectedTicket} readOnly={isTicketReadOnly(selectedTicket.status)} />
         )}
-        {INTERNAL_NOTES_ENABLED && activeTab === "notes" && (
+        {INTERNAL_NOTES_ENABLED && NOTES_TAB_ENABLED && activeTab === "notes" && (
           <NotesPanel ticketId={selectedTicketId} onNewNote={requestComposeNote} />
+        )}
+        {similarTabEnabled && activeTab === "similar" && (
+          <SimilarTab ticketId={selectedTicketId} lang={i18n.language} />
+        )}
+        {articlesTabEnabled && activeTab === "articles" && (
+          <ArticlesTab ticketId={selectedTicketId} />
         )}
       </Box>
       )}

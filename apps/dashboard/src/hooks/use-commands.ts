@@ -7,13 +7,14 @@ import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { isTicketReadOnly } from "@kairo/client-core/triage-status";
 import { COMMANDS, CONTEXT_TABS, GO_VIEWS, PRIORITY_FILTERS, type CommandDef, type CommandId } from "@/lib/commands";
 import { useAppCommands } from "@/lib/app-commands";
+import { SUPERPOWERS_ENABLED, WORK_QUEUE_ENABLED } from "@/lib/panel-flags";
 import { useLocale } from "@/hooks/useLocale";
 import type { AppView } from "@/types";
 
 export const QUEUE_VIEWS: readonly AppView[] = ["triage", "awaiting", "resolved", "escalated", "ai-review"];
 
 /** Toggles that the native menu and the keyboard can both report for one key press. */
-const DEBOUNCED: ReadonlySet<CommandId> = new Set(["toggle-sidebar", "toggle-ticket-list"]);
+const DEBOUNCED: ReadonlySet<CommandId> = new Set(["toggle-sidebar", "toggle-ticket-list", "toggle-superpowers"]);
 const DOUBLE_REPORT_MS = 250;
 const lastRun: Partial<Record<CommandId, number>> = {};
 
@@ -45,6 +46,8 @@ export function useCommands(view: AppView, onViewChange: (view: AppView) => void
       const notApplicable =
         (command.id === "wrong-classification" && !classified) ||
         (command.id === "group-similar" && !similarGroupAvailable) ||
+        (command.id === "toggle-superpowers" && !SUPERPOWERS_ENABLED) ||
+        (command.id === "toggle-ticket-list" && !WORK_QUEUE_ENABLED) ||
         ((command.id === "send" || command.id === "send-resolve") && composerEmpty);
       return { needsTicket, disabled: NOT_WIRED.has(command.id) || needsTicket || final || outsideQueue || notApplicable };
     },
@@ -99,6 +102,8 @@ export function useCommands(view: AppView, onViewChange: (view: AppView) => void
           return app.requestSidebarToggle();
         case "toggle-ticket-list":
           return app.toggleTicketList();
+        case "toggle-superpowers":
+          return app.toggleSuperpowers();
         case "language":
           return setLanguage(otherLanguage);
         case "sign-out":

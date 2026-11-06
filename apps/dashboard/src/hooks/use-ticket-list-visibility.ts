@@ -3,6 +3,7 @@
 
 import { useTranslation } from "react-i18next";
 import { useAppCommands } from "@/lib/app-commands";
+import { WORK_QUEUE_ENABLED } from "@/lib/panel-flags";
 
 const KEYS = { shortcut: "⌘⇧F", keyshortcuts: "Meta+Shift+F", controls: "ticket-list" } as const;
 
@@ -12,6 +13,8 @@ export function useTicketListVisibility() {
   const setHidden = useAppCommands((state) => state.setTicketListHidden);
   return {
     hidden,
+    /** The Work Queue flag is on: the list can be shown again. */
+    showable: WORK_QUEUE_ENABLED,
     show: () => setHidden(false),
     hideList: { label: t("ticketList.hide"), ...KEYS, onHide: () => setHidden(true) },
     showList: { label: t("ticketList.show"), ...KEYS, onShow: () => setHidden(false) },

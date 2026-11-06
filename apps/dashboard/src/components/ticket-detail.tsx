@@ -179,7 +179,8 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
 export function TicketDetail() {
   const { t } = useTranslation("dashboard");
   const { tickets, selectedTicketId, selectTicket } = useTriageStore();
-  const { hidden: listHidden, showList } = useTicketListVisibility();
+  const { hidden: queueHidden, showable, showList } = useTicketListVisibility();
+  const listHidden = queueHidden && showable;
   const requestPanelTab = useTriageStore((state) => state.requestPanelTab);
   const [view] = useActiveView();
   const labelKey = (VIEW_LABEL_KEY as Record<string, (typeof VIEW_LABEL_KEY)[keyof typeof VIEW_LABEL_KEY]>)[view ?? "triage"] ?? VIEW_LABEL_KEY.triage;
@@ -279,8 +280,8 @@ export function TicketDetail() {
       <TicketHeader ticket={ticket} queueName={queueName} readOnly={isReadOnly} onOpenNotes={() => requestPanelTab("notes")} />
 
       {/* Scrollable body */}
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll>
-        <Box maxWidth={780} display="flex" flexDirection="column" gap={22} paddingTop={28} paddingHorizontal={32} paddingBottom={32}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll display="flex" flexDirection="column" alignItems="center">
+        <Box width="100%" maxWidth={780} display="flex" flexDirection="column" gap={22} paddingTop={28} paddingHorizontal={32} paddingBottom={32}>
           <TicketHeadingBlock ticket={ticket} readOnly={isReadOnly} sla={<PrioritySlaBar ticket={ticket} />} />
 
           <TicketDecisions ticketId={ticket.id} />

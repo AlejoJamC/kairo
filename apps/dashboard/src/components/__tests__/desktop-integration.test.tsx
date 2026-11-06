@@ -20,6 +20,8 @@ const host = {
 let menuListener: ((id: string) => void) | null = null;
 let feedListener: ((rows: unknown[]) => void) | null = null;
 
+vi.mock("@/lib/panel-flags", () => ({ WORK_QUEUE_ENABLED: true, SUPERPOWERS_ENABLED: true }));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, string>) => `${key}${options ? JSON.stringify(options) : ""}`,

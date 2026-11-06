@@ -138,6 +138,9 @@ function Composer({
   return (
     <Box
       position="relative"
+      display="flex"
+      flexDirection="column"
+      alignItems="center"
       flexShrink={0}
       borderTopWidth={1}
       borderStyle="solid"
@@ -147,7 +150,7 @@ function Composer({
       paddingHorizontal={20}
       paddingBottom={14}
     >
-      <Box display="flex" flexDirection="column" gap={8} maxWidth={px(tokens['layout.reading'])}>
+      <Box display="flex" flexDirection="column" gap={8} width="100%" maxWidth={px(tokens['layout.reading'])}>
         <Box display="flex" alignItems="center" gap={8} minWidth={0}>
           {onModeChange && (
             <Segmented
