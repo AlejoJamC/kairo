@@ -12,6 +12,11 @@ export interface FilterContext {
    * they are the tenant itself.
    */
   tenantInternalEmails: Set<string>;
+  /**
+   * Normalized emails registered in `clients.authorized_emails` for the account.
+   * A person already in the client directory is never proposed as a draft contact.
+   */
+  clientEmails: Set<string>;
 }
 
 /**
@@ -39,7 +44,7 @@ function isBotEmail(email: string): boolean {
 }
 
 /**
- * Filters a list of candidates by applying three exclusion rules.
+ * Filters a list of candidates by applying four exclusion rules.
  *
  * Rule 1 — Noreply / bot emails:
  *   Emails matching common automated sender patterns are excluded.
@@ -49,7 +54,11 @@ function isBotEmail(email: string): boolean {
  *   Candidates whose email is in `ctx.tenantInternalEmails` are excluded.
  *   These are the tenant's own email channels — not external customers.
  *
- * Rule 3 — Mass CC exclusion:
+ * Rule 3 — Existing clients:
+ *   Candidates whose email is in `ctx.clientEmails` are excluded. They are
+ *   already in the client directory.
+ *
+ * Rule 4 — Mass CC exclusion:
  *   A candidate that:
  *   (a) only appears in CC role (never as sender or recipient),
  *   (b) was part of a message with more than 10 total addressees in the CC
@@ -87,7 +96,12 @@ export function filterCandidates(
       return false;
     }
 
-    // Rule 3: Mass CC exclusion
+    // Rule 3: Already a client of the account
+    if (ctx.clientEmails.has(c.email)) {
+      return false;
+    }
+
+    // Rule 4: Mass CC exclusion
     // Only applies to candidates that solely appeared in CC role
     if (
       c.evidence_role === 'cc' &&

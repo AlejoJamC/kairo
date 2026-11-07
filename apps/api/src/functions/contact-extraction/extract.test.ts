@@ -142,7 +142,7 @@ async function runHandlerSimulation(
     const rawCandidates = extractCandidatesHeuristic(corpus);
 
     // Step: filter (no tenant internal emails in this simulation)
-    const filtered = filterCandidates(rawCandidates, { tenantInternalEmails: new Set() });
+    const filtered = filterCandidates(rawCandidates, { tenantInternalEmails: new Set(), clientEmails: new Set() });
 
     // Step: upsert-loop
     let draftsCreated = 0;

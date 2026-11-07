@@ -17,7 +17,7 @@ function makeCandidate(overrides: Partial<Candidate> & { email: string }): Candi
   };
 }
 
-const emptyCtx = { tenantInternalEmails: new Set<string>() };
+const emptyCtx = { tenantInternalEmails: new Set<string>(), clientEmails: new Set<string>() };
 
 // ---------------------------------------------------------------------------
 // Rule 1: Bot / noreply pattern
@@ -67,7 +67,7 @@ describe('filterCandidates — Rule 1: bot/noreply patterns', () => {
 describe('filterCandidates — Rule 2: tenant internal emails', () => {
   it('excludes tenant email in from header', () => {
     const tenantEmail = 'support@mycompany.com';
-    const ctx = { tenantInternalEmails: new Set([tenantEmail]) };
+    const ctx = { tenantInternalEmails: new Set([tenantEmail]), clientEmails: new Set<string>() };
     const candidates = [
       makeCandidate({ email: tenantEmail, evidence_role: 'sender' }),
     ];
@@ -75,7 +75,7 @@ describe('filterCandidates — Rule 2: tenant internal emails', () => {
   });
 
   it('keeps non-tenant emails when tenant set is populated', () => {
-    const ctx = { tenantInternalEmails: new Set(['support@mycompany.com']) };
+    const ctx = { tenantInternalEmails: new Set(['support@mycompany.com']), clientEmails: new Set<string>() };
     const candidates = [
       makeCandidate({ email: 'external@customer.com' }),
     ];
@@ -84,14 +84,43 @@ describe('filterCandidates — Rule 2: tenant internal emails', () => {
 
   it('excludes tenant email regardless of case stored in set', () => {
     // filterCandidates expects emails already normalized (lowercase)
-    const ctx = { tenantInternalEmails: new Set(['support@mycompany.com']) };
+    const ctx = { tenantInternalEmails: new Set(['support@mycompany.com']), clientEmails: new Set<string>() };
     const candidates = [makeCandidate({ email: 'support@mycompany.com' })];
     expect(filterCandidates(candidates, ctx)).toHaveLength(0);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Rule 3: Mass CC exclusion
+// Rule 3: Existing clients
+// ---------------------------------------------------------------------------
+
+describe('filterCandidates — Rule 3: existing clients', () => {
+  const ctx = { tenantInternalEmails: new Set<string>(), clientEmails: new Set(['buyer@acme.com']) };
+
+  it('excludes a sender that is already a client', () => {
+    const candidates = [makeCandidate({ email: 'buyer@acme.com', evidence_role: 'sender' })];
+    expect(filterCandidates(candidates, ctx)).toHaveLength(0);
+  });
+
+  it('excludes a recipient and a cc that are already clients', () => {
+    const candidates = [
+      makeCandidate({ email: 'buyer@acme.com', evidence_role: 'recipient' }),
+      makeCandidate({ email: 'buyer@acme.com', evidence_role: 'cc' }),
+    ];
+    expect(filterCandidates(candidates, ctx)).toHaveLength(0);
+  });
+
+  it('keeps the candidates that are not clients', () => {
+    const candidates = [
+      makeCandidate({ email: 'buyer@acme.com' }),
+      makeCandidate({ email: 'new@outside.com' }),
+    ];
+    expect(filterCandidates(candidates, ctx).map((c) => c.email)).toEqual(['new@outside.com']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Rule 4: Mass CC exclusion
 // ---------------------------------------------------------------------------
 
 describe('filterCandidates — Rule 3: mass CC exclusion', () => {
@@ -132,7 +161,7 @@ describe('filterCandidates — Rule 3: mass CC exclusion', () => {
 describe('filterCandidates — combined rules', () => {
   it('filters multiple rules simultaneously', () => {
     const tenantEmail = 'agent@company.com';
-    const ctx = { tenantInternalEmails: new Set([tenantEmail]) };
+    const ctx = { tenantInternalEmails: new Set([tenantEmail]), clientEmails: new Set<string>() };
     const candidates = [
       makeCandidate({ email: 'customer@external.com' }),           // kept
       makeCandidate({ email: tenantEmail }),                        // Rule 2 excluded

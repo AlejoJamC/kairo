@@ -11,6 +11,7 @@ import { runJevShadowClassification } from "../../lib/jev-shadow-classification.
 import { isJevCanaryTenant, jevCanaryUpgrade } from "../../lib/jev-canary.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
+import { triggerContactExtraction } from "../../lib/contact-extraction-trigger.js";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
@@ -497,6 +498,9 @@ export async function processTier3Messages(input: {
               if (getFlag("enable_jev_shadow_classification")) {
                 runJevShadowClassification(emailMessage, { accountId, ticketId });
               }
+
+              // Contact extraction: every new ticket, whichever path created it.
+              triggerContactExtraction(ticketId, accountId, "tier3");
             }
 
             if (!was_created) {
@@ -543,6 +547,9 @@ export async function processTier3Messages(input: {
               if (getFlag("enable_jev_shadow_classification")) {
                 runJevShadowClassification(emailMessage, { accountId, ticketId });
               }
+
+              // Contact extraction: every new ticket, whichever path created it.
+              triggerContactExtraction(ticketId, accountId, "tier3");
             }
 
             if (proposal?.id && ticketId) {
@@ -608,6 +615,9 @@ export async function processTier3Messages(input: {
             if (getFlag("enable_jev_shadow_classification")) {
               runJevShadowClassification(emailMessage, { accountId, ticketId });
             }
+
+            // Contact extraction: every new ticket, whichever path created it.
+            triggerContactExtraction(ticketId, accountId, "tier3");
           }
 
           if (proposal?.id && ticketId) {

@@ -13,7 +13,7 @@ import { inngest } from '../../lib/inngest.js';
 import { supabase } from '../../lib/supabase.js';
 import { loadTicketCorpus } from '../../lib/contact-extraction/load-corpus.js';
 import { extractCandidatesHeuristic } from '../../lib/contact-extraction/candidates.js';
-import { filterCandidates } from '../../lib/contact-extraction/exclusions.js';
+import { filterCandidatesForAccount } from '../../lib/contact-extraction/account-filter.js';
 import { upsertDraftContact } from '../../lib/contact-extraction/upsert.js';
 import {
   startWorkerRun,
@@ -65,28 +65,7 @@ export const contactExtraction = inngest.createFunction(
       // Step 4: Load tenant internal emails + filter candidates
       // -----------------------------------------------------------------------
       const filtered = await step.run('filter', async () => {
-        // Load tenant's own channel email addresses (to exclude them)
-        const { data: channelRows } = await supabase
-          .from('channel_integrations')
-          .select('display_name')
-          .eq('account_id', accountId);
-
-        const tenantInternalEmails = new Set<string>(
-          (channelRows ?? [])
-            .map((r) => (r.display_name ?? '').toLowerCase().trim())
-            .filter(Boolean),
-        );
-
-        // Build CC count map for Rule 3 (mass CC exclusion):
-        // Count how many times each CC email appears as cc-only across all messages.
-        const ccCountByEmail = new Map<string, number>();
-        for (const c of rawCandidates) {
-          if (c.evidence_role === 'cc' && c.email) {
-            ccCountByEmail.set(c.email, (ccCountByEmail.get(c.email) ?? 0) + 1);
-          }
-        }
-
-        return filterCandidates(rawCandidates, { tenantInternalEmails }, ccCountByEmail);
+        return filterCandidatesForAccount(supabase, accountId, rawCandidates);
       });
 
       // -----------------------------------------------------------------------

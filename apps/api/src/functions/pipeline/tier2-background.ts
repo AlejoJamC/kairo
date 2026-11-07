@@ -8,6 +8,7 @@ import { buildEmailClassifierInput, resolveClassifierContext } from "../../lib/c
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
+import { triggerContactExtraction } from "../../lib/contact-extraction-trigger.js";
 import { NonRetriableError } from "inngest";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
@@ -535,6 +536,9 @@ export const tier2Background = inngest.createFunction(
                   if (getFlag("enable_jev_shadow_classification")) {
                     runJevShadowClassification(emailMessage, { accountId, ticketId });
                   }
+
+                  // Contact extraction: every new ticket, whichever path created it.
+                  triggerContactExtraction(ticketId, accountId, "tier2");
                 }
 
                 if (!was_created) {
@@ -581,6 +585,9 @@ export const tier2Background = inngest.createFunction(
                   if (getFlag("enable_jev_shadow_classification")) {
                     runJevShadowClassification(emailMessage, { accountId, ticketId });
                   }
+
+                  // Contact extraction: every new ticket, whichever path created it.
+                  triggerContactExtraction(ticketId, accountId, "tier2");
                 }
 
                 if (proposal?.id && ticketId) {
@@ -646,6 +653,9 @@ export const tier2Background = inngest.createFunction(
                 if (getFlag("enable_jev_shadow_classification")) {
                   runJevShadowClassification(emailMessage, { accountId, ticketId });
                 }
+
+                // Contact extraction: every new ticket, whichever path created it.
+                triggerContactExtraction(ticketId, accountId, "tier2");
               }
 
               if (proposal?.id && ticketId) {
