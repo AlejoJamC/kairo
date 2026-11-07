@@ -27,7 +27,7 @@ export async function apiCall(
 
 /**
  * Get the dashboard URL based on environment.
- * In dev you may want http://localhost:5173/dashboard; in prod it's /dashboard.
+ * In dev you may want http://localhost:5173/dashboard/; in prod it's /dashboard/.
  */
 export function getDashboardUrl(): string {
   return env.NEXT_PUBLIC_DASHBOARD_URL;
