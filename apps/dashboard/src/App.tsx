@@ -1,3 +1,4 @@
+import { SIDEBAR_ENABLED } from "@/lib/panel-flags";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -109,13 +110,15 @@ function AppContent() {
   return (
     <Box height="100vh" display="flex" flexDirection="column" backgroundColor="var(--k-bg)" overflow="hidden">
       <Box flexGrow={1} flexShrink={1} flexBasis="0%" display="flex" overflow="hidden">
-        <Sidebar
-          collapsed={sidebarCollapsed}
-          onToggle={handleToggle}
-          activeView={activeView}
-          onViewChange={setActiveView}
-          counts={counts}
-        />
+        {SIDEBAR_ENABLED && (
+          <Sidebar
+            collapsed={sidebarCollapsed}
+            onToggle={handleToggle}
+            activeView={activeView}
+            onViewChange={setActiveView}
+            counts={counts}
+          />
+        )}
         {/* overflowX: auto (not hidden) so the combined min-widths of the ticket
             list (360px fixed), center panel (520px min — see ticket-detail.tsx),
             and right panel (340px floor — see use-resizable-panel.ts) become a

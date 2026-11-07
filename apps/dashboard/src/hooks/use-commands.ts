@@ -7,7 +7,7 @@ import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { isTicketReadOnly } from "@kairo/client-core/triage-status";
 import { COMMANDS, CONTEXT_TABS, GO_VIEWS, PRIORITY_FILTERS, type CommandDef, type CommandId } from "@/lib/commands";
 import { useAppCommands } from "@/lib/app-commands";
-import { SUPERPOWERS_ENABLED, WORK_QUEUE_ENABLED } from "@/lib/panel-flags";
+import { SIDEBAR_ENABLED, SUPERPOWERS_ENABLED, WORK_QUEUE_ENABLED } from "@/lib/panel-flags";
 import { useLocale } from "@/hooks/useLocale";
 import type { AppView } from "@/types";
 
@@ -48,6 +48,7 @@ export function useCommands(view: AppView, onViewChange: (view: AppView) => void
         (command.id === "group-similar" && !similarGroupAvailable) ||
         (command.id === "toggle-superpowers" && !SUPERPOWERS_ENABLED) ||
         (command.id === "toggle-ticket-list" && !WORK_QUEUE_ENABLED) ||
+        (command.id === "toggle-sidebar" && !SIDEBAR_ENABLED) ||
         ((command.id === "send" || command.id === "send-resolve") && composerEmpty);
       return { needsTicket, disabled: NOT_WIRED.has(command.id) || needsTicket || final || outsideQueue || notApplicable };
     },

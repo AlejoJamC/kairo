@@ -43,6 +43,8 @@ const mockMessages = [
   },
 ];
 
+vi.mock("@/lib/panel-flags", () => ({ TICKET_DETAIL_ENABLED: true, SIDEBAR_ENABLED: true, WORK_QUEUE_ENABLED: true, SUPERPOWERS_ENABLED: true }));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     // Interpolation options (KAI-168 prioritySla.* keys) are an object, not a

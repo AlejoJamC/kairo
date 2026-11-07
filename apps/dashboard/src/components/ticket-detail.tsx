@@ -1,3 +1,4 @@
+import { TICKET_DETAIL_ENABLED } from "@/lib/panel-flags";
 import { TicketDecisions } from './ticket-decisions';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -177,6 +178,10 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
 // ---------------------------------------------------------------------------
 
 export function TicketDetail() {
+  return TICKET_DETAIL_ENABLED ? <TicketDetailView /> : null;
+}
+
+function TicketDetailView() {
   const { t } = useTranslation("dashboard");
   const { tickets, selectedTicketId, selectTicket } = useTriageStore();
   const { hidden: queueHidden, showable, showList } = useTicketListVisibility();

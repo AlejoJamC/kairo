@@ -7,6 +7,16 @@ import { isFlagEnabled } from "@/lib/feature-flags";
 // Lives here, not in feature-flags.ts, which stays generic by project rule.
 // ---------------------------------------------------------------------------
 
+/** The sidebar: navigation between views, search and the account menu. */
+export const SIDEBAR_ENABLED = isFlagEnabled(
+  import.meta.env.VITE_FF_ENABLE_SIDEBAR
+);
+
+/** The ticket detail in the center: the thread, the ticket bar and the reply bar. */
+export const TICKET_DETAIL_ENABLED = isFlagEnabled(
+  import.meta.env.VITE_FF_ENABLE_TICKET_DETAIL
+);
+
 /** The Work Queue panel on the left: the list of tickets to work through. */
 export const WORK_QUEUE_ENABLED = isFlagEnabled(
   import.meta.env.VITE_FF_ENABLE_WORK_QUEUE
