@@ -25,6 +25,12 @@ import { emitTicketActivity } from "./ticket-events.js";
 
 const FRESHNESS_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
+/** True when an email arrived recently enough for an automatic reply to make sense. */
+export function isFreshForAutoReply(receivedAt: string, now: Date = new Date()): boolean {
+  const receivedTime = new Date(receivedAt).getTime();
+  return !Number.isNaN(receivedTime) && now.getTime() - receivedTime <= FRESHNESS_WINDOW_MS;
+}
+
 export interface MaybeSendOutOfHoursReplyArgs {
   supabase: SupabaseClient;
   accountId: string;
@@ -65,8 +71,7 @@ export async function maybeSendOutOfHoursReply(
   const now = args.now ?? new Date();
 
   // Guard 1: freshness — never auto-reply to old emails (backfill protection).
-  const receivedTime = new Date(args.receivedAt).getTime();
-  if (Number.isNaN(receivedTime) || now.getTime() - receivedTime > FRESHNESS_WINDOW_MS) {
+  if (!isFreshForAutoReply(args.receivedAt, now)) {
     return { sent: false, reason: "stale" };
   }
 

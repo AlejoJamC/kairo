@@ -18,11 +18,13 @@ import { applyCustomerReplyTransition } from "../ticket-thread-transitions.js";
 import { extractLastKairoToken, findTicketByKairoToken } from "../ticket-traceability.js";
 import { getProfile, historyList, messagesList, getMessage } from "./gmail-client.js";
 import type { GmailPollDeps } from "./types.js";
+import { runTicketCreatedFollowUps } from "../ticket-created-follow-ups.js";
 import { getFlag } from '@kairo/feature-flags';
 import { inngest } from '../inngest.js';
 
 export function createGmailPollDeps(): GmailPollDeps {
   return {
+    ticketCreatedFollowUps: runTicketCreatedFollowUps,
     requestKnowledge: async input => {
       if (!getFlag('enable_email_knowledge')) return;
       await inngest.send({ name: 'messages/knowledge.requested', id: `email-knowledge:${input.accountId}:${input.messageId}`, data: input });

@@ -1,14 +1,13 @@
 import { extractBody } from "../../lib/email/body.js";
 import { classifyEmailWithMeta, DEFAULT_LANG, type EmailMessage, type PromptLang } from "@kairo/intelligence";
-import { assertSupabaseTarget, getFlag } from "@kairo/feature-flags";
-import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
+import { assertSupabaseTarget } from "@kairo/feature-flags";
+import { runTicketCreatedFollowUps } from "../../lib/ticket-created-follow-ups.js";
 import { isJevCanaryTenant, jevCanaryUpgrade } from "../../lib/jev-canary.js";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import { buildEmailClassifierInput, resolveClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
-import { triggerContactExtraction } from "../../lib/contact-extraction-trigger.js";
 import { NonRetriableError } from "inngest";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
@@ -447,6 +446,7 @@ export const tier2Background = inngest.createFunction(
             // tier2/tier3 were the two paths that never adopted this (tier1
             // and incremental-sync already had it).
             let ticketId: string | null = null;
+            let ticketNumber: number | null = null;
             let was_created = true;
             let prior_status: string | null = null;
 
@@ -490,6 +490,7 @@ export const tier2Background = inngest.createFunction(
                   priorityScore,
                 });
                 ticketId = result.ticket_id;
+                ticketNumber = result.ticket_number;
                 was_created = result.was_created;
                 prior_status = result.prior_status;
 
@@ -532,13 +533,25 @@ export const tier2Background = inngest.createFunction(
                 if (was_created && ticketId) {
                   await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
 
-                  // KAI-55 — shadow classification (fire-and-forget, non-blocking).
-                  if (getFlag("enable_jev_shadow_classification")) {
-                    runJevShadowClassification(emailMessage, { accountId, ticketId });
-                  }
-
-                  // Contact extraction: every new ticket, whichever path created it.
-                  triggerContactExtraction(ticketId, accountId, "tier2");
+                  await runTicketCreatedFollowUps({
+                    supabase,
+                    accountId,
+                    ticketId,
+                    source: "tier2",
+                    ticketNumber,
+                    conversationId: conversation_id,
+                    channelIntegrationId,
+                    gmailThreadId: threadId,
+                    gmailMessageId: messageId,
+                    messageIdHeader: null,
+                    subject,
+                    fromHeader: from,
+                    customerDisplayName: null,
+                    category: classification.category,
+                    receivedAt,
+                    emailMessage,
+                    proposalId: proposal?.id ?? null,
+                  });
                 }
 
                 if (!was_created) {
@@ -574,20 +587,33 @@ export const tier2Background = inngest.createFunction(
                     emotion_confidence: classification.confidence,
                     score_computed_at: classified_at,
                   })
-                  .select("id")
+                  .select("id, ticket_number")
                   .single();
                 ticketId = fallbackTicket?.id ?? null;
+                ticketNumber = fallbackTicket?.ticket_number ?? null;
 
                 if (ticketId) {
                   await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
 
-                  // KAI-55 — shadow classification (fire-and-forget, non-blocking).
-                  if (getFlag("enable_jev_shadow_classification")) {
-                    runJevShadowClassification(emailMessage, { accountId, ticketId });
-                  }
-
-                  // Contact extraction: every new ticket, whichever path created it.
-                  triggerContactExtraction(ticketId, accountId, "tier2");
+                  await runTicketCreatedFollowUps({
+                    supabase,
+                    accountId,
+                    ticketId,
+                    source: "tier2",
+                    ticketNumber,
+                    conversationId: null,
+                    channelIntegrationId,
+                    gmailThreadId: threadId,
+                    gmailMessageId: messageId,
+                    messageIdHeader: null,
+                    subject,
+                    fromHeader: from,
+                    customerDisplayName: null,
+                    category: classification.category,
+                    receivedAt,
+                    emailMessage,
+                    proposalId: proposal?.id ?? null,
+                  });
                 }
 
                 if (proposal?.id && ticketId) {
@@ -642,20 +668,33 @@ export const tier2Background = inngest.createFunction(
                   emotion_confidence: classification.confidence,
                   score_computed_at: classified_at,
                 })
-                .select("id")
+                .select("id, ticket_number")
                 .single();
               ticketId = bareTicket?.id ?? null;
+              ticketNumber = bareTicket?.ticket_number ?? null;
 
               if (ticketId) {
                 await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
 
-                // KAI-55 — shadow classification (fire-and-forget, non-blocking).
-                if (getFlag("enable_jev_shadow_classification")) {
-                  runJevShadowClassification(emailMessage, { accountId, ticketId });
-                }
-
-                // Contact extraction: every new ticket, whichever path created it.
-                triggerContactExtraction(ticketId, accountId, "tier2");
+                await runTicketCreatedFollowUps({
+                  supabase,
+                  accountId,
+                  ticketId,
+                  source: "tier2",
+                  ticketNumber,
+                  conversationId: null,
+                  channelIntegrationId,
+                  gmailThreadId: threadId,
+                  gmailMessageId: messageId,
+                  messageIdHeader: null,
+                  subject,
+                  fromHeader: from,
+                  customerDisplayName: null,
+                  category: classification.category,
+                  receivedAt,
+                  emailMessage,
+                  proposalId: proposal?.id ?? null,
+                });
               }
 
               if (proposal?.id && ticketId) {

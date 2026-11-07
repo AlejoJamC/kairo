@@ -7,11 +7,10 @@ import type { ClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
 import { tier3FullInbox, tier3Windows } from "../../lib/tier3-windows.js";
 import { assertSupabaseTarget, getFlag } from "@kairo/feature-flags";
-import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
+import { runTicketCreatedFollowUps } from "../../lib/ticket-created-follow-ups.js";
 import { isJevCanaryTenant, jevCanaryUpgrade } from "../../lib/jev-canary.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
-import { triggerContactExtraction } from "../../lib/contact-extraction-trigger.js";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
@@ -409,6 +408,7 @@ export async function processTier3Messages(input: {
         // tier2/tier3 were the two paths that never adopted this (tier1
         // and incremental-sync already had it).
         let ticketId: string | null = null;
+        let ticketNumber: number | null = null;
         let was_created = true;
         let prior_status: string | null = null;
 
@@ -452,6 +452,7 @@ export async function processTier3Messages(input: {
               priorityScore,
             });
             ticketId = result.ticket_id;
+            ticketNumber = result.ticket_number;
             was_created = result.was_created;
             prior_status = result.prior_status;
 
@@ -494,13 +495,25 @@ export async function processTier3Messages(input: {
             if (was_created && ticketId) {
               await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
 
-              // KAI-55 — shadow classification (fire-and-forget, non-blocking).
-              if (getFlag("enable_jev_shadow_classification")) {
-                runJevShadowClassification(emailMessage, { accountId, ticketId });
-              }
-
-              // Contact extraction: every new ticket, whichever path created it.
-              triggerContactExtraction(ticketId, accountId, "tier3");
+              await runTicketCreatedFollowUps({
+                supabase,
+                accountId,
+                ticketId,
+                source: "tier3",
+                ticketNumber,
+                conversationId: conversation_id,
+                channelIntegrationId,
+                gmailThreadId: threadId,
+                gmailMessageId: messageId,
+                messageIdHeader: null,
+                subject,
+                fromHeader: from,
+                customerDisplayName: null,
+                category: classification.category,
+                receivedAt,
+                emailMessage,
+                proposalId: proposal?.id ?? null,
+              });
             }
 
             if (!was_created) {
@@ -536,20 +549,33 @@ export async function processTier3Messages(input: {
                 emotion_confidence: classification.confidence,
                 score_computed_at: classified_at,
               })
-              .select("id")
+              .select("id, ticket_number")
               .single();
             ticketId = fallbackTicket?.id ?? null;
+            ticketNumber = fallbackTicket?.ticket_number ?? null;
 
             if (ticketId) {
               await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
 
-              // KAI-55 — shadow classification (fire-and-forget, non-blocking).
-              if (getFlag("enable_jev_shadow_classification")) {
-                runJevShadowClassification(emailMessage, { accountId, ticketId });
-              }
-
-              // Contact extraction: every new ticket, whichever path created it.
-              triggerContactExtraction(ticketId, accountId, "tier3");
+              await runTicketCreatedFollowUps({
+                supabase,
+                accountId,
+                ticketId,
+                source: "tier3",
+                ticketNumber,
+                conversationId: null,
+                channelIntegrationId,
+                gmailThreadId: threadId,
+                gmailMessageId: messageId,
+                messageIdHeader: null,
+                subject,
+                fromHeader: from,
+                customerDisplayName: null,
+                category: classification.category,
+                receivedAt,
+                emailMessage,
+                proposalId: proposal?.id ?? null,
+              });
             }
 
             if (proposal?.id && ticketId) {
@@ -604,20 +630,33 @@ export async function processTier3Messages(input: {
               emotion_confidence: classification.confidence,
               score_computed_at: classified_at,
             })
-            .select("id")
+            .select("id, ticket_number")
             .single();
           ticketId = bareTicket?.id ?? null;
+          ticketNumber = bareTicket?.ticket_number ?? null;
 
           if (ticketId) {
             await recordAiClassification(accountId, ticketId, classification, meta.model, classified_at);
 
-            // KAI-55 — shadow classification (fire-and-forget, non-blocking).
-            if (getFlag("enable_jev_shadow_classification")) {
-              runJevShadowClassification(emailMessage, { accountId, ticketId });
-            }
-
-            // Contact extraction: every new ticket, whichever path created it.
-            triggerContactExtraction(ticketId, accountId, "tier3");
+            await runTicketCreatedFollowUps({
+              supabase,
+              accountId,
+              ticketId,
+              source: "tier3",
+              ticketNumber,
+              conversationId: null,
+              channelIntegrationId,
+              gmailThreadId: threadId,
+              gmailMessageId: messageId,
+              messageIdHeader: null,
+              subject,
+              fromHeader: from,
+              customerDisplayName: null,
+              category: classification.category,
+              receivedAt,
+              emailMessage,
+              proposalId: proposal?.id ?? null,
+            });
           }
 
           if (proposal?.id && ticketId) {

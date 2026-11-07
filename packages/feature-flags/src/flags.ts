@@ -87,6 +87,10 @@
 //                                  from ticket_classification_history. Default: 30 —
 //                                  same cadence as the retry sweep; this is a batch
 //                                  aggregation over review activity, not a tight loop.
+//   ticket_acknowledgement_window_hours — how many hours back from now the open
+//                                  customer message may have arrived for the
+//                                  acknowledgement to be sent. Default: 48. Older
+//                                  messages are read but never answered automatically.
 // =============================================================================
 
 // ─── Static dashboard flags (build-time, no env override) ────────────────────
@@ -173,6 +177,7 @@ const NUMERIC_FLAG_DEFAULTS = {
   operational_sla_escalation_check_interval_minutes: 5,
   classification_retry_sweep_cron_interval_minutes: 30,
   auto_approval_recompute_interval_minutes: 30,
+  ticket_acknowledgement_window_hours: 48,
 } as const;
 
 type NumericFlagName = keyof typeof NUMERIC_FLAG_DEFAULTS;

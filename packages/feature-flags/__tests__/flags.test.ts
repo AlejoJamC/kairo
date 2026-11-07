@@ -206,3 +206,22 @@ describe("getNumericFlag('gmail_poll_cron_interval_minutes')", () => {
     expect(getNumericFlag("gmail_poll_cron_interval_minutes")).toBe(5);
   });
 });
+
+describe("getNumericFlag('ticket_acknowledgement_window_hours')", () => {
+  const ENV_KEY_WINDOW = "FEATURE_FLAG_TICKET_ACKNOWLEDGEMENT_WINDOW_HOURS";
+
+  afterEach(() => {
+    delete process.env[ENV_KEY_WINDOW];
+  });
+
+  it("defaults to 48 hours", () => {
+    expect(getNumericFlag("ticket_acknowledgement_window_hours")).toBe(48);
+  });
+
+  it("returns the override and ignores invalid values", () => {
+    process.env[ENV_KEY_WINDOW] = "24";
+    expect(getNumericFlag("ticket_acknowledgement_window_hours")).toBe(24);
+    process.env[ENV_KEY_WINDOW] = "0";
+    expect(getNumericFlag("ticket_acknowledgement_window_hours")).toBe(48);
+  });
+});
