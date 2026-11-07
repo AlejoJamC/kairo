@@ -227,7 +227,8 @@ export async function GET(request: Request) {
         granted_by_user_id:   user.id,
         external_account_id:  user.email,
         access_token_enc:     session.provider_token,
-        refresh_token_enc:    session.provider_refresh_token ?? null,
+        // Google issues a refresh token only on first consent; a later login without one must keep the stored token.
+        ...(session.provider_refresh_token ? { refresh_token_enc: session.provider_refresh_token } : {}),
         expires_at:           new Date(Date.now() + 3600 * 1000).toISOString(),
       }, { onConflict: "account_id,provider,external_account_id" })
       .select("id")
