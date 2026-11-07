@@ -54,6 +54,7 @@ import { humanizeDuration } from "../../lib/duration.js";
 import { renderAgentReply, renderResolved } from "../../emails/registry.js";
 import { resolveEmailUrls } from "../../emails/urls.js";
 import { formatEmailDate } from "../../emails/format.js";
+import { normalizeEmail } from "@kairo/identity";
 
 export const tickets = new Hono();
 
@@ -1901,14 +1902,16 @@ tickets.get("/:id/client-profile", async (c) => {
   // `from_email`. We surface that draft so the right-panel "Cliente" tab shows
   // SOMETHING actionable instead of "no disponible".
   if (!ticket.client_id) {
-    if (!ticket.from_email) {
+    // from_email may hold the whole header ("Name <address>"); drafts are keyed by the bare address.
+    const senderEmail = normalizeEmail(ticket.from_email);
+    if (!senderEmail) {
       return c.json({ error: "No client linked to this ticket" }, 404);
     }
     const { data: draft } = await supabase
       .from("draft_contact")
       .select("id, email, phone, display_name, organization, status, evidence_count, first_seen_at")
       .eq("account_id", ctx.accountId)
-      .eq("email", ticket.from_email.toLowerCase())
+      .eq("email", senderEmail)
       .in("status", ["proposed", "confirmed"])
       .maybeSingle();
 
@@ -1920,7 +1923,7 @@ tickets.get("/:id/client-profile", async (c) => {
       draftId:           draft.id,
       draftStatus:       draft.status as "proposed" | "confirmed" | "rejected",
       name:              draft.display_name ?? null,
-      email:             draft.email ?? ticket.from_email ?? null,
+      email:             draft.email ?? senderEmail,
       phone:             draft.phone ?? null,
       organization:      draft.organization ?? null,
       clientType:        "unknown" as const,
