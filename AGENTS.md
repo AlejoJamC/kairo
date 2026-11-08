@@ -132,6 +132,35 @@ All schema changes must go through the Supabase CLI workflow.
 Never write raw SQL and paste it into the Supabase dashboard.
 See `supabase/SKILL.md` for the full enforced workflow.
 
+### ⛔ Every database function is closed unless a caller is proven safe
+
+PostgREST exposes every function in `public` at `/rest/v1/rpc/<name>`, and
+the anon key is public: it ships in every client bundle. A function that
+`anon` or `authenticated` can execute is callable by anyone on the internet.
+
+- `REVOKE ... FROM PUBLIC` alone does **not** close a function in Supabase.
+  `anon` and `authenticated` hold their own direct grants, so every revoke
+  names all three:
+  `REVOKE EXECUTE ON FUNCTION public.fn(<arg types>) FROM PUBLIC, anon, authenticated;`
+  followed by `GRANT EXECUTE ... TO service_role;`.
+- A `SECURITY DEFINER` function runs as its owner and bypasses RLS. It is
+  restricted to `service_role` unless it validates its caller itself
+  (`auth.uid()` checked against `account_members` or an equivalent) before
+  reading or writing anything. Never trust a caller-supplied user id, account
+  id or actor id in a function that `anon` or `authenticated` can execute.
+- Granting EXECUTE to `anon` or `authenticated` is a security decision: state
+  in the reply which function, which role and how the function validates the
+  caller, and add the function to `CALLER_CHECKED_FUNCTIONS` in
+  `apps/api/src/lib/function-execute-grants-sql.test.ts`. Never add a function
+  to that list to make the test pass.
+- Never loosen the default privileges that keep new functions closed, and
+  never grant EXECUTE on a function to `PUBLIC`.
+- After writing a migration that creates or replaces a function, verify its
+  real grants (`has_function_privilege('anon', ...)`) on the local stack before
+  reporting the work; the intent written in the migration is not evidence.
+- A `CREATE OR REPLACE` keeps the existing grants, so replacing a function
+  never fixes its permissions; that takes an explicit `REVOKE`.
+
 ### ⛔ Do not turn schema installation into operational data processing
 
 Schema migrations may define tables, relationships, constraints, indexes,
