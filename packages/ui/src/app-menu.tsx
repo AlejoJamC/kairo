@@ -21,14 +21,19 @@ export type AppMenuItem =
 
 export type AppMenuGroup = { id: string; label: string; items: AppMenuItem[] }
 
+export type AppMenuContextTab = 'client' | 'assistant' | 'notes' | 'escalate' | 'similar' | 'articles'
+
 export interface AppMenuState {
   view: AppView
   language: 'en' | 'es'
   sidebarExpanded: boolean
   /** The ticket list of the queue views is shown (⌘⇧F). */
   ticketListShown: boolean
+  superpowersShown: boolean
   /** Tab of the context panel that is open, when a ticket is. */
-  contextTab: 'client' | 'assistant' | 'notes' | 'escalate' | null
+  contextTab: AppMenuContextTab | null
+  /** The six tabs in the order of the panel; the position gives each its ⌘ number. */
+  contextTabOrder: readonly AppMenuContextTab[]
   /** No ticket open: the whole Ticket menu is disabled. */
   ticketOpen: boolean
   /** Awaiting customer: Acknowledge and Resolve are disabled, as in the composer. */
@@ -59,12 +64,15 @@ export function buildAppMenu(state: AppMenuState): AppMenuGroup[] {
   ]
 
   const queueViews: AppView[] = ['triage', 'awaiting', 'resolved', 'escalated', 'ai-review']
-  const contextTabs = [
-    { id: 'client', label: 'Client' },
-    { id: 'assistant', label: 'Assistant' },
-    { id: 'notes', label: 'Notes' },
-    { id: 'escalate', label: 'Escalate' },
-  ] as const
+  const contextTabLabels: Record<AppMenuContextTab, string> = {
+    client: 'Client',
+    assistant: 'Assistant',
+    notes: 'Notes',
+    escalate: 'Escalate',
+    similar: 'Similar',
+    articles: 'Articles',
+  }
+  const contextTabs = state.contextTabOrder.map((id) => ({ id, label: contextTabLabels[id] }))
 
   const ticketItems: AppMenuItem[] = [
     item('acknowledge', 'Acknowledge', { shortcut: 'A', disabled: !state.ticketOpen || state.ticketAwaitingCustomer || state.ticketFinal }),
@@ -119,6 +127,7 @@ export function buildAppMenu(state: AppMenuState): AppMenuGroup[] {
       items: [
         { kind: 'checkbox', id: 'sidebar', label: 'Sidebar', checked: state.sidebarExpanded, shortcut: '⌃⌘S', accelerator: 'Ctrl+Cmd+S' },
         { kind: 'checkbox', id: 'ticket-list', label: 'Ticket list', checked: state.ticketListShown, shortcut: '⌘⇧F', accelerator: 'CmdOrCtrl+Shift+F', disabled: !queueViews.includes(state.view) },
+        { kind: 'checkbox', id: 'superpowers', label: 'Superpowers', checked: state.superpowersShown, shortcut: '⌘⇧B', accelerator: 'CmdOrCtrl+Shift+B', disabled: !queueViews.includes(state.view) },
         submenu('context', 'Context', contextTabs.map((tab, index) =>
           item(`context-${tab.id}`, tab.label, { checked: state.contextTab === tab.id, shortcut: `⌘${index + 1}`, accelerator: `CmdOrCtrl+${index + 1}`, disabled: !state.ticketOpen }),
         )),

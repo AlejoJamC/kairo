@@ -269,8 +269,9 @@ describe("findOrCreateTicketForThread", () => {
     const client = makeMockClient({ insertedTicket: { id: "ticket-new", ticket_number: 101 } });
     await findOrCreateTicketForThread(client, BASE_ARGS);
 
-    expect(client._rpcFn).toHaveBeenCalledTimes(1);
-    const [fnName, args] = client._rpcFn.mock.calls[0];
+    const transitionCalls = client._rpcFn.mock.calls.filter(([name]) => name === "apply_ticket_transition");
+    expect(transitionCalls).toHaveLength(1);
+    const [fnName, args] = transitionCalls[0];
     expect(fnName).toBe("apply_ticket_transition");
     expect(args).toMatchObject({
       p_ticket_id: "ticket-new",

@@ -92,6 +92,8 @@ export class GmailMessageNotFoundError extends Error {
  * `mock.module()`, which leaks across test files.
  */
 export interface GmailPollDeps {
+  /** Work every new ticket gets, whichever flow created it. */
+  ticketCreatedFollowUps?: (ctx: import('../ticket-created-follow-ups.js').TicketCreatedContext) => Promise<void>;
   requestKnowledge?: (input: { accountId: string; ticketId: string; messageId: string }) => Promise<void>;
   runMessage?: <T>(key: string, handler: () => Promise<T>) => Promise<T>;
   db: DbClient;

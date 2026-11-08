@@ -35,6 +35,7 @@ import {
 } from "../../lib/classifier-input.js";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
+import { runTicketCreatedFollowUps } from "../../lib/ticket-created-follow-ups.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
 import { createSemaphore } from "../../lib/semaphore.js";
 import { createCircuitBreaker } from "../../lib/circuit-breaker.js";
@@ -230,6 +231,27 @@ export const classificationRetrySweep = inngest.createFunction(
               message_id: message.id,
               is_origin: ticketResult.was_created,
             });
+
+            if (ticketResult.was_created) {
+              await runTicketCreatedFollowUps({
+                supabase,
+                accountId: message.account_id,
+                ticketId: ticketResult.ticket_id,
+                source: "classification-retry-sweep",
+                ticketNumber: ticketResult.ticket_number,
+                conversationId: conversation_id,
+                channelIntegrationId: message.channel_integration_id,
+                gmailThreadId: message.thread_external_id ?? message.external_id,
+                gmailMessageId: message.external_id,
+                messageIdHeader: null,
+                subject,
+                fromHeader: from,
+                customerDisplayName: message.sender_display_name,
+                category: classification.category,
+                receivedAt: message.received_at,
+                emailMessage: { subject, body: classifierBody, from, ...classifierContext },
+              });
+            }
 
             recovered++;
           } catch (err) {

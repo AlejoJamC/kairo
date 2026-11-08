@@ -2,6 +2,8 @@
 // command palette (Commands scope), the status bar, the native menu and the
 // tabs take their keys from here.
 
+import { CONTEXT_TAB_ORDER } from "@/lib/context-tab-order";
+
 export type CommandGroup = "ticket" | "goTo" | "view" | "general";
 
 export type CommandId =
@@ -10,7 +12,7 @@ export type CommandId =
   | "next-ticket" | "previous-ticket" | "search"
   | "go-triage" | "go-awaiting" | "go-resolved" | "go-escalated" | "go-ai-review" | "go-knowledge" | "go-clients" | "go-settings"
   | "filter-all" | "filter-p1" | "filter-p2" | "filter-p3"
-  | "toggle-sidebar" | "toggle-ticket-list" | "context-client" | "context-assistant" | "context-notes" | "context-escalate" | "switch-theme" | "language"
+  | "toggle-sidebar" | "toggle-ticket-list" | "toggle-superpowers" | "context-client" | "context-assistant" | "context-notes" | "context-escalate" | "context-similar" | "context-articles" | "switch-theme" | "language"
   | "all-commands" | "close" | "sign-out";
 
 export interface CommandDef {
@@ -53,10 +55,8 @@ export const COMMANDS: readonly CommandDef[] = [
   { id: "go-settings", group: "goTo", keys: ["⌘", ","] },
   { id: "toggle-sidebar", group: "view", keys: ["⌃", "⌘", "S"] },
   { id: "toggle-ticket-list", group: "view", keys: ["⌘", "⇧", "F"], queue: true },
-  { id: "context-client", group: "view", keys: ["⌘", "1"], ticket: true },
-  { id: "context-assistant", group: "view", keys: ["⌘", "2"], ticket: true },
-  { id: "context-notes", group: "view", keys: ["⌘", "3"], ticket: true },
-  { id: "context-escalate", group: "view", keys: ["⌘", "4"], ticket: true },
+  { id: "toggle-superpowers", group: "view", keys: ["⌘", "⇧", "B"], queue: true },
+  ...CONTEXT_TAB_ORDER.map((tab, index): CommandDef => ({ id: `context-${tab}`, group: "view", keys: ["⌘", String(index + 1)], ticket: true })),
   { id: "filter-all", group: "view", keys: ["P", "0"], triage: true },
   { id: "filter-p1", group: "view", keys: ["P", "1"], triage: true },
   { id: "filter-p2", group: "view", keys: ["P", "2"], triage: true },
@@ -70,13 +70,10 @@ export const COMMANDS: readonly CommandDef[] = [
 
 export const COMMAND_GROUPS: readonly CommandGroup[] = ["ticket", "goTo", "view", "general"];
 
-/** Tab of the context panel each ⌘1–⌘4 command opens. */
-export const CONTEXT_TABS: Partial<Record<CommandId, string>> = {
-  "context-client": "client",
-  "context-assistant": "assistant",
-  "context-notes": "notes",
-  "context-escalate": "escalate",
-};
+/** Tab of the context panel each ⌘1–⌘6 command opens. */
+export const CONTEXT_TABS: Partial<Record<CommandId, string>> = Object.fromEntries(
+  CONTEXT_TAB_ORDER.map((tab) => [`context-${tab}`, tab]),
+);
 
 /** Views the "go-*" commands open. */
 export const GO_VIEWS = {

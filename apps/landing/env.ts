@@ -19,7 +19,7 @@ export const env = createEnv({
         NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
         NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
         NEXT_PUBLIC_APP_URL: z.string().url(),
-        NEXT_PUBLIC_DASHBOARD_URL: z.string().default("/dashboard"),
+        NEXT_PUBLIC_DASHBOARD_URL: z.string().default("/dashboard/"),
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: z.string().optional(),
         // KAI-126/KAI-189: browser-side OTel tracing. Unset -> disabled.
         NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),

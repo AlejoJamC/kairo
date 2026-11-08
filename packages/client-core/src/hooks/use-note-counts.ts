@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { getNoteCounts } from "../endpoints";
 import { useTriageStore, type NoteCounts } from "../stores/triage-store";
 
@@ -14,6 +14,10 @@ import { useTriageStore, type NoteCounts } from "../stores/triage-store";
 
 export function useNoteCounts(enabled: boolean, pollIntervalSeconds: number) {
   const setNoteCounts = useTriageStore((s) => s.setNoteCounts);
+  // A note added or a mention read reloads the counters at once instead of at the next poll.
+  const noteCountsRevision = useTriageStore((s) => s.noteCountsRevision);
+  // Only the latest request may write: a slower, older answer must not bring back a number already corrected.
+  const latestRequest = useRef(0);
 
   useEffect(() => {
     if (!enabled) return;
@@ -21,10 +25,12 @@ export function useNoteCounts(enabled: boolean, pollIntervalSeconds: number) {
     let cancelled = false;
 
     function load() {
+      const request = ++latestRequest.current;
       getNoteCounts()
-        .then((res) => (res.ok ? res.json() : { data: {} }))
-        .then((body: { data?: Record<string, NoteCounts> }) => {
-          if (!cancelled) setNoteCounts(body.data ?? {});
+        .then((res) => (res.ok ? res.json() : null))
+        .then((body: { data?: Record<string, NoteCounts> } | null) => {
+          // A failed read keeps the numbers already shown instead of zeroing every badge.
+          if (!cancelled && request === latestRequest.current && body) setNoteCounts(body.data ?? {});
         })
         .catch(() => {});
     }
@@ -35,5 +41,5 @@ export function useNoteCounts(enabled: boolean, pollIntervalSeconds: number) {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [enabled, pollIntervalSeconds, setNoteCounts]);
+  }, [enabled, pollIntervalSeconds, setNoteCounts, noteCountsRevision]);
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { appWindowMinWidth, appWindowWidth } from "./desktop-window";
 
 describe("desktop window size", () => {
-  it("fits the sidebar, the ticket list, the center column and the context panel", () => {
+  it("fits the sidebar, the ticket list, the center column and the Superpowers panel", () => {
     expect(appWindowMinWidth(false)).toBe(232 + 372 + 520 + 344);
   });
 

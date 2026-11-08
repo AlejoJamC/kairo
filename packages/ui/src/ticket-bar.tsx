@@ -46,6 +46,15 @@ type ListHidden = {
   }
 }
 
+/** Superpowers is hidden: the bar shows it again. */
+type SuperpowersHidden = {
+  showLabel: string
+  shortcut: string
+  keyshortcuts: string
+  controls?: string
+  onShow: () => void
+}
+
 type TicketBarProps = {
   /** Name of the current queue ("Triage"). */
   queueName: string
@@ -60,6 +69,7 @@ type TicketBarProps = {
   /** status-chip with its menu, or the static read-only chip. */
   status?: ReactNode
   listHidden?: ListHidden
+  superpowersHidden?: SuperpowersHidden
   onPrevious?: () => void
   onNext?: () => void
   /** Previous on the first row and Next on the last row are disabled. */
@@ -127,7 +137,7 @@ function QueueSwitcher({ name, switcher, pin }: { name: string; switcher: ListHi
   )
 }
 
-function TicketBar({ queueName, ticketId, position, notes, escalatedLabel, status, listHidden, onPrevious, onNext, hasPrevious = true, hasNext = true, labels }: TicketBarProps) {
+function TicketBar({ queueName, ticketId, position, notes, escalatedLabel, status, listHidden, superpowersHidden, onPrevious, onNext, hasPrevious = true, hasNext = true, labels }: TicketBarProps) {
   const macosWindow = useWindowChrome()
   return (
     <Box
@@ -194,10 +204,17 @@ function TicketBar({ queueName, ticketId, position, notes, escalatedLabel, statu
         <IconButton label={labels.next} shortcut="J" disabled={!hasNext} onPress={onNext}>
           <Icon name="down" size={15} color={tokens['text.tertiary']} />
         </IconButton>
+        {superpowersHidden && (
+          <Tooltip label={superpowersHidden.showLabel} shortcut={superpowersHidden.shortcut}>
+            <IconButton label={superpowersHidden.showLabel} aria-keyshortcuts={superpowersHidden.keyshortcuts} aria-controls={superpowersHidden.controls} aria-expanded={false} onPress={superpowersHidden.onShow}>
+              <Icon name="panel" size={15} color={tokens['text.tertiary']} />
+            </IconButton>
+          </Tooltip>
+        )}
       </Box>
     </Box>
   )
 }
 
 export { TicketBar }
-export type { ListHidden, QueueSwitcherItem, TicketBarProps }
+export type { SuperpowersHidden, ListHidden, QueueSwitcherItem, TicketBarProps }

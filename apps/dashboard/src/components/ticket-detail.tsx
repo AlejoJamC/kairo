@@ -1,3 +1,4 @@
+import { TICKET_DETAIL_ENABLED } from "@/lib/panel-flags";
 import { TicketDecisions } from './ticket-decisions';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -177,16 +178,23 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
 // ---------------------------------------------------------------------------
 
 export function TicketDetail() {
+  return TICKET_DETAIL_ENABLED ? <TicketDetailView /> : null;
+}
+
+function TicketDetailView() {
   const { t } = useTranslation("dashboard");
   const { tickets, selectedTicketId, selectTicket } = useTriageStore();
-  const { hidden: listHidden, showList } = useTicketListVisibility();
+  const { hidden: queueHidden, showable, showList } = useTicketListVisibility();
+  const listHidden = queueHidden && showable;
   const requestPanelTab = useTriageStore((state) => state.requestPanelTab);
   const [view] = useActiveView();
   const labelKey = (VIEW_LABEL_KEY as Record<string, (typeof VIEW_LABEL_KEY)[keyof typeof VIEW_LABEL_KEY]>)[view ?? "triage"] ?? VIEW_LABEL_KEY.triage;
   const queueName = t(labelKey);
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
 
-  const { messages: allMessages, loading: threadLoading, appendOptimisticMessage } = useTicketThread(ticket?.id ?? null);
+  const { messages: allMessages, loading: threadLoading, appendOptimisticMessage, contentAdded } = useTicketThread(ticket?.id ?? null);
+  const bumpThreadRevision = useTriageStore((s) => s.bumpThreadRevision);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // KAI-232: with the internal-notes flag OFF the thread is customer-only —
   // notes are never rendered, restoring the pre-KAI-221 surface.
@@ -195,11 +203,22 @@ export function TicketDetail() {
     [allMessages],
   );
 
+  // Whatever adds content to the thread (a reply, a note, a message that arrives) brings the
+  // end of the conversation into view.
+  const lastMessageId = messages[messages.length - 1]?.id ?? null;
+  const lastMessageIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    lastMessageIdRef.current = lastMessageId;
+  }, [lastMessageId]);
+  useEffect(() => {
+    if (!contentAdded || !lastMessageIdRef.current) return;
+    messageRefs.current.get(lastMessageIdRef.current)?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [contentAdded]);
+
   // KAI-232 — cross-panel scroll target (ADR-011): the Notes tab and mention
   // notifications ask the thread to reveal one specific message.
   const scrollToMessageId = useTriageStore((s) => s.scrollToMessageId);
   const clearScrollToMessage = useTriageStore((s) => s.clearScrollToMessage);
-  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -279,8 +298,8 @@ export function TicketDetail() {
       <TicketHeader ticket={ticket} queueName={queueName} readOnly={isReadOnly} onOpenNotes={() => requestPanelTab("notes")} />
 
       {/* Scrollable body */}
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll>
-        <Box maxWidth={780} display="flex" flexDirection="column" gap={22} paddingTop={28} paddingHorizontal={32} paddingBottom={32}>
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll display="flex" flexDirection="column" alignItems="center">
+        <Box width="100%" maxWidth={780} display="flex" flexDirection="column" gap={22} paddingTop={28} paddingHorizontal={32} paddingBottom={32}>
           <TicketHeadingBlock ticket={ticket} readOnly={isReadOnly} sla={<PrioritySlaBar ticket={ticket} />} />
 
           <TicketDecisions ticketId={ticket.id} />
@@ -353,7 +372,12 @@ export function TicketDetail() {
       {isReadOnly ? (
         <ReadOnlyBar>{t("ticketDetail.readOnlyBanner")}</ReadOnlyBar>
       ) : (
-        <ReplyBar onReplyQueued={appendOptimisticMessage} />
+        <ReplyBar
+          onReplyQueued={(message) => {
+            appendOptimisticMessage(message);
+            bumpThreadRevision();
+          }}
+        />
       )}
     </Box>
   );

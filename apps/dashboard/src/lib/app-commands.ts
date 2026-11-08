@@ -6,16 +6,28 @@
 import { create } from "zustand";
 import { getPlatform } from "@kairo/client-core/config";
 import type { AccountPresence } from "@kairo/ui";
+import { WORK_QUEUE_ENABLED } from "@/lib/panel-flags";
 
 export type PriorityFilterValue = "all" | "P1" | "P2" | "P3";
 
 export type PaletteScope = "all" | "commands";
 
 const TICKET_LIST_KEY = "ticket-list-hidden";
+const SUPERPOWERS_KEY = "superpowers-hidden";
 
+/** With the Work Queue flag off the list is always hidden. */
 function readTicketListHidden(): boolean {
+  if (!WORK_QUEUE_ENABLED) return true;
   try {
     return getPlatform().storage.getItem(TICKET_LIST_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function readSuperpowersHidden(): boolean {
+  try {
+    return getPlatform().storage.getItem(SUPERPOWERS_KEY) === "true";
   } catch {
     return false;
   }
@@ -29,6 +41,8 @@ interface AppCommands {
   sidebarToggleRequests: number;
   /** The ticket list of the queue views is hidden whole (⌘⇧F). */
   ticketListHidden: boolean;
+  /** The Superpowers panel on the right is hidden whole (⌘⇧B). */
+  superpowersHidden: boolean;
   /** The reply composer has no text: Send and Send and resolve do not apply. */
   composerEmpty: boolean;
   setComposerEmpty: (empty: boolean) => void;
@@ -53,6 +67,8 @@ interface AppCommands {
   requestSidebarToggle: () => void;
   setTicketListHidden: (hidden: boolean) => void;
   toggleTicketList: () => void;
+  setSuperpowersHidden: (hidden: boolean) => void;
+  toggleSuperpowers: () => void;
   setPresence: (presence: AccountPresence) => void;
 }
 
@@ -61,6 +77,7 @@ export const useAppCommands = create<AppCommands>((set, get) => ({
   paletteScope: "all",
   sidebarToggleRequests: 0,
   ticketListHidden: readTicketListHidden(),
+  superpowersHidden: readSuperpowersHidden(),
   composerEmpty: true,
   setComposerEmpty: (composerEmpty) => set({ composerEmpty }),
   engineBusy: false,
@@ -78,6 +95,7 @@ export const useAppCommands = create<AppCommands>((set, get) => ({
   requestPalette: (scope = "all") => set((state) => ({ paletteRequests: state.paletteRequests + 1, paletteScope: scope })),
   requestSidebarToggle: () => set((state) => ({ sidebarToggleRequests: state.sidebarToggleRequests + 1 })),
   setTicketListHidden: (hidden) => {
+    if (!WORK_QUEUE_ENABLED) return;
     try {
       getPlatform().storage.setItem(TICKET_LIST_KEY, String(hidden));
     } catch {
@@ -86,5 +104,14 @@ export const useAppCommands = create<AppCommands>((set, get) => ({
     set({ ticketListHidden: hidden });
   },
   toggleTicketList: () => get().setTicketListHidden(!get().ticketListHidden),
+  setSuperpowersHidden: (hidden) => {
+    try {
+      getPlatform().storage.setItem(SUPERPOWERS_KEY, String(hidden));
+    } catch {
+      // The choice still applies for this session.
+    }
+    set({ superpowersHidden: hidden });
+  },
+  toggleSuperpowers: () => get().setSuperpowersHidden(!get().superpowersHidden),
   setPresence: (presence) => set({ presence }),
 }));

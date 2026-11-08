@@ -181,10 +181,13 @@ describe("useNoteCounts", () => {
     await waitFor(() => expect(useTriageStore.getState().noteCounts).toEqual(counts));
   });
 
-  it("falls back to empty counters on a non-ok response", async () => {
+  it("keeps the counters already shown on a non-ok response", async () => {
+    const shown = { "t-1": { notes: 2, unread_mentions: 1 } };
+    useTriageStore.setState({ noteCounts: shown });
     getNoteCounts.mockResolvedValue({ ok: false, json: async () => ({}) });
     renderHook(() => useNoteCounts(true, 30));
     await waitFor(() => expect(getNoteCounts).toHaveBeenCalled());
-    await waitFor(() => expect(useTriageStore.getState().noteCounts).toEqual({}));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(useTriageStore.getState().noteCounts).toEqual(shown);
   });
 });

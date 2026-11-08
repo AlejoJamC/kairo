@@ -11,6 +11,7 @@ import { Box, Button, Callout, DataTable, Dialog, FilterPill, FilterPillDivider,
 import { useContactColumns } from "@/components/clients/contact-columns";
 import { clientKpis, mapRow } from "@/components/clients/contact-helpers";
 import { ContactDetailDrawer } from "@/components/clients/contact-detail-drawer";
+import { CONTACT_DETAIL_DRAWER_ENABLED } from "@/lib/panel-flags";
 
 type StatusFilter = "all" | "drafts" | "confirmed" | "rejected";
 type PlanFilter   = "all" | "Enterprise" | "Pro" | "Starter" | "churn-risk";
@@ -365,12 +366,12 @@ export function ClientDirectory() {
         columns={columns}
         rows={filteredRows}
         rowKey={(row) => row.id}
-        onRowClick={setSelectedRow}
+        onRowClick={CONTACT_DETAIL_DRAWER_ENABLED ? setSelectedRow : undefined}
         isNewRow={(row) => newIds.has(row.id)}
         emptyLabel={emptyMessage()}
       />
 
-      {selectedRow && (
+      {CONTACT_DETAIL_DRAWER_ENABLED && selectedRow && (
         <ContactDetailDrawer
           row={selectedRow}
           client={selectedRow.source === "client" ? clients.find((c) => c.id === selectedRow.id.replace("client:", "")) ?? null : null}

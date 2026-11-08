@@ -1,5 +1,19 @@
 import type { HandoffTokens, PlatformPorts } from "./platform";
 
+/**
+ * Removes every stored Supabase session from localStorage. A handoff brings a fresh session, and a
+ * stale one left behind would be refreshed with a token the server has already seen: the refresh is
+ * rejected, the client signs out, and the new session is wiped with it.
+ */
+export function discardStoredSessions(storage: Pick<Storage, "length" | "key" | "removeItem">): void {
+  const stale: string[] = [];
+  for (let index = 0; index < storage.length; index++) {
+    const name = storage.key(index);
+    if (name && /^sb-.+-auth-token(-code-verifier)?$/.test(name)) stale.push(name);
+  }
+  for (const name of stale) storage.removeItem(name);
+}
+
 function readHandoffTokens(): HandoffTokens | null {
   const hash = window.location.hash.substring(1);
   if (!hash) return null;
@@ -10,6 +24,11 @@ function readHandoffTokens(): HandoffTokens | null {
   if (!access_token || !refresh_token) return null;
 
   history.replaceState(null, "", window.location.pathname);
+  try {
+    discardStoredSessions(window.localStorage);
+  } catch {
+    /* storage unavailable */
+  }
   return { access_token, refresh_token };
 }
 

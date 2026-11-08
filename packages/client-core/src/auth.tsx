@@ -136,6 +136,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // we will deadlock the gotrue-js lock manager (which waits for subscribers to finish before releasing init locks).
         fetchProfile(session.user.id, nextVersion).catch(() => console.error("[auth] Profile lookup failed"));
       } else if (event === "SIGNED_OUT") {
+        // While starting, a stale stored session being dropped is not the person signing out: init decides.
+        if (initializing) return;
         diagnostic("signed_out");
         ++authVersion.current;
         setUser(null);

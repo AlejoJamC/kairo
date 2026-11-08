@@ -3,17 +3,13 @@ import { classifyEmailWithMeta, type EmailMessage } from "@kairo/intelligence";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import { buildEmailClassifierInput, loadPreviousCase, resolveClassifierContext } from "../../lib/classifier-input.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
-import { getFlag } from "@kairo/feature-flags";
-import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
 import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
-import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
-import { maybeSendTicketAcknowledgement } from "../../lib/ticket-acknowledgement.js";
-import { requestSemanticIndexing } from "../../lib/semantic-indexing.js";
+import { runTicketCreatedFollowUps } from "../../lib/ticket-created-follow-ups.js";
 import { upsertConversationByThread } from "../../lib/conversations.js";
 import { findOrCreateTicketForThread } from "../../lib/tickets-by-thread.js";
 import { linkMessageToTicket } from "../../lib/ticket-messages.js";
@@ -240,7 +236,7 @@ export const incrementalSync = inngest.createFunction(
     await step.run("classify-new-emails", async () => {
       // The tenant fields are per-account, so they are resolved once for the
       // whole sync rather than once per email (KAI-93).
-      const [gmailAccessToken, classifierContext, channelRow] = await Promise.all([
+      const [, classifierContext, channelRow] = await Promise.all([
         getFreshGmailToken(accountId),
         resolveClassifierContext("new_email", accountId),
         supabase
@@ -474,61 +470,23 @@ export const incrementalSync = inngest.createFunction(
             }
 
             if (ticketId && was_created) {
-              // KAI-55 — shadow classification (fire-and-forget, non-blocking).
-              if (getFlag("enable_jev_shadow_classification")) {
-                runJevShadowClassification(emailMessage, { accountId, ticketId });
-              }
-
-              // KAI-246: send the acknowledgement first. If it goes out, skip the
-              // out-of-hours reply for this creation — the customer should not get
-              // two auto-replies for the same inbound email. When the flag is off
-              // (default), the ack didn't send, or ticketNumber is unavailable,
-              // out-of-hours behaves as before.
-              const ackOutcome = ticketNumber === null
-                ? { sent: false as const, reason: "send_failed" as const }
-                : await maybeSendTicketAcknowledgement({
-                    supabase,
-                    accountId,
-                    ticketId,
-                    ticketNumber,
-                    conversationId: conversationIdForMessages,
-                    channelIntegrationId,
-                    gmailThreadId: threadId,
-                    subject,
-                    fromHeader: from,
-                    customerDisplayName: null,
-                    category: classification.category,
-                    receivedAt,
-                    messageIdHeader,
-                  }).catch((err: unknown) => {
-                    console.error(`[incremental-sync] Acknowledgement failed for ticket ${ticketId}:`, err);
-                    return { sent: false as const, reason: "send_failed" as const };
-                  });
-
-              if (!ackOutcome.sent) {
-                maybeSendOutOfHoursReply({
-                  supabase,
-                  accountId,
-                  ticketId,
-                  gmailAccessToken,
-                  gmailThreadId: threadId,
-                  gmailMessageId: messageId,
-                  fromHeader: from,
-                  subject,
-                  receivedAt,
-                }).catch((err: unknown) => {
-                  console.error(
-                    `[incremental-sync] Out-of-hours reply failed for ticket ${ticketId}:`,
-                    err
-                  );
-                });
-              }
-
-              await requestSemanticIndexing(supabase, accountId, [{ kind: 'ticket', id: ticketId }]).catch((err: unknown) => {
-                console.error(
-                  `[incremental-sync] Embedding generation failed for ticket ${ticketId}:`,
-                  err
-                );
+              await runTicketCreatedFollowUps({
+                supabase,
+                accountId,
+                ticketId,
+                source: "incremental-sync",
+                ticketNumber,
+                conversationId: conversationIdForMessages,
+                channelIntegrationId,
+                gmailThreadId: threadId,
+                gmailMessageId: messageId,
+                messageIdHeader,
+                subject,
+                fromHeader: from,
+                customerDisplayName: null,
+                category: classification.category,
+                receivedAt,
+                emailMessage,
               });
             }
           })

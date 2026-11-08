@@ -9,6 +9,8 @@ import { ClientDirectory } from "@/components/client-directory";
 // Mocks
 // ---------------------------------------------------------------------------
 
+vi.mock("@/lib/panel-flags", () => ({ CONTACT_DETAIL_DRAWER_ENABLED: true }));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, opts?: Record<string, unknown>) => {

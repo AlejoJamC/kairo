@@ -43,6 +43,8 @@ const mockMessages = [
   },
 ];
 
+vi.mock("@/lib/panel-flags", () => ({ TICKET_DETAIL_ENABLED: true, SIDEBAR_ENABLED: true, WORK_QUEUE_ENABLED: true, SUPERPOWERS_ENABLED: true }));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     // Interpolation options (KAI-168 prioritySla.* keys) are an object, not a
@@ -91,6 +93,7 @@ vi.mock("@kairo/client-core/stores/triage-store", () => {
       operationalSlaConfig: mockOperationalSlaConfig,
       selectTicket: mockSelectTicket,
       requestPanelTab: vi.fn(),
+      bumpThreadRevision: vi.fn(),
     };
     return selector ? selector(state) : state;
   };
@@ -112,10 +115,11 @@ vi.mock("./ticket-header", () => ({
 }));
 
 // We mock useTicketThread directly — we test the hook separately
-let mockThreadResult: { messages: typeof mockMessages | []; loading: boolean; error: string | null } = {
+let mockThreadResult: { messages: typeof mockMessages | []; loading: boolean; error: string | null; contentAdded?: number } = {
   messages: [],
   loading: false,
   error: null,
+  contentAdded: 0,
 };
 
 vi.mock("@kairo/client-core/hooks/use-ticket-thread", () => ({
@@ -283,5 +287,40 @@ describe("TicketDetail — auto-clear after leaving the active view (KAI-177)", 
 
     await new Promise((resolve) => setTimeout(resolve, 2600));
     expect(mockSelectTicket).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Content added to the thread (a reply, a note) brings the end of it into view
+// ---------------------------------------------------------------------------
+
+describe("TicketDetail — scrolls to the end when content is added", () => {
+  const scrollIntoView = vi.fn();
+
+  beforeEach(() => {
+    scrollIntoView.mockClear();
+    Element.prototype.scrollIntoView = scrollIntoView;
+  });
+
+  it("does not scroll when the thread has only loaded", () => {
+    mockThreadResult = { messages: mockMessages, loading: false, error: null, contentAdded: 0 };
+    renderWithProviders(React.createElement(TicketDetail));
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("scrolls the last message into view each time content is added", () => {
+    mockThreadResult = { messages: mockMessages, loading: false, error: null, contentAdded: 0 };
+    const view = renderWithProviders(React.createElement(TicketDetail));
+
+    mockThreadResult = {
+      messages: [...mockMessages, { ...mockMessages[2]!, id: "note-1", direction: "internal", body_plain: "Internal note body" } as never],
+      loading: false,
+      error: null,
+      contentAdded: 1,
+    };
+    view.rerender(React.createElement(TicketDetail));
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "end" });
   });
 });

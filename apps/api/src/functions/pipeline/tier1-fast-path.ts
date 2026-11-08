@@ -1,6 +1,5 @@
 import { extractBody } from "../../lib/email/body.js";
-import { classifyEmailWithMeta, detectEscalationTriggers, type EmailMessage, type PromptLang } from "@kairo/intelligence";
-import { runJevShadowClassification } from "../../lib/jev-shadow-classification.js";
+import { classifyEmailWithMeta, type EmailMessage, type PromptLang } from "@kairo/intelligence";
 import { isJevCanaryTenant, jevCanaryUpgradeTier1 } from "../../lib/jev-canary.js";
 import { classificationAudit, routingAudit } from "../../lib/classification-audit.js";
 import {
@@ -9,7 +8,7 @@ import {
 } from "../../lib/classifier-input.js";
 import { tier1ProposalStatus } from "./tier1-proposal-status.js";
 import { logLlmCall } from "../../lib/llm-logging.js";
-import { assertSupabaseTarget, getFlag } from "@kairo/feature-flags";
+import { assertSupabaseTarget } from "@kairo/feature-flags";
 import { preFilterEmail } from "../../lib/email/pre-filter.js";
 import { inngest } from "../../lib/inngest.js";
 import { getFreshGmailToken } from "../../lib/gmail-token.js";
@@ -17,10 +16,7 @@ import { supabase } from "../../lib/supabase.js";
 import { env } from "../../env.js";
 import { computePriorityScore, DEFAULT_WEIGHTS } from "../../lib/scoring.js";
 import { resolveModelVersion } from "../../lib/model-version.js";
-import { buildEscalationContext } from "../../routes/v1/tickets.js";
-import { maybeSendOutOfHoursReply } from "../../lib/out-of-hours-reply.js";
-import { maybeSendTicketAcknowledgement } from "../../lib/ticket-acknowledgement.js";
-import { requestSemanticIndexing } from "../../lib/semantic-indexing.js";
+import { runTicketCreatedFollowUps } from "../../lib/ticket-created-follow-ups.js";
 import { pipelineLog, pipelineLogRun } from "../../lib/pipeline-logger.js";
 import { NonRetriableError } from "inngest";
 import { upsertConversationByThread } from "../../lib/conversations.js";
@@ -149,7 +145,7 @@ export const tier1FastPath = inngest.createFunction(
     // Step 1: Resolve account, fetch Gmail profile + most recent message headers
     // ADR-022: getFreshGmailToken now takes accountId (Level 4 oauth_credentials).
     // -----------------------------------------------------------------------
-    const { messages, userEmail, tenantMailboxes, language, gmailAccessToken, accountId: resolvedAccountId } = await step.run("fetch-headers", async () => {
+    const { messages, userEmail, tenantMailboxes, language, accountId: resolvedAccountId } = await step.run("fetch-headers", async () => {
       // Resolve accountId before token fetch (required by ADR-022 Phase 2).
       const { data: memberRow } = await supabase
         .from("account_members")
@@ -608,86 +604,27 @@ export const tier1FastPath = inngest.createFunction(
                 .from("ticket_proposals")
                 .update({ ticket_id: ticket.id })
                 .eq("id", proposal.id);
-
-              // Detect escalation triggers post-classification (fire-and-forget)
-              // Only on new tickets (no reclassification of follow-ups per KAI-165 decision #1)
-              if (was_created) {
-                buildEscalationContext(ticket.id, accountId)
-                  .then((ctx) => {
-                    if (!ctx) return;
-                    const result = detectEscalationTriggers(ctx);
-                    if (result.reasons.length > 0) {
-                      return supabase
-                        .from("ticket_proposals")
-                        .update({ escalation_reasons: result.reasons })
-                        .eq("id", proposal.id);
-                    }
-                  })
-                  .catch((err: unknown) => {
-                    console.error(`[tier1] Escalation detection failed for ticket ${ticket!.id}:`, err);
-                  });
-              }
             }
 
             if (ticket?.id && was_created) {
-              // KAI-55 — shadow classification (fire-and-forget, non-blocking).
-              // Only on ticket creation — not for follow-up messages.
-              if (getFlag("enable_jev_shadow_classification")) {
-                runJevShadowClassification(emailMessage, { accountId, ticketId: ticket.id });
-              }
-
-              // KAI-225 — Emit contact-extraction trigger (fire-and-forget, non-blocking).
-              // Only on ticket creation — not for follow-up messages.
-              if (getFlag("enable_contact_extraction")) {
-                inngest.send({
-                  name: "tickets/ticket.created",
-                  data: { ticketId: ticket.id, accountId },
-                }).catch((err: unknown) => {
-                  console.error(`[tier1] tickets/ticket.created send failed for ticket ${ticket!.id}:`, err);
-                });
-              }
-
-              // KAI-246: send the acknowledgement first. If it goes out, skip the
-              // out-of-hours reply for this creation — the customer should not get
-              // two auto-replies for the same inbound email. When the flag is off
-              // (default) or the ack didn't send, out-of-hours behaves as before.
-              const ackOutcome = await maybeSendTicketAcknowledgement({
+              await runTicketCreatedFollowUps({
                 supabase,
                 accountId,
                 ticketId: ticket.id,
+                source: "tier1",
                 ticketNumber: ticket.ticket_number,
                 conversationId: conversationIdForMessages,
                 channelIntegrationId,
                 gmailThreadId: message.threadId,
+                gmailMessageId: messageId,
+                messageIdHeader,
                 subject,
                 fromHeader: from,
                 customerDisplayName: from_name,
                 category: classification.category,
                 receivedAt,
-                messageIdHeader,
-              }).catch((err: unknown) => {
-                console.error(`[tier1] Acknowledgement failed for ticket ${ticket!.id}:`, err);
-                return { sent: false as const, reason: "send_failed" as const };
-              });
-
-              if (!ackOutcome.sent) {
-                maybeSendOutOfHoursReply({
-                  supabase,
-                  accountId,
-                  ticketId: ticket.id,
-                  gmailAccessToken,
-                  gmailThreadId: message.threadId,
-                  gmailMessageId: messageId,
-                  fromHeader: from,
-                  subject,
-                  receivedAt,
-                }).catch((err: unknown) => {
-                  console.error(`[tier1] Out-of-hours reply failed for ticket ${ticket!.id}:`, err);
-                });
-              }
-
-              await requestSemanticIndexing(supabase, accountId, [{ kind: 'ticket', id: ticket.id }]).catch((err: unknown) => {
-                console.error(`[tier1] Embedding generation failed for ticket ${ticket!.id}:`, err);
+                emailMessage,
+                proposalId: proposal?.id ?? null,
               });
             }
           })

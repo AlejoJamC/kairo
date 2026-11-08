@@ -5,6 +5,7 @@
 
 import { useEffect } from "react";
 import type { CommandId } from "@/lib/commands";
+import { CONTEXT_TAB_ORDER } from "@/lib/context-tab-order";
 
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -21,12 +22,9 @@ const SINGLE_KEYS: Record<string, CommandId> = {
   n: "note",
 };
 
-const CONTEXT_KEYS: Record<string, CommandId> = {
-  "1": "context-client",
-  "2": "context-assistant",
-  "3": "context-notes",
-  "4": "context-escalate",
-};
+const CONTEXT_KEYS: Record<string, CommandId> = Object.fromEntries(
+  CONTEXT_TAB_ORDER.map((tab, index) => [String(index + 1), `context-${tab}` as CommandId]),
+);
 
 function combinationOf(event: KeyboardEvent): CommandId | null {
   const key = event.key.toLowerCase();
@@ -36,6 +34,7 @@ function combinationOf(event: KeyboardEvent): CommandId | null {
   if (event.shiftKey) {
     if (key === "?" || key === "/") return "all-commands";
     if (key === "f") return "toggle-ticket-list";
+    if (key === "b") return "toggle-superpowers";
     if (key === "l") return "switch-theme";
     return null;
   }

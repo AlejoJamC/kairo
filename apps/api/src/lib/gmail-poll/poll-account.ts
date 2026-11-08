@@ -181,12 +181,14 @@ export async function ingestMessages(
       const { data: priorTicket, error: priorTicketError } = await deps.db.from('tickets').select('id,status,model_verdict,assigned_to').eq('account_id', accountId).eq('conversation_id', conversation_id).is('merged_into_ticket_id', null).maybeSingle();
       if (priorTicketError) throw new Error('Prior ticket context unavailable');
       const llmStart = Date.now();
+      const classifierInput = buildEmailClassifierInput({
+        stage: "new_email", subject, from, bodyPlain: body_plain, snippet,
+        facts: filterResult.facts, context: classifierContext,
+      });
       let classified: Awaited<ReturnType<GmailPollDeps["classifyEmail"]>>;
       try {
-        classified = await deps.classifyEmail({ ...buildEmailClassifierInput({
-          stage: "new_email", subject, from, bodyPlain: body_plain, snippet,
-          facts: filterResult.facts, context: classifierContext,
-        }), previousCase: priorTicket ?? { status: 'new_case' } }, { lang: classifierContext.language, context: { accountId } });
+        classified = await deps.classifyEmail({ ...classifierInput,
+          previousCase: priorTicket ?? { status: 'new_case' } }, { lang: classifierContext.language, context: { accountId } });
       } catch (err) {
         deps.logLlmCall({
           feature: "email_classification",
@@ -253,6 +255,24 @@ export async function ingestMessages(
 
       if (result.was_created) {
         ticketsCreated++;
+        await deps.ticketCreatedFollowUps?.({
+          supabase: deps.db,
+          accountId,
+          ticketId: result.ticket_id,
+          source: "gmail-poll",
+          ticketNumber: result.ticket_number,
+          conversationId: conversation_id,
+          channelIntegrationId,
+          gmailThreadId: threadId,
+          gmailMessageId: messageId,
+          messageIdHeader,
+          subject,
+          fromHeader: from,
+          customerDisplayName: null,
+          category: classification.category,
+          receivedAt,
+          emailMessage: classifierInput,
+        });
       } else {
         await deps.applyCustomerReplyTransition(deps.db, result.ticket_id, result.prior_status);
         ticketsReopened++;

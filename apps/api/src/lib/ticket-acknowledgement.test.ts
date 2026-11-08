@@ -28,9 +28,11 @@ mock.module("../emails/format.js", () => ({
 }));
 
 let gmailEmail = "support@acme.com";
+let channelAddresses: string[] = [];
 const getGmailEmailByAccountMock = mock(() => Promise.resolve(gmailEmail));
 mock.module("./gmail-token.js", () => ({
   getGmailEmailByAccount: getGmailEmailByAccountMock,
+  getFreshGmailToken: () => Promise.resolve("token"),
 }));
 
 const inngestSendMock = mock((_event: { name: string; data: Record<string, unknown> }) => Promise.resolve());
@@ -75,6 +77,14 @@ function makeSupabaseStub(opts: Partial<SupabaseStub> = {}) {
 
   const client = {
     from(table: string) {
+      if (table === "support_channels") {
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          then: (resolve: (v: unknown) => void) => resolve({ data: channelAddresses.map((email_address) => ({ email_address })), error: null }),
+        };
+        return chain;
+      }
       return {
         insert: (payload: Record<string, unknown>) => {
           state.inserted.push(payload);
@@ -113,6 +123,7 @@ beforeEach(() => {
     unsubscribe_url: "",
   };
   gmailEmail = "support@acme.com";
+  channelAddresses = [];
 });
 
 describe("maybeSendTicketAcknowledgement — guards", () => {
@@ -124,17 +135,67 @@ describe("maybeSendTicketAcknowledgement — guards", () => {
     expect(inngestSendMock).not.toHaveBeenCalled();
   });
 
-  it("aborts (stale) when receivedAt > 15min before now, even with the flag on", async () => {
+  it("aborts (stale) when the open message is older than 48 hours, even with the flag on", async () => {
     process.env[ENV_KEY] = "true";
     const { client } = makeSupabaseStub();
-    const oldReceived = new Date(now.getTime() - 20 * 60_000).toISOString();
     const result = await maybeSendTicketAcknowledgement({
       ...BASE_ARGS,
       supabase: client as never,
-      receivedAt: oldReceived,
+      receivedAt: new Date(now.getTime() - 48 * 60 * 60_000 - 1).toISOString(),
     });
     expect(result).toEqual({ sent: false, reason: "stale" });
     expect(inngestSendMock).not.toHaveBeenCalled();
+  });
+
+  it("honours the configured window in hours", async () => {
+    process.env[ENV_KEY] = "true";
+    process.env.FEATURE_FLAG_TICKET_ACKNOWLEDGEMENT_WINDOW_HOURS = "6";
+    try {
+      const { client } = makeSupabaseStub();
+      const result = await maybeSendTicketAcknowledgement({
+        ...BASE_ARGS,
+        supabase: client as never,
+        receivedAt: new Date(now.getTime() - 7 * 60 * 60_000).toISOString(),
+      });
+      expect(result).toEqual({ sent: false, reason: "stale" });
+    } finally {
+      delete process.env.FEATURE_FLAG_TICKET_ACKNOWLEDGEMENT_WINDOW_HOURS;
+    }
+  });
+
+  it("acknowledges an open message received 47 hours ago", async () => {
+    process.env[ENV_KEY] = "true";
+    const { client } = makeSupabaseStub();
+    const result = await maybeSendTicketAcknowledgement({
+      ...BASE_ARGS,
+      supabase: client as never,
+      receivedAt: new Date(now.getTime() - 47 * 60 * 60_000).toISOString(),
+    });
+    expect(result).toEqual({ sent: true });
+  });
+
+  it("aborts (own_mailbox) when the open message comes from the connected mailbox", async () => {
+    process.env[ENV_KEY] = "true";
+    const { client } = makeSupabaseStub();
+    const result = await maybeSendTicketAcknowledgement({
+      ...BASE_ARGS,
+      supabase: client as never,
+      fromHeader: '"Support" <Support@Acme.com>',
+    });
+    expect(result).toEqual({ sent: false, reason: "own_mailbox" });
+    expect(inngestSendMock).not.toHaveBeenCalled();
+  });
+
+  it("aborts (own_mailbox) when the open message comes from another active support channel", async () => {
+    process.env[ENV_KEY] = "true";
+    channelAddresses = ["billing@acme.com"];
+    const { client } = makeSupabaseStub();
+    const result = await maybeSendTicketAcknowledgement({
+      ...BASE_ARGS,
+      supabase: client as never,
+      fromHeader: "billing@acme.com",
+    });
+    expect(result).toEqual({ sent: false, reason: "own_mailbox" });
   });
 
   it("aborts (no_thread_id) when gmailThreadId is null", async () => {

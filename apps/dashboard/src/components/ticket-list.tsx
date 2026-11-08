@@ -5,6 +5,7 @@ import { useTriageStore, pickPreferredGroupId } from "@kairo/client-core/stores/
 import { TicketCard } from "@/components/ticket-card";
 import { RelatedHistoryDrawer, type RelatedHistoryItem } from "@/components/related-history-drawer";
 import { TICKET_GROUPING_ENABLED } from "@/lib/feature-flags";
+import { RELATED_HISTORY_DRAWER_ENABLED } from "@/lib/panel-flags";
 import { isTriageActive } from "@kairo/client-core/triage-status";
 import { getSimilarTickets, getRelatedHistory, syncGmail, classifyBatch } from "@kairo/client-core/endpoints";
 import { fetchTicketById, fetchInboxTickets, fetchBatchJobStatus } from "@kairo/client-core/queries";
@@ -576,7 +577,7 @@ export function TicketList() {
           onSelect={selectTicket}
           selectedTicketIds={selectedTicketIds}
           onToggleSelect={TICKET_GROUPING_ENABLED ? toggleTicketSelection : undefined}
-          hasRelatedHistory={!relatedHistoryLoading && relatedHistory.length > 0}
+          hasRelatedHistory={RELATED_HISTORY_DRAWER_ENABLED && !relatedHistoryLoading && relatedHistory.length > 0}
           onOpenHistory={handleOpenHistory}
         />
       ) : (
@@ -592,21 +593,23 @@ export function TicketList() {
               multiSelectMode={selectedTicketIds.size > 0}
               isChecked={selectedTicketIds.has(ticket.id)}
               onToggleSelect={TICKET_GROUPING_ENABLED ? toggleTicketSelection : undefined}
-              hasRelatedHistory={selectedTicketId === ticket.id && !relatedHistoryLoading && relatedHistory.length > 0}
+              hasRelatedHistory={RELATED_HISTORY_DRAWER_ENABLED && selectedTicketId === ticket.id && !relatedHistoryLoading && relatedHistory.length > 0}
               onOpenHistory={handleOpenHistory}
             />
           ))}
         </Box>
       )}
 
-      <RelatedHistoryDrawer
-        open={historyDrawerOpen}
-        loading={relatedHistoryLoading}
-        items={relatedHistory}
-        lang={i18n.language}
-        onClose={() => setHistoryDrawerOpen(false)}
-        onSelectTicket={handleSelectHistoricalTicket}
-      />
+      {RELATED_HISTORY_DRAWER_ENABLED && (
+        <RelatedHistoryDrawer
+          open={historyDrawerOpen}
+          loading={relatedHistoryLoading}
+          items={relatedHistory}
+          lang={i18n.language}
+          onClose={() => setHistoryDrawerOpen(false)}
+          onSelectTicket={handleSelectHistoricalTicket}
+        />
+      )}
     </Box>
   );
 }

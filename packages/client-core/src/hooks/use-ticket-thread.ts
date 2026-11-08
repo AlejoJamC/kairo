@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { apiCall } from "../api-client";
 
 export type DeliveryStatus = "queued" | "sending" | "sent" | "failed";
@@ -51,6 +51,11 @@ interface UseTicketThreadResult {
    * real delivery_status (sent/failed), so "Enviando…" resolves on its own.
    */
   appendOptimisticMessage: (message: ThreadMessage) => void;
+  /**
+   * Counts the times the thread gained content after it loaded: a message or note added here,
+   * or one that arrived on a refresh. It never resets, so a view reacts to every change of it.
+   */
+  contentAdded: number;
 }
 
 /** Outbound message is still in flight — keep polling until it settles. */
@@ -71,6 +76,11 @@ export function useTicketThread(ticketId: string | null): UseTicketThreadResult 
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contentAdded, setContentAdded] = useState(0);
+  const knownIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    knownIds.current = new Set(messages.map((m) => m.id));
+  }, [messages]);
 
   // Initial load (and reset) whenever the selected ticket changes.
   useEffect(() => {
@@ -120,7 +130,10 @@ export function useTicketThread(ticketId: string | null): UseTicketThreadResult 
         const res = await apiCall(`/api/v1/tickets/${ticketId}/messages`);
         if (!res.ok) return;
         const data = (await res.json()) as { messages: ThreadMessage[] };
-        if (!cancelled) setMessages(data.messages ?? []);
+        if (cancelled) return;
+        const next = data.messages ?? [];
+        if (next.some((m) => !knownIds.current.has(m.id))) setContentAdded((n) => n + 1);
+        setMessages(next);
       } catch {
         // transient — keep polling
       }
@@ -134,7 +147,8 @@ export function useTicketThread(ticketId: string | null): UseTicketThreadResult 
 
   function appendOptimisticMessage(message: ThreadMessage) {
     setMessages((prev) => [...prev, message]);
+    setContentAdded((n) => n + 1);
   }
 
-  return { messages, loading, error, appendOptimisticMessage };
+  return { messages, loading, error, appendOptimisticMessage, contentAdded };
 }
