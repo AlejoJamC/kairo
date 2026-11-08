@@ -192,7 +192,9 @@ function TicketDetailView() {
   const queueName = t(labelKey);
   const ticket = tickets.find((t) => t.id === selectedTicketId) ?? null;
 
-  const { messages: allMessages, loading: threadLoading, appendOptimisticMessage } = useTicketThread(ticket?.id ?? null);
+  const { messages: allMessages, loading: threadLoading, appendOptimisticMessage, contentAdded } = useTicketThread(ticket?.id ?? null);
+  const bumpThreadRevision = useTriageStore((s) => s.bumpThreadRevision);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // KAI-232: with the internal-notes flag OFF the thread is customer-only —
   // notes are never rendered, restoring the pre-KAI-221 surface.
@@ -201,11 +203,22 @@ function TicketDetailView() {
     [allMessages],
   );
 
+  // Whatever adds content to the thread (a reply, a note, a message that arrives) brings the
+  // end of the conversation into view.
+  const lastMessageId = messages[messages.length - 1]?.id ?? null;
+  const lastMessageIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    lastMessageIdRef.current = lastMessageId;
+  }, [lastMessageId]);
+  useEffect(() => {
+    if (!contentAdded || !lastMessageIdRef.current) return;
+    messageRefs.current.get(lastMessageIdRef.current)?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [contentAdded]);
+
   // KAI-232 — cross-panel scroll target (ADR-011): the Notes tab and mention
   // notifications ask the thread to reveal one specific message.
   const scrollToMessageId = useTriageStore((s) => s.scrollToMessageId);
   const clearScrollToMessage = useTriageStore((s) => s.clearScrollToMessage);
-  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -359,7 +372,12 @@ function TicketDetailView() {
       {isReadOnly ? (
         <ReadOnlyBar>{t("ticketDetail.readOnlyBanner")}</ReadOnlyBar>
       ) : (
-        <ReplyBar onReplyQueued={appendOptimisticMessage} />
+        <ReplyBar
+          onReplyQueued={(message) => {
+            appendOptimisticMessage(message);
+            bumpThreadRevision();
+          }}
+        />
       )}
     </Box>
   );

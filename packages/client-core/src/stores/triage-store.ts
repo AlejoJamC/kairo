@@ -137,6 +137,17 @@ interface TriageStore {
   // the queue, the ticket header and the Notes tab all read one copy.
   // `unread_mentions` is scoped to the current user.
   noteCounts: Record<string, NoteCounts>;
+  /**
+   * Bumped whenever content is added to the open ticket's thread (a note, a reply).
+   * Every surface that shows that content (the Notes tab, the note counters) reloads on it.
+   */
+  threadRevision: number;
+  bumpThreadRevision: () => void;
+  /** Changes whenever the note counters must be read again, so every surface shows the same numbers. */
+  noteCountsRevision: number;
+  refreshNoteCounts: () => void;
+  /** The viewer read the mentions on this ticket: its unread counter drops to zero at once. */
+  clearUnreadMentions: (ticketId: string) => void;
   setNoteCounts: (counts: Record<string, NoteCounts>) => void;
   // KAI-232 — "New note" in the Notes tab asks the composer to switch to note
   // mode and take focus. A counter, not a boolean: every press must fire, even
@@ -280,6 +291,17 @@ export const useTriageStore = create<TriageStore>((set) => ({
   clearScrollToMessage: () => set({ scrollToMessageId: null }),
 
   noteCounts: {},
+  threadRevision: 0,
+  bumpThreadRevision: () =>
+    set((state) => ({ threadRevision: state.threadRevision + 1, noteCountsRevision: state.noteCountsRevision + 1 })),
+  noteCountsRevision: 0,
+  refreshNoteCounts: () => set((state) => ({ noteCountsRevision: state.noteCountsRevision + 1 })),
+  clearUnreadMentions: (ticketId) =>
+    set((state) => {
+      const current = state.noteCounts[ticketId];
+      if (!current || current.unread_mentions === 0) return state;
+      return { noteCounts: { ...state.noteCounts, [ticketId]: { ...current, unread_mentions: 0 } } };
+    }),
   setNoteCounts: (counts) => set({ noteCounts: counts }),
 
   composeNoteRequests: 0,

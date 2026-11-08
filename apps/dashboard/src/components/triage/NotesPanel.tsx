@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getTicketMessages, markMentionsRead } from "@kairo/client-core/endpoints";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
@@ -43,16 +43,21 @@ export function NotesPanel({ ticketId, onNewNote }: NotesPanelProps) {
   const [notes, setNotes] = useState<ThreadMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const requestScrollToMessage = useTriageStore((s) => s.requestScrollToMessage);
+  // A note or reply added to the open ticket reloads the list in place, without the skeleton.
+  const threadRevision = useTriageStore((s) => s.threadRevision);
+  const loadedFor = useRef<string | null>(null);
 
   useEffect(() => {
     if (!ticketId) {
+      loadedFor.current = null;
       setNotes([]);
       setLoading(false);
       return;
     }
 
     let cancelled = false;
-    setLoading(true);
+    const refresh = loadedFor.current === ticketId;
+    if (!refresh) setLoading(true);
     const startedAt = Date.now();
 
     getTicketMessages(ticketId)
@@ -66,10 +71,11 @@ export function NotesPanel({ ticketId, onNewNote }: NotesPanelProps) {
         const elapsed = Date.now() - startedAt;
         const settle = () => {
           if (cancelled) return;
+          loadedFor.current = ticketId;
           setNotes(internal);
           setLoading(false);
         };
-        if (elapsed >= MIN_SKELETON_MS) settle();
+        if (refresh || elapsed >= MIN_SKELETON_MS) settle();
         else setTimeout(settle, MIN_SKELETON_MS - elapsed);
       })
       .catch(() => {
@@ -79,7 +85,7 @@ export function NotesPanel({ ticketId, onNewNote }: NotesPanelProps) {
       });
 
     return () => { cancelled = true; };
-  }, [ticketId]);
+  }, [ticketId, threadRevision]);
 
   // Rule F.1: a note counts as read after 1.2s of visibility in this tab.
   // Clears the unread treatment locally and stamps the mention server-side.
@@ -91,8 +97,11 @@ export function NotesPanel({ ticketId, onNewNote }: NotesPanelProps) {
 
     const timer = setTimeout(() => {
       setNotes((prev) => prev.map((n) => (n.mention_unread ? { ...n, mention_unread: false } : n)));
-      // Best-effort: the visual state has already settled either way.
-      markMentionsRead(unreadIds).catch(() => {});
+      // The badges drop at once and are read again once the server has stored the read.
+      if (ticketId) useTriageStore.getState().clearUnreadMentions(ticketId);
+      markMentionsRead(unreadIds)
+        .then(() => useTriageStore.getState().refreshNoteCounts())
+        .catch(() => {});
     }, MARK_READ_AFTER_MS);
 
     return () => clearTimeout(timer);
