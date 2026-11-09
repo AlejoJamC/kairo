@@ -36,6 +36,9 @@ const escalateTabEnabled = isFlagEnabled(import.meta.env.VITE_FF_ENABLE_ESCALATE
 
 type ComposeMode = "reply" | "note";
 
+/** Unsent text by ticket, so switching ticket and coming back finds the draft where it was left. */
+const savedComposers = new Map<string, { draft: string; mode: ComposeMode }>();
+
 // ---------------------------------------------------------------------------
 // Lifecycle action buttons
 // ---------------------------------------------------------------------------
@@ -223,17 +226,23 @@ export function ReplyBar({ onReplyQueued }: ReplyBarProps) {
   // Uses a ref to compare previous vs current so we only reset on actual ticket
   // transitions (not on initial mount, and not when an AI suggestion lands in
   // the same render batch as a ticket selection).
+  // What was being written on the ticket left behind is kept and comes back with it.
   const prevTicketIdRef = React.useRef<string | null>(null);
+  const composerNow = React.useRef({ draft, mode });
+  React.useEffect(() => { composerNow.current = { draft, mode }; });
   React.useEffect(() => {
     const prev = prevTicketIdRef.current;
     prevTicketIdRef.current = selectedTicketId;
     // Only reset when genuinely switching away from a ticket that was open
     if (prev !== null && prev !== selectedTicketId) {
-      setDraft("");
+      if (composerNow.current.draft.trim()) savedComposers.set(prev, composerNow.current);
+      else savedComposers.delete(prev);
+      const saved = selectedTicketId ? savedComposers.get(selectedTicketId) : undefined;
+      setDraft(saved?.draft ?? "");
       setSendError(null);
       setSendSuccess(false);
       setShowAiBanner(false);
-      setMode("reply");
+      setMode(saved?.mode ?? "reply");
     }
   }, [selectedTicketId]);
 

@@ -45,6 +45,8 @@ export const getClientProfile = (ticketId: string) =>
   apiCall(`/api/v1/tickets/${ticketId}/client-profile`);
 export const askAssistant = (ticketId: string, messages: unknown[], signal?: AbortSignal) =>
   apiCall(`/api/v1/tickets/${ticketId}/assistant`, { ...post({ messages }), signal });
+export const askAccountAssistant = (messages: unknown[], signal?: AbortSignal) =>
+  apiCall("/api/v1/assistant", { ...post({ messages }), signal });
 
 // ── Ticket groups ──────────────────────────────────────────────────────────
 export const createTicketGroup = (name: string) =>

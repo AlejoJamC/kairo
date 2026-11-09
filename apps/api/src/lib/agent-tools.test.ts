@@ -4,7 +4,7 @@ process.env['SUPABASE_URL'] ??= 'http://localhost:54321';
 process.env['SUPABASE_SERVICE_ROLE_KEY'] ??= 'synthetic-service-role-key';
 const { sharedAgentTools, contractTools } = await import('./agent-tools');
 const { inngestAgentSteps } = await import('./agent-steps');
-const { TICKET_ASSISTANT_CONTRACT } = await import('@kairo/intelligence');
+const { TICKET_ASSISTANT_CONTRACT, ACCOUNT_ASSISTANT_CONTRACT, assistantContract } = await import('@kairo/intelligence');
 
 type Filters = Record<string, unknown>;
 function database(rows: Record<string, unknown>) {
@@ -34,8 +34,16 @@ describe('shared agent tools', () => {
   it('gives a block only the tools its contract lists, in contract order', () => {
     const registry = sharedAgentTools(scope, { db: database({}).db });
     expect(contractTools(TICKET_ASSISTANT_CONTRACT, registry).map((definition) => definition.name))
-      .toEqual(['inspect_ticket', 'decide_classification', 'draft_reply']);
+      .toEqual(['inspect_ticket', 'read_account_memory', 'search_similar_cases', 'decide_classification', 'draft_reply']);
     expect(() => contractTools({ feature: 'synthetic_block', tools: ['send_email'] }, registry)).toThrow('unknown tool send_email');
+  });
+
+  it('serves the account assistant, without ticket tools, when no ticket is selected', () => {
+    const registry = sharedAgentTools({ feature: 'account_assistant', accountId: 'account', userId: 'user' }, { db: database({}).db });
+    expect(assistantContract(undefined)).toBe(ACCOUNT_ASSISTANT_CONTRACT);
+    expect(assistantContract('ticket')).toBe(TICKET_ASSISTANT_CONTRACT);
+    expect(contractTools(ACCOUNT_ASSISTANT_CONTRACT, registry).map((definition) => definition.name))
+      .toEqual(['read_account_memory', 'list_account_tickets']);
   });
 
   it('reads the conversation only inside the account and ticket scope', async () => {

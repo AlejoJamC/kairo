@@ -125,6 +125,7 @@ const FLAG_DEFAULTS = {
   enable_knowledge_candidates: false,
   enable_email_knowledge: false,
   enable_ticket_assistant: false,
+  enable_assistant_open_chat: false,
 } as const;
 
 type RuntimeFlagName = keyof typeof FLAG_DEFAULTS;

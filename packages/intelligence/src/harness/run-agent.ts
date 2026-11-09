@@ -4,6 +4,7 @@ import { resolveModelRoute, type ModelRole } from '../config/model-roles';
 import type { PromptLang } from '../classification/prompt';
 import { GatewayClient, gatewayError, gatewayKey, gatewayProvenance, gatewayProviderOptions, warnIfSystemCredential } from '../providers/gateway/client';
 import { ProviderError } from '../providers/base';
+import { createOllamaLanguageModel } from '../providers/ollama/chat-model';
 import { withGeneration, usageDetails } from './generation';
 import { extractPromptVersion, loadPromptTemplate } from './template';
 import type { LlmCallLogger, LlmCallRecord } from './run-llm-feature';
@@ -83,8 +84,11 @@ export async function runAgent<OUTPUT = never>(
 ) {
   const outside = request.tools.find((definition) => !contract.tools.includes(definition.name));
   if (outside) throw new ProviderError(`Tool ${outside.name} is outside the ${contract.feature} contract`, false);
-  const { model } = resolveModelRoute(contract.modelRole);
-  const gateway = new GatewayClient(gatewayKey(), deps.transport);
+  const route = resolveModelRoute(contract.modelRole);
+  const { model } = route;
+  const local = route.provider === 'ollama';
+  const gateway = local ? null : new GatewayClient(gatewayKey(), deps.transport);
+  const provider = local ? 'ollama' : 'gateway';
   const instructions = await loadPromptTemplate(contract.promptId, request.lang);
   const promptVersion = extractPromptVersion(instructions);
   const steps = request.steps ?? inlineAgentSteps;
@@ -128,17 +132,21 @@ export async function runAgent<OUTPUT = never>(
     metadata: { promptVersion }, context: request.context,
   }, async (generation) => {
     try {
-      await gateway.requireModel(model, 'language');
+      if (gateway) await gateway.requireModel(model, 'language');
       const agent = new ToolLoopAgent({
         id: contract.feature,
-        model: wrapLanguageModel({ model: gateway.sdk.languageModel(model), middleware: durable }),
-        providerOptions: gatewayProviderOptions(model),
+        model: wrapLanguageModel({
+          model: gateway ? gateway.sdk.languageModel(model) : createOllamaLanguageModel({ model, ...(process.env['OLLAMA_BASE_URL'] ? { baseUrl: process.env['OLLAMA_BASE_URL'] } : {}) }),
+          middleware: durable,
+        }),
+        ...(gateway ? { providerOptions: gatewayProviderOptions(model) } : {}),
         instructions,
         tools,
         // Reasoning models reject a named tool_choice (HTTP 400), so a read-first
         // block only requires some tool on its first step. The last step may not
-        // call tools, so the run always ends with an answer.
-        prepareStep: ({ stepNumber }) => stepNumber === 0 && contract.readFirst
+        // call tools, so the run always ends with an answer. A local model cannot be
+        // forced to call a tool, so there the instructions carry the read-first rule.
+        prepareStep: ({ stepNumber }) => stepNumber === 0 && contract.readFirst && !local
           ? { toolChoice: 'required' }
           : stepNumber === contract.maxSteps - 1 ? { toolChoice: 'none' } : {},
         stopWhen: isStepCount(contract.maxSteps),
@@ -161,16 +169,20 @@ export async function runAgent<OUTPUT = never>(
           : `${contract.feature} returned no final answer (finish=${result.finishReason}, steps=${result.steps.length})`, false);
       }
       const usage = { promptTokens: result.totalUsage.inputTokens ?? null, completionTokens: result.totalUsage.outputTokens ?? null };
-      const provenance = gatewayProvenance(result.providerMetadata, result.response.modelId);
-      warnIfSystemCredential(provenance);
-      const stepCosts = result.steps.map((step) => gatewayProvenance(step.providerMetadata, step.response.modelId).costUsd);
-      provenance.costUsd = stepCosts.every((cost) => cost !== null)
-        ? stepCosts.reduce<number>((total, cost) => total + (cost ?? 0), 0) : null;
+      const provenance = local
+        ? { model, costUsd: null as number | null, inferenceProvider: 'ollama' as string | null, credentialType: null as 'byok' | 'system' | null }
+        : gatewayProvenance(result.providerMetadata, result.response.modelId);
+      if (!local) {
+        warnIfSystemCredential(provenance);
+        const stepCosts = result.steps.map((step) => gatewayProvenance(step.providerMetadata, step.response.modelId).costUsd);
+        provenance.costUsd = stepCosts.every((cost) => cost !== null)
+          ? stepCosts.reduce<number>((total, cost) => total + (cost ?? 0), 0) : null;
+      }
       const responseText = contract.output ? JSON.stringify(output) : result.text;
       generation.update({ output: responseText, ...usageDetails(usage),
         metadata: { modelRole: contract.modelRole, reportedModel: provenance.model, costUsd: provenance.costUsd } });
       await log({
-        feature: contract.feature, provider: 'gateway', model: provenance.model,
+        feature: contract.feature, provider, model: provenance.model,
         promptVersion, promptText: instructions, responseText,
         ...usage, confidenceScore: null, latencyMs: Date.now() - started, errorCode: null, errorDetail: null,
         ...request.context,
@@ -179,7 +191,7 @@ export async function runAgent<OUTPUT = never>(
     } catch (error) {
       const safe = error instanceof ProviderError ? error : gatewayError(error);
       await log({
-        feature: contract.feature, provider: 'gateway', model, promptVersion, promptText: instructions,
+        feature: contract.feature, provider, model, promptVersion, promptText: instructions,
         responseText: null, promptTokens: null, completionTokens: null, confidenceScore: null,
         latencyMs: Date.now() - started, errorCode: 'LLM_ERROR', errorDetail: safe.message, ...request.context,
       });

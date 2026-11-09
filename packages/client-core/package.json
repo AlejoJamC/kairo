@@ -18,6 +18,7 @@
     "./note-mentions": "./src/note-mentions.ts",
     "./triage-status": "./src/triage-status.ts",
     "./stores/triage-store": "./src/stores/triage-store.ts",
+    "./stores/assistant-chat-store": "./src/stores/assistant-chat-store.ts",
     "./hooks/use-account-members": "./src/hooks/use-account-members.ts",
     "./hooks/use-ticket-thread": "./src/hooks/use-ticket-thread.ts",
     "./hooks/use-realtime-tickets": "./src/hooks/use-realtime-tickets.ts",

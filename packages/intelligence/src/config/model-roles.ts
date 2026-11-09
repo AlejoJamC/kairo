@@ -50,7 +50,7 @@ export function resolveModelRoute(role: ModelRole, env?: Record<string, string |
   if (configuredProvider && !allowedProviders.includes(configuredProvider)) {
     throw new ProviderConfigurationError('Unknown configured model provider');
   }
-  const provider = explicit || capability === 'decision' || role === 'assistant' || (configuredProvider && configuredProvider !== 'ollama')
+  const provider = explicit || capability === 'decision' || (role === 'assistant' && env['TEXT_PROVIDER'] !== 'ollama') || (configuredProvider && configuredProvider !== 'ollama')
     ? 'gateway' : 'ollama';
   let model: string | undefined;
   if (provider === 'ollama') {

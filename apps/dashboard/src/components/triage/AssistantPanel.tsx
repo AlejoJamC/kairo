@@ -1,29 +1,21 @@
-import { askAssistant } from "@kairo/client-core/endpoints";
+import { askAccountAssistant, askAssistant } from "@kairo/client-core/endpoints";
 import { getPlatform } from "@kairo/client-core/config";
 import { z } from "zod";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
+import { EMPTY_CHAT, useAssistantChats, type AssistantAnswer } from "@kairo/client-core/stores/assistant-chat-store";
+import { useAuth } from "@kairo/client-core/auth";
 import { useAppCommands } from "@/lib/app-commands";
+import { ASSISTANT_OPEN_CHAT_ENABLED } from "@/lib/panel-flags";
 import { AskBox, AssistantEmpty, AssistantMark, AssistantTurn, Bold, Box, Button, DraftCard as DraftCardView, FollowUps, Icon, InlineCode, PromptStarters, SourceList, Text, UserTurn, type IconName } from "@kairo/ui";
 
 // ── Types ───────────────────────────────────────────────────────────────────
-interface Step { label: string; detail: string }
-type ProseBlock = { type: "p"; text: string } | { type: "bullets"; items: string[] };
-interface Citation { kind: "kb" | "ticket"; id: string; title: string; meta: string }
-interface Draft { subject: string; body: string }
-interface Answer {
-  steps:      Step[];
-  prose:      ProseBlock[];
-  quote?:     { text: string; source: string };
-  draft?:     Draft;
-  citations?: Citation[];
-  followups?: string[];
-}
-type Turn =
-  | { id: number; role: "u"; text: string }
-  | { id: number; role: "a"; answer: Answer };
+type Answer = AssistantAnswer;
+type Citation = NonNullable<Answer["citations"]>[number];
+/** Requests in flight by conversation: a request outlives a ticket switch and lands in its own chat. */
+const inFlight = new Map<string, AbortController>();
 
 // ── Starters (suggestion chips) — labels are i18n, answers are scripted ───────
 type StarterKey =
@@ -31,6 +23,7 @@ type StarterKey =
   | "ai.assistantStarterPolicy"
   | "ai.assistantStarterDraft"
   | "ai.assistantStarterSimilar";
+type AccountStarterKey = "ai.assistantAccountStarterKnowledge" | "ai.assistantAccountStarterRecent";
 const STARTERS: { id: string; icon: IconName; labelKey: StarterKey }[] = [
   { id: "resume",  icon: "activity", labelKey: "ai.assistantStarterResume"  },
   { id: "policy",  icon: "knowledge", labelKey: "ai.assistantStarterPolicy"  },
@@ -46,6 +39,38 @@ const AssistantResponseSchema = z.object({
       data: z.record(z.string(), z.unknown()) }),
   })),
 });
+const ACCOUNT_STARTERS: { id: string; icon: IconName; labelKey: AccountStarterKey }[] = [
+  { id: "knowledge", icon: "knowledge", labelKey: "ai.assistantAccountStarterKnowledge" },
+  { id: "recent",    icon: "activity",  labelKey: "ai.assistantAccountStarterRecent"    },
+];
+const TOOL_LABELS = {
+  inspect_ticket: "ai.assistantToolInspect", draft_reply: "ai.assistantToolDraft", read_account_memory: "ai.assistantToolMemory",
+  search_similar_cases: "ai.assistantToolSimilar", list_account_tickets: "ai.assistantToolTickets",
+} as const;
+const CaseSchema = z.object({ id: z.string(), ticketNumber: z.number().optional(), subject: z.string().nullable().optional() });
+const ArticleSchema = z.object({ id: z.string(), title: z.string().optional(), content: z.string().optional() });
+const TicketRowSchema = z.object({ id: z.string(), subject: z.string().nullable().optional() });
+
+/** The articles and cases the assistant's reads brought back, deduplicated, as the sources of its answer. */
+function citationsFrom(operations: { tool: string; result: { status: string; data: Record<string, unknown> } }[], labels: { article: string; resolved: string; ticket: string }): Citation[] {
+  const found = new Map<string, Citation>();
+  for (const { result, tool } of operations) {
+    if (result.status !== "completed") continue;
+    const articles = z.array(ArticleSchema).safeParse(tool === "inspect_ticket" ? result.data["knowledge"] : result.data["approvedKnowledge"]);
+    for (const a of articles.success ? articles.data : []) {
+      found.set(`kb:${a.id}`, { kind: "kb", id: "KB", title: a.title ?? (a.content ?? "").slice(0, 80), meta: labels.article });
+    }
+    const cases = z.array(CaseSchema).safeParse(result.data["resolvedCases"]);
+    for (const c of cases.success ? cases.data : []) {
+      found.set(`case:${c.id}`, { kind: "ticket", id: c.ticketNumber === undefined ? "" : `KAI-T-${c.ticketNumber}`, title: c.subject ?? "", meta: labels.resolved });
+    }
+    const tickets = tool === "list_account_tickets" ? z.array(TicketRowSchema).safeParse(result.data["tickets"]) : null;
+    for (const row of tickets?.success ? tickets.data : []) {
+      found.set(`ticket:${row.id}`, { kind: "ticket", id: "", title: row.subject ?? "", meta: labels.ticket });
+    }
+  }
+  return [...found.values()].slice(0, 8);
+}
 const ProposalSchema = z.object({ suggestion: z.string(), proposalId: z.string(), referencedKbArticles: z.array(z.string()) });
 
 function renderInline(text: string): ReactNode[] {
@@ -65,7 +90,7 @@ function renderInline(text: string): ReactNode[] {
   return out;
 }
 
-function AssistantDraft({ d, onInsert, inserted }: { d: Draft; onInsert: () => void; inserted: boolean }) {
+function AssistantDraft({ d, onInsert, inserted }: { d: NonNullable<Answer["draft"]>; onInsert: () => void; inserted: boolean }) {
   const { t } = useTranslation("dashboard");
   const [copied, setCopied] = useState(false);
   return (
@@ -157,49 +182,49 @@ export function AssistantPanel() {
   const { t } = useTranslation("dashboard");
   const { selectedTicketId, tickets, setSuggestedReply } = useTriageStore();
   const selectedTicket = tickets.find((tk) => tk.id === selectedTicketId) ?? null;
+  // Without a ticket the chat exists only while the open-chat flag is on.
+  const accountMode = !selectedTicket && ASSISTANT_OPEN_CHAT_ENABLED;
   const focusPending = useAppCommands((state) => state.assistantFocusPending);
   const clearFocus = useAppCommands((state) => state.clearAssistantFocus);
   // Without a ticket there is no input to focus: the request ends here.
   useEffect(() => {
-    if (focusPending && !selectedTicket) clearFocus();
-  }, [focusPending, selectedTicket, clearFocus]);
+    if (focusPending && !selectedTicket && !accountMode) clearFocus();
+  }, [focusPending, selectedTicket, accountMode, clearFocus]);
 
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [busy, setBusy]   = useState(false);
+  const { user } = useAuth();
+  const chatKey = `${user?.id ?? "anonymous"}:${selectedTicketId ?? "account"}`;
+  const chat = useAssistantChats((state) => state.chats[chatKey]) ?? EMPTY_CHAT;
+  const { turns, busy, draft } = chat;
+  const error = chat.failed ? t("ai.assistantRequestFailed") : null;
+  const openChat = useAssistantChats((state) => state.open);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const seq = useRef(0);
-  const controller = useRef<AbortController | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [modelName, setModelName] = useState<string>(t('ai.assistantName'));
-  const [draft, setDraft] = useState("");
-  const lastQuestion = useRef("");
 
-  // Reset the conversation whenever the selected ticket changes.
-  useEffect(() => {
-    controller.current?.abort(); setTurns([]); setBusy(false); setError(null);
-    return () => controller.current?.abort();
-  }, [selectedTicketId]);
+  // Each ticket keeps its own conversation: switching loads the one already there instead of starting over.
+  useEffect(() => { openChat(chatKey); }, [chatKey, openChat]);
 
   // Keep the thread scrolled to the latest turn.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [turns, busy]);
+  }, [turns, busy, chatKey]);
 
   async function ask(text: string) {
-    if (busy || !selectedTicketId) return;
-    lastQuestion.current = text;
+    if (busy || (!selectedTicketId && !accountMode)) return;
+    const key = chatKey;
+    const ticketId = selectedTicketId;
+    const subject = selectedTicket?.subject ?? '';
+    const chats = useAssistantChats.getState();
     const abort = new AbortController();
-    controller.current = abort;
-    setError(null); setBusy(true);
-    const uid = ++seq.current;
-    const aid = ++seq.current;
+    inFlight.set(key, abort);
+    chats.setBusy(key, true);
     const history = turns.map((turn) => turn.role === 'u'
       ? { role: 'user' as const, content: turn.text }
       : { role: 'assistant' as const, content: turn.answer.prose.map((block) => block.type === 'p' ? block.text : block.items.join('\n')).join('\n') });
-    setTurns((previous) => [...previous, { id: uid, role: 'u', text }]);
+    chats.addQuestion(key, text);
     try {
-      const response = await askAssistant(selectedTicketId, [...history.slice(-18), { role: 'user', content: text }], abort.signal);
+      const messages = [...history.slice(-18), { role: 'user', content: text }];
+      const response = ticketId ? await askAssistant(ticketId, messages, abort.signal) : await askAccountAssistant(messages, abort.signal);
       if (!response.ok) throw new Error('Assistant request failed');
       const result = AssistantResponseSchema.parse(await response.json());
       if (abort.signal.aborted) return;
@@ -208,22 +233,23 @@ export function AssistantPanel() {
       const proposal = ProposalSchema.safeParse(draftOperation?.result.data['proposal']);
       const answer: Answer = {
         steps: result.operations.map((operation) => ({
-          label: t(operation.tool === 'inspect_ticket' ? 'ai.assistantToolInspect' : operation.tool === 'draft_reply' ? 'ai.assistantToolDraft' : 'ai.assistantToolDecide'),
+          label: t(TOOL_LABELS[operation.tool as keyof typeof TOOL_LABELS] ?? 'ai.assistantToolDecide'),
           detail: t(`ai.assistantOperation_${operation.result.status}`),
         })),
         prose: [{ type: 'p', text: result.text }],
-        ...(proposal.success ? { draft: { subject: selectedTicket?.subject ?? '', body: proposal.data.suggestion } } : {}),
+        citations: citationsFrom(result.operations, { article: t('ai.assistantSourceArticle'), resolved: t('ai.assistantSourceCase'), ticket: t('ai.assistantSourceTicket') }),
+        ...(proposal.success ? { draft: { subject, body: proposal.data.suggestion } } : {}),
       };
-      setTurns((previous) => [...previous, { id: aid, role: 'a', answer }]);
+      useAssistantChats.getState().addAnswer(key, answer);
     } catch {
-      if (!abort.signal.aborted) setError(t('ai.assistantRequestFailed'));
+      if (!abort.signal.aborted) useAssistantChats.getState().setFailed(key, true);
     } finally {
-      if (controller.current === abort) setBusy(false);
+      if (inFlight.get(key) === abort) { inFlight.delete(key); useAssistantChats.getState().setBusy(key, false); }
     }
   }
 
-  // No ticket selected — nothing to reason about yet.
-  if (!selectedTicket) {
+  // No ticket selected and no open chat — nothing to reason about yet.
+  if (!selectedTicket && !accountMode) {
     return (
       <Text tag="div" display="flex" flexDirection="column" alignItems="center" justifyContent="center" gap={8} height="100%" paddingVertical={32} paddingHorizontal={16} textAlign="center">
         <AssistantMark size={30} />
@@ -233,20 +259,20 @@ export function AssistantPanel() {
     );
   }
 
-  const ticketLabel = `KAI-T-${selectedTicket.ticket_number}`;
-  const senderName  = selectedTicket.from_name ?? selectedTicket.from_email ?? t("ai.assistantUnknownSender");
+  const ticketLabel = selectedTicket ? `KAI-T-${selectedTicket.ticket_number}` : "";
+  const senderName  = selectedTicket ? selectedTicket.from_name ?? selectedTicket.from_email ?? t("ai.assistantUnknownSender") : "";
   const empty = turns.length === 0;
 
   return (
     <Box display="flex" flexDirection="column" height="100%" minHeight={0}>
       <Box ref={scrollRef} flexGrow={1} flexShrink={1} flexBasis="0%" scroll paddingTop={empty ? 0 : 16} paddingRight={empty ? 0 : 14} paddingBottom={empty ? 0 : 8} paddingLeft={empty ? 0 : 14} minHeight={0}>
         {empty ? (
-          <AssistantEmpty name={t("ai.assistantName")} tagline={t("ai.assistantTagline")} intro={t("ai.assistantIntro", { ticket: ticketLabel, name: senderName })}>
+          <AssistantEmpty name={t("ai.assistantName")} tagline={accountMode ? t("ai.assistantAccountTagline") : t("ai.assistantTagline")} intro={accountMode ? t("ai.assistantAccountIntro") : t("ai.assistantIntro", { ticket: ticketLabel, name: senderName })}>
             <PromptStarters
               title={t("ai.assistantSuggestions")}
-              items={STARTERS.map((st) => ({ id: st.id, icon: st.icon, text: t(st.labelKey) }))}
+              items={(accountMode ? ACCOUNT_STARTERS : STARTERS).map((st) => ({ id: st.id, icon: st.icon, text: t(st.labelKey) }))}
               onPick={(id) => {
-                const starter = STARTERS.find((st) => st.id === id);
+                const starter = (accountMode ? ACCOUNT_STARTERS : STARTERS).find((st) => st.id === id);
                 if (starter) ask(t(starter.labelKey));
               }}
             />
@@ -262,27 +288,27 @@ export function AssistantPanel() {
               />)
         )}
       </Box>
-      {busy && <Text tag="p" role="status" paddingVertical={0} paddingHorizontal={14} display="block">{t('ai.assistantWaiting')}</Text>}
+      {busy && <Text tag="p" role="status" paddingVertical={0} paddingHorizontal={14} display="block">{accountMode ? t('ai.assistantAccountWaiting') : t('ai.assistantWaiting')}</Text>}
       <Box borderTopWidth={1} borderTopColor="var(--k-border)" paddingTop={10} paddingHorizontal={12} paddingBottom={12} backgroundColor="var(--kairo-color-surface)" flexShrink={0} borderStyle="solid">
         <AskBox
           value={draft}
-          onChange={setDraft}
-          onSend={() => { const text = draft.trim(); if (!text || busy) return; setDraft(""); void ask(text); }}
-          onStop={() => { controller.current?.abort(); setBusy(false); }}
+          onChange={(value) => useAssistantChats.getState().setDraft(chatKey, value)}
+          onSend={() => { const text = draft.trim(); if (!text || busy) return; useAssistantChats.getState().setDraft(chatKey, ""); void ask(text); }}
+          onStop={() => { inFlight.get(chatKey)?.abort(); inFlight.delete(chatKey); useAssistantChats.getState().setBusy(chatKey, false); }}
           autoFocus={focusPending}
           onFocused={clearFocus}
           answering={busy}
           error={Boolean(error)}
-          onRetry={() => { setDraft(""); void ask(lastQuestion.current); }}
-          contexts={[
+          onRetry={() => { useAssistantChats.getState().setDraft(chatKey, ""); void ask(chat.lastQuestion); }}
+          contexts={accountMode ? [] : [
             { id: "ticket", icon: "ticket", label: ticketLabel },
             { id: "sender", icon: "user", label: senderName },
             { id: "add", icon: "mention", label: t("ai.assistantContextChip"), add: true },
           ]}
           model={modelName}
-          hint={t("ai.assistantModelContext")}
+          hint={accountMode ? t("ai.assistantAccountContext") : t("ai.assistantModelContext")}
           labels={{
-            placeholder: t("ai.assistantComposerPlaceholder"),
+            placeholder: accountMode ? t("ai.assistantAccountPlaceholder") : t("ai.assistantComposerPlaceholder"),
             textarea: t("ai.assistantQuestionLabel"),
             send: t("ai.assistantSend"),
             stop: t("ai.assistantStop"),

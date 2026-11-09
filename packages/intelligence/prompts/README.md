@@ -27,6 +27,7 @@ Backfill classification uses shared priority and urgency criteria from [historic
 - `knowledge-draft/`: draft an article from a resolved ticket selected by the knowledge-candidate workflow. Role: `knowledge_draft`.
 - `reply-suggestion/`: draft a response from current case context and approved knowledge. Role: `reply`.
 - `ticket-assistant/`: conversational tool use for inspecting tickets and proposing actions. Role: `assistant`.
+- `account-assistant/`: the same assistant without a selected ticket, reading account memory and tickets only. Role: `assistant`.
 
 ## Native decision questions
 

@@ -57,7 +57,7 @@ workflow.post('/knowledge/:id/review', async c => {
     p_kind: value.kind, p_id: c.req.param('id'), p_version_id: value.versionId, p_decision: value.decision,
     p_title: value.title ?? null, p_content: value.content ?? null });
   if (error) return c.json({ error: 'Review conflict or permission denied; refresh before retrying' }, 409);
-  if (value.kind === 'article' && value.title && value.content) {
+  if (value.kind === 'article') {
     await requestSemanticIndexing(supabase, ctx.accountId, [{ kind: 'kb_article', id: c.req.param('id') }])
       .catch(() => console.warn('[workflow] Semantic indexing request was not accepted'));
   }

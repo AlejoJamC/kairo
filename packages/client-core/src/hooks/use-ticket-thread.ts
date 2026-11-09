@@ -67,6 +67,15 @@ function hasPendingDelivery(messages: ThreadMessage[]): boolean {
 
 const POLL_INTERVAL_MS = 3000;
 
+/** The last thread seen for each ticket, shown at once while a fresh one loads, so switching ticket never blanks the thread. */
+const threadCache = new Map<string, ThreadMessage[]>();
+const THREAD_CACHE_LIMIT = 50;
+function rememberThread(ticketId: string, messages: ThreadMessage[]): void {
+  threadCache.delete(ticketId);
+  threadCache.set(ticketId, messages);
+  if (threadCache.size > THREAD_CACHE_LIMIT) threadCache.delete(threadCache.keys().next().value as string);
+}
+
 /**
  * Fetches the message thread for a ticket via GET /api/v1/tickets/:id/messages.
  * Refreshes whenever ticketId changes, and polls while an outbound message is
@@ -92,7 +101,9 @@ export function useTicketThread(ticketId: string | null): UseTicketThreadResult 
     }
 
     let cancelled = false;
-    setLoading(true);
+    const remembered = threadCache.get(ticketId);
+    setMessages(remembered ?? []);
+    setLoading(!remembered);
     setError(null);
 
     apiCall(`/api/v1/tickets/${ticketId}/messages`)
@@ -104,6 +115,7 @@ export function useTicketThread(ticketId: string | null): UseTicketThreadResult 
         return res.json() as Promise<{ messages: ThreadMessage[]; count: number }>;
       })
       .then((data) => {
+        rememberThread(ticketId, data.messages ?? []);
         if (!cancelled) setMessages(data.messages ?? []);
       })
       .catch((err: unknown) => {
@@ -132,6 +144,7 @@ export function useTicketThread(ticketId: string | null): UseTicketThreadResult 
         const data = (await res.json()) as { messages: ThreadMessage[] };
         if (cancelled) return;
         const next = data.messages ?? [];
+        rememberThread(ticketId, next);
         if (next.some((m) => !knownIds.current.has(m.id))) setContentAdded((n) => n + 1);
         setMessages(next);
       } catch {
@@ -146,7 +159,11 @@ export function useTicketThread(ticketId: string | null): UseTicketThreadResult 
   }, [ticketId, pending]);
 
   function appendOptimisticMessage(message: ThreadMessage) {
-    setMessages((prev) => [...prev, message]);
+    setMessages((prev) => {
+      const next = [...prev, message];
+      if (ticketId) rememberThread(ticketId, next);
+      return next;
+    });
     setContentAdded((n) => n + 1);
   }
 

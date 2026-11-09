@@ -5,6 +5,7 @@ import { getClientProfile } from "@kairo/client-core/endpoints";
 import type { ClientProfile } from "@kairo/client-core/stores/triage-store";
 import { ClientTabContainer, EscalateTabContainer } from "@/components/triage/ContextTabs";
 import { useAppCommands } from "@/lib/app-commands";
+import { getPlatform } from "@kairo/client-core/config";
 import { useResizablePanel } from "@/hooks/use-resizable-panel";
 import { AssistantPanel } from "@/components/triage/AssistantPanel";
 import { NotesPanel } from "@/components/triage/NotesPanel";
@@ -29,6 +30,8 @@ const QUEUE_WIDTH = Number.parseFloat(tokens["layout.queue"]);
 // Default: false (disabled) — only renders if explicitly enabled
 //
 // ═══════════════════════════════════════════════════════════════════════════
+
+const ACTIVE_TAB_KEY = "superpowers-tab";
 
 export function isFlagEnabled(value: string | undefined): boolean {
   return value === "true";
@@ -74,7 +77,14 @@ function SuperpowersPanel() {
   );
   const defaultTabId: TabId = tabs[0]?.id ?? "assistant";
 
-  const [activeTab,      setActiveTab]      = useState<TabId>(defaultTabId);
+  // The tab in use stays put when another ticket is selected, and across reloads; a tab that is not
+  // available any more falls back to the first one.
+  const [chosenTab, setChosenTab] = useState<string | null>(() => getPlatform().storage.getItem(ACTIVE_TAB_KEY));
+  const activeTab: TabId = tabs.find((entry) => entry.id === chosenTab)?.id ?? defaultTabId;
+  const setActiveTab = (id: TabId) => {
+    setChosenTab(id);
+    getPlatform().storage.setItem(ACTIVE_TAB_KEY, id);
+  };
   const setContextTab = useAppCommands((state) => state.setContextTab);
   useEffect(() => {
     setContextTab(selectedTicketId ? activeTab : null);
@@ -114,9 +124,6 @@ function SuperpowersPanel() {
     show();
     if (tabs.some((entry) => entry.id === requested)) setActiveTab(requested);
   }, [panelTabRequest, clearPanelTabRequest, tabs, show]);
-
-  // Reset to the first tab when ticket changes.
-  useEffect(() => { setActiveTab(defaultTabId); }, [selectedTicketId, defaultTabId]);
 
   // Drag-to-resize. Floor = the current fixed width (340). Ceiling is computed
   // so the center column keeps a usable width; the left rail + ticket list

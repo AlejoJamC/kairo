@@ -27,6 +27,11 @@ export const SUPERPOWERS_ENABLED = isFlagEnabled(
   import.meta.env.VITE_FF_ENABLE_SUPERPOWERS
 );
 
+/** The assistant chat without a selected ticket. Also requires the assistant tab flag and the server-side flag. */
+export const ASSISTANT_OPEN_CHAT_ENABLED = isFlagEnabled(
+  import.meta.env.VITE_FF_ENABLE_ASSISTANT_OPEN_CHAT
+);
+
 /** The Notes tab of the Superpowers panel. Also requires the internal-notes flag. */
 export const NOTES_TAB_ENABLED = isFlagEnabled(
   import.meta.env.VITE_FF_ENABLE_NOTES_TAB

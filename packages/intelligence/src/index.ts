@@ -138,7 +138,7 @@ export {
 
 export { runAgentFeature, OperationResultSchema, type OperationResult, type AgentTool } from './harness/run-agent-feature';
 export { runAgent, inlineAgentSteps, type AgentContract, type AgentRunRequest, type AgentStepRunner } from './harness/run-agent';
-export { TICKET_ASSISTANT_CONTRACT } from './harness/run-agent-feature';
+export { TICKET_ASSISTANT_CONTRACT, ACCOUNT_ASSISTANT_CONTRACT, assistantContract } from './harness/run-agent-feature';
 export { BusinessSynthesisSchema, BUSINESS_SYNTHESIS_CONTRACT, type BusinessSynthesis } from './knowledge/business-synthesis';
 export { askJudgments, JudgmentRequestSchema, type JudgmentRequest } from './harness/ask-judgments';
 export { GatewayCompletionProvider } from './providers/gateway/completion';

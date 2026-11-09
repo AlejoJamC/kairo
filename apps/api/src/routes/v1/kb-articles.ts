@@ -190,9 +190,10 @@ kbArticles.put("/:id", async (c) => {
   }
   if (!data) return c.json({ error: "Not found" }, 404);
 
-  const titleChanged   = parsed.data.title !== undefined;
-  const contentChanged = parsed.data.content !== undefined;
-  if (titleChanged || contentChanged) {
+  const titleChanged     = parsed.data.title !== undefined;
+  const contentChanged   = parsed.data.content !== undefined;
+  const publishedChanged = parsed.data.is_published !== undefined;
+  if (titleChanged || contentChanged || publishedChanged) {
     await requestSemanticIndexing(supabase, ctx.accountId, [{ kind: 'kb_article', id: data.id }]).catch((err: unknown) => {
       console.error(`[kb-articles] embedding refresh failed for ${data.id}:`, err);
     });

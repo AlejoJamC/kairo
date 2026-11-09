@@ -19,6 +19,13 @@ describe('model role routing', () => {
       .toEqual({ role: 'validation', provider: 'gateway', capability: 'decision', model: 'acme/verifier' });
   });
 
+  it('runs the assistant on a local model only when the text provider is explicitly local', () => {
+    expect(resolveModelRoute('assistant', { TEXT_PROVIDER: 'ollama', OLLAMA_MODEL: 'acme-local:1b' }))
+      .toEqual({ role: 'assistant', provider: 'ollama', capability: 'language', model: 'acme-local:1b' });
+    expect(() => resolveModelRoute('assistant', { INTELLIGENCE_PROVIDER: 'jev' })).toThrow(/must be configured/);
+    expect(resolveModelRoute('assistant', { TEXT_PROVIDER: 'ollama', AI_GATEWAY_ASSISTANT_MODEL: 'acme/language-c' }).provider).toBe('gateway');
+  });
+
   it('changes classification capability without changing generation roles', () => {
     const env = { CLASSIFICATION_MODE: 'language', INTELLIGENCE_PROVIDER: 'gateway', AI_GATEWAY_MODEL: 'acme/language' };
     expect(resolveModelRoute('classification', env)).toEqual({ role: 'classification', provider: 'gateway',

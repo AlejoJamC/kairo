@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { runAgentFeature, TICKET_ASSISTANT_CONTRACT, type LlmCallLogger } from '@kairo/intelligence';
+import { assistantContract, runAgentFeature, type LlmCallLogger } from '@kairo/intelligence';
 import { contractTools, sharedAgentTools, type AgentToolDeps } from './agent-tools.js';
 import { resolveClassifierContext } from './classifier-input.js';
 import { recordLlmCall } from './llm-logging.js';
@@ -17,21 +17,24 @@ export interface TicketAssistantDeps extends Omit<AgentToolDeps, 'db' | 'logger'
 }
 
 export async function consultTicketAssistant(input: {
-  ticketId: string; accountId: string; userId: string;
+  ticketId?: string; accountId: string; userId: string;
   messages: z.infer<typeof AssistantRequestSchema>['messages']; signal?: AbortSignal;
 }, deps: TicketAssistantDeps = {}) {
   const db = deps.db ?? supabase;
   const logger = deps.logger ?? recordLlmCall;
-  const { data: ticket, error } = await db.from('tickets').select('id')
-    .eq('id', input.ticketId).eq('account_id', input.accountId).maybeSingle();
-  if (error) throw new Error('Ticket lookup failed');
-  if (!ticket) return null;
+  if (input.ticketId) {
+    const { data: ticket, error } = await db.from('tickets').select('id')
+      .eq('id', input.ticketId).eq('account_id', input.accountId).maybeSingle();
+    if (error) throw new Error('Ticket lookup failed');
+    if (!ticket) return null;
+  }
+  const contract = assistantContract(input.ticketId);
   const context = await (deps.resolveContext ?? resolveClassifierContext)('backfill', input.accountId);
-  const registry = sharedAgentTools({ feature: TICKET_ASSISTANT_CONTRACT.feature, accountId: input.accountId,
-    ticketId: input.ticketId, userId: input.userId, ...(input.signal ? { signal: input.signal } : {}) },
+  const registry = sharedAgentTools({ feature: contract.feature, accountId: input.accountId,
+    ...(input.ticketId ? { ticketId: input.ticketId } : {}), userId: input.userId, ...(input.signal ? { signal: input.signal } : {}) },
   { ...deps, db, logger, resolveContext: async () => context });
   return (deps.runAgent ?? runAgentFeature)({ lang: context.language, messages: input.messages,
-    tools: contractTools(TICKET_ASSISTANT_CONTRACT, registry),
-    context: { accountId: input.accountId, userId: input.userId, ticketId: input.ticketId },
+    tools: contractTools(contract, registry),
+    context: { accountId: input.accountId, userId: input.userId, ...(input.ticketId ? { ticketId: input.ticketId } : {}) },
     logger, ...(input.signal ? { signal: input.signal } : {}) });
 }
