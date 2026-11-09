@@ -3,6 +3,7 @@ import { describe, expect, it, mock } from 'bun:test';
 process.env['SUPABASE_URL'] ??= 'http://localhost:54321';
 process.env['SUPABASE_SERVICE_ROLE_KEY'] ??= 'synthetic-service-role-key';
 const { sharedAgentTools, contractTools } = await import('./agent-tools');
+const { memoryDb } = await import('../test-support/memory-db');
 const { inngestAgentSteps } = await import('./agent-steps');
 const { TICKET_ASSISTANT_CONTRACT, ACCOUNT_ASSISTANT_CONTRACT, assistantContract } = await import('@kairo/intelligence');
 
@@ -34,8 +35,56 @@ describe('shared agent tools', () => {
   it('gives a block only the tools its contract lists, in contract order', () => {
     const registry = sharedAgentTools(scope, { db: database({}).db });
     expect(contractTools(TICKET_ASSISTANT_CONTRACT, registry).map((definition) => definition.name))
-      .toEqual(['inspect_ticket', 'read_account_memory', 'search_similar_cases', 'decide_classification', 'draft_reply']);
+      .toEqual(['inspect_ticket', 'find_tickets', 'list_sender_tickets', 'account_stats', 'read_ticket_timeline', 'read_ticket_notes', 'read_client_profile',
+        'read_ticket_sla', 'read_ticket_relations', 'read_account_memory', 'search_similar_cases', 'decide_classification', 'draft_reply']);
     expect(() => contractTools({ feature: 'synthetic_block', tools: ['send_email'] }, registry)).toThrow('unknown tool send_email');
+  });
+
+  it('finds and counts tickets by fixed filters inside the account, including the sender of the ticket', async () => {
+    const db = memoryDb({ tickets: [
+      { ...ticket, id: 'ticket', account_id: 'account', status: 'open', created_at: '2026-06-03' },
+      { ...ticket, id: 'earlier', account_id: 'account', status: 'resolved', created_at: '2026-06-02' },
+      { ...ticket, id: 'waiting', account_id: 'account', status: 'awaiting_customer', created_at: '2026-06-01' },
+      { ...ticket, id: 'foreign', account_id: 'other-account', status: 'open', created_at: '2026-06-04' },
+      { ...ticket, id: 'stranger', account_id: 'account', from_email: 'other@outside.com', status: 'open', created_at: '2026-06-05' },
+    ] });
+    const tools = sharedAgentTools(scope, { db: db as never });
+    const sender = await tools.list_sender_tickets!.execute({});
+    expect(sender).toMatchObject({ status: 'completed', data: { total: 3, open: 2, byStatus: { open: 1, resolved: 1, awaiting_customer: 1 } } });
+    const open = await tools.find_tickets!.execute({ status: 'open' });
+    expect(open).toMatchObject({ data: { total: 3 } });
+    expect((open.data['tickets'] as { id: string }[]).map((row) => row.id)).not.toContain('foreign');
+    expect(await tools.find_tickets!.execute({ assignee: 'me' })).toMatchObject({ status: 'completed' });
+  });
+
+  it('summarises the account without reading other accounts', async () => {
+    const db = memoryDb({ tickets: [
+      { account_id: 'account', status: 'open', priority: 'P1', category: 'billing', assigned_to: null, sla_breached: true, created_at: new Date().toISOString() },
+      { account_id: 'account', status: 'resolved', priority: 'P2', category: 'billing', assigned_to: null, sla_breached: false, created_at: '2026-01-01T00:00:00Z', resolved_at: new Date().toISOString() },
+      { account_id: 'other-account', status: 'open', priority: 'P1', category: 'billing', assigned_to: null, sla_breached: true, created_at: new Date().toISOString() },
+    ] });
+    const result = await sharedAgentTools({ feature: 'account_assistant', accountId: 'account', userId: 'user' }, { db: db as never }).account_stats!.execute({});
+    expect(result).toMatchObject({ status: 'completed', data: { total: 2, open: 1, unassignedOpen: 1, slaBreachedOpen: 1, createdLast7Days: 1, resolvedLast7Days: 1 } });
+  });
+
+  it('reads timeline, notes, relations and the client profile only for its own ticket', async () => {
+    const AGENT = '11111111-1111-4111-8111-111111111111';
+    const db = memoryDb({
+      tickets: [{ ...ticket, id: 'ticket', account_id: 'account', assigned_to: AGENT, group_id: null }],
+      profiles: [{ id: AGENT, name: 'Ana Agent' }],
+      ticket_lifecycle_timeline: [{ account_id: 'account', ticket_id: 'ticket', occurred_at: '2026-01-02', kind: 'state_change', actor_ref: AGENT, detail: 'open → resolved' },
+        { account_id: 'account', ticket_id: 'foreign', occurred_at: '2026-01-03', kind: 'note', actor_ref: AGENT, detail: 'secret' }],
+      ticket_notes: [{ account_id: 'account', ticket_id: 'ticket', author_id: AGENT, body: 'Check logs', created_at: '2026-01-02' }],
+      ticket_tags: [{ ticket_id: 'ticket', tag: 'vip' }], ticket_followers: [], escalations: [], csat_events: [{ ticket_id: 'ticket', score: 5, comment: null, submitted_at: '2026-01-03' }],
+      clients: [], draft_contact: [], tenant_sla_rules: [], ticket_priority_sla_config: [],
+    });
+    const tools = sharedAgentTools(scope, { db: db as never });
+    const timeline = await tools.read_ticket_timeline!.execute({});
+    expect(timeline.data['events']).toEqual([{ at: '2026-01-02', kind: 'state_change', actorType: undefined, actor: 'Ana Agent', detail: 'open → resolved' }]);
+    expect(await tools.read_ticket_notes!.execute({})).toMatchObject({ data: { notes: [{ author: 'Ana Agent', body: 'Check logs' }] } });
+    expect(await tools.read_ticket_relations!.execute({})).toMatchObject({ data: { assignee: { name: 'Ana Agent' }, tags: ['vip'], csat: [{ score: 5 }] } });
+    expect(await tools.read_client_profile!.execute({})).toMatchObject({ status: 'completed', missing: ['client'] });
+    expect(await tools.read_ticket_sla!.execute({})).toMatchObject({ status: 'completed' });
   });
 
   it('serves the account assistant, without ticket tools, when no ticket is selected', () => {
@@ -43,7 +92,7 @@ describe('shared agent tools', () => {
     expect(assistantContract(undefined)).toBe(ACCOUNT_ASSISTANT_CONTRACT);
     expect(assistantContract('ticket')).toBe(TICKET_ASSISTANT_CONTRACT);
     expect(contractTools(ACCOUNT_ASSISTANT_CONTRACT, registry).map((definition) => definition.name))
-      .toEqual(['read_account_memory', 'list_account_tickets']);
+      .toEqual(['read_account_memory', 'find_tickets', 'account_stats']);
   });
 
   it('reads the conversation only inside the account and ticket scope', async () => {
