@@ -67,3 +67,4 @@ export * from "./pricing-table";
 export * from "./product-frame";
 export * from "./section";
 export * from "./top-nav";
+export * from './scroll-jump'

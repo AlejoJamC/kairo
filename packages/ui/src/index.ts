@@ -86,3 +86,4 @@ export * from "./window-chrome";
 export * from "./dock-badge";
 export * from "./app-menu";
 export * from "./system-notification";
+export * from "./scroll-jump";

@@ -476,6 +476,8 @@
     }
   },
   "ticketDetail": {
+    "scrollToEnd": "Ir al final de la conversación",
+    "scrollToStart": "Ir al inicio",
     "customer": "Cliente",
     "plan": "Plan",
     "sla": "SLA",

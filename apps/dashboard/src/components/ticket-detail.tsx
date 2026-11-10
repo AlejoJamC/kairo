@@ -11,13 +11,14 @@ import { INTERNAL_NOTES_ENABLED } from "@/lib/internal-notes-flags";
 import { NoteBody } from "./triage/note-body";
 import { TeamOnlyChip } from "./triage/note-primitives";
 import { useTicketListVisibility } from "@/hooks/use-ticket-list-visibility";
-import { Avatar, Box, Button, Chip, Icon, Pressable, ReadOnlyBar, SlaIndicator, Text, ThreadMessage as ThreadMessageView } from "@kairo/ui";
+import { Avatar, Box, Button, Chip, Icon, Pressable, ReadOnlyBar, SlaIndicator, Text, ThreadMessage as ThreadMessageView, ScrollJump } from "@kairo/ui";
 import { startGmailConnect } from "@kairo/client-core/endpoints";
 import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
 import { formatDuration, slaDisplay } from "@/lib/sla-display";
 import { useActiveView } from "@/hooks/useActiveView";
 import { formatDateTime } from "@/lib/date-format";
+import { useScrollEdges } from "@/hooks/use-scroll-edges";
 
 // Delay before clearing the selection once the open ticket leaves the active queue.
 const CLEAR_AFTER_LEAVING_ACTIVE_MS = 2500;
@@ -195,6 +196,7 @@ function TicketDetailView() {
 
   const { messages: allMessages, loading: threadLoading, appendOptimisticMessage, contentAdded } = useTicketThread(ticket?.id ?? null);
   const bumpThreadRevision = useTriageStore((s) => s.bumpThreadRevision);
+  const { attach: attachScroll, scrollable, direction: jumpDirection, jump } = useScrollEdges();
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // KAI-232: with the internal-notes flag OFF the thread is customer-only —
@@ -298,8 +300,9 @@ function TicketDetailView() {
     <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={CENTER_PANEL_MIN_WIDTH} display="flex" flexDirection="column" overflow="hidden" backgroundColor="var(--k-surface)">
       <TicketHeader ticket={ticket} queueName={queueName} readOnly={isReadOnly} onOpenNotes={() => requestPanelTab("notes")} />
 
-      {/* Scrollable body */}
-      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll display="flex" flexDirection="column" alignItems="center">
+      {/* Scrollable body, with the jump to its end and back to its start */}
+      <Box position="relative" flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} display="flex" flexDirection="column">
+      <Box ref={attachScroll} flexGrow={1} flexShrink={1} flexBasis="0%" minHeight={0} scroll display="flex" flexDirection="column" alignItems="center">
         <Box width="100%" maxWidth={780} display="flex" flexDirection="column" gap={22} paddingTop={28} paddingHorizontal={32} paddingBottom={32}>
           <TicketHeadingBlock ticket={ticket} readOnly={isReadOnly} sla={<PrioritySlaBar ticket={ticket} />} />
 
@@ -367,6 +370,13 @@ function TicketDetailView() {
             </>
           )}
         </Box>
+      </Box>
+      <ScrollJump
+        visible={scrollable}
+        direction={jumpDirection}
+        label={jumpDirection === "down" ? t("ticketDetail.scrollToEnd") : t("ticketDetail.scrollToStart")}
+        onPress={jump}
+      />
       </Box>
 
       {/* Fixed bottom reply bar — hidden for read-only historical tickets */}
