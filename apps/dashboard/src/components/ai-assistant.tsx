@@ -57,7 +57,7 @@ export function AiAssistant() {
 
 function SuperpowersPanel() {
   const { hidden, show, hidePanel } = useSuperpowersVisibility();
-  const { t, i18n } = useTranslation("dashboard");
+  const { t } = useTranslation("dashboard");
   const { selectedTicketId, tickets, setClientProfile } = useTriageStore();
   const selectedTicket = tickets.find((tk) => tk.id === selectedTicketId) ?? null;
 
@@ -198,7 +198,7 @@ function SuperpowersPanel() {
           <NotesPanel ticketId={selectedTicketId} onNewNote={requestComposeNote} />
         )}
         {similarTabEnabled && activeTab === "similar" && (
-          <SimilarTab ticketId={selectedTicketId} lang={i18n.language} />
+          <SimilarTab ticketId={selectedTicketId} />
         )}
         {articlesTabEnabled && activeTab === "articles" && (
           <ArticlesTab ticketId={selectedTicketId} />

@@ -7,6 +7,7 @@ import { supabase } from './supabase.js';
 
 export const AssistantRequestSchema = z.object({
   messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(4000) }).strict()).min(1).max(20),
+  timeZone: z.string().max(64).refine((zone) => { try { new Intl.DateTimeFormat('en-GB', { timeZone: zone }); return true; } catch { return false; } }, 'Unknown time zone').optional(),
 }).strict().refine((request) => request.messages.at(-1)?.role === 'user', 'The final message must be from the user');
 
 export interface TicketAssistantDeps extends Omit<AgentToolDeps, 'db' | 'logger' | 'resolveContext'> {
@@ -17,7 +18,7 @@ export interface TicketAssistantDeps extends Omit<AgentToolDeps, 'db' | 'logger'
 }
 
 export async function consultTicketAssistant(input: {
-  ticketId?: string; accountId: string; userId: string;
+  ticketId?: string; accountId: string; userId: string; timeZone?: string;
   messages: z.infer<typeof AssistantRequestSchema>['messages']; signal?: AbortSignal;
 }, deps: TicketAssistantDeps = {}) {
   const db = deps.db ?? supabase;
@@ -31,7 +32,7 @@ export async function consultTicketAssistant(input: {
   const contract = assistantContract(input.ticketId);
   const context = await (deps.resolveContext ?? resolveClassifierContext)('backfill', input.accountId);
   const registry = sharedAgentTools({ feature: contract.feature, accountId: input.accountId,
-    ...(input.ticketId ? { ticketId: input.ticketId } : {}), userId: input.userId, ...(input.signal ? { signal: input.signal } : {}) },
+    ...(input.ticketId ? { ticketId: input.ticketId } : {}), userId: input.userId, ...(input.timeZone ? { timeZone: input.timeZone } : {}), ...(input.signal ? { signal: input.signal } : {}) },
   { ...deps, db, logger, resolveContext: async () => context });
   return (deps.runAgent ?? runAgentFeature)({ lang: context.language, messages: input.messages,
     tools: contractTools(contract, registry),

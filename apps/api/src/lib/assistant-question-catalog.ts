@@ -15,7 +15,8 @@ export interface CatalogQuestion {
 }
 
 export const ASSISTANT_QUESTION_CATALOG: readonly CatalogQuestion[] = [
-  { question: 'What is the original date of this ticket?', scope: 'ticket', tool: 'inspect_ticket', answer: /2026|June 20|20 de junio/i },
+  { question: 'What is the opening date of this ticket?', scope: 'ticket', tool: 'inspect_ticket', answer: /16\s*\/\s*05\s*\/\s*2026/ },
+  { question: 'When did Kairo create this ticket record?', scope: 'ticket', tool: 'inspect_ticket', answer: /0[45]\s*\/\s*11\s*\/\s*2026/ },
   { question: 'How many open tickets does this customer have?', scope: 'ticket', tool: 'list_sender_tickets', answer: /\b2\b|two|dos/i },
   { question: 'Who is this ticket assigned to?', scope: 'ticket', tool: 'read_ticket_relations', answer: /Ana/i },
   { question: 'Which tags does this ticket have and was it escalated?', scope: 'ticket', tool: 'read_ticket_relations', answer: /billing.vip|escalated|level 2/i },
@@ -25,6 +26,6 @@ export const ASSISTANT_QUESTION_CATALOG: readonly CatalogQuestion[] = [
   { question: 'What are the SLA deadlines of this ticket?', scope: 'ticket', tool: 'read_ticket_sla' },
   { question: 'How many open P1 tickets does the account have?', scope: 'both', tool: ['find_tickets', 'account_stats'], answer: /\b2\b|two|dos/i },
   { question: 'How many open tickets are unassigned?', scope: 'both', tool: ['account_stats', 'find_tickets'], answer: /\b1\b|one|uno|una/i },
-  { question: 'How many tickets were created in the last 7 days?', scope: 'both', tool: ['account_stats', 'find_tickets'], answer: /\b2\b|two|dos/i },
+  { question: 'How many tickets were created in the last 7 days?', scope: 'both', tool: ['account_stats', 'find_tickets'], answer: /\b3\b|three|tres/i },
   { question: 'What does our knowledge say about the export button?', scope: 'both', tool: 'read_account_memory' },
 ];

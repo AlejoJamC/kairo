@@ -13,7 +13,7 @@ const ticketId = 'acme-ticket';
 const ticket = { id: ticketId, subject: 'Cannot export', body_plain: 'The export button does nothing. Please help.',
   conversation_id: 'acme-conversation', from_email: 'client@outside.com', to_email: 'support@acme.com', ticket_type: 'support',
   priority: 'P2', category: 'product', status: 'open', model_verdict: null, abstain: false,
-  ticket_number: 6, created_at: '2026-06-20T22:07:31Z', received_at: '2026-06-20T22:07:00Z' };
+  ticket_number: 6, created_at: '2026-11-04T23:15:26Z', received_at: '2026-05-15T22:03:17Z' };
 const article = { id: 'acme-article', title: 'Repair export configuration',
   content: 'Open Settings, enable exports, then retry the export button.', tags: [], similarity: 0.9 };
 
@@ -30,7 +30,7 @@ const db = memoryDb({
     ticketRow('acme-ticket-9', 9, { from_email: 'other@outside.com', priority: 'P1', assigned_to: null, created_at: daysAgo(1) }),
     ticketRow('acme-ticket-10', 10, { from_email: 'other@outside.com', priority: 'P3', created_at: daysAgo(2) }),
   ],
-  messages: [{ account_id: identity.accountId, conversation_id: 'acme-conversation', direction: 'inbound', body_plain: ticket.body_plain, received_at: '2026-06-20T22:07:31Z' }],
+  messages: [{ account_id: identity.accountId, conversation_id: 'acme-conversation', direction: 'inbound', body_plain: ticket.body_plain, received_at: '2026-05-15T22:03:17Z' }],
   profiles: [{ id: AGENT, name: 'Ana Agent' }],
   ticket_lifecycle_timeline: [
     { account_id: identity.accountId, ticket_id: ticketId, occurred_at: '2026-06-21T10:00:00Z', kind: 'state_change', actor_type: 'human', actor_ref: AGENT, detail: 'open → in_progress' },
@@ -59,7 +59,7 @@ const deps: TicketAssistantDeps = {
 
 async function ask(content: string, withTicket: boolean) {
   const { consultTicketAssistant } = await import('./ticket-assistant');
-  const result = await consultTicketAssistant({ ...identity, ...(withTicket ? { ticketId } : {}), messages: [{ role: 'user', content }] }, deps);
+  const result = await consultTicketAssistant({ ...identity, timeZone: 'Europe/Madrid', ...(withTicket ? { ticketId } : {}), messages: [{ role: 'user', content }] }, deps);
   expect(result).not.toBeNull();
   return result!;
 }

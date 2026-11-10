@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { reviewDecision, markTicketViewed, getTicketDecisions } from '@kairo/client-core/endpoints';
 import { getPlatform } from '@kairo/client-core/config';
 import { Button, EvidencePanel, type EvidenceRow } from "@kairo/ui";
+import { formatDateTime } from "@/lib/date-format";
 
 interface Decision {
   id: string; contract: string; status: string; created_at: string; message_id: string | null;
@@ -71,7 +72,7 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
       id: `${decision.id}:head`,
       key: label(decision.contract),
       value: label(decision.status),
-      sub: new Date(decision.created_at).toLocaleString(),
+      sub: formatDateTime(decision.created_at),
       actions: pending ? <>
         <Button size="sm" variant="primary" disabled={reviewing !== null} onPress={() => void review(decision.id, true)}>{t('decisionWorkflow.accept')}</Button>
         <Button size="sm" disabled={reviewing !== null} onPress={() => void review(decision.id, false)}>{t('decisionWorkflow.reject')}</Button>
@@ -94,7 +95,7 @@ export function TicketDecisions({ ticketId }: { ticketId: string }) {
     if (result.execution) row(t('decisionWorkflow.executionLabel'), label(result.execution));
     if (result.contribution) row(t('decisionWorkflow.contribution'), label(result.contribution));
     if (result.attention) row(t('decisionWorkflow.attention'), label(result.attention));
-    if (result.sla) row(t('decisionWorkflow.due'), new Date(result.sla.dueAt).toLocaleString());
+    if (result.sla) row(t('decisionWorkflow.due'), formatDateTime(result.sla.dueAt));
     if (result.authorization) row(t('decisionWorkflow.authorizationLabel'), label(result.authorization));
     const missing = missingEvidence(result);
     if (missing.length) row(t('decisionWorkflow.missing'), missing.map(label).join(', '));

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useTriageStore } from "@kairo/client-core/stores/triage-store";
 import { getRelatedHistory } from "@kairo/client-core/endpoints";
 import { Box, Button, Icon, Skeleton, Text } from "@kairo/ui";
+import { formatDate } from "@/lib/date-format";
 
 interface SimilarCase {
   id:                 string;
@@ -15,18 +16,11 @@ interface SimilarCase {
   similarity:         number | null;
 }
 
-function formatDate(iso: string | null, lang: string): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(lang === "en" ? "en-US" : "es-CO", {
-    day: "numeric", month: "short", year: "numeric",
-  });
-}
-
 function formatSim(s: number | null): string | null {
   return s === null ? null : `${Math.round(s * 100)}%`;
 }
 
-export function SimilarTab({ ticketId, lang }: { ticketId: string | null; lang: string }) {
+export function SimilarTab({ ticketId }: { ticketId: string | null }) {
   const { t } = useTranslation("dashboard");
   const setSuggestedReply = useTriageStore((s) => s.setSuggestedReply);
 
@@ -90,7 +84,7 @@ export function SimilarTab({ ticketId, lang }: { ticketId: string | null; lang: 
           )}
           {c.resolved_at && (
             <Text tag="p" fontSize={11} font="mono" color="var(--k-text-tertiary)" margin={0} display="block">
-              {t("ai.resolvedOn")} {formatDate(c.resolved_at, lang)}
+              {t("ai.resolvedOn")} {formatDate(c.resolved_at)}
             </Text>
           )}
           {c.resolution_summary && (

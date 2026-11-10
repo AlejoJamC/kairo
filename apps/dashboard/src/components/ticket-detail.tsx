@@ -17,6 +17,7 @@ import type { Ticket } from "@kairo/types";
 import { computeTicketOperationalSla } from "@kairo/types";
 import { formatDuration, slaDisplay } from "@/lib/sla-display";
 import { useActiveView } from "@/hooks/useActiveView";
+import { formatDateTime } from "@/lib/date-format";
 
 // Delay before clearing the selection once the open ticket leaves the active queue.
 const CLEAR_AFTER_LEAVING_ACTIVE_MS = 2500;
@@ -99,7 +100,7 @@ function MessageCard({ message, jumped = false }: { message: ThreadMessage; jump
     : "";
 
   const timestamp = message.received_at
-    ? new Date(message.received_at).toLocaleString()
+    ? formatDateTime(message.received_at)
     : "";
 
   const bodyText = message.body_plain ?? message.snippet ?? null;
@@ -290,7 +291,7 @@ function TicketDetailView() {
   }
 
   const receivedDate = ticket.received_at
-    ? new Date(ticket.received_at).toLocaleString()
+    ? formatDateTime(ticket.received_at)
     : null;
 
   return (

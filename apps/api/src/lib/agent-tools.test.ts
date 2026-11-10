@@ -2,7 +2,8 @@ import { describe, expect, it, mock } from 'bun:test';
 // Application modules validate their environment on import; synthetic values keep this suite independent of file order.
 process.env['SUPABASE_URL'] ??= 'http://localhost:54321';
 process.env['SUPABASE_SERVICE_ROLE_KEY'] ??= 'synthetic-service-role-key';
-const { sharedAgentTools, contractTools } = await import('./agent-tools');
+const { sharedAgentTools, contractTools, formatInstant, localizeInstants } = await import('./agent-tools');
+const { AssistantRequestSchema } = await import('./ticket-assistant');
 const { memoryDb } = await import('../test-support/memory-db');
 const { inngestAgentSteps } = await import('./agent-steps');
 const { TICKET_ASSISTANT_CONTRACT, ACCOUNT_ASSISTANT_CONTRACT, assistantContract } = await import('@kairo/intelligence');
@@ -85,6 +86,25 @@ describe('shared agent tools', () => {
     expect(await tools.read_ticket_relations!.execute({})).toMatchObject({ data: { assignee: { name: 'Ana Agent' }, tags: ['vip'], csat: [{ score: 5 }] } });
     expect(await tools.read_client_profile!.execute({})).toMatchObject({ status: 'completed', missing: ['client'] });
     expect(await tools.read_ticket_sla!.execute({})).toMatchObject({ status: 'completed' });
+  });
+
+  it('writes timestamps in the person\'s time zone as day, month, year', () => {
+    expect(formatInstant('2026-05-15T22:03:17Z', 'Europe/Madrid')).toBe('16/05/2026 00:03');
+    expect(formatInstant('2026-11-04T23:15:26.527466+00:00', 'America/Bogota')).toBe('04/11/2026 18:15');
+    expect(localizeInstants({ at: '2026-05-15T22:03:17Z', day: '2026-05-15', nested: [{ at: '2026-11-04T23:15:26Z' }], n: 3 }, 'UTC'))
+      .toEqual({ at: '15/05/2026 22:03', day: '2026-05-15', nested: [{ at: '04/11/2026 23:15' }], n: 3 });
+    const base = { messages: [{ role: 'user', content: 'Hi' }] };
+    expect(AssistantRequestSchema.safeParse({ ...base, timeZone: 'Europe/Madrid' }).success).toBe(true);
+    expect(AssistantRequestSchema.safeParse({ ...base, timeZone: 'Mars/Olympus' }).success).toBe(false);
+  });
+
+  it('tells the opening date, when the customer wrote, apart from when Kairo recorded the ticket', async () => {
+    const imported = { ...ticket, created_at: '2026-11-04T23:15:26Z', received_at: '2026-05-15T22:03:17Z' };
+    const db = memoryDb({ tickets: [{ ...imported, account_id: 'account' }], messages: [] });
+    const result = await sharedAgentTools({ ...scope, timeZone: 'Europe/Madrid' }, { db: db as never, retrieveContext: async () => ({ kbArticles: [], resolvedCases: [], degraded: [] }) }).inspect_ticket!.execute({});
+    expect(result.data['ticket']).toMatchObject({ openedAt: '16/05/2026 00:03', recordedInKairoAt: '05/11/2026 00:15' });
+    expect(result.data['ticket']).not.toHaveProperty('created_at');
+    expect(result.data['ticket']).not.toHaveProperty('received_at');
   });
 
   it('serves the account assistant, without ticket tools, when no ticket is selected', () => {

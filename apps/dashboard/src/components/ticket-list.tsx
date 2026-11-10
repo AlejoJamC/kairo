@@ -25,7 +25,7 @@ import { INITIAL_FILTERS, applyFilters, assignToGroupOrCreate, deriveGroupName, 
 const VIRTUALIZE_THRESHOLD = 50;
 
 export function TicketList() {
-  const { t, i18n } = useTranslation("dashboard");
+  const { t } = useTranslation("dashboard");
   const { user, accountId } = useAuth();
   const {
     tickets,
@@ -605,7 +605,6 @@ export function TicketList() {
           open={historyDrawerOpen}
           loading={relatedHistoryLoading}
           items={relatedHistory}
-          lang={i18n.language}
           onClose={() => setHistoryDrawerOpen(false)}
           onSelectTicket={handleSelectHistoricalTicket}
         />

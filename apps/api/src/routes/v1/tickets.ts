@@ -2382,7 +2382,7 @@ tickets.post('/:id/assistant', async (c) => {
   const parsed = AssistantRequestSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'Invalid assistant request' }, 400);
   try {
-    const result = await consultTicketAssistant({ ...ctx, ticketId: c.req.param('id'), messages: parsed.data.messages,
+    const result = await consultTicketAssistant({ ...ctx, ticketId: c.req.param('id'), messages: parsed.data.messages, ...(parsed.data.timeZone ? { timeZone: parsed.data.timeZone } : {}),
       signal: c.req.raw.signal });
     if (!result) return c.json({ error: 'Ticket not found' }, 404);
     return c.json(result);

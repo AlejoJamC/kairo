@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Drawer, EmptyState, Skeleton, SourceList } from "@kairo/ui";
+import { formatDate } from "@/lib/date-format";
 
 // ---------------------------------------------------------------------------
 // Historical context drawer: up to 3 past RESOLVED tickets related to the
@@ -15,13 +16,6 @@ export interface RelatedHistoryItem {
   similarity:         number | null;
 }
 
-function formatResolvedDate(iso: string | null, lang: string): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(lang === "en" ? "en-US" : "es-CO", {
-    day: "numeric", month: "short", year: "numeric",
-  });
-}
-
 function formatSimilarity(value: number | null): string | null {
   return value === null ? null : `${Math.round(value * 100)}%`;
 }
@@ -30,12 +24,11 @@ interface RelatedHistoryDrawerProps {
   open:      boolean;
   loading:   boolean;
   items:     RelatedHistoryItem[];
-  lang:      string;
   onClose:   () => void;
   onSelectTicket: (id: string) => void;
 }
 
-export function RelatedHistoryDrawer({ open, loading, items, lang, onClose, onSelectTicket }: RelatedHistoryDrawerProps) {
+export function RelatedHistoryDrawer({ open, loading, items, onClose, onSelectTicket }: RelatedHistoryDrawerProps) {
   const { t } = useTranslation("dashboard");
 
   return (
@@ -60,7 +53,7 @@ export function RelatedHistoryDrawer({ open, loading, items, lang, onClose, onSe
             id: item.id,
             kind: "similar" as const,
             code: t("relatedHistory.ticketNumber", { number: item.ticket_number }),
-            title: item.subject ?? `${t("relatedHistory.resolvedOn")} ${formatResolvedDate(item.resolved_at, lang)}`,
+            title: item.subject ?? `${t("relatedHistory.resolvedOn")} ${formatDate(item.resolved_at)}`,
             meta: formatSimilarity(item.similarity) ?? undefined,
             onOpen: () => onSelectTicket(item.id),
           }))}

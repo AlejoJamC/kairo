@@ -14,7 +14,7 @@ assistant.post('/', async (c) => {
   const parsed = AssistantRequestSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'Invalid assistant request' }, 400);
   try {
-    const result = await consultTicketAssistant({ ...ctx, messages: parsed.data.messages, signal: c.req.raw.signal });
+    const result = await consultTicketAssistant({ ...ctx, messages: parsed.data.messages, ...(parsed.data.timeZone ? { timeZone: parsed.data.timeZone } : {}), signal: c.req.raw.signal });
     return c.json(result);
   } catch (error) {
     const retryable = !(error instanceof ProviderError) || error.retriable;

@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Box, NoteCard as NoteCardView } from "@kairo/ui";
 import { NoteBody } from "./note-body";
 import type { ThreadMessage } from "@kairo/client-core/hooks/use-ticket-thread";
+import { formatDateTime } from "@/lib/date-format";
 
 // A single internal note in the Notes tab. The whole card is the jump target:
 // pressing it scrolls the center thread to this note (cross-panel signal).
@@ -12,7 +13,7 @@ interface NoteCardProps {
 }
 
 export function NoteCard({ note, onJump }: NoteCardProps) {
-  const { t, i18n } = useTranslation("dashboard");
+  const { t } = useTranslation("dashboard");
   const unread = note.mention_unread === true;
 
   const author = note.is_own_note
@@ -26,7 +27,7 @@ export function NoteCard({ note, onJump }: NoteCardProps) {
         authorName={note.sender_display_name}
         authorEmail={note.sender_external_id}
         seed={note.author_id ?? note.sender_external_id}
-        time={note.received_at ? new Date(note.received_at).toLocaleString(i18n.language) : undefined}
+        time={note.received_at ? formatDateTime(note.received_at) : undefined}
         unread={unread}
         mentionedYouLabel={t("notes.mentionedYou", "MENTIONED YOU")}
         hint={t("notes.jump", "View in thread")}

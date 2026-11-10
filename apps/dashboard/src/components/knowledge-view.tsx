@@ -4,6 +4,7 @@ import { getKnowledgeDrafts, getKbEvidence, reviewKnowledge } from "@kairo/clien
 import { useAuth } from "@kairo/client-core/auth";
 import type { AppView } from "@/types";
 import { ArticleEditor, Box, Button, Callout, Card, KnowledgeList, PageFrame, Text, type ArticleDraft, type ArticleState, type KnowledgeArticleRow } from "@kairo/ui";
+import { formatDate } from "@/lib/date-format";
 
 type ArticleFilter = "all" | ArticleState;
 
@@ -110,7 +111,6 @@ export function KnowledgeView({ onViewChange: _onViewChange }: KnowledgeViewProp
     setPublish(Boolean(article.is_published));
   };
 
-  const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(i18n.language === "en" ? "en-US" : "es-ES") : "—");
 
   const rows: KnowledgeArticleRow[] = useMemo(() => {
     const needle = query.trim().toLowerCase();

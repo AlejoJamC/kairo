@@ -11,6 +11,7 @@ import { formatCompactDuration, formatDuration, slaDisplay } from "@/lib/sla-dis
 import type { AppView } from "@/types";
 import { ClientPanel, EscalatePanel, type EscalateSignal, type SignalTone, type SourceItem } from "@kairo/ui";
 import type { SimilarTicketRow } from "@/components/ticket-list-helpers";
+import { formatMonthYear } from "@/lib/date-format";
 
 function viewForStatus(status: string): AppView {
   if (status === "resolved" || status === "ai_resolved" || status === "closed") return "resolved";
@@ -24,7 +25,7 @@ function viewForStatus(status: string): AppView {
 // ---------------------------------------------------------------------------
 
 export function ClientTabContainer({ loading }: { loading: boolean }) {
-  const { t, i18n } = useTranslation("dashboard");
+  const { t } = useTranslation("dashboard");
   const clientProfile = useTriageStore((s) => s.clientProfile);
   const selectedTicketId = useTriageStore((s) => s.selectedTicketId);
   const ticket = useTriageStore((s) => s.tickets.find((entry) => entry.id === s.selectedTicketId) ?? null);
@@ -60,7 +61,6 @@ export function ClientTabContainer({ loading }: { loading: boolean }) {
     selectTicket(ticketId);
   }
 
-  const dateLocale = i18n.language === "en" ? "en-US" : "es-ES";
   const otherTickets: SourceItem[] = useMemo(
     () =>
       (clientProfile?.recentTickets ?? [])
@@ -98,7 +98,7 @@ export function ClientTabContainer({ loading }: { loading: boolean }) {
       loading={loading}
       account={clientProfile ? {
         plan,
-        since: clientProfile.clientSince ? new Date(clientProfile.clientSince).toLocaleDateString(dateLocale, { month: "short", year: "numeric" }) : null,
+        since: clientProfile.clientSince ? formatMonthYear(clientProfile.clientSince) : null,
         tickets: { value: clientProfile.totalTickets, onOpen: () => setView("clients") },
       } : null}
       otherTickets={otherTickets}

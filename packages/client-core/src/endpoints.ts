@@ -43,10 +43,11 @@ export const requestEscalationReasons = (ticketId: string) =>
   apiCall(`/api/v1/tickets/${ticketId}/escalation-reasons`, { method: "POST" });
 export const getClientProfile = (ticketId: string) =>
   apiCall(`/api/v1/tickets/${ticketId}/client-profile`);
+const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 export const askAssistant = (ticketId: string, messages: unknown[], signal?: AbortSignal) =>
-  apiCall(`/api/v1/tickets/${ticketId}/assistant`, { ...post({ messages }), signal });
+  apiCall(`/api/v1/tickets/${ticketId}/assistant`, { ...post({ messages, timeZone: timeZone() }), signal });
 export const askAccountAssistant = (messages: unknown[], signal?: AbortSignal) =>
-  apiCall("/api/v1/assistant", { ...post({ messages }), signal });
+  apiCall("/api/v1/assistant", { ...post({ messages, timeZone: timeZone() }), signal });
 
 // ── Ticket groups ──────────────────────────────────────────────────────────
 export const createTicketGroup = (name: string) =>

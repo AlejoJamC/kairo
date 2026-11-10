@@ -4,6 +4,7 @@ import { useAuth } from "@kairo/client-core/auth";
 import { listChannels, deleteChannel, startGmailConnect } from "@kairo/client-core/endpoints";
 import type { AppView } from "@/types";
 import { Box, Callout, Icon, IconButton, IntegrationCard, Spinner, Text } from "@kairo/ui";
+import { formatDate } from "@/lib/date-format";
 
 interface SupportChannel {
   id: string;
@@ -119,7 +120,7 @@ export function ChannelsSettings({ onViewChange }: Props) {
               tileColor="var(--kairo-color-accent)"
               status={disconnecting === ch.id ? "connecting" : "connected"}
               description={[
-                t("channelsSettings.connectedOn", { type: ch.channel_type, date: new Date(ch.connected_at).toLocaleDateString() }),
+                t("channelsSettings.connectedOn", { type: ch.channel_type, date: formatDate(ch.connected_at) }),
                 ch.is_primary ? t("channelsSettings.primary") : null,
               ].filter(Boolean).join(" · ")}
               labels={labels}

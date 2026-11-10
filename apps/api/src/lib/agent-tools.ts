@@ -27,6 +27,8 @@ export interface AgentToolScope {
   userId?: string;
   stage?: 'backfill' | 'new_email';
   signal?: AbortSignal;
+  /** The person's IANA time zone: timestamps in tool results are written in it, as DD/MM/YYYY HH:mm. */
+  timeZone?: string;
 }
 
 export interface AgentToolDeps {
@@ -45,6 +47,32 @@ export interface AgentToolDeps {
 }
 
 const noArguments = z.object({}).strict();
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/;
+
+/** Writes an instant as DD/MM/YYYY HH:mm in the given time zone, the way the dashboard shows it. */
+export function formatInstant(value: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone, day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(value));
+  const part = (type: string) => parts.find((entry) => entry.type === type)?.value ?? '';
+  return `${part('day')}/${part('month')}/${part('year')} ${part('hour')}:${part('minute')}`;
+}
+
+/** Rewrites every timestamp inside a tool result into the person's time zone. */
+export function localizeInstants(value: unknown, timeZone: string): unknown {
+  if (typeof value === 'string') return INSTANT.test(value) ? formatInstant(value, timeZone) : value;
+  if (Array.isArray(value)) return value.map((item) => localizeInstants(item, timeZone));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, localizeInstants(item, timeZone)]));
+  return value;
+}
+
+/**
+ * The ticket as the model reads it. `openedAt` is when the customer wrote, the date the dashboard shows for the ticket;
+ * `recordedInKairoAt` is when Kairo created it, which is later when older mail was imported.
+ */
+function modelTicket<T extends { created_at: string | null; received_at: string | null }>(current: T) {
+  const { created_at, received_at, ...rest } = current;
+  return { ...rest, openedAt: received_at ?? created_at, recordedInKairoAt: created_at };
+}
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OPEN_STATUSES = TICKET_STATUSES.filter((status) => !RESOLVED_STATUSES.includes(status));
 const FIND_TICKETS_CAP = 500;
@@ -99,7 +127,7 @@ export function sharedAgentTools(scope: AgentToolScope, deps: AgentToolDeps = {}
     const truncated = (current.body_plain?.length ?? 0) > 6000 || (history?.length ?? 0) === 20
       || Boolean(history?.some((message) => (message.body_plain?.length ?? 0) > 2000));
     return {
-      ticket: { ...current, body_plain: current.body_plain?.slice(0, 6000) ?? null },
+      ticket: { ...modelTicket(current), body_plain: current.body_plain?.slice(0, 6000) ?? null },
       messages: (history ?? []).reverse().map((message) => ({ ...message, body_plain: message.body_plain?.slice(0, 2000) ?? null })),
       missing: [...(current.body_plain ? [] : ['message_body']), ...(error ? ['message_history'] : []), ...(truncated ? ['truncated_context'] : [])],
     };
@@ -135,7 +163,7 @@ export function sharedAgentTools(scope: AgentToolScope, deps: AgentToolDeps = {}
     return read({ total: rows.length, open: rows.filter((row) => !resolved.has(String(row.status))).length, byStatus,
       tickets: rows.slice(0, filters.limit ?? 25).map((row) => ({ id: row.id, ticketNumber: row.ticket_number, subject: row.subject, status: row.status,
         priority: row.priority, category: row.category, type: row.ticket_type, assignedTo: row.assigned_to, sender: row.from_email,
-        receivedAt: row.received_at, createdAt: row.created_at, resolvedAt: row.resolved_at, current: row.id === scope.ticketId })) },
+        openedAt: row.received_at ?? row.created_at, recordedInKairoAt: row.created_at, resolvedAt: row.resolved_at, current: row.id === scope.ticketId })) },
       rows.length === FIND_TICKETS_CAP ? ['truncated_context'] : []);
   };
 
@@ -432,7 +460,13 @@ export function sharedAgentTools(scope: AgentToolScope, deps: AgentToolDeps = {}
       },
     },
   ];
-  return Object.fromEntries(tools.map((definition) => [definition.name, definition]));
+  const zone = scope.timeZone;
+  return Object.fromEntries(tools.map((definition) => [definition.name, zone
+    ? { ...definition, execute: async (input: unknown) => {
+      const result = await definition.execute(input);
+      return { ...result, data: localizeInstants(result.data, zone) as Record<string, unknown> };
+    } }
+    : definition]));
 }
 
 /** The tools a block's contract lists, in contract order; an unknown name is a wiring defect. */

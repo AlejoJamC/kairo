@@ -7,6 +7,7 @@ import type { Client } from "@/types";
 import { Avatar, Box, Button, Callout, Chip, Drawer, Field, FieldInput, Icon, PropRow, Text } from "@kairo/ui";
 import { ExternalSourceBadge, StatusBadge } from "@/components/clients/contact-parts";
 import { relativeTime } from "@/components/clients/contact-helpers";
+import { formatDate } from "@/lib/date-format";
 
 // ---------------------------------------------------------------------------
 // ContactDetailDrawer — read-only slide-out for both source='client' and 'draft'.
@@ -245,7 +246,7 @@ export function ContactDetailDrawer({
           {/* confirmed: read-only with date */}
           {isConfirmed && (
             <Text tag="p" fontSize={12} color="var(--kairo-color-faint)" margin={0} display="block">
-              {t("actions.confirmedOn", { date: row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleDateString() : "—" })}
+              {t("actions.confirmedOn", { date: formatDate(row.lastSeenAt) })}
             </Text>
           )}
         </Box>
