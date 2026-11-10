@@ -6,7 +6,7 @@ Input to ask the AI, fixed at the bottom of the assistant panel.
 
 ## Variants
 
-- Card with context chips (active ticket, customer, dashed @ Context), 2-row textarea, model selector, "active ticket context" hint and a 30px button.
+- Card with 2-row textarea, model selector, "active ticket context" hint and a 30px button. Context chips (active ticket, customer, dashed @ Context) are optional; the assistant panel shows none.
 
 ## States
 
@@ -20,7 +20,7 @@ Input to ask the AI, fixed at the bottom of the assistant panel.
 ## Accessibility
 
 - Textarea with a label; ↵ sends, ⇧↵ adds a line.
-- ⌘J opens the Assistant tab and puts focus in the textarea, with or without a ticket open. With no ticket, the ticket chip is not shown.
+- ⌘J opens the Assistant tab and puts focus in the textarea, with or without a ticket open.
 
 ## Domain value
 

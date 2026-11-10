@@ -1,4 +1,4 @@
-import { askAccountAssistant, askAssistant } from "@kairo/client-core/endpoints";
+import { askAccountAssistant, askAssistant, getAssistantModel } from "@kairo/client-core/endpoints";
 import { getPlatform } from "@kairo/client-core/config";
 import { z } from "zod";
 import { useEffect, useRef, useState } from "react";
@@ -198,7 +198,17 @@ export function AssistantPanel() {
   const error = chat.failed ? t("ai.assistantRequestFailed") : null;
   const openChat = useAssistantChats((state) => state.open);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [modelName, setModelName] = useState<string>(t('ai.assistantName'));
+  const [modelName, setModelName] = useState<string | undefined>(undefined);
+
+  // The model in use is named from the first moment, not only after the first answer.
+  useEffect(() => {
+    let cancelled = false;
+    getAssistantModel()
+      .then(async (response) => (response.ok ? z.object({ model: z.string() }).parse(await response.json()).model : undefined))
+      .then((name) => { if (!cancelled && name) setModelName(name); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Each ticket keeps its own conversation: switching loads the one already there instead of starting over.
   useEffect(() => { openChat(chatKey); }, [chatKey, openChat]);
@@ -300,11 +310,6 @@ export function AssistantPanel() {
           answering={busy}
           error={Boolean(error)}
           onRetry={() => { useAssistantChats.getState().setDraft(chatKey, ""); void ask(chat.lastQuestion); }}
-          contexts={accountMode ? [] : [
-            { id: "ticket", icon: "ticket", label: ticketLabel },
-            { id: "sender", icon: "user", label: senderName },
-            { id: "add", icon: "mention", label: t("ai.assistantContextChip"), add: true },
-          ]}
           model={modelName}
           hint={accountMode ? t("ai.assistantAccountContext") : t("ai.assistantModelContext")}
           labels={{
