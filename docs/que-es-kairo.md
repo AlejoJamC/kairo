@@ -1,343 +1,418 @@
 # Qué es Kairo hoy
 
-*Una descripción en lenguaje sencillo del producto tal como está construido en este momento. Está escrita para personas que no leen código. Explica qué funciona hoy, qué está construido pero apagado y qué aparece en pantalla sin ser real todavía.*
+*Una descripción en lenguaje sencillo de qué hace Kairo y cómo lo hace. Está escrita para personas que no leen código. Al final dice qué parte funciona en toda cuenta, qué parte se enciende por configuración y qué sigue en construcción.*
 
 🇬🇧 [English version](what-is-kairo.md)
 
 ---
 
-## En un párrafo
+## En pocas palabras
 
-Kairo es un espacio de trabajo para equipos de soporte al cliente que reciben las solicitudes por correo electrónico. Se conecta el buzón de Gmail de la empresa y Kairo lee cada correo que entra, aparta lo que no sirve y convierte el resto en **tickets**. Para cada ticket decide qué es el correo (una solicitud de un cliente, un posible cliente, correo interno u otra cosa), qué tan importante y qué tan urgente es, y en qué estado de ánimo escribe el remitente. Después ordena toda la cola para que quien la abra vea de un vistazo qué atender primero. Los agentes responden a los clientes desde Kairo (la respuesta sale desde el Gmail de la propia empresa, dentro del mismo hilo de correo), dejan notas privadas para sus compañeros, escalan los casos difíciles y corrigen a Kairo cuando se equivoca. Lo que el equipo resuelve también puede convertirse en conocimiento reutilizable, pero solo después de que una persona lo publique. La idea central es una **confianza que se gana paso a paso**: la IA propone, una persona decide, y la IA solo actúa sola donde ha demostrado ser fiable. Hoy esa autonomía es pequeña a propósito.
+Kairo ordena el correo de soporte de una empresa, aprende de su negocio y ayuda a su equipo a responder bien.
+
+La empresa conecta su buzón de Gmail. Kairo lee cada correo que llega, aparta lo que no es un asunto por atender y convierte el resto en **tickets**. De cada ticket dice qué tipo de asunto es, qué tan grave es, cuánto tiempo hay para atenderlo y con qué ánimo escribe el cliente. Con eso ordena la bandeja, para que quien la abra sepa por dónde empezar.
+
+El equipo responde desde Kairo, y la respuesta sale desde el Gmail de la empresa, en el mismo hilo del cliente. Mientras tanto Kairo va guardando lo que la empresa sabe: cómo resuelve cada tipo de caso, qué políticas aplica, qué le ha pasado a cada cliente. Ese conocimiento vuelve a aparecer cuando llega un caso parecido.
+
+Dos reglas sostienen todo lo demás:
+
+- **La IA propone y una persona decide.** Kairo solo actúa por su cuenta en lo que ha demostrado hacer bien, y una corrección le quita ese permiso.
+- **Una respuesta correcta vale más que una rápida y equivocada.** Kairo no inventa soluciones, y ninguna respuesta que redacte sale sin que alguien la revise.
+
+---
+
+## El problema que resuelve
+
+En muchas empresas el soporte vive en un correo compartido. La clave del buzón pasa de mano en mano, la lista de clientes está en un Excel que alguien reenvía y cada persona responde como puede, a veces con un texto modelo que le mandó un compañero. Funciona hasta que un correo se queda sin responsable o dos personas le contestan cosas distintas al mismo cliente.
+
+Lo que más se pierde no se ve. Cada caso resuelto enseña algo sobre el negocio y sobre el cliente, y ese aprendizaje no queda en ninguna parte. El caso siguiente empieza de cero.
+
+Kairo pone ese trabajo en un solo lugar, le da orden y conserva lo aprendido.
 
 ---
 
 ## Para quién es
 
-- **Equipos de soporte** de empresas pequeñas y medianas que reciben más correo del que pueden leer, empezando por equipos de habla hispana.
-- **El agente**, que trabaja la cola todos los días.
-- **El supervisor o el dueño**, que necesita saber que no se está quedando nada urgente sin atender y que se cumplen los tiempos de respuesta.
+Para empresas pequeñas y medianas que atienden a sus clientes por correo, empezando por Colombia. Sirve igual en tres momentos de una misma empresa:
+
+- **El dueño que responde solo.** Todos los tickets le llegan a él, ya ordenados.
+- **El equipo pequeño.** Cada persona entra con su usuario y los tickets se reparten por turnos.
+- **El equipo con líder de soporte.** Quien responde por el servicio ve qué va al día y qué se está quedando.
 
 ---
 
-## El recorrido, desde el registro hasta el uso diario
+## Cómo funciona
 
-### 1. Registro
+Atender un correo son cuatro trabajos: leerlo, entender qué pide el cliente, decidir qué tan urgente es y responder. Kairo hace los tres primeros y ayuda con el cuarto.
 
-Un usuario nuevo crea su cuenta con Google o con correo y contraseña. La primera persona que se registra queda como **propietaria** de un espacio de trabajo nuevo para su empresa (Kairo lo llama *cuenta*). Kairo resuelve solo los casos habituales: alguien que vuelve a entrar, alguien que ya tiene cuenta con el mismo correo, alguien a quien invitaron a un equipo existente y un usuario completamente nuevo.
+| Paso | Quién lo hace | Qué pasa |
+|---|---|---|
+| **1. Leer** | Kairo | Revisa el buzón, deja fuera lo que no es un asunto por atender y crea un ticket por cada conversación |
+| **2. Entender** | Kairo | Dice qué tipo de asunto es, su prioridad, su urgencia y el ánimo del cliente, con una explicación corta |
+| **3. Ordenar** | Kairo | Pone primero lo que no da espera y le asigna un responsable a cada ticket |
+| **4. Responder** | El equipo | Responde con el caso ya entendido, y con casos parecidos y conocimiento a la mano |
 
-Después, un asistente de configuración breve pide el nombre de la organización.
-
-### 2. Conexión del buzón
-
-Hoy Gmail es el único canal. La persona propietaria autoriza a Kairo en la pantalla de permisos estándar de Google. Desde ese momento Kairo puede leer el buzón y, cuando un agente decide responder, enviar correo desde él.
-
-### 3. La primera revisión del buzón
-
-Justo después de conectar, Kairo hace una primera revisión por etapas para que el equipo vea resultados rápido:
-
-1. **Los 30 correos más recientes** se clasifican uno tras otro, del más nuevo al más antiguo, para que el panel no aparezca vacío.
-2. **Las últimas dos semanas** se clasifican en segundo plano.
-3. **El correo más antiguo, hasta unos tres meses atrás**, se procesa después, por lotes.
-
-Esta primera revisión se hace una sola vez por empresa y no se repite en los inicios de sesión posteriores.
-
-### 4. El día a día
-
-- Kairo revisa cada buzón conectado **aproximadamente cada cinco minutos** y procesa el correo nuevo de la misma forma.
-- Los agentes pueden pulsar **Sincronizar** para forzar una revisión inmediata.
-- La cola se actualiza **en vivo**: los tickets nuevos y los cambios de estado aparecen sin recargar la página.
+Las cuatro secciones siguientes explican cada paso.
 
 ---
 
-## Cómo lee Kairo un correo
+## 1. Kairo lee el correo
 
-Esta es la parte central del producto. Cada correo que entra pasa por los pasos siguientes.
+### Conectar el buzón
 
-### Paso 1 — ¿Debe ser un ticket?
+Una persona crea su cuenta con Google o con correo y contraseña. La primera que se registra queda como **propietaria** del espacio de trabajo de su empresa. Kairo resuelve solo los casos habituales: alguien que vuelve a entrar, alguien que ya tiene cuenta con el mismo correo y alguien a quien invitaron a un equipo que ya existe.
 
-Antes de usar la IA, un conjunto de reglas fijas decide si el correo pertenece a la cola. Las reglas se aplican en un orden establecido:
+Después la propietaria autoriza a Kairo en la pantalla de permisos de Google. Kairo pide dos permisos: leer el buzón y enviar correo desde él. No puede borrar ni modificar los correos.
 
-- **Spam.** Si el servidor de correo que lo recibió ya lo marcó como spam, Kairo le cree. Es instantáneo y no cuesta nada; en las pruebas internas de Kairo acertó tanto como los modelos de IA y fue muchísimo más rápido. Ese correo nunca llega a ser un ticket.
-- **Las respuestas y los asuntos urgentes siempre pasan.** Una respuesta dentro de una conversación existente nunca se descarta por las reglas que siguen.
-- **Remitentes automáticos, notificaciones de sistemas, correo generado automáticamente y las pestañas promocionales de Gmail** quedan fuera de la cola.
+Hoy Gmail es el único canal.
 
-Cada correo que queda fuera se guarda con el motivo, para poder revisarlo después. No se pierde nada en silencio.
+### La primera revisión del buzón
 
-Los correos entre direcciones de la propia empresa **ya no** se descartan. Antes sí se descartaban, y resultó que eso ocultaba al sistema la mayor parte del correo interno de la empresa. Ahora pasan por la clasificación como cualquier otro.
+Apenas se conecta el buzón, Kairo lo revisa en tres etapas. La revisión se hace una sola vez por empresa.
 
-### Paso 2 — ¿Qué es este correo?
+| Etapa | Qué correo revisa | Cómo | ¿Hay alguien mirando? |
+|---|---|---|---|
+| **Primera** | Los 30 correos más recientes | Uno tras otro, del más nuevo al más antiguo, para que la bandeja no aparezca vacía | Sí. La persona está en la configuración inicial |
+| **Segunda** | Los últimos 15 días | En segundo plano | No |
+| **Tercera** | El correo más antiguo, hasta unos tres meses atrás | Después, por lotes | No |
 
-La IA lee el correo (asunto, remitente, destinatarios, en qué punto de la conversación está, los nombres de los archivos adjuntos y el cuerpo sin el historial citado) junto con dos datos de la empresa: **qué buzón se está leyendo** y **a qué se dedica la empresa**, en una descripción breve. Ese segundo dato importa, porque el mismo correo puede ser un problema de un cliente para un negocio y la oferta de un proveedor para otro.
+Esa diferencia importa más adelante: Kairo se permite menos cuando nadie está mirando.
 
-En lugar de pedirle a la IA que elija una etiqueta de entrada, Kairo le hace dos preguntas sencillas que responde bien:
+### El día a día
 
-1. **¿Requiere que alguien haga algo?** ¿O es solo informativo?
-2. **¿De qué trata?** Una de cuatro respuestas:
-   - el servicio que la empresa presta a sus clientes;
-   - alguien que quiere **comprarle** a la empresa;
-   - alguien que quiere **venderle** a la empresa;
-   - la administración propia de la empresa (contratación, trámites, cumplimiento normativo, alertas de sus propios sistemas).
+- Kairo revisa cada buzón conectado cada cinco minutos.
+- Quien atiende puede pulsar **Sincronizar Gmail** para revisar de inmediato.
+- La bandeja se actualiza sola. Los tickets nuevos y los cambios de estado aparecen sin recargar la página.
 
-Después Kairo combina esas dos respuestas con **el origen del correo** (de fuera de la empresa, de otra dirección de la empresa o del propio buzón conectado) mediante una tabla fija. El resultado es el **tipo de ticket**:
+### Qué correo queda fuera de la bandeja
 
-| Tipo de ticket | Qué significa |
-|---|---|
-| **Soporte** | Un asunto de un cliente sobre el servicio. Es la razón de ser de la cola |
-| **Prospecto** | Alguien que quiere ser cliente (una solicitud de cotización, una invitación a licitar) |
-| **Interno** | Asuntos internos de la propia empresa |
-| **Otro** | Ofertas de proveedores, publicidad, invitaciones a eventos |
+Antes de usar la IA, unas reglas fijas deciden si un correo entra. Se aplican en este orden:
 
-El spam no es un tipo de ticket. Se decide antes que todo esto, con la regla del paso 1, y un correo marcado como spam nunca llega a ser un ticket.
+1. **Spam.** Si el servidor de correo ya lo marcó como spam, Kairo le cree. En las pruebas internas esa señal acertó tanto como los modelos de IA, al instante y sin costo.
+2. **Las respuestas y los asuntos urgentes siempre entran.** Una respuesta dentro de una conversación que ya existe, o un correo con asunto urgente, nunca se descarta por las reglas que siguen.
+3. **Remitentes automáticos.** Direcciones "no-reply" y envíos masivos que llegan de fuera.
+4. **Invitaciones de calendario y comprobantes de sistemas.**
+5. **Las pestañas Promociones y Social de Gmail.**
+6. **Correo generado automáticamente.**
 
-Kairo decide el tipo de esta manera, y no pidiéndole a la IA que lo adivine, por una razón. Cuando se le preguntaba directamente, la IA mezclaba dos preguntas distintas y respondía de forma inconsistente; sobre todo confundía a quien quiere comprar con quien quiere vender. Una tabla fija da la misma respuesta siempre y cualquiera puede revisarla.
+Cada correo que queda fuera se guarda con su motivo, para poder revisarlo después. Nada se descarta en silencio.
 
-### Paso 3 — Importancia, urgencia y estado de ánimo
-
-La IA también devuelve:
-
-- **Prioridad (P1 / P2 / P3):** qué tan grave es el caso. P1 significa que ya hubo una pérdida, un incumplimiento o un bloqueo, o que el cliente ha pedido lo mismo varias veces sin respuesta.
-- **Urgencia (alta / media / baja):** cuánto tiempo queda para actuar. Se mide aparte de la prioridad a propósito: un caso muy grave cuyo desenlace ya ocurrió puede ser importante sin ser urgente.
-- **Categoría:** la prestación del servicio, dinero (facturación, reembolsos), acceso y cuentas, información general o no aplica. "Técnico" significa *que el servicio no se prestó bien*, sea lo que sea lo que venda la empresa; no se limita a problemas informáticos.
-- **Tono:** agresivo, frustrado, neutral o positivo. La frustración se juzga por la **insistencia**, no por la cortesía: un correo amable de alguien que reclama lo mismo por tercera vez cuenta como frustrado.
-- **Una explicación de una o dos frases** sobre la decisión, en el idioma del correo.
-- **Un nivel de confianza** de 0 a 1.
-
-### Paso 4 — Una segunda opinión (opcional)
-
-Kairo puede configurarse para hacerle las mismas preguntas a un **segundo modelo de IA distinto**. Cuando se usa esa configuración, el segundo modelo hace dos cosas, y las dos están apagadas por defecto:
-
-- En cada clasificación nueva da su propia respuesta, que se guarda junto a la de Kairo pero nunca se aplica.
-- Para un buzón que el equipo elija, puede ir un paso más allá: cuando **coincide** con el tipo que Kairo ya eligió, una clasificación que de otro modo esperaría a una persona puede darse por buena. Nunca cambia el tipo, y fuera de la primera revisión la empresa también tiene que haberse ganado la aprobación automática de ese tipo. Es la única excepción a la regla de que, en la primera revisión, solo Soporte se aprueba automáticamente.
-
-Cuando los dos modelos **no coinciden** en el tipo de ticket, Kairo no da por buena ninguna de las dos respuestas y el ticket pasa a una persona.
-
-### Paso 5 — ¿La decisión se aplica sola o espera a una persona?
-
-Cada clasificación se guarda como una **propuesta** con uno de dos resultados: *aprobada automáticamente* o *pendiente de una persona*. Hoy las reglas son prudentes a propósito:
-
-- En la primera revisión del buzón, solo los correos de **Soporte** se aprueban automáticamente, porque las pruebas internas de Kairo mostraron que acierta en ese caso bastante más del 90 % de las veces. Todos los demás tipos esperan a una persona. Aquí el error peligroso es esconder una solicitud real de un cliente, y Kairo no corre ese riesgo.
-- Para el resto del correo, un tipo solo se aprueba automáticamente cuando la empresa se lo ha **ganado**: el tipo debe alcanzar una precisión medida (90 % por defecto) sobre un número mínimo de casos (30 por defecto), y Kairo debe saber a qué se dedica la empresa. La medición que concede eso está construida, pero viene apagada por defecto, así que **en la práctica hoy esas clasificaciones esperan a una persona.**
-- Si los dos modelos de IA no coincidieron, el ticket siempre espera a una persona.
-
-### Idiomas
-
-Las instrucciones que usa la IA de Kairo existen en **español e inglés**. El idioma se configura para cada empresa. Por defecto es español.
+El correo entre direcciones de la propia empresa sí entra a la clasificación. Antes se descartaba, y eso le ocultaba a Kairo casi todo el correo interno.
 
 ### Cuando el servicio de IA falla
 
-- Cada correo tiene varios intentos, con pausas cada vez más largas entre ellos.
-- Si fallan muchos correos seguidos, Kairo entiende que el servicio de IA está caído y deja de mandarle trabajo en esa ronda, en lugar de acumular errores y costos.
-- Cada 30 minutos se reintentan automáticamente los correos que fallaron por un problema pasajero. Los que no pueden salir bien nunca quedan marcados como tales, con su contenido guardado.
+- Cada correo tiene varios intentos, con pausas cada vez más largas.
+- Si fallan muchos seguidos, Kairo entiende que el servicio está caído y deja de mandarle trabajo en esa ronda.
+- Cada 30 minutos reintenta los correos que fallaron por un problema pasajero.
 - Ningún correo se pierde por un fallo.
 
 ---
 
-## Cómo se ordena la cola
+## 2. Kairo entiende cada correo
 
-Cada ticket recibe una **puntuación de prioridad** entre 0 y 1 que combina cuatro factores:
+### Qué tipo de asunto es
+
+Kairo no le pide a la IA que escoja una etiqueta. Le hace dos preguntas sencillas, que responde bien:
+
+1. **¿Si nadie contesta este correo, queda algo sin hacer?**
+2. **¿De qué trata?** Hay cuatro respuestas posibles:
+   - el servicio que la empresa les presta a sus clientes;
+   - alguien que quiere **comprarle** a la empresa;
+   - alguien que quiere **venderle** a la empresa;
+   - la administración de la propia empresa (contratación, trámites, alertas de sus sistemas).
+
+Después combina las dos respuestas con **el origen del correo** (de fuera, de otra dirección de la empresa o del propio buzón conectado) usando una tabla fija. El resultado es el **tipo de ticket**:
+
+| Tipo | Qué significa |
+|---|---|
+| **Soporte** | Un asunto de un cliente sobre el servicio. Para esto existe la bandeja |
+| **Prospecto** | Alguien que quiere ser cliente: una cotización, una invitación a licitar |
+| **Interno** | Asuntos de la propia empresa |
+| **Otro** | Ofertas de proveedores, publicidad, invitaciones a eventos |
+
+Kairo lo hace así por una razón medida. Cuando se le pedía la etiqueta directamente, la IA mezclaba las dos preguntas y confundía sobre todo a quien quiere comprar con quien quiere vender. Una tabla fija responde siempre igual y cualquiera puede revisarla.
+
+### A qué se dedica la empresa
+
+Para responder la segunda pregunta, la IA necesita saber qué hace la empresa. El mismo correo puede ser el problema de un cliente para un negocio y la oferta de un proveedor para otro.
+
+Esa descripción se escribe en el último paso de la configuración inicial o en **Configuración › Espacio de trabajo**. Kairo también puede proponerla a partir de los primeros correos, para que una persona la apruebe.
+
+Kairo clasifica por lo que pide el remitente y no por el sector. Tiene que servirle igual a una empresa de logística, a una clínica o a una de software.
+
+### Qué tan grave, qué tan urgente y con qué ánimo
+
+De cada correo la IA también devuelve:
+
+- **Prioridad (P1, P2 o P3):** qué tan grave es. P1 significa que ya hubo una pérdida, un incumplimiento o un bloqueo, o que el cliente ha pedido lo mismo varias veces sin respuesta.
+- **Urgencia (alta, media o baja):** cuánto tiempo queda para actuar. Se mide aparte de la prioridad, porque un caso grave cuyo desenlace ya ocurrió es importante sin ser urgente.
+- **Categoría:** la prestación del servicio, dinero (facturación, reembolsos), acceso y cuentas, información general o no aplica.
+- **Tono:** agresivo, frustrado, neutral o positivo. La frustración se mide por la insistencia y no por la cortesía. Un correo amable de alguien que reclama lo mismo por tercera vez cuenta como frustrado.
+- **Una explicación** de una o dos frases, en el idioma del correo.
+- **Un nivel de confianza** de 0 a 1. Kairo lo guarda, pero no lo usa para decidir: las mediciones mostraron que ese número no distingue los aciertos de los errores.
+
+Las instrucciones de la IA existen en español y en inglés. El idioma se define por empresa y el español es el valor por defecto.
+
+### Cuándo una clasificación queda en firme
+
+Cada clasificación se guarda como una **propuesta**, en uno de dos estados: *aprobada por la IA* o *por revisar*.
+
+- **En la primera etapa de la revisión inicial**, solo los correos de **Soporte** quedan aprobados sin revisión. En las pruebas internas Kairo acertó en ese tipo entre el 92 % y el 97 % de las veces. Los demás tipos esperan a una persona, porque ahí el error grave es esconder la solicitud real de un cliente.
+- **En la segunda y la tercera etapa**, que corren sin nadie mirando, un tipo solo queda aprobado si la empresa ya se lo **ganó**: 90 % de aciertos sobre al menos 30 revisiones, medidos en las 50 revisiones más recientes de ese tipo. Además Kairo tiene que saber a qué se dedica la empresa.
+- **Kairo puede pedir una segunda opinión** a otro modelo de IA. Si los dos no coinciden en el tipo, el ticket siempre espera a una persona.
+
+La vista **Clasificación IA** muestra las propuestas en dos pestañas, *Por revisar* y *Aprobadas por la IA*. Confirmar o rechazar una propuesta es lo que le enseña a Kairo cuándo puede dejar de preguntar.
+
+---
+
+## 3. Kairo ordena la bandeja
+
+### El orden
+
+Cada ticket recibe una puntuación entre 0 y 1 que combina cuatro factores:
 
 | Factor | Peso por defecto | Idea |
 |---|---|---|
 | Tipo de ticket | 30 % | Soporte puntúa alto; interno y otro, bajo |
-| Plan del cliente | 35 % | Enterprise por encima de Pro y de Starter; los clientes sin plan tienen un tope |
-| Estado de ánimo del remitente | 20 % | Agresivo y frustrado por encima de neutral y positivo |
-| Tiempo de espera | 15 % | Aumenta a lo largo de 48 horas |
+| Plan del cliente | 35 % | Enterprise por encima de Pro y de Starter; un cliente sin plan tiene un tope |
+| Ánimo del remitente | 20 % | Agresivo y frustrado por encima de neutral y positivo |
+| Tiempo de espera | 15 % | Sube durante las primeras 48 horas |
 
-Los clientes que han escrito cinco veces o más en los últimos 30 días reciben un impulso adicional. Hoy estos pesos son iguales para todas las empresas: el ajuste por empresa todavía no está construido.
+Un cliente que ha escrito cinco veces o más en los últimos 30 días recibe un impulso adicional. La bandeja se ordena por esa puntuación, después por P1, P2 y P3 y, al final, del más antiguo al más reciente.
 
-La cola se ordena por esa puntuación, después por P1/P2/P3 y, por último, de más antiguo a más reciente.
+### Los plazos de respuesta
 
-### Tiempos de respuesta por prioridad
+Cada empresa define, para P1, P2 y P3, cuatro tiempos: el máximo para la primera respuesta, un mínimo, un punto de alerta y un punto de escalamiento. Cada ticket muestra cuánto le queda o cuánto lleva vencido. La ficha del cliente muestra cuántos de sus tickets anteriores se pasaron del plazo.
 
-Cada empresa define, para P1, P2 y P3, un tiempo máximo para la primera respuesta, un tiempo mínimo, un punto de alerta y un punto de escalamiento. El tiempo corre las 24 horas, los 7 días de la semana. Cada ticket muestra cuánto tiempo le queda o cuánto va de retraso, y la ficha del cliente muestra cuántos de sus tickets anteriores se pasaron del tiempo.
+Hay un segundo nivel de plazo, distinto, que viene del **contrato del cliente** y se define en el directorio de clientes. Se mantienen separados a propósito: uno depende de qué tan urgente es el ticket y el otro de lo que el cliente contrató.
 
-Existe además un nivel de tiempo de respuesta distinto, más antiguo, que viene del **contrato del cliente** y se define en el directorio de clientes. Se mantienen separados a propósito: uno depende de lo urgente que es el ticket y el otro de lo que el cliente contrató.
+### Quién responde cada ticket
+
+Cada ticket nuevo llega con responsable. Kairo lo asigna por turnos entre los miembros activos del equipo, empezando por quien lleva más tiempo sin recibir uno. Si la empresa tiene un solo miembro, todos los tickets van a esa persona.
+
+### Las vistas
+
+| Vista | Qué muestra |
+|---|---|
+| **Triage** | La bandeja activa: tickets nuevos, en curso y reabiertos |
+| **En espera del cliente** | Tickets que el equipo ya respondió y el cliente no ha contestado |
+| **Escalado** | Casos escalados, aparte de la bandeja |
+| **Resuelto** | Tickets cerrados, solo para consulta |
+| **Clasificación IA** | Las propuestas de Kairo, por revisar y aprobadas |
+| **Conocimiento** | Lo que Kairo propone guardar y lo que la empresa ya publicó |
+| **Clientes** | El directorio de clientes |
+| **Configuración** | El espacio de trabajo, el equipo, los plazos y la conexión con Gmail |
+
+La barra lateral lleva un contador junto a cada vista de tickets, y un buscador que también ejecuta acciones.
 
 ---
 
-## Trabajar un ticket: el panel
-
-### Las vistas principales
-
-- **Triage:** la cola activa (tickets nuevos, en curso y reabiertos).
-- **Esperando respuesta:** tickets en los que un agente respondió y el cliente aún no contesta.
-- **Escalados:** casos escalados que necesitan atención prioritaria.
-- **Resueltos:** tickets cerrados, en modo de solo lectura.
-- **Clasificación IA:** lo que Kairo propuso para cada ticket, separado entre lo que todavía necesita a una persona y lo que Kairo aprobó por su cuenta. Confirmar o rechazar es la forma en que un equipo le enseña a Kairo cuándo puede actuar sola.
-- **Conocimiento:** hechos del negocio y artículos propuestos, como borradores, que el equipo edita, publica o descarta.
-- **Clientes:** el directorio de clientes.
-- **Configuración.**
-
-La barra lateral muestra un contador en vivo junto a las vistas de tickets.
-
-### Qué muestra cada tarjeta de ticket
-
-La prioridad, el tiempo que queda frente al objetivo de respuesta (o el retraso), el estado de ánimo del remitente, la confianza de la IA, hace cuánto llegó y si está agrupado con tickets similares.
+## 4. El equipo responde
 
 ### Dentro de un ticket
 
-- **La conversación completa**, con los mensajes del cliente, las respuestas de los agentes y las notas internas en un solo hilo.
-- **Responder.** El agente escribe y envía. La respuesta sale desde el Gmail de la empresa **dentro de la conversación de correo original**, con un diseño de correo de marca. Kairo muestra si se está enviando, si se envió o si falló. Si la conexión con Gmail caducó, pide al agente que la reconecte, y el texto nunca se pierde.
-- **Enviar y resolver.** Responde y cierra el ticket en un solo paso, con un diseño de correo de "caso resuelto".
-- **Acciones rápidas:** atender (tomar el ticket), resolver y escalar (con un motivo opcional).
-- **Responsable.** Los tickets nuevos se asignan solos, rotando entre el equipo para repartir el trabajo; si hay un solo miembro, siempre van a esa persona. La cabecera muestra a quién pertenece el ticket.
-- **Plantillas de respuesta.** Textos predefinidos para respuestas frecuentes, con campos variables como el nombre del cliente.
-- **"¿Clasificación incorrecta?"** El agente puede corregir el tipo, la prioridad, la categoría o el estado de ánimo, con una nota opcional. La corrección se guarda junto a lo que dijo la IA y el ticket muestra la etiqueta "Corregido". Con estas correcciones Kairo mide su propia precisión en cada empresa.
-- **Panel lateral** (pestañas que se pueden activar o desactivar):
-  - **Cliente:** quién es, su plan, cuántos tickets ha enviado en total y en el mes, si es un cliente recurrente, sus tickets recientes y su historial frente a los tiempos de respuesta.
-  - **Similares:** casos resueltos anteriores parecidos a este y cómo se resolvieron. Con un clic se lleva una resolución anterior a la respuesta.
-  - **Artículos:** artículos de conocimiento relacionados, que también se pueden llevar a la respuesta.
-  - **Escalar:** motivos que Kairo sugiere para escalar (tiempo de respuesta en riesgo, un cliente enterprise esperando demasiado, frustración repetida, un error técnico repetido, un caso similar que antes necesitó un nivel superior), con un nivel sugerido.
-  - **Notas:** las notas internas del ticket.
-  - **Asistente:** una conversación sobre el ticket. Solo funciona cuando está activado; ver más abajo.
+- **La conversación completa**, con los mensajes del cliente, las respuestas del equipo y las notas internas en un solo hilo.
+- **Responder.** La respuesta sale desde el Gmail de la empresa, dentro de la conversación original, con un diseño de correo de marca. Kairo muestra si se está enviando, si se envió o si falló. Si la conexión con Gmail caducó, pide reconectarla y el texto no se pierde.
+- **Enviar y resolver.** Responde y cierra el ticket en un solo paso.
+- **Acciones rápidas:** atender el ticket, resolverlo o escalarlo, con un motivo opcional.
+- **"¿Clasificación incorrecta?"** Quien atiende corrige el tipo, la prioridad, la categoría o el tono. La corrección se guarda junto a lo que dijo la IA y el ticket queda marcado como *Corregido*. Con esas correcciones Kairo mide su precisión en cada empresa.
 
-### El registro de decisiones
+### Ayuda para responder
 
-Cuando el flujo de conocimiento está activado (apagado por defecto), un panel dentro del ticket enumera cada decisión que la IA tomó sobre él y en qué se apoyó, y permite aceptar o rechazar un cambio propuesto en el conocimiento que ese ticket usa. Sin ese flujo, el panel aparece vacío.
+- **Plantillas.** Textos guardados para las respuestas frecuentes, con campos variables como el nombre del cliente.
+- **Casos similares.** Tickets resueltos parecidos a este, con la forma en que se resolvieron. Un clic lleva esa resolución a la respuesta.
+- **Artículos.** El conocimiento publicado que tiene que ver con el ticket, que también se puede llevar a la respuesta.
+- **Cliente.** Quién es, su plan, cuántos tickets ha enviado, sus casos recientes y su historial frente a los plazos.
+- **Asistente.** Una conversación sobre el ticket. Puede revisar el caso y preparar una propuesta de respuesta. Al insertarla, el texto llega al cuadro de respuesta marcado como *Borrador IA*, y se puede editar antes de enviar.
 
-### Notas internas y @menciones
+Los borradores de Kairo siguen cinco reglas:
 
-Los agentes pueden escribir **notas internas** en un ticket que el cliente nunca ve. Al escribir **@** se menciona a un compañero, que recibe una notificación dentro de la aplicación (nunca por correo). Una campana en la barra superior muestra la actividad, lo no leído y las menciones.
+1. No inventa información que no esté en el caso o en el conocimiento aprobado.
+2. Cada dato, política, plazo o compromiso necesita respaldo. Un caso parecido es un ejemplo, no una prueba.
+3. No dice que algo se revisó, se envió o se resolvió si la conversación no lo registra.
+4. Si no hay una solución con respaldo, reconoce la solicitud y pregunta solo por lo que falta.
+5. El borrador siempre necesita la aprobación de una persona.
 
-### Agrupación e historial relacionado
+### Trabajo en equipo
 
-Los agentes pueden seleccionar varios tickets y **agruparlos** cuando tratan del mismo problema, y Kairo también sugiere grupos. Un panel de **historial relacionado** muestra casos anteriores similares.
+- **Notas internas.** Comentarios dentro del ticket que el cliente nunca ve.
+- **Menciones.** Al escribir **@** se avisa a un compañero dentro de la aplicación, nunca por correo. Una campana muestra la actividad, lo no leído y las menciones.
+- **Escalar.** Kairo sugiere motivos para escalar y un nivel: plazo en riesgo, un cliente Enterprise esperando demasiado, frustración repetida, un error que se repite o un caso parecido que antes necesitó un nivel superior.
+- **Agrupar.** Varios tickets sobre el mismo problema se pueden agrupar, y Kairo sugiere grupos cuando los detecta.
 
-### El ciclo de vida de un ticket
+### El recorrido de un ticket
 
-Un ticket llega **abierto**. Desde ahí puede tomarse (**en curso**), responderse y quedar **esperando al cliente**, **escalarse** o **resolverse**. Cuando el cliente vuelve a escribir:
+Un ticket llega **abierto**. Desde ahí puede pasar a **en curso**, quedar **esperando al cliente** después de una respuesta, **escalarse** o **resolverse**. Cuando el cliente vuelve a escribir:
 
 - un ticket que esperaba su respuesta vuelve a **en curso**;
 - un ticket resuelto se **reabre**;
-- una respuesta a un ticket **cerrado** definitivamente no lo reabre, pero queda registrada para que no desaparezca.
+- una respuesta a un ticket **cerrado** definitivamente no lo reabre, pero queda registrada.
 
-También existe un estado reservado para "resuelto por la IA", pero **hoy nada lo asigna**. Kairo no resuelve tickets por su cuenta.
+Existe un estado reservado para "resuelto por la IA", pero hoy nada lo asigna. Kairo no resuelve tickets por su cuenta.
 
-Cada cambio de estado, cada clasificación y cada corrección se guardan en un **historial permanente que no se puede editar**, con quién o qué lo hizo, y la propia base de datos rechaza los cambios de estado que no cumplan estas reglas. De cualquier decisión se puede saber qué la produjo y con qué versión de las reglas y de las instrucciones de la IA.
+Cada cambio de estado, cada clasificación y cada corrección quedan en un historial permanente que no se puede editar, con quién o qué lo hizo. De cualquier decisión se puede saber qué la produjo y con qué versión de las reglas y de las instrucciones de la IA.
 
 ---
 
-## Correos automáticos a los clientes
+## Kairo aprende del negocio
 
-| Correo | Estado hoy |
+Esta es la parte que hace distinto a Kairo. Lo que el equipo aprende atendiendo deja de perderse.
+
+### Qué guarda
+
+Kairo propone cuatro clases de conocimiento:
+
+| Clase | Ejemplo |
 |---|---|
-| **Respuesta automática fuera de horario:** se envía cuando llega un ticket nuevo fuera del horario de soporte de la empresa | **Siempre activa.** Cada empresa puede definir su horario; si no lo define, se aplica un horario diurno de lunes a sábado por defecto. Solo se envía para correo reciente (no para correo antiguo traído por una sincronización) y una sola vez por conversación |
-| **Respuesta del agente** (diseño de marca) | Activa |
-| **Caso resuelto** (diseño de marca, usado por "Enviar y resolver") | Activa |
-| **Acuse de recibo** "recibimos tu solicitud", con el número de ticket | Construido, **apagado** por defecto. Si se activa, reemplaza a la respuesta fuera de horario para que el cliente nunca reciba dos correos automáticos |
-| **Encuesta de satisfacción** | Diseñada, **nunca se envía** (todavía nada la dispara) |
-| **Aviso de escalamiento** | Diseñado, **nunca se envía** |
+| **Hecho del negocio** | Qué vende la empresa, en qué ciudades entrega |
+| **Política** | Cómo se tramita una devolución |
+| **Excepción** | Un acuerdo distinto con un cliente en particular |
+| **Artículo** | La forma en que se resolvió un caso, escrita para volver a usarla |
 
-Cada correo saliente lleva una referencia del ticket en el asunto para que las respuestas queden en el mismo hilo. **La IA nunca envía nada por sí misma.** Todo mensaje al cliente lo escribe y lo envía una persona, o es uno de los correos automáticos fijos de la tabla.
+Las propuestas salen de tres lugares: los correos de la primera revisión, con los que Kairo redacta el **perfil del negocio**; el correo que sigue llegando; y los tickets que el equipo resuelve.
 
----
+### Quién lo aprueba
 
-## Clientes y contactos
+Toda propuesta es un borrador hasta que una persona la publica. Cada una llega con su **fuente**, la cita del correo del que salió, y con una validación. Kairo marca la propuesta cuando la cita no coincide con la fuente, cuando la fuente no respalda todo lo que se afirma o cuando contradice algo que la empresa ya aprobó.
 
-- **Directorio de clientes:** empresas con identificador interno, identificación legal, teléfono, plan, nivel contractual de tiempo de respuesta, los correos autorizados para escribir en su nombre y las personas de contacto. Se pueden crear, editar y eliminar.
-- **Contactos detectados automáticamente:** Kairo puede proponer contactos nuevos que encuentra en el correo entrante, como *borradores* para que una persona los confirme, los rechace o los edite. Deja fuera las direcciones de la propia empresa y a quienes solo aparecen en copia de correos masivos. Esta detección está construida pero **apagada por defecto**; cuando se enciende, los borradores aparecen en el directorio de clientes.
-- Los correos y los teléfonos se normalizan a un formato estándar para no contar dos veces a la misma persona.
+La vista **Conocimiento** tiene dos pestañas, *Borradores* y *Publicados*. El equipo edita, publica o descarta. Lo que Kairo todavía no sabe, la empresa lo puede escribir.
 
----
+### Cómo vuelve a usarse
 
-## Equipos, empresas y permisos
+Solo el conocimiento publicado se usa de nuevo. Aparece en los artículos relacionados de cada ticket, en las respuestas del asistente y en los borradores, siempre con la referencia de dónde salió.
 
-- **Muchas empresas en una misma plataforma.** Los datos de cada empresa están completamente separados de los de las demás a nivel de base de datos.
-- **Roles:** propietario, administrador, supervisor y agente. Hoy los cuatro pueden hacer todas las acciones del día a día sobre un ticket; solo el cierre definitivo queda reservado al sistema. Las reglas de permisos están preparadas para poder restringirse más adelante con un cambio pequeño.
-- **Invitaciones:** propietarios y administradores pueden invitar personas mediante un enlace, y la página de invitación funciona. Todavía no hay una forma de enviarla desde el panel: la pantalla de Equipo es ilustrativa, y su botón de invitar y su lista de miembros son ejemplos fijos.
-- **Planes** en los registros internos del producto: Starter (por defecto), Pro y Enterprise, cada uno con un límite de puestos. Todavía **no hay facturación ni pagos** en el producto.
+Dentro del ticket, el panel **Decisiones y evidencia** enumera cada decisión que la IA tomó sobre ese caso, las fuentes que usó y qué evidencia le faltó.
+
+### Cómo se gana la autonomía
+
+Kairo también aprende de las correcciones. Cada vez que alguien confirma o rechaza una clasificación, queda una medida de qué tan bien acierta Kairo en ese tipo de ticket para esa empresa. Cuando esa medida supera el umbral, Kairo deja de preguntar en ese tipo. Si empieza a fallar, vuelve a preguntar. Nadie le asigna ese permiso a mano.
 
 ---
 
-## Supervisión del sistema
+## La empresa, su equipo y sus clientes
 
-El equipo detrás de Kairo puede seguir su funcionamiento con detalle. Cada llamada a la IA (qué se preguntó, la respuesta, cuánto tardó, el costo, a qué ticket y a qué empresa correspondía) y cada decisión automática (filtrado, tipo de ticket, aprobación automática) se registran en dos herramientas de monitoreo con tableros ya preparados. Hoy esas herramientas funcionan en los equipos del propio equipo, no como un servicio de producción alojado.
-
-El equipo también mantiene un **banco de evaluación interno**: pasa conjuntos de correos reales etiquetados a mano por los mismos pasos que usa producción —por separado para la primera revisión, la pasada de dos semanas y el correo más antiguo— y mide con qué frecuencia Kairo acierta cada campo. Muchas de las decisiones de diseño de este documento, como creerle al filtro de spam, separar a quien compra de quien vende y aprobar automáticamente solo Soporte al principio, salieron directamente de esas mediciones.
-
----
-
-## Otras partes del producto
-
-- **Sitio web público:** página principal, precios, política de privacidad, términos del servicio, inicio de sesión, registro y el asistente de configuración, en inglés y español.
-- **Consola interna de administración (Kelan):** una herramienta aparte para el equipo de Kairo, no para los clientes. Hoy tiene un acceso seguro restringido al personal autorizado; su panel es provisional.
-- **Aplicación móvil:** por ahora solo una pantalla provisional.
-- **Idiomas del panel:** inglés y español, con un selector en la barra lateral. Un navegador nuevo arranca en su propio idioma.
+- **Cada empresa por separado.** Los datos de una empresa están separados de los de las demás en la base de datos.
+- **Cada quien con su usuario.** Nadie comparte la clave del correo. Hay cuatro roles: propietario, administrador, supervisor y agente. Hoy los cuatro pueden hacer todas las acciones del día a día sobre un ticket. Solo el propietario y el administrador cambian la descripción de la empresa.
+- **Invitaciones.** Se invita a una persona con un enlace. La lista del equipo se ve en Configuración.
+- **Directorio de clientes.** Empresas con su identificación, teléfono, plan, nivel de plazo por contrato, los correos autorizados a escribir en su nombre y sus personas de contacto.
+- **Contactos detectados.** Kairo puede proponer contactos nuevos que encuentra en el correo entrante. Deja fuera las direcciones de la propia empresa y a quien solo aparece en copia de envíos masivos. Los correos y teléfonos se llevan a un formato estándar para no contar dos veces a la misma persona.
+- **Planes.** El producto registra Starter, Pro y Enterprise, cada uno con un límite de puestos.
 
 ---
 
-## Decisiones clave detrás del producto
+## Lo que Kairo les envía a los clientes
 
-1. **La IA propone, una persona decide.** La autonomía se concede por empresa y por tipo de ticket según la precisión medida. Nadie la asigna a mano y se puede retirar.
-2. **La IA nunca envía correos ni resuelve tickets por su cuenta.**
-3. **Primero, la señal fiable más barata.** Si una regla fija o el servidor de correo ya conocen la respuesta (spam, remitentes automáticos), no se usa la IA.
-4. **Preguntarle a la IA solo lo que responde bien.** Dos preguntas sencillas y una tabla fija son más consistentes que una sola etiqueta compleja.
-5. **No se confía en la confianza que la IA declara sobre sí misma para decidir.** Las mediciones mostraron que no distingue las respuestas correctas de las incorrectas. Lo que cuenta es la precisión medida frente a las decisiones de las personas.
-6. **Clasificar por lo que pide el remitente, no por el sector.** Kairo tiene que servir igual a una empresa de logística, a una clínica o a una de software, por eso se le indica a qué se dedica cada empresa.
-7. **Todo se puede rastrear.** Cada decisión se guarda con sus datos de entrada y la versión de las reglas que la produjo, y el historial de un ticket nunca se puede reescribir.
-8. **Nada se descarta en silencio.** El correo filtrado conserva su motivo, el correo que falla se reintenta y el cliente que escribe a un caso cerrado queda registrado.
-9. **La importancia y la urgencia son cosas distintas**, y cada una se mide por separado.
-10. **Las respuestas se mantienen en la conversación de correo del cliente**, enviadas desde la dirección de la propia empresa.
-11. **Las notas internas nunca llegan al cliente**, y las menciones solo notifican dentro de la aplicación.
-12. **El conocimiento lo publica una persona.** Lo que Kairo deduce del propio soporte del equipo es un borrador hasta que alguien lo aprueba, y solo el conocimiento aprobado se vuelve a usar.
-13. **Las funciones con riesgo salen apagadas** y se activan en cada entorno cuando están listas.
+La IA nunca envía nada por sí misma. Todo mensaje a un cliente lo escribe y lo envía una persona, o es uno de estos correos fijos:
+
+| Correo | Cuándo sale |
+|---|---|
+| **Respuesta del equipo** | Cuando alguien pulsa Enviar |
+| **Caso resuelto** | Cuando alguien pulsa Enviar y resolver |
+| **Aviso fuera de horario** | Cuando llega un ticket nuevo fuera del horario de atención. Solo para correo recién llegado y una sola vez por conversación. Si la empresa no ha definido su horario, se usa lunes a viernes de 8:00 a 18:00 y sábados de 8:00 a 12:00, hora de Bogotá |
+| **Acuse de recibo** | "Recibimos tu solicitud", con el número del ticket. Cuando está encendido reemplaza al aviso fuera de horario, para que el cliente nunca reciba dos correos automáticos |
+
+Cada correo saliente lleva la referencia del ticket en el asunto, para que las respuestas queden en el mismo hilo.
 
 ---
 
-## Construido, pero apagado por defecto
+## Los principios detrás de Kairo
 
-- El correo de **acuse de recibo** "recibimos tu solicitud".
-- Los **contactos detectados automáticamente** en el correo entrante.
-- Las **alertas automáticas dentro de la aplicación** cuando un ticket supera su punto de escalamiento por tiempo de respuesta.
-- El paso de **"detección" en vivo** del asistente de configuración.
-- El **asistente del panel lateral**: una conversación real con IA sobre el ticket, que necesita dos interruptores (uno en el servidor y otro en el panel) antes de aparecer.
-- **Convertir el soporte en conocimiento:** artículos propuestos a partir de tickets resueltos, hechos del negocio propuestos desde el correo entrante, el **perfil del negocio** que Kairo escribe a partir de los correos de la primera revisión para que una persona lo apruebe, y el panel de **registro de decisiones** dentro de un ticket.
-- La medición que **concede la aprobación automática** por tipo de ticket.
-- El **segundo modelo de IA**, tanto como segunda opinión silenciosa en cada ticket nuevo y como la opción que le permite confirmar una clasificación para un buzón elegido.
-- En el panel, las pestañas laterales (cliente, similares, artículos, escalar, asistente), la **agrupación de tickets**, **"Asignarme"** y toda la función de **notas internas** se pueden activar o desactivar por separado.
-
----
-
-## En pantalla, pero todavía no es real
-
-Estas partes del producto son diseños o simulaciones, no funciones que operen:
-
-- **El paso de detección que se ve por defecto en el asistente de configuración.** La versión en vivo está construida pero apagada; lo que recibe una cuenta nueva es una animación con cifras fijas (234 tickets, 89 conversaciones, 47 clientes y un conjunto fijo de categorías), no la revisión real.
-- **Los cuatro botones de inicio del asistente.** El asistente del ticket en sí es real cuando está activado, pero esos botones siguen devolviendo respuestas de ejemplo fijas.
-- **Respuestas redactadas por la IA.** El sistema puede generar una respuesta sugerida a partir del ticket, de casos similares y de la base de conocimiento, pero el panel todavía no la solicita ni la muestra. Hoy el agente solo puede insertar una resolución anterior o un artículo.
-- En **Configuración**, la lista del equipo, la lista de herramientas conectadas y la sección *Motor de triage* (niveles, umbral de resolución automática, categorías personalizadas) son ilustrativas: cambiarlas no tiene efecto. *Base de conocimiento*, *Facturación* y *API y Webhooks* aparecen como "en construcción". La verificación en dos pasos aparece como "próximamente". Lo que sí funciona en Configuración: el nombre del espacio de trabajo, los tiempos de respuesta por prioridad, la conexión con Gmail y la gestión de la contraseña.
-- La vista **"En curso"** es provisional.
-- Las **opciones de triage del asistente de configuración** (clasificar automáticamente, redactar respuestas, resolver el spam automáticamente, priorizar planes de pago) no se guardan; solo se guarda el nombre de la organización.
-- La **descripción de la empresa** en la que se apoya la IA todavía no tiene una pantalla para escribirla a mano. Se puede configurar directamente en el sistema o, con el flujo de conocimiento activado, venir del perfil del negocio que Kairo propone y una persona aprueba.
-- El **panel de Kelan** y la **aplicación móvil**.
+1. **La IA propone, una persona decide.** La autonomía se gana por empresa y por tipo de ticket, con precisión medida, y se puede perder.
+2. **La IA no envía correos ni resuelve tickets por su cuenta.**
+3. **No inventa.** Lo que Kairo redacta o propone guardar necesita respaldo en el caso o en el conocimiento aprobado.
+4. **El conocimiento lo publica una persona.** Lo que Kairo deduce es un borrador hasta que alguien lo aprueba.
+5. **Primero la señal más barata que sea confiable.** Si una regla fija o el servidor de correo ya saben la respuesta, no se usa la IA.
+6. **A la IA se le pregunta solo lo que responde bien.** Dos preguntas sencillas y una tabla fija son más consistentes que una etiqueta compleja.
+7. **La confianza que la IA declara no decide nada.** Cuenta la precisión medida frente a las decisiones de las personas.
+8. **Nada se descarta en silencio.** El correo filtrado conserva su motivo, el que falla se reintenta y el cliente que escribe a un caso cerrado queda registrado.
+9. **Todo se puede rastrear.** Cada decisión se guarda con sus datos de entrada y la versión de las reglas que la produjo.
+10. **La gravedad y la urgencia son cosas distintas**, y se miden por separado.
+11. **Las respuestas se quedan en el correo del cliente**, enviadas desde la dirección de la empresa.
+12. **Lo interno no le llega al cliente.** Las notas y las menciones solo existen dentro de la aplicación.
 
 ---
 
-## Dónde el sitio web promete más de lo que hace el producto
+## Qué funciona, qué se enciende y qué sigue en construcción
 
-El sitio web describe hacia dónde va Kairo, no solo lo que hace hoy. Para quien tenga que explicar el producto, estas son las diferencias:
+Kairo publica cada función nueva detrás de un interruptor y la enciende en cada entorno cuando está lista. Por eso una cuenta puede no ver todo lo que describe este documento.
 
-- **Canales:** el sitio menciona Slack, WhatsApp, Telegram e Instagram. Solo existe Gmail.
-- **Resolución automática:** el sitio y la configuración describen el archivado automático del spam y la resolución de tickets por encima de un umbral de confianza. Kairo deja el spam fuera de la cola, pero **no resuelve tickets** por su cuenta.
-- **Textos de privacidad:** la política de privacidad y la pantalla de conexión con Gmail dicen que Kairo nunca envía correos y que solo lee. En el producto, los agentes envían respuestas desde Kairo y la respuesta automática fuera de horario está siempre activa.
-- **Planes y precios:** el sitio muestra Free, Pro, Scale y Enterprise, con límites de tickets y precios. El producto registra Starter, Pro y Enterprise, y no tiene facturación, límites de uso ni pagos.
-- **Funciones enterprise** como el inicio de sesión único (SAML, SCIM), la instalación en servidores propios, la API y los webhooks, las alertas por Slack, o los datos de ingresos y satisfacción en la ficha del cliente, no están construidas.
-- **Promesas de velocidad e idioma** (primer ticket priorizado en menos de 60 segundos, modelos ajustados a variantes regionales del español) son objetivos. Las instrucciones de la IA de Kairo existen en español e inglés, sin variantes regionales.
+### Funciona en toda cuenta
+
+Registro y conexión con Gmail · primera revisión y revisión cada cinco minutos · reglas de filtrado · clasificación · bandeja ordenada · plazos por prioridad · responder y Enviar y resolver · plantillas · reparto por turnos · corrección de la clasificación · vista Clasificación IA · escalamiento · aviso fuera de horario · directorio de clientes · historial permanente.
+
+### Tiene interruptor propio
+
+| Función | Qué hace falta para verla |
+|---|---|
+| Conocimiento a partir del correo y perfil del negocio | Un interruptor en el servidor |
+| Artículos a partir de tickets resueltos | Otro interruptor en el servidor |
+| Asistente del ticket | Un interruptor en el servidor y otro en el panel |
+| Pestañas del panel lateral: cliente, similares, artículos, escalar, notas y asistente | Un interruptor por pestaña |
+| Notas internas, agrupación de tickets, "Asignarme" e historial relacionado | Un interruptor cada una |
+| Acuse de recibo | Un interruptor en el servidor |
+| Contactos detectados | Un interruptor en el servidor |
+| Alertas cuando un ticket pasa su punto de escalamiento | Un interruptor en el servidor |
+| La medición que concede la aprobación automática por tipo | Un interruptor en el servidor |
+| El segundo modelo de IA | Un interruptor para la segunda opinión y otro para dejarlo confirmar clasificaciones en un buzón elegido |
+| El paso de detección en vivo de la configuración inicial | Un interruptor en el servidor. Sin él, la configuración pasa directo al final |
+
+### Sigue en construcción
+
+- **Otros canales.** Solo existe Gmail.
+- **Facturación y pagos.** No hay cobros ni límites de uso.
+- **Resolución automática de tickets.**
+- **Enviar invitaciones desde el panel.** Hoy se invita por enlace.
+- **Confirmar, rechazar o editar un contacto detectado** desde el panel.
+- **Una pantalla para ajustar los pesos del orden.** Hoy se cambian por empresa directamente en el sistema.
+- **En Configuración:** la sección *Triage* (niveles, umbral de confianza, categorías) es una maqueta y cambiarla no tiene efecto. *Facturación* y *API* aparecen en construcción. La verificación en dos pasos aparece como próximamente.
+- **Las reglas iniciales de la configuración inicial** no se guardan. Sí se guardan el nombre de la organización, la industria y la descripción de la empresa.
+- **Los botones de inicio del asistente** devuelven respuestas de ejemplo.
+- **La encuesta de satisfacción y el aviso de escalamiento al cliente** están diseñados, pero nada los envía todavía.
+- **La aplicación móvil** es una pantalla provisional.
+
+---
+
+## Dónde el sitio web publicado dice más que el producto
+
+El sitio describe hacia dónde va Kairo. Para quien tenga que explicar el producto, estas son las diferencias de hoy:
+
+- **Canales.** El sitio menciona Slack, WhatsApp, Telegram e Instagram. Solo existe Gmail.
+- **Privacidad.** La política de privacidad y la pantalla de conexión dicen que Kairo solo lee y nunca envía. El producto envía las respuestas del equipo y el aviso fuera de horario.
+- **Resolución automática.** El sitio habla de resolver tickets sobre un umbral de confianza. Kairo deja el spam fuera de la bandeja, pero no resuelve tickets.
+- **Planes y precios.** El sitio muestra Free, Pro, Scale y Enterprise con precios y límites. El producto registra Starter, Pro y Enterprise y no cobra.
+- **Funciones para empresas grandes.** Inicio de sesión único, instalación en servidores propios, API, webhooks y alertas por Slack no están construidos.
+- **Velocidad e idioma.** "Primer ticket priorizado en menos de 60 segundos" es un objetivo de diseño. Las instrucciones de la IA existen en español e inglés, sin variantes regionales.
+
+---
+
+## Cómo se vigila a Kairo
+
+Cada llamada a la IA queda registrada: qué se preguntó, qué respondió, cuánto tardó, cuánto costó y a qué ticket y empresa correspondía. También queda cada decisión automática: el filtrado, el tipo de ticket y la aprobación. Hoy esas herramientas corren en los equipos del propio equipo de Kairo.
+
+Además hay un **banco de evaluación**. Conjuntos de correos reales, etiquetados a mano, pasan por los mismos pasos que usa producción, y se mide cuántas veces Kairo acierta en cada campo. Varias decisiones de este documento salieron de esas mediciones: creerle al filtro de spam, separar a quien compra de quien vende y aprobar sin revisión solo Soporte al principio.
+
+---
+
+## Otras aplicaciones
+
+- **Sitio web público:** página principal, precios, privacidad, términos, inicio de sesión y configuración inicial, en español e inglés.
+- **Panel:** en español e inglés, con un selector en la barra lateral.
+- **Aplicación de escritorio:** el mismo panel, empaquetado como aplicación.
+- **Kelan:** una herramienta interna para el equipo de Kairo, con acceso restringido. No es para los clientes.
 
 ---
 
 ## Glosario
 
-- **Cuenta / espacio de trabajo:** una empresa que usa Kairo, con sus propios usuarios, buzones y datos.
-- **Ticket:** un asunto de un cliente creado a partir de uno o varios correos de la misma conversación.
+- **Espacio de trabajo o cuenta:** una empresa que usa Kairo, con sus usuarios, sus buzones y sus datos.
+- **Ticket:** un asunto de un cliente, creado a partir de uno o varios correos de la misma conversación.
 - **Tipo de ticket:** soporte, prospecto, interno u otro. El spam se filtra antes de que exista un ticket.
-- **Prioridad (P1–P3):** qué tan grave es un caso.
+- **Prioridad (P1 a P3):** qué tan grave es un caso.
 - **Urgencia:** cuánto tiempo queda para actuar.
-- **Puntuación de prioridad:** el número de 0 a 1 con el que se ordena la cola.
-- **Propuesta:** lo que la IA sugiere para un ticket, sea una clasificación o un dato de conocimiento, en estado aprobado automáticamente o pendiente de una persona.
-- **Conocimiento:** un hecho del negocio o un artículo que Kairo propone y que una persona tiene que aprobar antes de que se vuelva a usar.
-- **Perfil del negocio:** la descripción breve de a qué se dedica una empresa, que la IA necesita para clasificar; se puede escribir a mano o la propone Kairo y alguien la aprueba.
+- **Puntuación:** el número de 0 a 1 con el que se ordena la bandeja.
+- **Propuesta:** lo que la IA sugiere, sea una clasificación o un conocimiento. Queda aprobada o por revisar.
+- **Conocimiento:** un hecho del negocio, una política, una excepción o un artículo que Kairo propone y una persona publica.
+- **Perfil del negocio:** la descripción corta de a qué se dedica la empresa. La IA la necesita para clasificar.
+- **Plazo de respuesta:** el tiempo máximo para la primera respuesta, definido por prioridad.
 - **Escalamiento:** pasar un caso a un nivel superior para darle atención prioritaria.
 - **Nota interna:** un comentario que solo ve el equipo.
-- **Tiempo de respuesta objetivo (SLA):** el tiempo máximo permitido para la primera respuesta, definido por prioridad.
