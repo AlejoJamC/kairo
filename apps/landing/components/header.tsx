@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TopNav } from "@kairo/ui";
 import { useTranslation } from "@/lib/i18n";
@@ -9,6 +10,7 @@ import { LangToggle } from "@/components/lang-toggle";
 export function Header() {
   const { t } = useTranslation();
   const router = useRouter();
+  const [open, setOpen] = useState(false);
 
   return (
     <TopNav
@@ -21,6 +23,7 @@ export function Header() {
         { id: "pricing", label: t.header.navPricing, href: "/pricing" },
       ]}
       language={<LangToggle />}
+      menu={{ label: t.header.menu, open, onToggle: () => setOpen((value) => !value) }}
       signIn={{ label: t.header.login, href: "/login" }}
       cta={{ label: t.header.getStarted, onPress: () => router.push("/wizard") }}
     />

@@ -24,6 +24,7 @@ import {
 import { useTranslation } from "@/lib/i18n";
 import { AppLink } from "@/components/app-link";
 import { HeroCockpit } from "@/components/hero-cockpit";
+import { useMinWidth } from "@/lib/hooks/useMinWidth";
 import { QueueList } from "@/components/queue-list";
 
 const noop = () => {};
@@ -55,8 +56,9 @@ function Label({ children }: { children: ReactNode }) {
 type Card = { title: string; text: string };
 
 function Cards({ items, icons }: { items: readonly Card[]; icons: readonly IconName[] }) {
+  const tablet = useMinWidth(720, true);
   return (
-    <Box grid gridTemplateColumns="repeat(3, minmax(0, 1fr))" gap={32} marginBottom={32}>
+    <Box grid gridTemplateColumns={tablet ? "repeat(3, minmax(0, 1fr))" : "minmax(0, 1fr)"} gap={tablet ? 32 : 24} marginBottom={32}>
       {items.map((item, index) => (
         <BenefitCard key={item.title} icon={icons[index]} title={item.title} text={item.text} />
       ))}
@@ -72,6 +74,8 @@ export default function HomePage() {
   const router = useRouter();
   const l = t.landing;
   const d = l.demo;
+  const tablet = useMinWidth(720, true);
+  const desktop = useMinWidth(980, true);
   const goToWizard = () => router.push("/wizard");
   const goToHow = () => document.getElementById("como")?.scrollIntoView({ behavior: "smooth" });
 
@@ -81,13 +85,13 @@ export default function HomePage() {
     <>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <Section first grid>
-        <Text tag="h1" display="block" fontSize={76} lineHeightRatio={1.04} letterSpacing={-2.66} fontWeight={600} marginTop={0} marginHorizontal={0} marginBottom={22} maxWidth={1000} font="display" color="var(--kairo-color-text)">
+        <Text tag="h1" display="block" fontSize={desktop ? 76 : tablet ? 56 : 38} lineHeightRatio={1.06} letterSpacing={desktop ? -2.66 : tablet ? -1.8 : -1.1} fontWeight={600} marginTop={0} marginHorizontal={0} marginBottom={22} maxWidth={1000} font="display" color="var(--kairo-color-text)">
           {l.heroTitle}
         </Text>
-        <Text tag="p" display="block" fontSize={19} color="var(--kairo-color-muted)" maxWidth={640} lineHeightRatio={1.55} marginTop={0} marginHorizontal={0} marginBottom={28}>
+        <Text tag="p" display="block" fontSize={tablet ? 19 : 17} color="var(--kairo-color-muted)" maxWidth={640} lineHeightRatio={1.55} marginTop={0} marginHorizontal={0} marginBottom={28}>
           {l.heroSubtitle}
         </Text>
-        <Box display="flex" gap={12} alignItems="center" marginBottom={24}>
+        <Box display="flex" flexDirection={tablet ? "row" : "column"} alignItems={tablet ? "center" : "stretch"} gap={12} marginBottom={24}>
           <Button variant="primary" size="webLg" iconEnd={<Icon name="right" size={16} color="var(--kairo-color-on-accent)" />} onPress={goToWizard}>
             {l.heroCta}
           </Button>
@@ -95,19 +99,19 @@ export default function HomePage() {
             {l.heroCtaSecondary}
           </Button>
         </Box>
-        <Text tag="div" display="flex" gap={24} font="mono" fontSize={11} color="var(--kairo-color-faint)">
+        <Text tag="div" display="flex" flexDirection={tablet ? "row" : "column"} flexWrap="wrap" gap={tablet ? 24 : 8} font="mono" fontSize={11} color="var(--kairo-color-faint)">
           <span>✓ {l.heroTrust1}</span>
           <span>✓ {l.heroTrust2}</span>
           <span>✓ {l.heroTrust3}</span>
         </Text>
-        <Box marginTop={64}>
+        <Box marginTop={tablet ? 64 : 40}>
           <HeroCockpit />
         </Box>
       </Section>
 
       {/* ── Channels ─────────────────────────────────────────────────────── */}
-      <Box tag="section" id="canales" paddingVertical={40} borderTopWidth={1} borderStyle="solid" borderTopColor="var(--kairo-color-line)">
-        <Box maxWidth={1200} marginHorizontal="auto" paddingHorizontal={32}>
+      <Box tag="section" id="canales" paddingVertical={tablet ? 40 : 32} borderTopWidth={1} borderStyle="solid" borderTopColor="var(--kairo-color-line)">
+        <Box maxWidth={1200} marginHorizontal="auto" paddingHorizontal={tablet ? 32 : 16}>
           <Text tag="p" display="block" fontSize={16} fontWeight={600} marginTop={0} marginHorizontal={0} marginBottom={16}>
             {l.channelsLead}
           </Text>
@@ -115,7 +119,7 @@ export default function HomePage() {
             {channels.map((name, index) => (
               <Box tag="li" key={name}>
                 <Chip mono tone={index === 0 ? "accent" : "neutral"}>
-                  {name} · {index === 0 ? l.channelAvailable : l.channelSoon}
+                  {`${name} · ${index === 0 ? l.channelAvailable : l.channelSoon}`}
                 </Chip>
               </Box>
             ))}
@@ -134,7 +138,7 @@ export default function HomePage() {
       {/* ── 01 How it works ──────────────────────────────────────────────── */}
       <Section id="como">
         <SectionHeader eyebrow={l.howEyebrow} title={l.howTitle} body={l.howBody} />
-        <Box grid gridTemplateColumns="repeat(4, minmax(0, 1fr))" gap={12}>
+        <Box grid gridTemplateColumns={desktop ? "repeat(4, minmax(0, 1fr))" : tablet ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)"} gap={12}>
           {l.howSteps.map((step, index) => (
             <TierCard
               key={step.title}
@@ -158,7 +162,7 @@ export default function HomePage() {
               {d.sortRows.map((row, index) => (
                 <TicketRow
                   key={row.subject}
-                  code={`KAI-092${1 - index}`}
+                  code={`KAI-0${921 - index}`}
                   subject={row.subject}
                   priority={PRIORITIES[index]}
                   escalated={index === 1}
@@ -186,7 +190,7 @@ export default function HomePage() {
       <Section>
         <SectionHeader eyebrow={l.knowEyebrow} title={l.knowTitle} body={l.knowBody} />
         <Cards items={l.knowCards} icons={["knowledge", "link", "check"]} />
-        <Box grid gridTemplateColumns="1fr 1fr" gap={16} marginBottom={16}>
+        <Box grid gridTemplateColumns={desktop ? "1fr 1fr" : "minmax(0, 1fr)"} gap={16} marginBottom={16}>
           <Panel>
             <Label>{d.knowledgeTitle}</Label>
             <Box marginTop={12} display="flex" flexDirection="column" gap={14}>
@@ -205,6 +209,7 @@ export default function HomePage() {
           </Panel>
           <Panel>
             <SourceList
+              stacked={!tablet}
               title={d.similarOnlyTitle}
               items={d.similar.map((item, index) => ({ id: String(index), kind: "similar" as const, code: ["KAI-0892", "KAI-0814", "KAI-0701"][index], title: item.title, meta: item.outcome, metaTone: "ok" as const }))}
             />
@@ -240,7 +245,7 @@ export default function HomePage() {
         <Para>{l.replyP2}</Para>
         <Para strong>{l.replyP3}</Para>
         <Para marginBottom={32}>{l.replyP4}</Para>
-        <Box grid gridTemplateColumns="3fr 2fr" gap={16}>
+        <Box grid gridTemplateColumns={desktop ? "3fr 2fr" : "minmax(0, 1fr)"} gap={16}>
           <DraftCard
             variant="web"
             badge={d.draftBadge}
@@ -293,10 +298,10 @@ export default function HomePage() {
       {/* ── 06 Your data ─────────────────────────────────────────────────── */}
       <Section id="datos" surface="sidebar">
         <SectionHeader eyebrow={l.dataEyebrow} title={l.dataTitle} body={l.dataBody} />
-        <Box grid gridTemplateColumns="3fr 2fr" gap={32}>
+        <Box grid gridTemplateColumns={desktop ? "3fr 2fr" : "minmax(0, 1fr)"} gap={32}>
           <Box>
             {l.dataRows.map((row, index) => (
-              <Box key={row.title} grid gridTemplateColumns="200px 1fr" gap={16} paddingVertical={12} borderTopWidth={index === 0 ? 1 : 0} borderBottomWidth={1} borderStyle="solid" borderTopColor="var(--kairo-color-line)" borderBottomColor="var(--kairo-color-line)">
+              <Box key={row.title} grid gridTemplateColumns={tablet ? "200px 1fr" : "minmax(0, 1fr)"} gap={tablet ? 16 : 4} paddingVertical={12} borderTopWidth={index === 0 ? 1 : 0} borderBottomWidth={1} borderStyle="solid" borderTopColor="var(--kairo-color-line)" borderBottomColor="var(--kairo-color-line)">
                 <Text fontSize={14} fontWeight={600}>{row.title}</Text>
                 <Text fontSize={14} color="var(--kairo-color-muted)">{row.text}</Text>
               </Box>
@@ -323,7 +328,7 @@ export default function HomePage() {
       {/* ── Closing ──────────────────────────────────────────────────────── */}
       <Section surface="inverse" grid>
         <SectionHeader level="h2" title={l.ctaTitle} body={l.ctaBody} inverse />
-        <Box display="flex" gap={12} marginBottom={20}>
+        <Box display="flex" flexDirection={tablet ? "row" : "column"} gap={12} marginBottom={20}>
           <Button variant="primary" size="webLg" iconEnd={<Icon name="right" size={16} color="var(--kairo-color-on-accent)" />} onPress={goToWizard}>
             {l.ctaPrimary}
           </Button>

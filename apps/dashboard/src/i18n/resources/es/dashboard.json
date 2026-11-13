@@ -407,7 +407,7 @@
     },
     "triage": {
       "title": "Triage Engine",
-      "subtitle": "Cómo Kairo decide qué entra a tu cockpit y qué se filtra.",
+      "subtitle": "Cómo Kairo decide qué entra a tu bandeja y qué se filtra.",
       "tiersLabel": "Tiers activos",
       "tier0Name": "Heurística — filtro de spam",
       "tier0Desc": "Reglas simples + listas negras. ~40% del volumen.",
@@ -418,7 +418,7 @@
       "tier3Name": "Cola larga — agrupamiento",
       "tier3Desc": "Clusters semánticos sin SLA.",
       "confidenceTitle": "Umbral de confianza para auto-resolución",
-      "confidenceDesc": "Tickets con confianza ≥ {{threshold}} se resuelven automáticamente. Por debajo van al cockpit.",
+      "confidenceDesc": "Tickets con confianza ≥ {{threshold}} se resuelven automáticamente. Por debajo van a la bandeja.",
       "confidenceLow": "0.50 conservador",
       "confidenceHigh": "1.00 estricto",
       "categoriesLabel": "Categorías personalizadas",

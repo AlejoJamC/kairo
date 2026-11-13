@@ -121,6 +121,12 @@ describe('SourceList', () => {
     expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('OTHER TICKETS')
   })
 
+  it('puts the meta under the title when stacked, without cutting the title', () => {
+    renderUi(<SourceList stacked title="SIMILAR" items={[{ id: 'a', kind: 'similar', code: 'KAI-2', title: 'A long title that must wrap', meta: 'Solved with a refund' }]} />)
+    expect(screen.getByText('KAI-2 · A long title that must wrap')).toBeTruthy()
+    expect(screen.getByText('Solved with a refund')).toBeTruthy()
+  })
+
   it('shows two skeleton rows while loading and nothing without rows', () => {
     const { container, rerender } = renderUi(<SourceList title="SIMILAR TICKETS" items={[]} />)
     expect(container.textContent).toBe('')

@@ -5,6 +5,7 @@ export const en = {
     navChannels: "Channels",
     navData: "Your data",
     navPricing: "Pricing",
+    menu: "Menu",
     getStarted: "Connect my Gmail",
     language: "Language",
     navLabel: "Main",
@@ -118,8 +119,8 @@ export const en = {
     ctaPrimary: "Connect my Gmail",
     ctaSecondary: "See pricing",
     ctaNote: "Free up to 200 tickets a month. No card. Cancel anytime.",
-    footerSlogan: "Reply well, not more.",
-    footerTagline: "Kairo sorts your company's support email, learns your business and helps you reply well.",
+    footerSlogan: "Answer well, not more.",
+    footerTagline: "Kairo sorts your company's support email, learns your business and helps you answer well.",
     footerBuilt: "MADE IN BUCARAMANGA AND UTRECHT",
     footerColProduct: "Product",
     footerColLegal: "Legal",
@@ -214,7 +215,6 @@ export const en = {
     },
   },
   footer: {
-    tagline: "AI Support Cockpit",
     privacy: "Privacy Policy",
     terms: "Terms of Service",
     copyright: "© 2026 Kairo. All rights reserved.",
@@ -235,7 +235,6 @@ export const en = {
       'Invalid credentials. If you signed up with Google, use "Continue with Google" or set a password first.',
     errorUnexpected: "An unexpected error occurred. Please try again.",
     forgotPassword: "Forgot?",
-    tagline: "AI support cockpit · 14 days free",
     switchLabel: "No account? Create one →",
     emailDivider: "OR WITH EMAIL",
     testimonialQuote:
@@ -428,7 +427,7 @@ export const en = {
     updated: "Last updated: February 20, 2026",
     s1: {
       title: "1. Introduction",
-      p1: 'Kairo (\u201cwe\u201d, \u201cour\u201d, or \u201cus\u201d) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our AI Support Cockpit service.',
+      p1: 'Kairo (\u201cwe\u201d, \u201cour\u201d, or \u201cus\u201d) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use Kairo.',
       p2: "By using Kairo, you agree to the collection and use of information in accordance with this policy.",
     },
     s2: {
@@ -645,7 +644,7 @@ export const en = {
     },
     s2: {
       title: "2. Service Description",
-      intro: "Kairo is an AI-powered support cockpit that:",
+      intro: "Kairo is an AI-powered support service that:",
       items: [
         "Connects to your Gmail account to read support emails",
         "Automatically triages and prioritizes support tickets",

@@ -376,7 +376,7 @@ Registro y conexión con Gmail · primera revisión y revisión cada cinco minut
 
 El sitio describe hacia dónde va Kairo. Para quien tenga que explicar el producto, estas son las diferencias de hoy:
 
-- **Canales.** El sitio menciona Slack, WhatsApp, Telegram e Instagram. Solo existe Gmail.
+- **Canales.** El sitio anuncia WhatsApp, Instagram, Telegram y Slack como próximamente. Solo existe Gmail.
 - **Privacidad.** La política de privacidad y la pantalla de conexión dicen que Kairo solo lee y nunca envía. El producto envía las respuestas del equipo y el aviso fuera de horario.
 - **Resolución automática.** El sitio habla de resolver tickets sobre un umbral de confianza. Kairo deja el spam fuera de la bandeja, pero no resuelve tickets.
 - **Planes y precios.** El sitio muestra Free, Pro, Scale y Enterprise con precios y límites. El producto registra Starter, Pro y Enterprise y no cobra.
