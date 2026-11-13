@@ -6,9 +6,9 @@ import { LanguageProvider } from "@/lib/i18n";
 import { UiRoot } from "./ui-root";
 
 export const metadata: Metadata = {
-  title: "Kairo — AI Support Cockpit",
+  title: "Kairo — Responder bien, no responder más",
   description:
-    "Resolve support tickets in seconds. AI-powered triage, intelligent prioritization, and rapid response times.",
+    "Kairo ordena el correo de soporte de tu empresa, aprende de tu negocio y te ayuda a responder bien. Empieza con Gmail.",
 };
 
 export default function RootLayout({
