@@ -216,7 +216,6 @@ export const es: Translations = {
     },
   },
   footer: {
-    tagline: "Cockpit de Soporte con IA",
     privacy: "Política de Privacidad",
     terms: "Términos de Servicio",
     copyright: "© 2026 Kairo. Todos los derechos reservados.",
@@ -237,7 +236,6 @@ export const es: Translations = {
       'Credenciales inválidas. Si te registraste con Google, usa "Continuar con Google" o establece una contraseña primero.',
     errorUnexpected: "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.",
     forgotPassword: "¿Olvidaste?",
-    tagline: "Cockpit de soporte con IA · 14 días gratis",
     switchLabel: "¿Sin cuenta? Crear una →",
     emailDivider: "O CON EMAIL",
     testimonialQuote:
@@ -430,7 +428,7 @@ export const es: Translations = {
     updated: "Última actualización: 20 de febrero de 2026",
     s1: {
       title: "1. Introducción",
-      p1: "Kairo («nosotros», «nuestro» o «nos») está comprometido con la protección de tu privacidad. Esta Política de Privacidad explica cómo recopilamos, usamos y protegemos tu información cuando utilizas nuestro servicio de Cockpit de Soporte con IA.",
+      p1: "Kairo («nosotros», «nuestro» o «nos») está comprometido con la protección de tu privacidad. Esta Política de Privacidad explica cómo recopilamos, usamos y protegemos tu información cuando utilizas Kairo.",
       p2: "Al usar Kairo, aceptas la recopilación y el uso de información de acuerdo con esta política.",
     },
     s2: {
@@ -647,7 +645,7 @@ export const es: Translations = {
     },
     s2: {
       title: "2. Descripción del Servicio",
-      intro: "Kairo es un cockpit de soporte impulsado por IA que:",
+      intro: "Kairo es un servicio de soporte con IA que:",
       items: [
         "Se conecta a tu cuenta de Gmail para leer correos de soporte",
         "Clasifica y prioriza automáticamente los tickets de soporte",
