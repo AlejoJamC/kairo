@@ -39,6 +39,8 @@ type SourceListProps = {
   items: readonly SourceItem[]
   /** Two skeleton rows in place of the items. */
   loading?: boolean
+  /** Narrow containers: the mono meta sits under the title instead of beside it, and the title wraps. */
+  stacked?: boolean
 }
 
 const ICON: Record<'ticket' | 'client', IconName> = { ticket: 'triage', client: 'user' }
@@ -64,10 +66,24 @@ function Lead({ item }: { item: SourceItem }) {
   )
 }
 
-function Row({ item }: { item: SourceItem }) {
+function Row({ item, stacked }: { item: SourceItem; stacked?: boolean }) {
   const opens = item.onOpen !== undefined
   const metaColor = item.metaTone === 'ok' ? tokens['color.ok-ink'] : opens || item.kind === 'similar' ? tokens['accent.ink'] : tokens['text.tertiary']
-  const content = (
+  const content = stacked ? (
+    <>
+      <Lead item={item} />
+      <Box flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0} display="flex" flexDirection="column" gap={2}>
+        <Text fontSize={12.5} color={tokens['text.primary']}>
+          {[item.code, item.title].filter(Boolean).join(' · ')}
+        </Text>
+        {item.meta && (
+          <Text font="mono" fontSize={11} color={metaColor}>
+            {item.meta}
+          </Text>
+        )}
+      </Box>
+    </>
+  ) : (
     <>
       <Lead item={item} />
       {item.code && (
@@ -116,7 +132,7 @@ function Row({ item }: { item: SourceItem }) {
   return <Box {...frame}>{content}</Box>
 }
 
-function SourceList({ title, items, loading }: SourceListProps) {
+function SourceList({ title, items, loading, stacked }: SourceListProps) {
   if (!loading && items.length === 0) return null
   return (
     <Box>
@@ -130,7 +146,7 @@ function SourceList({ title, items, loading }: SourceListProps) {
                 <Skeleton height={10} width="60%" />
               </Box>
             ))
-          : items.map((item) => <Row key={item.id} item={item} />)}
+          : items.map((item) => <Row key={item.id} item={item} stacked={stacked} />)}
       </Box>
     </Box>
   )

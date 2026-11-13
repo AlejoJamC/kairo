@@ -7,6 +7,7 @@ export const es: Translations = {
     navChannels: "Canales",
     navData: "Tus datos",
     navPricing: "Precios",
+    menu: "Menú",
     getStarted: "Conectar mi Gmail",
     language: "Idioma",
     navLabel: "Principal",
