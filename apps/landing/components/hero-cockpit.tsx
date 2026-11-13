@@ -2,6 +2,7 @@
 
 import { Avatar, Box, Button, Callout, Icon, NavItem, NoteCard, ProductFrame, PropRow, SourceList, Text, ThreadMessage, TicketRow, type IconName } from "@kairo/ui";
 import { useTranslation } from "@/lib/i18n";
+import { useMinWidth } from "@/lib/hooks/useMinWidth";
 
 // The product, as it is: the same pieces the app is built from, with invented data.
 
@@ -15,6 +16,8 @@ const CODES = ["KAI-0921", "KAI-0920", "KAI-0919", "KAI-0918", "KAI-0917"] as co
 export function HeroCockpit() {
   const { t } = useTranslation();
   const d = t.landing.demo;
+  const full = useMinWidth(1180, true);
+  const withQueue = useMinWidth(760, true);
 
   const sidebar: { label: string; count?: number; icon: IconName; active?: boolean }[] = [
     { label: d.sidebarTriage, count: 5, active: true, icon: "triage" },
@@ -27,13 +30,16 @@ export function HeroCockpit() {
 
   return (
     <ProductFrame label={d.frameLabel} route={d.route}>
-      <Box grid gridTemplateColumns="180px 300px 1fr 260px" height={500} position="relative">
-        <Box borderRightWidth={1} borderStyle="solid" borderRightColor="var(--kairo-color-line)" padding={10} backgroundColor="var(--kairo-color-sunk)">
-          {sidebar.map((item) => (
-            <NavItem key={item.label} icon={item.icon} label={item.label} count={item.count} active={item.active} onPress={noop} />
-          ))}
-        </Box>
+      <Box grid gridTemplateColumns={full ? "180px 300px minmax(0, 1fr) 260px" : withQueue ? "300px minmax(0, 1fr)" : "minmax(0, 1fr)"} height={full || withQueue ? 580 : undefined} position="relative">
+        {full && (
+          <Box borderRightWidth={1} borderStyle="solid" borderRightColor="var(--kairo-color-line)" padding={10} backgroundColor="var(--kairo-color-sunk)">
+            {sidebar.map((item) => (
+              <NavItem key={item.label} icon={item.icon} label={item.label} count={item.count} active={item.active} onPress={noop} />
+            ))}
+          </Box>
+        )}
 
+        {withQueue && (
         <Box borderRightWidth={1} borderStyle="solid" borderRightColor="var(--kairo-color-line)" overflow="hidden">
           <Box paddingVertical={10} paddingHorizontal={12} borderBottomWidth={1} borderStyle="solid" borderBottomColor="var(--kairo-color-line)" display="flex" justifyContent="space-between" alignItems="center">
             <Text font="mono" fontSize={11} color="var(--kairo-color-faint)" textTransform="uppercase" letterSpacing={0.55}>
@@ -57,6 +63,7 @@ export function HeroCockpit() {
             />
           ))}
         </Box>
+        )}
 
         <Box display="flex" flexDirection="column" minWidth={0} backgroundColor="var(--kairo-color-sunk)">
           <Box paddingVertical={8} paddingHorizontal={14} borderBottomWidth={1} borderStyle="solid" borderBottomColor="var(--kairo-color-line)" display="flex" gap={8} alignItems="center" backgroundColor="var(--kairo-color-surface)">
@@ -93,6 +100,7 @@ export function HeroCockpit() {
           </Box>
         </Box>
 
+        {full && (
         <Box borderLeftWidth={1} borderStyle="solid" borderLeftColor="var(--kairo-color-line)" padding={12}>
           <Text font="mono" fontSize={10} color="var(--kairo-color-faint)" textTransform="uppercase" letterSpacing={0.5}>
             {d.clientPanel}
@@ -108,11 +116,13 @@ export function HeroCockpit() {
           <PropRow label={d.clientLast} size="sm" last>{d.clientLastValue}</PropRow>
           <Box marginTop={14}>
             <SourceList
+              stacked
               title={d.similarTitle}
               items={d.similar.map((item, index) => ({ id: String(index), kind: "similar" as const, title: item.title, meta: item.outcome, metaTone: "ok" as const }))}
             />
           </Box>
         </Box>
+        )}
       </Box>
     </ProductFrame>
   );

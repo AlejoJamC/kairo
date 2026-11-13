@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { tokens } from '@kairo/tokens'
 import { Box, Text } from './layout'
+import { useMinWidth } from './lib/use-min-width'
 
 // The public web footer, and the reduced one-line footer of the auth pages.
 // Each column is its own navigation landmark.
@@ -28,10 +29,12 @@ function LinkText({ link }: { link: FooterLink }) {
 }
 
 function SiteFooter({ brand, description, note, columns, copyright, version }: SiteFooterProps) {
+  const tablet = useMinWidth(720)
+  const desktop = useMinWidth(980)
   return (
     <Box tag="footer" backgroundColor={tokens['surface.sidebar']} borderTopWidth={1} borderStyle="solid" borderTopColor={tokens['border.default']}>
-      <Box maxWidth={1200} marginHorizontal="auto" paddingVertical={56} paddingHorizontal={32}>
-        <Box grid gridTemplateColumns="2fr repeat(4, 1fr)" gap={32}>
+      <Box maxWidth={1200} marginHorizontal="auto" paddingVertical={tablet ? 56 : 40} paddingHorizontal={tablet ? 32 : 16}>
+        <Box grid gridTemplateColumns={desktop ? `2fr repeat(${columns.length}, 1fr)` : '1fr'} gap={desktop ? 32 : 28}>
           <Box>
             {brand}
             <Text tag="p" display="block" margin={0} marginTop={12} maxWidth={280} fontSize={13.5} lineHeightRatio={1.55} color={tokens['text.secondary']}>
@@ -56,7 +59,7 @@ function SiteFooter({ brand, description, note, columns, copyright, version }: S
             </Box>
           ))}
         </Box>
-        <Box display="flex" justifyContent="space-between" marginTop={40} paddingTop={20} borderTopWidth={1} borderStyle="solid" borderTopColor={tokens['border.default']}>
+        <Box display="flex" flexWrap="wrap" gap={8} justifyContent="space-between" marginTop={40} paddingTop={20} borderTopWidth={1} borderStyle="solid" borderTopColor={tokens['border.default']}>
           <Text fontSize={12.5} color={tokens['text.tertiary']}>
             {copyright}
           </Text>

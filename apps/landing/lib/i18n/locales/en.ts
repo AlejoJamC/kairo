@@ -5,6 +5,7 @@ export const en = {
     navChannels: "Channels",
     navData: "Your data",
     navPricing: "Pricing",
+    menu: "Menu",
     getStarted: "Connect my Gmail",
     language: "Language",
     navLabel: "Main",

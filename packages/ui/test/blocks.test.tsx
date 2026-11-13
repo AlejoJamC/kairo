@@ -874,8 +874,7 @@ describe('Public web pieces', () => {
     expect(container.querySelector('[aria-hidden="true"]')).toBeTruthy()
   })
 
-  it('TopNav marks the current link and exposes the mobile menu state', () => {
-    const onToggle = vi.fn()
+  it('TopNav marks the current link', () => {
     renderUi(
       <TopNav
         brand={<span>Kairo</span>}
@@ -884,16 +883,43 @@ describe('Public web pieces', () => {
         current="pricing"
         signIn={{ label: 'Sign in', href: '/login' }}
         cta={{ label: 'Start free', onPress: vi.fn() }}
-        menu={{ label: 'Menu', open: false, onToggle }}
+        menu={{ label: 'Menu', open: false, onToggle: vi.fn() }}
       />,
     )
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
     expect(screen.getByText('Pricing').getAttribute('aria-current')).toBe('page')
     expect(screen.getByText('Product').getAttribute('aria-current')).toBeNull()
-    const menu = screen.getByRole('button', { name: 'Menu' })
-    expect(menu.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(menu)
-    expect(onToggle).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Menu' })).toBeNull()
+  })
+
+  it('TopNav collapses into a menu button on a narrow screen and lists the links when open', () => {
+    const original = window.matchMedia
+    window.matchMedia = ((query: string) => ({ matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia
+    try {
+      const onToggle = vi.fn()
+      const props = {
+        brand: <span>Kairo</span>,
+        label: 'Main',
+        links: [{ id: 'product', label: 'Product', href: '/product' }],
+        signIn: { label: 'Sign in', href: '/login' },
+        cta: { label: 'Start free', onPress: vi.fn() },
+      }
+      const { rerender } = renderUi(<TopNav {...props} menu={{ label: 'Menu', open: false, onToggle }} />)
+      expect(screen.queryByText('Product')).toBeNull()
+      const menu = screen.getByRole('button', { name: 'Menu' })
+      expect(menu.getAttribute('aria-expanded')).toBe('false')
+      fireEvent.click(menu)
+      expect(onToggle).toHaveBeenCalled()
+      rerender(
+        <UiProvider>
+          <TopNav {...props} menu={{ label: 'Menu', open: true, onToggle }} />
+        </UiProvider>,
+      )
+      expect(screen.getByText('Product')).toBeTruthy()
+      expect(screen.getByText('Sign in')).toBeTruthy()
+    } finally {
+      window.matchMedia = original
+    }
   })
 
   it('WizardHeader carries the stepper and Exit', () => {
