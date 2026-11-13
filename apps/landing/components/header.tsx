@@ -15,10 +15,10 @@ export function Header() {
       label={t.header.navLabel}
       brand={<KairoLogo size={26} href="/" />}
       links={[
-        { id: "product", label: t.header.navProduct, href: "#product" },
+        { id: "how", label: t.header.navHow, href: "/#como" },
+        { id: "channels", label: t.header.navChannels, href: "/#canales" },
+        { id: "data", label: t.header.navData, href: "/#datos" },
         { id: "pricing", label: t.header.navPricing, href: "/pricing" },
-        { id: "docs", label: t.header.navDocs, href: "#" },
-        { id: "changelog", label: t.header.navChangelog, href: "#" },
       ]}
       language={<LangToggle />}
       signIn={{ label: t.header.login, href: "/login" }}
