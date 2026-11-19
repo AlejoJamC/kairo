@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/banner.png" alt="Kairo — la bandeja de soporte que se ordena sola" width="100%">
+  <img src="assets/banner.png" alt="Kairo — responder bien, no responder más" width="100%">
 </p>
 
-**Triage de soporte con IA para la bandeja de soporte.** Cada mensaje se clasifica al llegar; la IA actúa sola solo donde se ha ganado el derecho, y le pasa la decisión a una persona cuando no.
+**Kairo ordena el correo de soporte de una empresa, aprende de su negocio y ayuda a su equipo a responder bien.** Empieza con Gmail. La IA propone y una persona decide: Kairo solo actúa por su cuenta en lo que ha demostrado hacer bien, y ninguna respuesta que redacte sale sin que alguien la revise.
 
 [Sitio web](https://kairo.alejojamc.com) · [Qué funciona hoy](que-es-kairo.md) · [English](../README.md)
 
@@ -14,9 +14,11 @@
 
 ## Qué hace
 
-- **Clasifica cada mensaje al llegar** — tipo, prioridad, urgencia y tono — antes de que nadie abra la bandeja.
-- **Ordena la cola** por tipo de ticket, plan del cliente, estado de ánimo, tiempo de espera y reincidencia, para que la primera pantalla sea el orden de trabajo.
-- **Se gana la autonomía por cliente.** Un tipo de ticket se aprueba automáticamente solo tras medir su precisión, y una corrección le quita ese derecho otra vez.
+- **Lee y entiende cada correo al llegar.** Dice qué tipo de asunto es, qué tan grave es, qué tan urgente es y con qué ánimo escribe el cliente, antes de que nadie abra la bandeja.
+- **Ordena la bandeja** por tipo de ticket, plan del cliente, ánimo, tiempo de espera y reincidencia, y deja cada ticket con un responsable, para que quien la abra sepa por dónde empezar.
+- **Aprende del negocio.** Lo que el equipo aprende atendiendo deja de perderse: Kairo propone conocimiento a partir del correo de la empresa y de los tickets resueltos, y una persona lo publica.
+- **Ayuda al equipo a responder bien.** Las respuestas salen desde el Gmail de la empresa, en el mismo hilo del cliente. Kairo no inventa soluciones, y un borrador siempre necesita la aprobación de una persona.
+- **Se gana la autonomía por empresa y por tipo de ticket.** Un tipo queda en firme sin revisión solo tras medir su precisión, y una corrección le quita ese permiso otra vez.
 
 ## Cómo un mensaje se convierte en ticket
 
@@ -36,8 +38,8 @@ flowchart LR
 
 | Estado | Qué incluye |
 |---|---|
-| **Funciona hoy** | Entrada desde Gmail · clasificación · cola por prioridad · respuestas en el hilo · notas internas · escalamientos · tiempos de respuesta |
-| **Construido, apagado por defecto** | Propuestas de conocimiento · asistente del ticket · segundo modelo · borradores de contactos · correo de acuse |
+| **Funciona hoy** | Entrada desde Gmail · clasificación · cola por prioridad · respuestas en el hilo · escalamientos · tiempos de respuesta |
+| **Construido, apagado por defecto** | Propuestas de conocimiento · notas internas · asistente del ticket · segundo modelo · borradores de contactos · correo de acuse |
 | **Sin construir** | Canales distintos de Gmail · facturación · resolución automática |
 
 Qué funciona, qué está apagado y dónde el sitio de marketing promete más de lo que hace el producto: **[what-is-kairo.md](what-is-kairo.md)**.
@@ -65,7 +67,7 @@ Cada variable se valida al arrancar con [`@kairo/env`](../packages/env/index.ts)
 ```
 apps/
   api/          Bun + Hono · REST v1 + pipeline Inngest (tiers, sondeo, reintentos)
-  dashboard/    Vite + React 19 · el panel
+  dashboard/    Vite + React 19 · la aplicación donde trabaja el equipo de soporte
   landing/      Next.js 15 · sitio de marketing, auth, asistente de registro
   kelan/        Next.js 15 · administración interna
   mobile/       Expo · solo esqueleto

@@ -49,7 +49,7 @@ bare id and strip it.
 - When a spec or task says "create X file" — verify it doesn't already exist first.
 
 ## Project
-Kairo — AI support cockpit for support teams. Monorepo: dashboard (Vite+React19), landing (Next.js 15), api (Bun+Hono), mobile (Expo). See `PROJECT.md` for full architecture, conventions, and boundaries.
+Kairo puts a company's support email in order, learns the business, and helps the team answer well. Monorepo: dashboard (Vite+React19), landing (Next.js 15), api (Bun+Hono), mobile (Expo). See `PROJECT.md` for full architecture, conventions, and boundaries.
 
 ## ⛔ Environment files
 

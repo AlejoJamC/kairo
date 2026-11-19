@@ -1,9 +1,10 @@
-# Kairo — AI Support Cockpit for Support Teams
+# Kairo
 
 ## What is Kairo
-Kairo is an AI-powered support cockpit that helps support teams manage
-customer support more intelligently. It connects to Gmail, classifies incoming
-emails, and routes/responds based on learned behavior per client.
+Kairo puts a company's support email in order, learns the business, and helps
+the team answer well. It connects to Gmail, classifies incoming emails, orders
+the inbox and keeps what the company learns while serving its customers. The
+AI proposes and a person decides.
 
 **Read `docs/what-is-kairo.md` before working on the classification pipeline
 or its tiers.** It describes the staged first pass every account goes

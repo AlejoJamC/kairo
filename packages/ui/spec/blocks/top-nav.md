@@ -31,4 +31,4 @@ Entry point to sign in and to onboarding.
 
 - **web**: Public web (no session).
 - **desktop**: Not part of the desktop app design.
-- **mobile**: Designed. Below 720px links, language and sign-in hide and a 44px menu button opens a stacked menu with 44px links.
+- **mobile**: Designed. Below 980px links, language and sign-in hide and a 44px menu button opens a stacked menu with 44px links.
