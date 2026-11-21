@@ -9,6 +9,15 @@ export const metadata: Metadata = {
   title: "Kairo — Responder bien, no responder más",
   description:
     "Kairo ordena el correo de soporte de tu empresa, aprende de tu negocio y te ayuda a responder bien. Empieza con Gmail.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-16.png", type: "image/png", sizes: "16x16" },
+      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/favicon-dark-32.png", type: "image/png", sizes: "32x32", media: "(prefers-color-scheme: dark)" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({

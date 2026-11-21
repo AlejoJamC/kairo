@@ -2,8 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Box, GridBackground, WizardHeader } from "@kairo/ui";
-import { KairoLogo } from "@/components/kairo-logo";
+import { Box, GridBackground, KairoLogo, WizardHeader } from "@kairo/ui";
+import { AppLink } from "@/components/app-link";
 import { LangToggle } from "@/components/lang-toggle";
 import { useTranslation } from "@/lib/i18n";
 import { useMinWidth } from "@/lib/hooks/useMinWidth";
@@ -38,7 +38,7 @@ export function WizardChrome({ stepper, width = 520, gap = 28, centered, exit = 
 
   return (
     <Box minHeight="100vh" backgroundColor="var(--kairo-color-bg)" display="flex" flexDirection="column">
-      <WizardHeader brand={<KairoLogo size={26} href="/" />} stepper={stepper} language={<LangToggle />} exit={exit ? { label: t.wizard.exitSetup, onPress: () => router.push("/") } : undefined} />
+      <WizardHeader brand={<AppLink href="/"><KairoLogo size={26} /></AppLink>} stepper={stepper} language={<LangToggle />} exit={exit ? { label: t.wizard.exitSetup, onPress: () => router.push("/") } : undefined} />
       <Box display="flex" flexGrow={1} flexShrink={1} flexBasis="0%">
         <Box tag="main" display="flex" alignItems={centered ? "center" : "flex-start"} justifyContent="center" flexGrow={1} flexShrink={1} flexBasis="0%" minWidth={0} paddingTop={56} paddingHorizontal={24} paddingBottom={centered ? 56 : 64}>
           <Box width="100%" maxWidth={width} display="flex" flexDirection="column" gap={gap}>

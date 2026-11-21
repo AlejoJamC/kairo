@@ -1,9 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { AuthFooter, AuthHeader, AuthLayout } from "@kairo/ui";
+import { AuthFooter, AuthHeader, AuthLayout, KairoLogo } from "@kairo/ui";
 import { useTranslation } from "@/lib/i18n";
-import { KairoLogo } from "@/components/kairo-logo";
+import { AppLink } from "@/components/app-link";
 import { LangToggle } from "@/components/lang-toggle";
 
 /** The page of the sign-in, invitation and password screens: header, centered column and reduced footer. */
@@ -13,7 +13,7 @@ export function AuthPage({ children, wide }: { children: ReactNode; wide?: boole
   return (
     <AuthLayout
       wide={wide}
-      header={<AuthHeader brand={<KairoLogo size={28} href="/" />} language={<LangToggle />} />}
+      header={<AuthHeader brand={<AppLink href="/"><KairoLogo size={28} /></AppLink>} language={<LangToggle />} />}
       footer={
         <AuthFooter
           links={[

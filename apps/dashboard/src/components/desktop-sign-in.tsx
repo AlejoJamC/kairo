@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@kairo/client-core/auth";
 import { getPlatform } from "@kairo/client-core/config";
 import { copyText, openLanding, startGoogleSignIn } from "@kairo/client-core/endpoints";
-import { AuthCard, AuthHeader, AuthLayout, Box, Field, FieldInput, GoogleMark, Icon, Pressable, Text, WindowControlsSlot, useWindowChrome } from "@kairo/ui";
+import { AuthCard, AuthHeader, AuthLayout, Box, Field, FieldInput, GoogleMark, KairoCharacter, Pressable, Text, WindowControlsSlot, useWindowChrome } from "@kairo/ui";
 import { APP_WINDOW_HEIGHT, APP_WINDOW_MIN_HEIGHT, appWindowMinWidth, appWindowWidth } from "@/lib/desktop-window";
 import { useContentHeight } from "@/hooks/useContentHeight";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -69,11 +69,7 @@ export function DesktopSignIn() {
     <AuthLayout header={<AuthHeader desktop={{ controls: macosWindow ? <WindowControlsSlot /> : null }} language={<LanguageSwitcher plain />} />}>
       <Box ref={contentRef}>
       <AuthCard
-        mark={
-          <Box width={40} height={40} borderRadius={10} display="flex" alignItems="center" justifyContent="center" backgroundColor="var(--kairo-color-accent)">
-            <Icon name="zap" size={20} color="var(--kairo-color-on-accent)" strokeWidth={2.4} label={t("auth:desktop.markLabel")} />
-          </Box>
-        }
+        mark={<KairoCharacter size={40} label={t("auth:desktop.markLabel")} />}
         title={t("auth:desktop.title")}
         subtitle={t("auth:desktop.subtitle")}
         providers={[{ id: "google", label: t("auth:desktop.google"), icon: <GoogleMark />, onPress: continueInBrowser }]}

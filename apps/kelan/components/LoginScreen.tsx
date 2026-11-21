@@ -1,6 +1,6 @@
 'use client';
 
-import { AuthLayout, Box, Card, CardContent, Icon, Text } from '@kairo/ui';
+import { AuthLayout, Box, Card, CardContent, KairoMark, Text } from '@kairo/ui';
 import { AccessDenied } from '@/components/AccessDenied';
 import { LoginButton } from '@/components/LoginButton';
 
@@ -8,8 +8,8 @@ export function LoginScreen({ accessDenied }: { accessDenied: boolean }) {
   return (
     <AuthLayout>
       <Box alignItems="center" marginBottom={24}>
-        <Box display="flex" alignItems="center" justifyContent="center" width={56} height={56} borderRadius={16} backgroundColor="var(--kairo-color-accent)" marginBottom={16}>
-          <Icon name="zap" size={26} color="var(--kairo-color-on-accent)" />
+        <Box display="flex" alignItems="center" justifyContent="center" marginBottom={16} aria-hidden>
+          <KairoMark size={48} />
         </Box>
         <Text tag="h1" display="block" margin={0} fontSize={24} fontWeight={600} color="var(--kairo-color-text)">
           Kelan

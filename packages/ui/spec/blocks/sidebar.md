@@ -7,7 +7,7 @@ First column of the app shell: brand, notifications, search, navigation, languag
 ## Variants
 
 - Expanded (`.sb`): `layout.sidebar` wide on `surface.sidebar`, `border.default` right border, padding 12px 10px, 14px gap. Top to bottom: header, search, navigation, flexible space, footer.
-- Header (`.sb-head`): 24px brand tile (`.mark`, `accent.default`, `radius.sm`, white bolt) · "Kairo" 14px/600 · flexible space · bell icon button (`.ibtn.bell`) · collapse icon button.
+- Header (`.sb-head`): kairo-mark at 24px tall (the three-layer cut, no tile) · "Kairo" 14px/600 · flexible space · bell icon button (`.ibtn.bell`) · collapse icon button.
 - Bell: `.bell-count` with the total unread (notifications plus mentions), 15px pill on `color.bad`, mono 9px/600 in `text.onAccent`, 2px ring in `surface.sidebar`. With an unread mention, also `.bell-mention`: 7px dot in `mentions.unreadDot` at the bottom right. Opens the activity popover of notification-row (380px, 46px from the top).
 - Search (`.nav.sb-box.sb-search`): `surface.panel`, `border.default`, `shadow.xs`; 14px magnifier, "Search or run a command…" 12.5px in `text.tertiary`, kbd ⌘K. Opens command-palette.
 - Navigation: two groups of nav-item with a 2px gap, separated by `.sb-div` (1px `border.default`, 6px side margin). Group 1: Triage, Awaiting customer, Resolved, Escalated, AI Classification, Knowledge. Group 2: Clients, Settings.

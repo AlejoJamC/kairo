@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import type { AdminUser } from '@kairo/types';
-import { Avatar, Box, Button, Icon, Text } from '@kairo/ui';
+import { Avatar, Box, Button, KairoMark, Text } from '@kairo/ui';
 import { signOut } from '@/lib/auth/actions';
 
 interface AdminShellProps {
@@ -16,8 +16,8 @@ export function AdminShell({ admin, children }: AdminShellProps) {
       {/* Sidebar — placeholder for Phase 2 navigation */}
       <Box tag="aside" width={240} flexShrink={0} borderRightWidth={1} borderStyle="solid" borderRightColor="var(--kairo-color-line)" backgroundColor="var(--kairo-color-sunk)" display="flex" flexDirection="column">
         <Box padding={20} borderBottomWidth={1} borderStyle="solid" borderBottomColor="var(--kairo-color-line)" display="flex" alignItems="center" gap={8}>
-          <Box width={28} height={28} borderRadius={8} backgroundColor="var(--kairo-color-accent)" display="flex" alignItems="center" justifyContent="center">
-            <Icon name="zap" size={14} color="var(--kairo-color-on-accent)" />
+          <Box display="inline-flex" flexShrink={0} aria-hidden>
+            <KairoMark size={24} />
           </Box>
           <Text fontSize={14} fontWeight={600} color="var(--kairo-color-text)">Kelan</Text>
         </Box>
