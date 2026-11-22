@@ -4,6 +4,7 @@ import { Badge } from './badge'
 import { IconButton } from './button'
 import { Icon, type IconName } from './icon'
 import { Kbd } from './kbd'
+import { KairoMark } from './kairo-mark'
 import { Box, Pressable, Text } from './layout'
 import { Menu, MenuItem } from './menu'
 import { NavItem } from './nav-item'
@@ -99,8 +100,8 @@ function SidebarBell({ count, hasMention, label, unreadLabel, open, ...rest }: S
 
 function Brand() {
   return (
-    <Box width={24} height={24} borderRadius={px(tokens['radius.sm'])} backgroundColor={tokens['accent.default']} display="inline-flex" alignItems="center" justifyContent="center" flexShrink={0} aria-hidden>
-      <Icon name="zap" size={13} color={tokens['text.onAccent']} strokeWidth={2.4} />
+    <Box display="inline-flex" flexShrink={0} aria-hidden>
+      <KairoMark size={24} />
     </Box>
   )
 }

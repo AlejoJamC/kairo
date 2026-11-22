@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { tokens } from '@kairo/tokens'
 import { Button } from './button'
 import { Callout } from './callout'
-import { Icon } from './icon'
+import { KairoCharacter } from './kairo-character'
 import { Box, Text } from './layout'
 import { ReasoningSteps, type ProgressStep, type ReasoningPhase } from './progress-steps'
 
@@ -10,25 +10,13 @@ import { ReasoningSteps, type ProgressStep, type ReasoningPhase } from './progre
 // agent's question and the assistant's answer. The answer body, draft card,
 // sources and follow-ups are slots, so every answer type shares one frame.
 
-const GRADIENT = `linear-gradient(135deg, ${tokens['accent.default']}, ${tokens['color.accent-indigo']})`
-
 type AssistantMarkProps = { size?: number }
 
-/** The assistant's tile: the spark on the accent gradient with a soft glow. */
+/** The assistant's avatar: the happy character on a flat accent circle. */
 function AssistantMark({ size = 24 }: AssistantMarkProps) {
   return (
-    <Box
-      width={size}
-      height={size}
-      borderRadius={7}
-      flexShrink={0}
-      backgroundImage={GRADIENT}
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      boxShadow={tokens['shadow.glow']}
-    >
-      <Icon name="spark" size={size * 0.56} color={tokens['text.onAccent']} />
+    <Box width={size} height={size} circle flexShrink={0} backgroundColor={tokens['accent.default']} display="flex" alignItems="center" justifyContent="center">
+      <KairoCharacter size={Math.round(size * 0.68)} />
     </Box>
   )
 }

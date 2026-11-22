@@ -1,3 +1,3 @@
-import Svg, { Circle, Line, Path } from 'react-native-svg'
+import Svg, { Circle, Ellipse, G, Line, Path } from 'react-native-svg'
 
-export { Svg, Circle, Path, Line }
+export { Svg, Circle, Path, Line, Ellipse, G }

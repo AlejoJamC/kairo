@@ -6,7 +6,7 @@ Kairo Assistant conversation in the context panel.
 
 ## Variants
 
-- Empty: 34px accent tile with `shadow.glow`, name, "Agent copilot · knows this ticket", intro and starter suggestions.
+- Empty: 34px circle on `accent.default` with the happy kairo-character (68% of the circle tall), no glow, name, "Agent copilot · knows this ticket", intro and starter suggestions.
 - User turn: bubble on the right on `surface.hover`, max 86%.
 - AI turn: reasoning steps, answer in rich text, draft card (draft answers), source list and follow-ups; the last three appear when the answer finishes.
 - Answer types: summary, draft, short draft, similar tickets, knowledge base. Free questions are routed to one of them.

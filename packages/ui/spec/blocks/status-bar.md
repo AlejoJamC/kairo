@@ -11,7 +11,7 @@ Fixed bar at the bottom of the app: the shortcuts of the current view and the en
   - Separator (`.sb-sep`): 1×14px in `border.strong`, 12px on each side; only when the view group is shown.
   - Fixed group (`.sb-grp.sb-fixed`): ⌘K commands · ⌘/ all commands. ⌘/ opens command-palette in the Commands scope.
   - Flexible space (16px minimum).
-  - Engine status in mono with a 6px ok pulse dot ("kairo · 6 open").
+  - Engine status in mono with a 6px ok pulse dot ("Kairo · 6 open").
 - Ticket open: view group, separator, fixed group, status.
 - Queue view without an editable ticket: J K navigate, separator, fixed group, status.
 - Page views (Clients, Knowledge, Settings): only the fixed group, no separator, and the status.
@@ -23,7 +23,7 @@ Fixed bar at the bottom of the app: the shortcuts of the current view and the en
 - **hover**: Not applicable: shortcuts are text, not buttons.
 - **active**: Not applicable.
 - **disabled**: Not applicable.
-- **loading**: While the engine classifies, the dot keeps its pulse and the text reads "kairo · classifying…".
+- **loading**: While the engine classifies, the dot keeps its pulse and the text reads "Kairo · classifying…".
 - **error**: Engine offline: the status dot turns `color.bad` without pulse and the status text is shown in `color.bad-ink`.
 
 ## Accessibility

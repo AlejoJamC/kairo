@@ -191,4 +191,7 @@ apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 # The bundle requires these icons, so they are not covered by *.png.
 !apps/desktop/src-tauri/icons/*.png
+
+# Favicons and the apple-touch icon each web app serves from its public folder.
+!apps/*/public/*.png
 .vercel

@@ -44,7 +44,8 @@
     "eval:attribute": "bun scripts/eval/attribute_layers.ts",
     "ui:metrics": "bun scripts/ui-metrics.ts",
     "ui:boundaries": "bun scripts/ui/check-boundaries.ts",
-    "ui:catalog": "bun scripts/ui/catalog.ts"
+    "ui:catalog": "bun scripts/ui/catalog.ts",
+    "brand:assets": "bun scripts/brand/generate-assets.ts"
   },
   "workspaces": [
     "apps/*",

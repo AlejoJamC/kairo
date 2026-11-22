@@ -38,5 +38,10 @@ function Svg({ title, children, ...props }: SvgProps) {
 const Circle = tag<Common & { cx: number; cy: number; r: number }>('circle')
 const Path = tag<Common & { d: string }>('path')
 const Line = tag<Common & { x1: number; y1: number; x2: number; y2: number }>('line')
+const Ellipse = tag<Common & { cx: number; cy: number; rx: number; ry: number }>('ellipse')
 
-export { Svg, Circle, Path, Line }
+function G({ children, ...props }: Common & { children?: ReactNode }) {
+  return createElement('g', props, children)
+}
+
+export { Svg, Circle, Path, Line, Ellipse, G }

@@ -1,8 +1,8 @@
 "use client";
 
-import { Box, SiteFooter, Text } from "@kairo/ui";
+import { Box, KairoLogo, SiteFooter, Text } from "@kairo/ui";
 import { useTranslation } from "@/lib/i18n";
-import { KairoLogo } from "@/components/kairo-logo";
+import { AppLink } from "@/components/app-link";
 
 export function Footer() {
   const { t } = useTranslation();
@@ -11,7 +11,7 @@ export function Footer() {
     <SiteFooter
       brand={
         <Box>
-          <KairoLogo size={28} href="/" />
+          <AppLink href="/"><KairoLogo size={28} /></AppLink>
           <Text tag="p" display="block" margin={0} marginTop={12} fontSize={14} fontWeight={600}>
             {t.landing.footerSlogan}
           </Text>

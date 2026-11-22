@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { TopNav } from "@kairo/ui";
+import { KairoLogo, TopNav } from "@kairo/ui";
 import { useTranslation } from "@/lib/i18n";
-import { KairoLogo } from "@/components/kairo-logo";
+import { AppLink } from "@/components/app-link";
 import { LangToggle } from "@/components/lang-toggle";
 
 export function Header() {
@@ -15,7 +15,7 @@ export function Header() {
   return (
     <TopNav
       label={t.header.navLabel}
-      brand={<KairoLogo size={26} href="/" />}
+      brand={<AppLink href="/"><KairoLogo size={26} /></AppLink>}
       links={[
         { id: "how", label: t.header.navHow, href: "/#como" },
         { id: "channels", label: t.header.navChannels, href: "/#canales" },
