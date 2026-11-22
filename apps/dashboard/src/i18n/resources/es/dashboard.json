@@ -857,7 +857,7 @@
   },
   "statusBar": {
     "commands": "comandos",
-    "open": "kairo · {{count}} abiertos",
+    "open": "Kairo · {{count}} abiertos",
     "navigate": "navegar",
     "acknowledge": "reconocer",
     "resolve": "resolver",
@@ -866,7 +866,7 @@
     "shortcuts": "atajos",
     "allCommands": "todos los comandos",
     "label": "Atajos y estado del motor",
-    "classifying": "kairo · clasificando…"
+    "classifying": "Kairo · clasificando…"
   },
   "shortcuts": {
     "title": "Atajos de teclado",

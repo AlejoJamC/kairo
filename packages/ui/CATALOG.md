@@ -25,7 +25,7 @@ A piece is implemented when `src/<name>.tsx` exists and is exported from `src/in
 | `filter-pill` | implemented | `FilterPill`, `FilterPillDivider`, `FilterPillGroup`, `FilterPillSelect` | Filters a data page and the AI Classification view. |
 | `icon` | implemented | `Icon` | Line icons of the system. |
 | `kairo-character` | implemented | `KairoCharacter` | The symbol with a face: the Kairo assistant. It is the illustration of empty states, onboarding and pages with a message, and the assistant's avatar. |
-| `kairo-logo` | implemented | `KairoLogo` | The logotype: the symbol next to the lowercase word "kairo". |
+| `kairo-logo` | implemented | `KairoLogo` | The logotype: the symbol next to the word "Kairo". |
 | `kairo-mark` | implemented | `KairoMark`, `kairoMarkLayers` | The Kairo symbol: five flat layers, one per letter of KAIRO, always stacked in the same order. It is the brand in the interface, the favicon and the app icon. |
 | `kbd` | implemented | `Kbd`, `KbdGroup` | Shows a keyboard shortcut. |
 | `kpi-strip` | implemented | `KpiStrip` | Row of key figures. |

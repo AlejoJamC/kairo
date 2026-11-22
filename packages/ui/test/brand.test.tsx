@@ -160,13 +160,13 @@ describe('KairoCharacter', () => {
 })
 
 describe('KairoLogo', () => {
-  it('writes the lowercase word next to a decorative symbol', () => {
+  it('writes the word Kairo next to a decorative symbol', () => {
     const { container } = renderUi(<KairoLogo size={24} />)
-    expect(screen.getByText('kairo')).toBeTruthy()
+    expect(screen.getByText('Kairo')).toBeTruthy()
     const svg = svgOf(container)
     expect(svg.getAttribute('aria-hidden')).toBe('true')
     expect(svg.getAttribute('height')).toBe('24')
-    expect(svg.compareDocumentPosition(screen.getByText('kairo')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(svg.compareDocumentPosition(screen.getByText('Kairo')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('uses the five layers from 32px and the cut below', () => {
@@ -181,7 +181,7 @@ describe('KairoLogo', () => {
     for (const layout of ['horizontal', 'stacked'] as const) {
       for (const onAccent of [false, true]) {
         renderUi(<KairoLogo layout={layout} onAccent={onAccent} />)
-        expect(screen.getByText('kairo')).toBeTruthy()
+        expect(screen.getByText('Kairo')).toBeTruthy()
         cleanup()
       }
     }

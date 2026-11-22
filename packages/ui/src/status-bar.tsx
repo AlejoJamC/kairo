@@ -15,7 +15,7 @@ type StatusBarProps = {
   shortcuts: readonly StatusBarShortcut[]
   /** Shortcuts that are never cut (⌘K commands, ? all commands). */
   pinned?: readonly StatusBarShortcut[]
-  /** Engine status text, for example "kairo · 6 open". */
+  /** Engine status text, for example "Kairo · 6 open". */
   status: string
   /** Accessible name of the footer ("Shortcuts and engine status"). */
   label?: string

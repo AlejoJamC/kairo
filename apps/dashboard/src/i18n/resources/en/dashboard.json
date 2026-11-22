@@ -857,7 +857,7 @@
   },
   "statusBar": {
     "commands": "commands",
-    "open": "kairo · {{count}} open",
+    "open": "Kairo · {{count}} open",
     "navigate": "navigate",
     "acknowledge": "acknowledge",
     "resolve": "resolve",
@@ -866,7 +866,7 @@
     "shortcuts": "shortcuts",
     "allCommands": "all commands",
     "label": "Shortcuts and engine status",
-    "classifying": "kairo · classifying…"
+    "classifying": "Kairo · classifying…"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",

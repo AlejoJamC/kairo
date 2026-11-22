@@ -2,8 +2,7 @@ import { tokens } from '@kairo/tokens'
 import { KairoMark } from './kairo-mark'
 import { Box, Text } from './layout'
 
-// The logotype: the symbol and the lowercase word "kairo" (Inter 600, tight
-// tracking). Every measure is a proportion of the symbol height.
+// The logotype: the symbol and the word "Kairo" (Inter 600, tight tracking). Every measure is a proportion of the symbol height.
 
 type KairoLogoProps = {
   /** Symbol height in px; the word scales with it. */
@@ -27,7 +26,7 @@ function KairoLogo({ size = 24, layout = 'horizontal', onAccent = false }: Kairo
     <Box display="inline-flex" flexDirection={layout === 'stacked' ? 'column' : 'row'} alignItems="center" gap={size * gap}>
       <KairoMark size={size} />
       <Text font="sans" fontSize={fontSize} fontWeight={600} letterSpacing={-0.045 * fontSize} lineHeightRatio={1} color={onAccent ? tokens['text.onAccent'] : tokens['text.primary']}>
-        kairo
+        Kairo
       </Text>
     </Box>
   )
